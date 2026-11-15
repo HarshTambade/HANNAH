@@ -150,4 +150,3 @@ def _serialize(task: Task) -> dict[str, Any]:
         "createdAt": task.created_at,
         "updatedAt": task.updated_at,
     }
-PY

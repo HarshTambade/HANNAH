@@ -41,9 +41,12 @@ electronPackage.scripts.pack = packScript.replace(
 writeFileSync(electronPackagePath, `${JSON.stringify(electronPackage, null, 2)}\n`);
 
 copyFileSync(resolve(clientRoot, "electron-main.ts"), resolve(electronRoot, "main.ts"));
+const signingAvailable = Boolean(process.env.CSC_LINK || process.env.WIN_CSC_LINK);
 let builderConfig = readFileSync(resolve(clientRoot, "electron-builder.yml"), "utf8");
-builderConfig = builderConfig.replace(/^  notarize: false$/m, `  notarize: ${releaseRequested ? "true" : "false"}`);
-if (releaseRequested) builderConfig = builderConfig.replaceAll("  forceCodeSigning: false", "  forceCodeSigning: true");
+builderConfig = builderConfig.replace(/^  notarize: false$/m, `  notarize: ${releaseRequested && signingAvailable ? "true" : "false"}`);
+if (releaseRequested && signingAvailable) {
+  builderConfig = builderConfig.replaceAll("  forceCodeSigning: false", "  forceCodeSigning: true");
+}
 writeFileSync(resolve(electronRoot, "electron-builder.yml"), builderConfig);
 
 console.log(`Prepared Electron packaging for ${electronPackage.version}; notarization ${releaseRequested ? "required" : "disabled"}.`);
