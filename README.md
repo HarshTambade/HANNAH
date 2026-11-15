@@ -206,6 +206,91 @@ Shanaya's request path flows through five clean layers, each with a single respo
 
 </div>
 
+### System architecture diagram
+
+<div style="margin:24px 0">
+
+<div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;margin-bottom:14px">Shanaya platform architecture — layered, governed, privacy-first</div>
+
+<!-- Layer 1: User Interface -->
+<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
+  <div style="flex:0 0 auto;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 14px;min-width:120px;text-align:center">
+    <div style="font-size:10px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">User interfaces</div>
+    <div style="font-size:11.5px;color:#0f172a;font-weight:600">Web · PWA</div>
+    <div style="font-size:11.5px;color:#0f172a">iOS · Android</div>
+    <div style="font-size:11.5px;color:#0f172a">macOS · Windows · Linux</div>
+    <div style="font-size:11.5px;color:#0f172a">Companion hardware</div>
+  </div>
+  <div style="width:28px;height:4px;background:#cbd5e1;border-radius:2px;align-self:center"></div>
+</div>
+
+<!-- Layer 2: Client -->
+<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:160px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Client runtime · client/src</div>
+    <div style="font-size:11.5px;color:#334155">AgentRuntime · LLMRouter</div>
+    <div style="font-size:11.5px;color:#334155">GuardianAgent · Kill Switch</div>
+    <div style="font-size:11.5px;color:#334155">CognitiveRiskEngine</div>
+    <div style="font-size:11.5px;color:#334155">MemoryService · Router</div>
+    <div style="font-size:11.5px;color:#334155">AvatarScene · VoiceService</div>
+  </div>
+  <div style="width:28px;height:4px;background:#cbd5e1;border-radius:2px;align-self:center"></div>
+</div>
+
+<!-- Layer 3: API -->
+<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">API gateway · server/</div>
+    <div style="font-size:11.5px;color:#334155">Express · Node.js</div>
+    <div style="font-size:11.5px;color:#334155">/api/health · /api/chat · /api/agent</div>
+    <div style="font-size:11.5px;color:#334155">/api/tasks · /api/side-effects · /api/undo</div>
+    <div style="font-size:11.5px;color:#334155">Bearer-token auth · Rate limiting</div>
+  </div>
+  <div style="width:28px;height:4px;background:#cbd5e1;border-radius:2px;align-self:center"></div>
+</div>
+
+<!-- Layer 4: Core services -->
+<div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:130px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Governance &amp; Safety</div>
+    <div style="font-size:11px;color:#334155">PolicyEnforcementLayer</div>
+    <div style="font-size:11px;color:#334155">SideEffectLedger + Undo</div>
+    <div style="font-size:11px;color:#334155">TypedRails (Tiers 1–3)</div>
+  </div>
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:130px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Memory &amp; Task</div>
+    <div style="font-size:11px;color:#334155">MemoryRouter · Graph + Vector</div>
+    <div style="font-size:11px;color:#334155">Task Spine · background_agent_runner</div>
+    <div style="font-size:11px;color:#334155">DreamingConsolidator</div>
+  </div>
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:140px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Sync &amp; Continuity</div>
+    <div style="font-size:11px;color:#334155">SyncService · CRDT · E2E</div>
+    <div style="font-size:11px;color:#334155">Self-hostable relay</div>
+    <div style="font-size:11px;color:#334155">AgentNativeHomeService</div>
+  </div>
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:140px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Ecosystem &amp; Identity</div>
+    <div style="font-size:11px;color:#334155">AAIF · PAP adapter</div>
+    <div style="font-size:11px;color:#334155">IdentityInteropLayer</div>
+    <div style="font-size:11px;color:#334155">HardwareBridgeService</div>
+  </div>
+</div>
+
+<!-- Layer 5: Infrastructure -->
+<div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;flex-wrap:wrap">
+  <div style="flex:0 0 auto;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px;text-align:center">
+    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Infrastructure &amp; external</div>
+    <div style="font-size:11.5px;color:#334155">Groq · Ollama · Anthropic · OpenAI</div>
+    <div style="font-size:11.5px;color:#334155">MCP · WebSocket (mTLS)</div>
+    <div style="font-size:11.5px;color:#334155">Self-hosted relay · Sentry</div>
+  </div>
+</div>
+
+<p style="font-size:10px;color:#94a3b8;text-align:center;margin-top:12px">Data flows bottom-up through governance gates; every irreversible action is recorded in the SideEffectLedger with an undo window.</p>
+
+</div>
+
 The main Android/iOS apps are Capacitor projects under [`client/android`](./client/android) and [`client/ios`](./client/ios). The released desktop packages wrap the same client in Capacitor Electron. [`apps/desktop`](./apps/desktop) is a separate Python-enabled Electron shell; it starts the local FastAPI service by default. The example bridge in `client/electron-agent` is an optional integration and is not the default desktop package path.
 
 ### Governed autonomy and trust
