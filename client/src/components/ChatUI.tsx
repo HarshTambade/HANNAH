@@ -18,8 +18,10 @@ import { apiFetch, apiHeaders, apiUrl } from "../services/api";
 import { SpeechService } from "../services/SpeechService";
 import { VoiceService } from "../services/VoiceService";
 import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
-import { clearMobileAgentConversation, getMobileAgentStatus, runMobileAgentTurn, setMobileAgentApiKey } from "../services/MobileAgent";
+import { clearMobileAgentConversation, getMobileAgentStatus, removeMobileAgentApiKey, runMobileAgentTurn, setMobileAgentApiKey } from "../services/MobileAgent";
+import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuardrails";
 import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent";
+import MemoryControls from "./MemoryControls";
 
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
 const welcomeMessage: ChatMessage = {
@@ -58,17 +60,17 @@ function parseAIResponse(value: unknown): { reply: string; emotion: Emotion } {
       try {
         parsed = JSON.parse(candidate);
       } catch {
-        return { reply: value.trim(), emotion: "neutral" };
+        return { reply: screenOutgoingText(value.trim()), emotion: "neutral" };
       }
     } else {
-      return { reply: value.trim(), emotion: "neutral" };
+      return { reply: screenOutgoingText(value.trim()), emotion: "neutral" };
     }
   }
 
   if (parsed && typeof parsed === "object" && "reply" in parsed) {
     const result = parsed as { reply?: unknown; emotion?: unknown };
     if (typeof result.reply === "string" && result.reply.trim()) {
-      return { reply: result.reply.trim(), emotion: normalizeEmotion(result.emotion) };
+      return { reply: screenOutgoingText(result.reply.trim()), emotion: normalizeEmotion(result.emotion) };
     }
   }
   throw new Error("The companion returned an invalid response. Please try again.");
@@ -130,6 +132,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
   const [nativeAgentStatus, setNativeAgentStatus] = useState({ available: false, initialized: false, hasApiKey: false });
   const [mobileApiKey, setMobileApiKey] = useState("");
   const [isSavingMobileApiKey, setIsSavingMobileApiKey] = useState(false);
+  const [isRemovingMobileApiKey, setIsRemovingMobileApiKey] = useState(false);
   const [agentActivity, setAgentActivity] = useState<AgentActivity | null>(null);
   const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
   const [error, setError] = useState("");
@@ -348,6 +351,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
     }
 
     const nextMessages = [...messages, { role: "user" as const, content }];
+    const guardedContent = screenIncomingPrompt(content);
     setMessages(nextMessages);
     setInput("");
     setError("");
@@ -366,7 +370,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
       };
 
       if (effectiveMode === "desktop") {
-        const reply = await runDesktopAgentTurn(content, publishActivity);
+        const reply = await runDesktopAgentTurn(guardedContent, publishActivity);
         result = parseAIResponse(reply);
       } else if (effectiveMode === "mobileclaw" && isNative && isOnline && nativeAgentStatus.hasApiKey) {
         const response = await runMobileAgentTurn(content, publishActivity);
@@ -449,6 +453,20 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
       setError(keyError instanceof Error ? keyError.message : "Could not save the native agent key.");
     } finally {
       setIsSavingMobileApiKey(false);
+    }
+  };
+
+  const removeMobileAgentKey = async () => {
+    setIsRemovingMobileApiKey(true);
+    setError("");
+    try {
+      await removeMobileAgentApiKey();
+      setNativeAgentStatus({ available: true, initialized: true, hasApiKey: false });
+      setVoiceStatus("Saved Anthropic key removed from this device.");
+    } catch (keyError) {
+      setError(keyError instanceof Error ? keyError.message : "Could not remove the saved agent key.");
+    } finally {
+      setIsRemovingMobileApiKey(false);
     }
   };
 
@@ -829,7 +847,10 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
                   <span className={`ml-auto h-1.5 w-1.5 rounded-full ${nativeAgentStatus.hasApiKey ? "bg-emerald-400" : "bg-slate-600"}`} />
                 </div>
                 {nativeAgentStatus.hasApiKey ? (
-                  <p className="text-[11px] leading-relaxed text-slate-400">MobileClaw is ready with on-device vector memory. Select MobileClaw · Anthropic above to use it; Groq remains the default cloud model.</p>
+                  <>
+                    <p className="text-[11px] leading-relaxed text-slate-400">MobileClaw is ready. Its Anthropic key is stored by the native plugin on this device. Select MobileClaw · Anthropic above to use it; Groq remains the default cloud model.</p>
+                    <button type="button" onClick={() => void removeMobileAgentKey()} disabled={isRemovingMobileApiKey} className="mt-2 rounded-lg border border-white/[0.08] px-2.5 py-1.5 text-[10px] text-slate-300 transition hover:bg-white/[0.05] disabled:opacity-50">{isRemovingMobileApiKey ? "Removing…" : "Remove saved Anthropic key"}</button>
+                  </>
                 ) : (
                   <>
                     <p className="mb-2 text-[11px] leading-relaxed text-slate-500">Add an Anthropic API key to use the native Rust agent and its on-device LanceDB memory. The key is stored by the native agent plugin.</p>
@@ -841,6 +862,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
                 )}
               </div>
             )}
+
+            {isNative && <MemoryControls />}
 
             {effectiveMode === "desktop" && (
               <div className="mt-3 rounded-lg border border-amber-200/10 bg-amber-200/[0.04] px-3 py-2 text-xs leading-relaxed text-amber-100/75">

@@ -56,6 +56,7 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 - [QA audit report](./docs/QA-AUDIT-2026-11-11.md)
 - [Deployment](#deployment)
 - [Security and privacy](#security-and-privacy)
+- [Store submission checklist](./STORE_SUBMISSION_CHECKLIST.md)
 - [Troubleshooting and FAQ](#troubleshooting-and-faq)
 - [Contributing](#contributing)
 - [Roadmap](#roadmap)
@@ -269,6 +270,7 @@ Capabilities vary by runtime and by the device/browser configuration:
 - This repository does not add a database or server-side conversation history.
 - Cloud mode sends the selected messages to Groq through the API server. The browser's optional BYOK is sent as `X-Groq-API-Key` per request, held only in memory, and forwarded only to `api.groq.com` over HTTPS; it is not persisted or included in application logs.
 - MobileClaw mode sends online messages directly to Anthropic using the key stored by the native plugin.
+- Native agent memory is off by default. On iOS and Android, users can opt in, inspect matching saved entries, delete individual entries, or clear all entries in **Settings → Privacy and voice**. Relevant recalled memories are sent with an Anthropic request when MobileClaw is selected.
 - Ollama mode sends the selected messages to the configured Ollama instance through the API server.
 - WebLLM and native llama.cpp modes generate locally, subject to browser/device runtime behavior.
 - The optional Mithi service receives reply text when configured and online; offline speech falls back to an installed device voice.
@@ -671,10 +673,10 @@ To export a signed iOS IPA, configure the repository variable `IOS_SIGNING_ENABL
 The GitHub Actions workflow in [`.github/workflows/build.yml`](./.github/workflows/build.yml) uses Node 24 and builds the client on every pull request, push to `main`, version tag, and manual dispatch.
 
 - **Web/PWA:** installs with lifecycle scripts disabled, generates the Draco avatar, and uploads `shanaya-web-pwa`.
-- **Electron:** generates the Capacitor Electron project, vendors runtime plugins, ignores invalid directory-valued certificate settings, and disables automatic Snap Store publishing. Tagged builds publish the generated installers through the dedicated GitHub Release job instead.
-- **Android:** installs SDK 36, NDK 29, and CMake 3.22.1; syncs the checked-in Gradle project, applies native compatibility patches, and uploads debug or signed release APKs.
-- **iOS:** patches and syncs the checked-in Xcode project, includes privacy and speech permission metadata, archives it, and exports an IPA when Apple signing is configured.
-- **Releases:** on `v*` tags, gathers the Android, iOS, macOS, Windows, and Linux outputs and attaches their install packages to a GitHub Release. The release job has `contents: write` permission; other build jobs remain read-only.
+- **Electron:** generates the Capacitor Electron project on Electron 45.3.2, audits the generated dependency tree before packaging, vendors runtime plugins and the `electron-updater` dependency tree, and disables automatic Snap Store publishing. Tagged builds sign Windows and macOS releases, notarize macOS, and publish updater manifests with the installers.
+- **Android:** installs SDK 36, NDK 29, and CMake 3.22.1; syncs the checked-in Gradle project, applies native compatibility patches, and creates signed APK and AAB packages for releases. Ordinary CI builds create a debug APK.
+- **iOS:** patches and syncs the checked-in Xcode project, includes privacy and speech permission metadata, archives it, and exports an IPA for releases after signing is configured.
+- **Releases:** a `v*` tag or a manual release dispatch requires Windows, macOS, Android, iOS, and GPG signing credentials. Missing credentials fail the release gates. The workflow signs Linux artifacts, starts Electron updates at 10%, and attaches packages to a GitHub Release. Other build jobs remain read-only.
 
 Native compatibility patches update third-party dependency files under `client/node_modules`; the iOS patch also keeps the app privacy manifest and microphone descriptions in the checked-in Xcode project. Dependency changes are reapplied after clean installs.
 
@@ -691,6 +693,16 @@ Preview it with:
 ```bash
 npm run preview --prefix client
 ```
+
+Analyze and enforce the gzip-compressed JavaScript/CSS budget with:
+
+```bash
+cd client
+npm run build:analyzer
+npm run bundle:size -- --strict
+```
+
+The analyzer writes `client/bundle-report.html`. The size check includes each renderer JS/CSS asset and reports the static web distribution separately; pass `--package-dir <packaged-app-directory>` to check each distributable installer against the 150 MiB target. CI runs this check after packaging all three Electron platforms.
 
 ### Avatar optimization
 
@@ -987,12 +999,14 @@ Run server commands with `npm run <command> --prefix server`.
 
 ## Testing and quality
 
-The security and quality workflow runs a client dependency audit, Vitest, backend Pytest, and a Playwright browser smoke test. The client audit currently has no high or critical findings; six low or moderate advisories remain in the Workbox/PWA dependency tree. `npm audit fix --force` currently proposes downgrading `vite-plugin-pwa` to 1.1.0, so it is not used because that is a breaking change to the installed PWA toolchain.
+The security and quality workflow audits the client, root desktop workspace, generated Capacitor Electron package, and server, then runs Vitest and backend Pytest. On 2026-11-15, the client audit reported no high or critical findings. A Workbox-only glob override removes the four moderate `glob`/`minimatch` findings; four low findings remain because [`deepmerge@4.3.1` has no patched version listed in its advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4). npm currently suggests downgrading `vite-plugin-pwa` to 0.2.1 to clear those low findings, which is not compatible with this toolchain. The separate root desktop workspace is now on Electron 45.3.2, removing its high Electron and `extract-zip` advisories; its audit still reports six moderate `minimatch` findings through `electron-builder@26.18.0`. npm proposes a major downgrade to electron-builder 25.1.0, so retain the current builder until a compatible patched toolchain is available and verified. Recheck all workspace audits before each release.
 
 Run the same checks locally:
 
 ```bash
 npm audit --prefix client --audit-level=high
+npm audit --audit-level=high
+npm audit --prefix server --audit-level=high
 npm test --prefix client
 python3 -m pip install -r backend/requirements-test.txt
 python3 -m pytest -q backend/tests
@@ -1000,7 +1014,7 @@ npm run test:e2e --prefix client
 npm run build --prefix client
 ```
 
-The client security tests cover the Groq model retry path, local fallback, HITL confirmation, and agent tool-result loop. Backend tests reject unexpected request fields, verify that tool execution waits for its WebSocket approval token, and validate the audit log hash chain. The Playwright test uses a mocked API so it needs no provider key; it checks WebGL, sends a message, and verifies that the avatar receives the returned emotion while its model motion is active.
+The client security tests cover prompt-injection flags, common PII/credential redaction, toxic-output patterns, denied tools, iteration caps, HITL confirmation, and the agent tool-result loop. Backend tests reject unexpected request fields, verify that tool execution waits for its WebSocket approval token, and validate the audit log hash chain. The Playwright test uses a mocked API so it needs no provider key; it checks WebGL, sends a message, and verifies that the avatar receives the returned emotion while its model motion is active.
 
 The older [QA audit report](./docs/QA-AUDIT-2026-11-11.md) records its 2026-11-11 baseline and limitations. Its dependency counts and unimplemented test findings predate this hardening work. No physical-device or live provider verification is implied by the automated checks.
 
@@ -1050,6 +1064,10 @@ For production operations, monitor availability and latency separately for the c
 ## Security and privacy
 
 - Keep `server/.env` and all API keys out of version control.
+- Native on-device memory is disabled until a user opts in. Settings exposes saved-memory search and deletion, and turning memory off stops automatic capture and recall without silently deleting entries.
+- File reads, file writes/deletes, phone actions, flashlight changes, memory writes/deletes, and saved-key removal require a SafetyGuard confirmation before execution.
+- Agent guardrails flag common prompt-injection phrases, deny shell/terminal tools, cap agent turns at 8 by default (20 maximum), limit response size, apply configurable output deny-substrings, and redact common credential, email, phone, government-ID, and payment-card patterns from generated/tool text.
+- The local text safety patterns are defense in depth, not a general-purpose toxicity classifier or a guarantee against prompt injection. Review cloud-provider controls and test the actual release build before production use.
 - Treat cloud conversations according to the provider's retention and training policy.
 - Local WebLLM, Ollama, and native GGUF modes can keep inference on the user's device or local network.
 - Restrict `CLIENT_ORIGIN` to trusted production origins.

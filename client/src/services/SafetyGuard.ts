@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { Dialog } from "@capacitor/dialog";
 import { getDesktopBridge } from "./DesktopBridge";
 
-export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "delete_memory" | "desktop_action" | "write_file" | "delete_file";
+export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file";
 
 function describeAction(action: SensitiveAction, args: Record<string, unknown>) {
   if (action === "send_message") {
@@ -13,6 +13,15 @@ function describeAction(action: SensitiveAction, args: Record<string, unknown>) 
   }
   if (action === "delete_memory") {
     return `Delete this saved information from Shanaya's on-device memory?\n\n${String(args.summary ?? "Matching memory entries")}`;
+  }
+  if (action === "store_memory") {
+    return `Save this information in Shanaya's on-device memory?\n\n${String(args.summary ?? "Requested information").slice(0, 700)}`;
+  }
+  if (action === "delete_credential") {
+    return `Remove this saved provider credential from Shanaya on this device?\n\n${String(args.summary ?? "Saved credential")}`;
+  }
+  if (action === "read_file") {
+    return `Read this private app file and share its contents with the selected AI model?\n\n${String(args.path ?? "")}`;
   }
   if (action === "toggle_setting") {
     return `Change the ${String(args.setting ?? "requested")} device setting to ${String(args.enabled ?? "the requested state")}?`;

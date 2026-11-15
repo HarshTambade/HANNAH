@@ -4,7 +4,7 @@ import { Device } from "@capacitor/device";
 import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { Network } from "@capacitor/network";
 import type { DeviceTool as MobileClawTool } from "capacitor-mobile-claw";
-import { SafetyGuard } from "./SafetyGuard";
+import { SafetyGuard, type SensitiveAction } from "./SafetyGuard";
 
 export type ToolSchema = {
   type: "object";
@@ -16,7 +16,8 @@ export type ShanayaTool = {
   name: string;
   description: string;
   inputSchema: ToolSchema;
-  sensitive?: "send_message" | "make_call" | "toggle_setting" | "write_file" | "delete_file";
+  requiresApproval?: boolean;
+  sensitive?: SensitiveAction;
   execute: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
@@ -42,6 +43,8 @@ const deviceTools: ShanayaTool[] = [
   {
     name: "read_app_file",
     description: "Read a UTF-8 text file up to 128 KB from Shanaya's private app Documents area. Cloud-mode file contents are sent to the selected model provider.",
+    requiresApproval: true,
+    sensitive: "read_file",
     inputSchema: {
       type: "object",
       properties: { path: { type: "string", description: "Relative path inside Shanaya's app Documents area." } },
@@ -60,6 +63,7 @@ const deviceTools: ShanayaTool[] = [
   {
     name: "write_app_file",
     description: "Create or replace a UTF-8 text file up to 1 MB inside Shanaya's private app Documents area. Always requires user confirmation.",
+    requiresApproval: true,
     sensitive: "write_file",
     inputSchema: {
       type: "object",
@@ -74,7 +78,6 @@ const deviceTools: ShanayaTool[] = [
       if (typeof args.content !== "string") throw new Error("File content must be text.");
       const bytes = new TextEncoder().encode(args.content).byteLength;
       if (bytes > 1_000_000) throw new Error("The file exceeds the 1 MB write limit.");
-      await SafetyGuard.require("write_file", { path, bytes, preview: args.content });
       await Filesystem.writeFile({
         path,
         data: args.content,
@@ -88,6 +91,7 @@ const deviceTools: ShanayaTool[] = [
   {
     name: "delete_app_file",
     description: "Delete a file from Shanaya's private app Documents area. Directories and paths outside app storage are not allowed. Always requires user confirmation.",
+    requiresApproval: true,
     sensitive: "delete_file",
     inputSchema: {
       type: "object",
@@ -98,7 +102,6 @@ const deviceTools: ShanayaTool[] = [
       const path = safeDocumentPath(args.path);
       const stat = await Filesystem.stat({ path, directory: Directory.Data });
       if (stat.type !== "file") throw new Error("Directories cannot be deleted with this tool.");
-      await SafetyGuard.require("delete_file", { path });
       await Filesystem.deleteFile({ path, directory: Directory.Data });
       return { ok: true, path, deleted: true };
     },
@@ -143,6 +146,7 @@ const deviceTools: ShanayaTool[] = [
   {
     name: "make_call",
     description: "After confirmation, open the phone dialer with the requested number. The user must tap Call.",
+    requiresApproval: true,
     sensitive: "make_call",
     inputSchema: {
       type: "object",
@@ -152,7 +156,6 @@ const deviceTools: ShanayaTool[] = [
     execute: async (args) => {
       const recipient = String(args.recipient ?? "").trim();
       if (!/^\+?[0-9 ().-]{3,24}$/.test(recipient)) throw new Error("Enter a valid phone number.");
-      await SafetyGuard.require("make_call", { recipient });
       await AppLauncher.openUrl({ url: `tel:${recipient.replace(/[ ().-]/g, "")}` });
       return { ok: true, message: "Opened the phone dialer. Review the number and tap Call." };
     },
@@ -160,6 +163,7 @@ const deviceTools: ShanayaTool[] = [
   {
     name: "toggle_setting",
     description: "After explicit confirmation, toggle the flashlight. Wi-Fi and Bluetooth toggles are blocked by iOS and Android; report how the user can change them manually.",
+    requiresApproval: true,
     sensitive: "toggle_setting",
     inputSchema: {
       type: "object",
@@ -176,7 +180,6 @@ const deviceTools: ShanayaTool[] = [
         return { ok: false, message: `The operating system does not let Shanaya toggle ${setting} directly. Use Control Center or Quick Settings to turn it ${enabled ? "on" : "off"}.` };
       }
       if (setting !== "flashlight") throw new Error("Unsupported setting.");
-      await SafetyGuard.require("toggle_setting", { setting, enabled: enabled ? "on" : "off" });
       if (!Capacitor.isNativePlatform()) throw new Error("Flashlight control requires the iOS or Android app.");
       const { Torch } = await import("@capawesome/capacitor-torch");
       const available = await Torch.isAvailable();
@@ -189,6 +192,7 @@ const deviceTools: ShanayaTool[] = [
   {
     name: "send_message",
     description: "After confirmation, open the SMS composer with the exact recipient and text. The user must tap Send.",
+    requiresApproval: true,
     sensitive: "send_message",
     inputSchema: {
       type: "object",
@@ -203,7 +207,6 @@ const deviceTools: ShanayaTool[] = [
       const message = String(args.message ?? "").trim();
       if (!/^\+?[0-9 ().-]{3,24}$/.test(recipient)) throw new Error("Enter a valid phone number for the SMS draft.");
       if (!message || message.length > 2000) throw new Error("The message must contain 1 to 2,000 characters.");
-      await SafetyGuard.require("send_message", { recipient, message });
       await AppLauncher.openUrl({ url: `sms:${recipient.replace(/[ ().-]/g, "")}?body=${encodeURIComponent(message)}` });
       return { ok: true, message: "Opened the SMS draft. Review it and tap Send in your messaging app." };
     },
@@ -253,13 +256,21 @@ export function getDeviceTools() {
   return deviceTools;
 }
 
+export async function executeShanayaTool(tool: ShanayaTool, args: Record<string, unknown>) {
+  if (tool.requiresApproval) {
+    if (!tool.sensitive) throw new Error(`The approval-required tool "${tool.name}" has no SafetyGuard action configured.`);
+    await SafetyGuard.require(tool.sensitive, args);
+  }
+  return tool.execute(args);
+}
+
 export function getMobileClawTools(): MobileClawTool[] {
-  return deviceTools.map(({ name, description, inputSchema, execute }) => ({
-    name,
-    description,
-    inputSchema,
+  return deviceTools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
     execute: async (args) => {
-      return execute(args);
+      return executeShanayaTool(tool, args);
     },
   }));
 }

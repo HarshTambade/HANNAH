@@ -1,0 +1,50 @@
+appId: com.shanaya.companion
+productName: Shanaya
+artifactName: "${productName}-${os}-${arch}.${ext}"
+asar: true
+directories:
+  output: dist
+  buildResources: assets
+files:
+  - build/**/*
+  - app/**/*
+  - generated/**/*
+  - assets/**/*
+  - package.json
+  - from: vendor/node_modules
+    to: node_modules
+publish:
+  - provider: github
+    owner: HarshTambade
+    repo: Shanaya---Your-AI-companion-
+win:
+  forceCodeSigning: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+mac:
+  forceCodeSigning: false
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.lifestyle
+  hardenedRuntime: true
+  entitlements: ../config/entitlements.mac.plist
+  entitlementsInherit: ../config/entitlements.mac.inherit.plist
+  notarize: false
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility

@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import { visualizer } from "rollup-plugin-visualizer";
 import { mobileClawVitePlugin } from "capacitor-mobile-claw/vite-plugin";
 import { shanayaSeoPlugin } from "./scripts/seoPlugin";
 
@@ -40,12 +41,28 @@ export default defineConfig(({ mode }) => ({
         }],
       },
     }),
+    ...(mode === "analyze" ? [visualizer({
+      filename: resolve(projectRoot, "bundle-report.html"),
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+    })] : []),
   ],
   build: {
     rollupOptions: {
       input: {
         main: resolve(projectRoot, "index.html"),
         about: resolve(projectRoot, "about/index.html"),
+      },
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-reconciler)[\\/]/.test(id)) return "vendor-react";
+          if (/[\\/]node_modules[\\/](@react-three|three|three-stdlib)[\\/]/.test(id)) return "vendor-three";
+          if (/[\\/]node_modules[\\/]@capacitor[\\/]/.test(id)) return "vendor-capacitor";
+          if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) return "vendor-icons";
+          return undefined;
+        },
       },
     },
   },
