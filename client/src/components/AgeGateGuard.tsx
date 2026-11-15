@@ -40,18 +40,18 @@ export default function AgeGateGuard({ children }: AgeGateGuardProps) {
   if (consented) return <>{children}</>;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#03050b] p-6 text-slate-100">
-      <section className="w-full max-w-md rounded-3xl border border-rose-300/20 bg-[#0d111d] p-6 shadow-2xl">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-ink/50 p-6 text-ink">
+      <section className="w-full max-w-md rounded-3xl border border-rose-200 bg-white p-6 shadow-soft-lg">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/[0.08] text-rose-200">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600">
             <ShieldAlert size={18} />
           </span>
           <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-rose-200/80">Age confirmation</p>
-            <h1 className="mt-1 font-['Manrope'] text-xl font-semibold text-white">This app is for adults.</h1>
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-rose-600">Age confirmation</p>
+            <h1 className="mt-1 font-['Manrope'] text-xl font-semibold text-ink">This app is for adults.</h1>
           </div>
         </div>
-        <p className="mt-4 text-[11px] leading-6 text-slate-400">
+        <p className="mt-4 text-[11px] leading-6 text-slate-500">
           Shanaya is declared as an 18+ app. You must confirm that you are at least 18 years old before using chat or voice features.
         </p>
         <button
@@ -60,7 +60,7 @@ export default function AgeGateGuard({ children }: AgeGateGuardProps) {
             recordConsent();
             setConsented(true);
           }}
-          className="mt-6 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-cyan-200 to-violet-300 px-4 py-3 text-[11px] font-bold text-[#090d1a]"
+          className="mt-6 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-3 text-[11px] font-bold text-white shadow-soft"
         >
           I am 18 or older
         </button>
