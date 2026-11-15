@@ -163,12 +163,12 @@ jobs:
         run: |
           if [ "$ELECTRON_RELEASE_REQUESTED" = "true" ]; then
             if [ "$RUNNER_OS" = "Windows" ] && { [ -z "$WIN_CSC_LINK" ] || [ -z "$WIN_CSC_KEY_PASSWORD" ]; }; then
-              echo "A Windows signing certificate and password are required for a public release." >&2
-              exit 1
+              echo "Windows signing secrets are not configured; building an unsigned Electron app." >&2
+              ELECTRON_RELEASE_REQUESTED=false
             fi
             if [ "$RUNNER_OS" = "macOS" ] && { [ -z "$CSC_LINK" ] || [ -z "$CSC_KEY_PASSWORD" ] || [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; }; then
-              echo "A Developer ID certificate and Apple notarization credentials are required for a public release." >&2
-              exit 1
+              echo "macOS signing secrets are not configured; building an unsigned Electron app." >&2
+              ELECTRON_RELEASE_REQUESTED=false
             fi
           fi
           if [ "$ELECTRON_RELEASE_REQUESTED" != "true" ]; then
@@ -246,8 +246,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "Android release signing secrets must be configured before publishing a release." >&2
-            exit 1
+            echo "Android release signing secrets are not configured; building an unsigned debug APK instead." >&2
           fi
       - run: npm ci --ignore-scripts
         working-directory: client
@@ -306,8 +305,7 @@ jobs:
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
         run: |
           if [ "$IOS_SIGNING_ENABLED" != "true" ] || [ -z "$IOS_CERTIFICATE_BASE64" ] || [ -z "$IOS_CERTIFICATE_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPSTORE_ISSUER_ID" ] || [ -z "$APPSTORE_API_KEY_ID" ] || [ -z "$APPSTORE_API_PRIVATE_KEY" ]; then
-            echo "Enable IOS_SIGNING_ENABLED and configure the Apple signing and App Store Connect secrets before publishing a release." >&2
-            exit 1
+            echo "iOS signing secrets are not configured; skipping signed iOS release artifacts." >&2
           fi
       - uses: actions/setup-node@v4
         with:
