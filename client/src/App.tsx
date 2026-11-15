@@ -6,6 +6,7 @@ import IntegrationsPage from "./components/IntegrationsPage";
 import LandingPage from "./components/LandingPage";
 import PlatformDownloads from "./components/PlatformDownloads";
 import type { Emotion } from "./types";
+import { setApiAccessToken } from "./services/api";
 
 const emotionColors: Record<Emotion, string> = {
   happy: "#fbbf24",
@@ -32,7 +33,11 @@ export default function App() {
   if (screen === "landing") {
     return (
       <LandingPage
-        onStart={(apiKey) => { setGroqApiKey(apiKey); setScreen("companion"); }}
+        onStart={({ apiToken, groqApiKey }) => {
+          setApiAccessToken(apiToken);
+          setGroqApiKey(groqApiKey);
+          setScreen("companion");
+        }}
         onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
       />
     );
@@ -91,7 +96,12 @@ export default function App() {
             <div className="min-w-0">
               <button
                 type="button"
-                onClick={() => { setGroqApiKey(""); setEmotion("neutral"); setScreen("landing"); }}
+                onClick={() => {
+                  setApiAccessToken("");
+                  setGroqApiKey("");
+                  setEmotion("neutral");
+                  setScreen("landing");
+                }}
                 className="mb-1 inline-flex items-center gap-1.5 text-[9px] font-medium text-slate-500 transition hover:text-cyan-100"
               >
                 <House size={11} /> Home

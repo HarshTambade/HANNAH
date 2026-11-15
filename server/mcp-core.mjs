@@ -1,5 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/server";
+import dotenv from "dotenv";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as z from "zod/v4";
+
+dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), ".env") });
 
 const apiBaseUrl = (process.env.SHANAYA_API_URL || `http://127.0.0.1:${process.env.PORT || "3001"}`)
   .trim()
@@ -11,6 +16,7 @@ async function requestApi(path, options = {}) {
     ...options,
     headers: {
       Accept: "application/json",
+      ...(process.env.SHANAYA_API_TOKEN ? { Authorization: "Bearer " + process.env.SHANAYA_API_TOKEN.trim() } : {}),
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...options.headers,
     },

@@ -190,6 +190,8 @@ The `client` service is public at `/`. The server handles `/api/*`; its `/mcp` r
 
 ### Responsibilities by layer
 
+Every /api route except /api/health requires Authorization: Bearer SHANAYA_API_TOKEN. The public client asks trusted users for this token per session; it does not embed the token in its static bundle.
+
 | Layer | Location | Responsibility |
 | --- | --- | --- |
 | Presentation | [`client/src/App.tsx`](./client/src/App.tsx) | Composes the avatar surface, branding, and chat experience. |
@@ -216,7 +218,7 @@ The `client` service is public at `/`. The server handles `/api/*`; its `/mcp` r
 | Native MobileClaw Anthropic credential | Native plugin to Anthropic when the optional native agent is used. | Managed by the native plugin; separate from the Express cloud route. |
 | Chat and agent messages | Chosen local runtime or Express/provider route. | No conversation database is configured by the server; local history behavior depends on the client/runtime. |
 | Local model and agent memory | WebLLM browser storage, or app-private native GGUF/LanceDB storage. | Stored by the relevant browser or operating system sandbox. |
-| API access | Public Express endpoints, subject to request validation and configured CORS. | CORS controls browser origins; it is not user authentication or rate limiting. See the [QA audit](./docs/QA-AUDIT-2026-11-11.md) for current exposure findings. |
+| API access | Express endpoints require a bearer token except for health; chat, agent, and desktop routes are rate limited per token. | The browser asks for a trusted token each session. CORS is not authentication. Rate limits are in-memory per server process; multi-instance deployments need a shared limiter. |
 
 ## How a message works
 
@@ -324,6 +326,8 @@ Provider behavior is outside this repository's control. Before production use, r
 
 ## Quick start
 
+The API requires a random 32–512 character SHANAYA_API_TOKEN for every /api route except /api/health. Generate it with openssl rand -hex 32, keep it in the server environment, and share it out of band only with trusted users. The landing page asks users for this token each session; it is held in page memory, never in browser storage or a Vite build variable. Use HTTPS for remote clients.
+
 ### Primary client and server
 
 The root app uses the React/Vite client in `client/` and the Express API in `server/`. Visitors can enter without a personal key when the server has a provider configured, or add a temporary Groq key for the current page session. That key is sent in a request header only for Groq requests and is not persisted by the client.
@@ -348,6 +352,7 @@ Groq is the default cloud provider. Add a server-side Groq API key to `server/.e
 PORT=3001
 HOST=127.0.0.1
 CLIENT_ORIGIN=http://localhost:5173,capacitor://localhost,http://localhost,https://localhost
+SHANAYA_API_TOKEN=replace_with_a_random_value_of_at_least_32_characters
 GROQ_API_KEY=your_server_side_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
@@ -437,6 +442,11 @@ Kernel sensing is a separate, optional Linux eBPF monitor. It is disabled unless
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
+| SHANAYA_API_TOKEN | Yes in production | — | Random bearer token required by all /api routes except /api/health. Keep it server-side; do not place it in a Vite build variable. |
+| SHANAYA_RATE_LIMIT_WINDOW_MS | No | 60000 | Fixed-window duration shared by the per-token API limits. |
+| SHANAYA_RATE_LIMIT_CHAT_MAX | No | 30 | Chat requests allowed per token per window. |
+| SHANAYA_RATE_LIMIT_AGENT_MAX | No | 60 | Agent requests allowed per token per window. |
+| SHANAYA_RATE_LIMIT_DESKTOP_MAX | No | 20 | Computer-use requests allowed per token per window. |
 | `PORT` | No | `3001` | Express API port. |
 | `HOST` | No | `127.0.0.1` | API bind address; `0.0.0.0` enables LAN access. |
 | `CLIENT_ORIGIN` | No | Local origins | Comma-separated CORS allowlist. |
@@ -771,7 +781,7 @@ To deploy:
 
 5. Expose it through HTTPS and set `VITE_API_BASE_URL` to the public API origin when building the client.
 
-The API currently has no built-in authentication, rate limiting, request logging policy, user accounts, or persistent storage. Add those controls before exposing it as a public multi-user service.
+M1.5 added bearer authentication and configurable per-token limits to the Express API. The API still has no user accounts or persistent storage; the shared access token must be distributed only to trusted users. Rate limits are per process and should be backed by a shared store or upstream limiter when the server runs on multiple instances.
 
 ### Deploying the web client
 
@@ -789,7 +799,7 @@ Publish `client/dist` to a static host. Configure SPA fallback routing to serve 
 - [ ] Set `CLIENT_ORIGIN` to exact production origins.
 - [ ] Store API keys in the host's secret manager.
 - [ ] Configure provider timeouts, quotas, and billing alerts.
-- [ ] Add authentication and rate limiting if the API is public.
+- [ ] Verify SHANAYA_API_TOKEN is configured and monitor or centrally enforce limits across all production instances.
 - [ ] Add structured logs without recording message content by default.
 - [ ] Confirm CORS, CSP, microphone permissions, and platform privacy declarations.
 - [ ] Confirm the avatar, model, font, and dependency licenses allow the intended distribution.
@@ -976,6 +986,8 @@ Run server commands with `npm run <command> --prefix server`.
 5. Document whether offline recognition and synthesis are supported.
 
 ## Testing and quality
+
+M1.5 added a Node API security suite. On this revision, the server suite passes seven cases and the primary client production build/type-check succeeds. The older QA report findings below describe its 2026-11-11 baseline; M1.5 addresses the API authentication/rate-limit finding but does not re-audit dependency advisories.
 
 The repository currently provides a production build/type-check command rather than a dedicated unit, component, or browser end-to-end test suite. The [QA audit report](./docs/QA-AUDIT-2026-11-11.md) documents the latest checks across the primary client/PWA, Express API, Python source, Electron entry points, native project metadata, CI packaging, and current release assets.
 

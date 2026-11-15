@@ -14,7 +14,7 @@ import {
   resolveInferenceMode,
   type OfflineModelStatus,
 } from "../services/AIService";
-import { apiUrl } from "../services/api";
+import { apiFetch, apiHeaders, apiUrl } from "../services/api";
 import { SpeechService } from "../services/SpeechService";
 import { VoiceService } from "../services/VoiceService";
 import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
@@ -167,7 +167,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
     let active = true;
     const loadProviders = async () => {
       try {
-        const response = await fetch(apiUrl("/api/providers"), { signal: AbortSignal.timeout(5_000) });
+        const response = await apiFetch(apiUrl("/api/providers"), { signal: AbortSignal.timeout(5_000) });
         if (!response.ok) throw new Error(`API returned HTTP ${response.status}.`);
         const data = await response.json();
         if (!active || !Array.isArray(data.providers)) return;
@@ -208,7 +208,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
     let active = true;
     setApiStatus("checking");
     setCloudModels([]);
-    const headers = new Headers({ Accept: "application/json" });
+    const headers = apiHeaders({ Accept: "application/json" });
     if (cloudProviderId === "groq" && groqApiKey) headers.set("X-Groq-API-Key", groqApiKey);
     const loadModels = async () => {
       try {

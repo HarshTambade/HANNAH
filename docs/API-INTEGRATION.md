@@ -14,6 +14,10 @@ In production, use the HTTPS API origin or the same-origin `/api` path exposed b
 
 ## Start the API
 
+All /api routes except /api/health require Authorization: Bearer <SHANAYA_API_TOKEN>. Generate a random value with openssl rand -hex 32, configure it only in the server environment, and give it to trusted app users out of band. The browser app asks for the token each page session and keeps it in memory only. Never put it in a Vite client variable. Use HTTPS for remote clients. The public health route remains available without a token.
+
+Default fixed-window limits are 30 chat, 60 agent, and 20 desktop-computer requests per token per 60 seconds. Configure them with SHANAYA_RATE_LIMIT_CHAT_MAX, SHANAYA_RATE_LIMIT_AGENT_MAX, SHANAYA_RATE_LIMIT_DESKTOP_MAX, and SHANAYA_RATE_LIMIT_WINDOW_MS. Counters are process-local; use a shared or upstream limiter across multiple instances.
+
 ```bash
 npm install --prefix server
 cp server/.env.example server/.env
@@ -34,6 +38,7 @@ Minimum cloud configuration:
 PORT=3001
 HOST=127.0.0.1
 CLIENT_ORIGIN=http://localhost:5173
+SHANAYA_API_TOKEN=replace_with_a_random_value_of_at_least_32_characters
 GROQ_API_KEY=replace_with_your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
@@ -129,6 +134,7 @@ The simple conversation endpoint. `messages` must contain 1–40 user or assista
 ```bash
 curl -X POST http://localhost:3001/api/chat \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_SHANAYA_API_TOKEN' \
   -d '{
     "mode": "cloud",
     "messages": [
@@ -199,6 +205,7 @@ Proxies validated text to Mithi and returns `audio/wav`. The supported language 
 ```bash
 curl -X POST http://localhost:3001/api/tts \
   -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer YOUR_SHANAYA_API_TOKEN' \
   -d '{"text":"नमस्ते, मैं शनाया हूँ।","language":"hi-IN"}' \
   --output reply.wav
 ```
@@ -261,5 +268,5 @@ For a separate frontend origin, set `VITE_API_BASE_URL` and include that exact o
 - Never put `GROQ_API_KEY`, `CLOUD_API_KEY`, `ANTHROPIC_API_KEY`, `PINECALL_TOKEN_URL` credentials, or `MCP_API_TOKEN` in `VITE_*`.
 - Use HTTPS for production API, MCP, token issuer, and TTS URLs.
 - Restrict `CLIENT_ORIGIN` to exact trusted origins.
-- Add authentication, rate limiting, quotas, and request observability before exposing the API to multiple users.
+- Express authentication and per-token limits are implemented. Keep usage quotas and request observability as deployment-level follow-up work.
 - Do not log request bodies or conversation content by default.

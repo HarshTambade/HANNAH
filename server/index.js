@@ -3,6 +3,12 @@ require("dotenv").config();
 const cors = require("cors");
 const express = require("express");
 const {
+  assertProductionApiToken,
+  createRateLimiter,
+  rateLimitSettings,
+  requireApiToken,
+} = require("./api-security");
+const {
   defaultModelFor,
   defaultProviderId,
   listProviders,
@@ -14,6 +20,8 @@ const {
   discoverProviderModels,
   requestWithProviderFallback,
 } = require("./providers/runtime");
+
+assertProductionApiToken();
 
 // Preserve the previous single-provider environment variables as aliases for
 // the generic custom OpenAI-compatible provider.
@@ -104,6 +112,11 @@ const systemPrompt = [
 const allowedEmotions = new Set(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 
 app.use(cors({ origin: corsOrigin }));
+app.use("/api", requireApiToken);
+const rateLimits = rateLimitSettings();
+app.post("/api/chat", createRateLimiter(rateLimits.chat));
+app.post("/api/agent", createRateLimiter(rateLimits.agent));
+app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
 app.use(express.json({ limit: "12mb" }));
 
 if (process.env.NODE_ENV !== "production") {
@@ -454,6 +467,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 async function startServer() {
+  assertProductionApiToken();
   const mcpEnabled = process.env.MCP_ENABLED === "true";
   if (mcpEnabled) {
     const { mountShanayaMcpEndpoint } = await import("./mcp-http.mjs");

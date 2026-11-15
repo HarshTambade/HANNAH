@@ -1,4 +1,4 @@
-import { apiUrl } from "./api";
+import { apiFetch, apiUrl } from "./api";
 import type { ShanayaTool } from "./DeviceTools";
 import type { InferenceMode } from "../types";
 import { resolveInferenceMode, getNetworkStatus } from "./AIService";
@@ -47,10 +47,11 @@ function normalizeStep(data: any): AgentStep {
   };
 }
 
-async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 90_000, groqApiKey?: string): Promise<AgentStep> {
+async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 90_000, groqApiKey?: string, useApiToken = false): Promise<AgentStep> {
   let response: Response;
   try {
-    response = await fetch(url, {
+    const request = useApiToken ? apiFetch : fetch;
+    response = await request(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -140,7 +141,7 @@ export class LLMRouter {
       tools: tools.map(({ name, description, inputSchema }) => ({ type: "function", function: { name, description, parameters: inputSchema } })),
     };
     try {
-      return await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && selectedProvider === "groq" ? groqApiKey : undefined);
+      return await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && selectedProvider === "groq" ? groqApiKey : undefined, true);
     } catch (primaryError) {
       if (mode !== "cloud" || selectedProvider !== "groq" || groqApiKey || !shouldUsePythonFallback(primaryError)) throw primaryError;
       // If the connection dropped during the cloud request, let AgentRuntime

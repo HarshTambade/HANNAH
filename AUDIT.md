@@ -6,6 +6,10 @@
 
 ## Executive summary
 
+### M1.5 security hotfix follow-up
+
+After the b81a527 baseline below, M1.5 added Express bearer authentication for every /api route except /api/health, production startup validation, and configurable per-token fixed-window limits on chat, agent, and desktop-computer requests. The primary client collects the bearer from the user in page memory; it is not compiled into the Vite bundle or stored in browser storage. See server/api-security.js:15-40,49-90; server/index.js:114-120; client/src/services/api.ts:1-21; and MILESTONE_1.5.md. The limits are process-local, so multi-instance deployments need a shared or upstream limiter.
+
 Shanaya is an existing multi-surface assistant with a primary React/Capacitor client, an Express provider API, a separate Python agent/backend, native memory and voice dependencies, a small eBPF metadata sensor, and two additional app shells. Several capabilities are real, but the repository does not yet behave as one unified autonomous system.
 
 The primary released path appears to be client/ (web/PWA, Capacitor native apps, and the client-generated Electron package in CI). apps/frontend/ plus apps/desktop/ form a second Python-backed app path with separate routing, approvals, prompts, and desktop packaging. The two paths do not share one agent/tool contract.
@@ -89,7 +93,9 @@ This maps tracked paths by file and actual role. Generated resources are grouped
 ### Express provider/API service
 
 - server/package.json, server/package-lock.json, server/.env.example — server runtime/dependencies/config samples.
-- server/index.js — Express API routes for health/providers/models, chat, agent model steps, TTS, Pinecall token issuance, desktop computer proxy, and optional MCP mount during direct server startup. It binds to 127.0.0.1 by default, but does not install general request authentication or rate limiting.
+- server/index.js — Express API routes for health/providers/models, chat, agent model steps, TTS, Pinecall token issuance, desktop computer proxy, and optional MCP mount during direct server startup. It binds to 127.0.0.1 by default. Since M1.5, all /api routes except health require a bearer token; chat, agent, and desktop-computer routes have per-token process-local rate limits.
+- server/api-security.js — validates the production token, performs constant-time bearer comparison, and implements configurable fixed-window rate limiting.
+- server/api-security.test.js — Node built-in integration tests for authentication, the health exemption, rate limits, and production startup validation.
 - server/providers/catalog.js — canonical Node provider list, per-provider model defaults/overrides, default Groq ID, custom-base URL validation.
 - server/providers/runtime.js — request adapters for OpenAI-compatible APIs, Anthropic Messages/tool blocks, and Ollama; model fallback loop; provider model discovery.
 - server/mcp-core.mjs — Shanaya MCP tool definitions and bridge to the Express chat/model APIs. Exposes shanaya_chat, shanaya_status, shanaya_models.
@@ -202,7 +208,7 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 
 - Primary web/PWA, Capacitor Android/iOS, and client-generated Electron build paths exist (client/package.json:6-20; .github/workflows/build.yml:31-260).
 - apps/frontend and apps/desktop are separate applications with a different Python agent contract. The separate desktop preload only offers confirmation, whereas DesktopAgent expects confirmation, screenshot, and perform methods (apps/desktop/preload.js:3-6; client/src/services/DesktopBridge.ts:3-16). The example preload implements the richer bridge but is not wired as the default shell.
-- Local Python binds only to loopback (backend/main.py:62-78); local Express defaults to loopback (server/index.js:29-32). Neither local API uses bearer-token authentication. CORS does not authenticate non-browser callers. The remote MCP route is the exception and has a bearer token.
+- Local Python binds only to loopback and does not use bearer-token authentication (backend/main.py:62-78). Express defaults to loopback (server/index.js:29-32) and since M1.5 requires a bearer token on all /api routes except health. CORS remains a browser-origin control, not authentication. The remote MCP route also has its separate bearer token.
 - No shanaya CLI, --yes, policy-file headless mode, or JSON CLI output was found. External MCP client support is missing.
 
 ### 4.9 Quality — PARTIAL
@@ -224,8 +230,8 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 
 ## 5. Ranked high-risk defects and gaps
 
-1. **Public provider API has no caller authentication or rate limiting.** server/index.js:106-117 installs CORS and JSON parsing but no auth or quota middleware. CORS is not caller authentication; no-Origin requests are accepted (server/index.js:37-46). If deployed publicly with provider credentials, /api/chat, /api/agent, and /api/desktop/computer can incur usage or abuse configured services. The prior audit independently flagged this; recheck deployment exposure and protect provider-backed routes.
-2. **Computer-use endpoint can use a server Anthropic key without route-level authentication.** /api/desktop/computer accepts requests and uses ANTHROPIC_API_KEY (server/index.js:368-392). Its caller-side action approvals do not authenticate the route or prevent third-party provider spend.
+1. **Shared API token and process-local quotas need deployment controls.** M1.5 protects /api routes (except health) with a 32–512 character bearer token and adds configurable per-token limits. The token is shared with trusted users and can be extracted by anyone who receives it; rotate it to revoke all clients. Rate-limit counters are in process memory and do not coordinate across Vercel/server replicas (server/api-security.js:3-40,49-90). Use HTTPS and a shared/upstream limiter for a multi-instance public deployment.
+2. **Computer-use endpoint still depends on caller-side approval and deployment trust.** The endpoint uses server-side ANTHROPIC_API_KEY (server/index.js:368-392). M1.5 adds the same bearer gate and rate limit as other API routes, but authorized token holders can invoke it; the API token is not a per-user identity or desktop-action approval.
 3. **App surface and contract mismatch can make advertised desktop capabilities unavailable.** apps/desktop/preload.js exposes only confirmation, while DesktopAgent needs screenshot and perform methods; the primary desktop release path is a different Capacitor-generated Electron app. This is a correctness gap and makes support status unclear.
 4. **Vercel remote MCP may be routed to an app without an MCP handler.** /mcp is mounted only when startServer() executes, but serverless export returns the unmounted Express app (server/index.js:456-487). The deployment rewrite alone does not prove route initialization.
 5. **Provider/runtime divergence can ignore user intent or fail inconsistently.** Node is primary but Python maintains a separate catalog and is only conditionally called for Groq failures; mobile selects Anthropic directly. Model defaults, fallback and adapter behavior are not shared.
@@ -243,4 +249,4 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 
 ## 7. Proposed sequence after approval
 
-Proceed in the brief's milestone order, with these audit corrections incorporated: M2 should document that Python fallback is client→Python (not Python→Express); M2 should settle supported app surfaces and routing authority; M3 should include MobileClaw/desktop capability adapters; M7 should verify both outbound and inbound MCP and the Vercel mount; M8 should expose only the metadata retained by the bounded event buffer and document its privacy boundary. No implementation changes are included in this audit.
+M1.5 is implemented and recorded in MILESTONE_1.5.md. Proceed with the brief's milestone order after review checkpoint M2: document that Python fallback is client→Python (not Python→Express); settle supported app surfaces and routing authority; include MobileClaw/desktop capability adapters in M3; verify both outbound and inbound MCP and the Vercel mount in M7; expose only metadata retained by the bounded event buffer and document its privacy boundary in M8.

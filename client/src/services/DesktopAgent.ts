@@ -1,4 +1,4 @@
-import { apiUrl } from "./api";
+import { apiFetch, apiUrl } from "./api";
 import { SafetyGuard } from "./SafetyGuard";
 import { getDesktopBridge } from "./DesktopBridge";
 
@@ -26,7 +26,7 @@ export async function runDesktopAgentTurn(task: string, onActivity: (message: st
   let actionCount = 0;
   for (let turn = 0; turn < 10; turn += 1) {
     onActivity("Shanaya is examining the desktop…", false);
-    const response = await fetch(apiUrl("/api/desktop/computer"), {
+    const response = await apiFetch(apiUrl("/api/desktop/computer"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages }),

@@ -5,7 +5,10 @@ import {
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
 
-type LandingPageProps = { onStart: (groqApiKey: string) => void; onIntegrations: () => void };
+type LandingPageProps = {
+  onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
+  onIntegrations: () => void;
+};
 
 const highlights = [
   {
@@ -27,25 +30,32 @@ const highlights = [
 
 export default function LandingPage({ onStart, onIntegrations }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [apiToken, setApiToken] = useState("");
   const [groqApiKey, setGroqApiKey] = useState("");
+  const [showApiToken, setShowApiToken] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [keyError, setKeyError] = useState("");
 
   const beginConversation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const token = apiToken.trim();
     const key = groqApiKey.trim();
     const localDevelopment = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
-    if (key && !window.isSecureContext && !localDevelopment) {
-      setKeyError("For your safety, connect over HTTPS before sending an API key.");
+    if (token.length < 32 || token.length > 512 || /\s/.test(token)) {
+      setKeyError("Enter the API access token provided by your Shanaya server operator (32–512 characters, without spaces).");
+      return;
+    }
+    if ((token || key) && !window.isSecureContext && !localDevelopment) {
+      setKeyError("For your safety, connect over HTTPS before sending an access token or API key.");
       return;
     }
     const configuredApiUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-    if (key && configuredApiUrl) {
+    if (configuredApiUrl) {
       try {
         const apiOrigin = new URL(configuredApiUrl, window.location.href);
         const localApi = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(apiOrigin.hostname);
         if (apiOrigin.protocol !== "https:" && !localApi) {
-          setKeyError("Configure your API server to use HTTPS before sending a Groq key.");
+          setKeyError("Configure your API server to use HTTPS before sending an access token or API key.");
           return;
         }
       } catch {
@@ -53,7 +63,7 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
         return;
       }
     }
-    onStart(key);
+    onStart({ apiToken: token, groqApiKey: key });
   };
 
   const openKeyDialog = () => {
@@ -249,9 +259,28 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-200/15 bg-violet-200/[0.07] text-violet-100"><Sparkles size={17} /></span>
               <p className="mt-6 text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-100/70">Your first step</p>
               <h2 id="connect-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">Connect with Shanaya.</h2>
-                <p className="mt-3 text-[11px] leading-6 text-slate-400">If this server has a model provider configured, you can start right away. You can also add a Groq key for this visit only.</p>
+                <p className="mt-3 text-[11px] leading-6 text-slate-400">Enter the access token from your Shanaya server operator. It stays in this page's memory for the session. You can also add a Groq key for this visit only.</p>
 
               <form className="mt-6" onSubmit={beginConversation}>
+                <label htmlFor="shanaya-api-token" className="mb-2 block text-[10px] font-semibold text-slate-200">Shanaya API access token</label>
+                <div className="flex items-center rounded-xl border border-white/[0.1] bg-[#080b13] pr-2 transition focus-within:border-violet-300/40">
+                  <input
+                    id="shanaya-api-token"
+                    type={showApiToken ? "text" : "password"}
+                    value={apiToken}
+                    onChange={(event) => { setApiToken(event.target.value); setKeyError(""); }}
+                    placeholder="Paste the token from your server operator"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    maxLength={512}
+                    required
+                    className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-xs text-slate-100 outline-none placeholder:text-slate-600"
+                  />
+                  <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide Shanaya access token" : "Show Shanaya access token"} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white/[0.05] hover:text-slate-200">
+                    {showApiToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                </div>
                 <label htmlFor="groq-key" className="mb-2 block text-[10px] font-semibold text-slate-200">Optional Groq API key</label>
                 <div className="flex items-center rounded-xl border border-white/[0.1] bg-[#080b13] pr-2 transition focus-within:border-violet-300/40">
                   <input
@@ -271,7 +300,7 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
                   </button>
                 </div>
                 {keyError && <p role="alert" className="mt-2 text-[10px] text-rose-300">{keyError}</p>}
-                <p className="mt-3 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-300/80" />If provided, the key stays in memory for this visit and is sent only to the Shanaya API for Groq requests.</p>
+                <p className="mt-3 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-300/80" />The access token and optional Groq key stay in this page's memory. The access token is sent to your configured Shanaya API; the Groq key is forwarded only for Groq requests.</p>
                 <button type="submit" className="group mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-200 to-violet-300 text-[11px] font-bold text-[#090d1a] transition hover:brightness-105">
                   Continue to Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
                 </button>

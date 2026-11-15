@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { SpeechSynthesis } from "@capgo/capacitor-speech-synthesis";
 import type { SpeechLanguage } from "../types";
-import { apiUrl } from "./api";
+import { apiFetch, apiUrl } from "./api";
 import { getNetworkStatus } from "./AIService";
 
 const voiceNames: Record<SpeechLanguage, string[]> = {
@@ -56,7 +56,7 @@ export class SpeechService {
     const network = await getNetworkStatus().catch(() => ({ connected: typeof navigator === "undefined" || navigator.onLine }));
     try {
       if (!network.connected) throw new Error("Use the installed device voice while offline.");
-      const response = await fetch(apiUrl("/api/tts"), {
+      const response = await apiFetch(apiUrl("/api/tts"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text.slice(0, 5000), language }),
