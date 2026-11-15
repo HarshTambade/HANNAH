@@ -28,7 +28,7 @@ const welcomeMessage: ChatMessage = {
 };
 
 const modeDetails: Record<InferenceMode, { label: string; description: string; icon: typeof Globe2 }> = {
-  cloud: { label: "Groq Cloud", description: "Groq model with device tools", icon: Globe2 },
+  cloud: { label: "Groq Cloud", description: "Groq is the default; other configured model providers are available", icon: Globe2 },
   webllm: { label: "WebLLM Local", description: "Runs in this browser with WebGPU", icon: Cpu },
   ollama: { label: "Local Ollama", description: "Uses your configured Ollama server", icon: HardDrive },
   native: { label: "On-device AI", description: "Runs a downloaded llama.cpp model", icon: Smartphone },
@@ -87,11 +87,20 @@ type ChatUIProps = {
 };
 
 type ApiStatus = "checking" | "connected" | "offline" | "misconfigured";
+type CloudProviderOption = { id: string; label: string; local: boolean; configured: boolean; defaultModel?: string };
 
 export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: ChatUIProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<InferenceMode>("cloud");
+  const [cloudProviders, setCloudProviders] = useState<CloudProviderOption[]>([]);
+  const [cloudProviderId, setCloudProviderId] = useState(() => {
+    try {
+      return window.localStorage.getItem("shanaya.cloudProvider") || "groq";
+    } catch {
+      return "groq";
+    }
+  });
   const [cloudModels, setCloudModels] = useState<string[]>([]);
   const [cloudModel, setCloudModel] = useState("");
   const [cloudProvider, setCloudProvider] = useState("Groq");
@@ -156,35 +165,38 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
     : modeDetails[effectiveMode];
   useEffect(() => {
     let active = true;
-    const loadApiStatus = async () => {
+    const loadProviders = async () => {
       try {
-        const response = await fetch(apiUrl("/api/models"), { signal: AbortSignal.timeout(5_000) });
+        const response = await fetch(apiUrl("/api/providers"), { signal: AbortSignal.timeout(5_000) });
         if (!response.ok) throw new Error(`API returned HTTP ${response.status}.`);
         const data = await response.json();
-        if (!active || !Array.isArray(data.models)) return;
-
-        const models = data.models.filter((model: unknown): model is string => typeof model === "string" && model.length > 0);
-        setApiStatus(models.length ? "connected" : "misconfigured");
-        setCloudModels(models);
-        if (typeof data.provider === "string" && data.provider) setCloudProvider(data.provider);
-        let storedModel: string | null = null;
+        if (!active || !Array.isArray(data.providers)) return;
+        const providers = (data.providers as unknown[]).filter((item: unknown): item is CloudProviderOption =>
+          Boolean(item && typeof item === "object" && typeof (item as CloudProviderOption).id === "string"
+            && typeof (item as CloudProviderOption).label === "string" && !(item as CloudProviderOption).local
+            && ((item as CloudProviderOption).configured || (item as CloudProviderOption).id === "groq")));
+        setCloudProviders(providers);
+        let storedProvider: string | null = null;
         try {
-          storedModel = window.localStorage.getItem("shanaya.cloudModel");
+          storedProvider = window.localStorage.getItem("shanaya.cloudProvider");
         } catch {
-          storedModel = null;
+          storedProvider = null;
         }
-        setCloudModel((currentModel) => models.includes(currentModel)
-          ? currentModel
-          : models.includes(storedModel || "")
-            ? storedModel!
-            : models.includes(data.defaultModel) ? data.defaultModel : models[0] || "");
+        const selected = providers.some((provider) => provider.id === storedProvider)
+          ? storedProvider!
+          : providers.some((provider) => provider.id === data.defaultProvider)
+            ? data.defaultProvider
+            : providers[0]?.id || "groq";
+        setCloudProviderId(selected);
+        setCloudProvider(providers.find((provider) => provider.id === selected)?.label || "Groq");
+        setApiStatus(providers.length ? "checking" : "misconfigured");
       } catch {
         if (active) setApiStatus("offline");
       }
     };
 
-    void loadApiStatus();
-    const retryTimer = window.setInterval(() => void loadApiStatus(), 10_000);
+    void loadProviders();
+    const retryTimer = window.setInterval(() => void loadProviders(), 30_000);
     return () => {
       active = false;
       window.clearInterval(retryTimer);
@@ -192,13 +204,58 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
   }, []);
 
   useEffect(() => {
-    if (!cloudModel) return;
+    if (!cloudProviderId) return;
+    let active = true;
+    setApiStatus("checking");
+    setCloudModels([]);
+    const headers = new Headers({ Accept: "application/json" });
+    if (cloudProviderId === "groq" && groqApiKey) headers.set("X-Groq-API-Key", groqApiKey);
+    const loadModels = async () => {
+      try {
+        const response = await fetch(apiUrl(`/api/models?provider=${encodeURIComponent(cloudProviderId)}`), { headers, signal: AbortSignal.timeout(8_000) });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "Provider model discovery failed.");
+        if (!active || !Array.isArray(data.models)) return;
+        const models = data.models.filter((model: unknown): model is string => typeof model === "string" && model.length > 0);
+        setCloudModels(models);
+        setCloudProvider(typeof data.provider === "string" ? data.provider : "Groq");
+        setApiStatus(models.length ? "connected" : "misconfigured");
+        let storedModel: string | null = null;
+        try {
+          storedModel = window.localStorage.getItem(`shanaya.cloudModel:${cloudProviderId}`);
+        } catch {
+          storedModel = null;
+        }
+        setCloudModel(models.includes(storedModel || "") ? storedModel! : data.defaultModel || models[0] || "");
+      } catch {
+        if (active) {
+          setApiStatus("misconfigured");
+          setCloudModels([]);
+          setCloudModel("");
+        }
+      }
+    };
+    void loadModels();
+    return () => { active = false; };
+  }, [cloudProviderId, groqApiKey]);
+
+  useEffect(() => {
+    if (!cloudProviderId) return;
     try {
-      window.localStorage.setItem("shanaya.cloudModel", cloudModel);
+      window.localStorage.setItem("shanaya.cloudProvider", cloudProviderId);
+    } catch {
+      // Provider preference remains available for this session if storage is unavailable.
+    }
+  }, [cloudProviderId]);
+
+  useEffect(() => {
+    if (!cloudProviderId || !cloudModel) return;
+    try {
+      window.localStorage.setItem(`shanaya.cloudModel:${cloudProviderId}`, cloudModel);
     } catch {
       // The server still supplies its default if storage is unavailable.
     }
-  }, [cloudModel]);
+  }, [cloudProviderId, cloudModel]);
 
   useEffect(() => {
     try {
@@ -317,6 +374,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
       } else {
         result = await runAgentTurn({
           mode: effectiveMode,
+          providerId: cloudProviderId,
           model: cloudModel || undefined,
           groqApiKey,
           messages: nextMessages,
@@ -633,7 +691,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
                 : effectiveMode === "cloud" && apiStatus === "offline"
                   ? "API server unavailable"
                   : effectiveMode === "cloud" && apiStatus === "misconfigured"
-                    ? "Add a Groq API key on the server"
+                    ? "Add a provider key or configure one on the server"
                     : effectiveMode === "cloud" && apiStatus === "checking"
                       ? "Connecting to the API…"
                       : selectedMode.label}
@@ -707,6 +765,21 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
 
             {effectiveMode === "cloud" && (
               <div className="mt-3 rounded-xl border border-violet-300/10 bg-violet-300/[0.035] p-3">
+                <label htmlFor="cloud-provider" className="mb-1.5 block text-xs font-semibold text-slate-300">Model provider</label>
+                <select
+                  id="cloud-provider"
+                  value={cloudProviderId}
+                  onChange={(event) => {
+                    const nextProvider = event.target.value;
+                    setCloudProviderId(nextProvider);
+                    setCloudProvider(cloudProviders.find((provider) => provider.id === nextProvider)?.label || "AI provider");
+                    setCloudModel("");
+                  }}
+                  disabled={isLoading || cloudProviders.length === 0}
+                  className="mb-3 w-full rounded-lg border border-white/[0.08] bg-[#111521] px-2.5 py-2 text-xs text-slate-200 outline-none focus:border-violet-300/30 disabled:opacity-50"
+                >
+                  {cloudProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}{provider.id === "groq" ? " · default" : ""}</option>)}
+                </select>
                 <label htmlFor="cloud-model" className="mb-1.5 block text-xs font-semibold text-slate-300">{cloudProvider} model</label>
                 <select
                   id="cloud-model"
@@ -719,7 +792,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
                     ? <option value="">Waiting for server model settings…</option>
                     : cloudModels.map((model) => <option key={model} value={model}>{modelLabel(model)}</option>)}
                 </select>
-                <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">{cloudProvider === "Groq" ? "Groq is the default." : `${cloudProvider} is configured on the server.`} If a selected model is unavailable, the server tries the remaining configured models.</p>
+                <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">Groq is the default. Other providers appear after their server-side credentials are configured. Model names load from the selected provider when its API supports model discovery.</p>
               </div>
             )}
 
@@ -802,7 +875,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
       )}
       {effectiveMode === "cloud" && apiStatus === "misconfigured" && (
         <div role="alert" className="shrink-0 border-b border-amber-200/10 bg-amber-200/[0.05] px-4 py-2 text-[10px] leading-relaxed text-amber-100/80">
-          The API server is online, but no cloud models are configured. Add <code className="text-amber-100">GROQ_API_KEY</code> to <code className="text-amber-100">server/.env</code> and restart the server.
+          The API server is online, but no model key is available. Add a provider key such as <code className="text-amber-100">GROQ_API_KEY</code> to <code className="text-amber-100">server/.env</code>, or enter your Groq key on the landing page.
         </div>
       )}
 

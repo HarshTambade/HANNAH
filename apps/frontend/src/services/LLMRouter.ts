@@ -141,7 +141,6 @@ export class ApprovalChannel {
   private socket: WebSocket | null = null;
   private readyPromise: Promise<void> | null = null;
   private resolveReady: (() => void) | null = null;
-  private rejectReady: ((error: Error) => void) | null = null;
   private decisionWaiters = new Map<string, { resolve: (result: ApprovalResult) => void; reject: (error: Error) => void }>();
 
   constructor(private readonly onApproval: (approval: Approval) => void) {}
@@ -157,13 +156,11 @@ export class ApprovalChannel {
         settled = true;
         window.clearTimeout(timeout);
         this.resolveReady = null;
-        this.rejectReady = null;
         this.readyPromise = null;
         if (error) reject(error);
         else resolve();
       };
       this.resolveReady = () => finish();
-      this.rejectReady = (error) => finish(error);
       let socket: WebSocket;
       try {
         const url = new URL(endpoint(`/api/ws/approvals/${this.sessionId}`), window.location.href);
@@ -185,7 +182,6 @@ export class ApprovalChannel {
           window.clearTimeout(timeout);
           const ready = this.resolveReady;
           this.resolveReady = null;
-          this.rejectReady = null;
           this.readyPromise = null;
           ready?.();
           return;

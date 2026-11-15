@@ -21,11 +21,12 @@ const localMcpConfig = JSON.stringify({
 const apiExample = `curl -X POST "${apiRoot}/chat" \\
   -H "Content-Type: application/json" \\
   -H "X-Groq-API-Key: $GROQ_API_KEY" \\
-  -d '{"mode":"cloud","messages":[{"role":"user","content":"Hello, Shanaya!"}]}'`;
+  -d '{"mode":"cloud","provider":"groq","messages":[{"role":"user","content":"Hello, Shanaya!"}]}'`;
 
 const endpoints = [
   { method: "GET", path: "/api/health", description: "Check that the Shanaya API is responding." },
-  { method: "GET", path: "/api/models", description: "List the cloud models available to this server." },
+  { method: "GET", path: "/api/providers", description: "List providers enabled by the server without exposing credentials." },
+  { method: "GET", path: "/api/models?provider=groq", description: "Discover models available from the selected provider." },
   { method: "POST", path: "/api/chat", description: "Send a conversation and receive a reply with an emotion." },
   { method: "POST", path: "/api/agent", description: "Request one agent step with tools; the client validates and runs tools." },
 ];
@@ -99,7 +100,7 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
               <pre className="overflow-x-auto p-4 text-[9px] leading-5 text-cyan-50/80"><code>{apiExample}</code></pre>
             </div>
 
-            <p className="mt-4 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><KeyRound size={13} className="mt-0.5 shrink-0 text-cyan-200/70" />Use your own Groq key in the request header. Do not put keys in frontend source code or public URLs.</p>
+            <p className="mt-4 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><KeyRound size={13} className="mt-0.5 shrink-0 text-cyan-200/70" />Groq is the default. You may send a session key with X-Groq-API-Key, or configure other provider keys on your server. Never put keys in frontend source code or public URLs.</p>
           </section>
 
           <section className="rounded-3xl border border-violet-100/[0.09] bg-[radial-gradient(ellipse_at_100%_0%,rgba(139,92,246,0.11),transparent_48%),rgba(255,255,255,0.025)] p-5 sm:p-7">

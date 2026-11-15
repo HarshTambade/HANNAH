@@ -47,7 +47,7 @@ function normalizeStep(data: any): AgentStep {
   };
 }
 
-async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 12_000, groqApiKey?: string): Promise<AgentStep> {
+async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 90_000, groqApiKey?: string): Promise<AgentStep> {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -70,7 +70,7 @@ async function requestAgentStep(url: string, body: Record<string, unknown>, time
     }
     throw new AgentApiError(
       timedOut
-        ? "The AI request timed out while waiting for the API server. Check the server terminal and Groq model access."
+        ? "The AI request timed out while waiting for the configured provider. Check the API server and provider connection."
         : `Could not reach the AI API at ${endpointLabel}. Start the server with npm run dev from the project root.`,
       timedOut ? 408 : undefined,
     );
@@ -130,17 +130,19 @@ export class LLMRouter {
     return resolveInferenceMode(preferred, browserConnected && network.connected);
   }
 
-  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: ShanayaTool[], model?: string, groqApiKey?: string): Promise<AgentStep> {
+  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: ShanayaTool[], model?: string, groqApiKey?: string, providerId = "groq"): Promise<AgentStep> {
+    const selectedProvider = mode === "ollama" ? "ollama" : providerId;
     const body = {
       mode,
+      provider: selectedProvider,
       ...(mode === "cloud" && model ? { model } : {}),
       messages,
       tools: tools.map(({ name, description, inputSchema }) => ({ type: "function", function: { name, description, parameters: inputSchema } })),
     };
     try {
-      return await requestAgentStep(apiUrl("/api/agent"), body, 12_000, mode === "cloud" ? groqApiKey : undefined);
+      return await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && selectedProvider === "groq" ? groqApiKey : undefined);
     } catch (primaryError) {
-      if (mode !== "cloud" || !shouldUsePythonFallback(primaryError)) throw primaryError;
+      if (mode !== "cloud" || selectedProvider !== "groq" || groqApiKey || !shouldUsePythonFallback(primaryError)) throw primaryError;
       // If the connection dropped during the cloud request, let AgentRuntime
       // switch straight to WebLLM/llama.cpp instead of waiting on an unreachable
       // Python endpoint. A reachable local Python service still gets its cold-load budget.

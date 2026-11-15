@@ -34,17 +34,13 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
   const beginConversation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const key = groqApiKey.trim();
-    if (!key) {
-      setKeyError("Enter your Groq API key to continue.");
-      return;
-    }
     const localDevelopment = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
-    if (!window.isSecureContext && !localDevelopment) {
+    if (key && !window.isSecureContext && !localDevelopment) {
       setKeyError("For your safety, connect over HTTPS before sending an API key.");
       return;
     }
     const configuredApiUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-    if (configuredApiUrl) {
+    if (key && configuredApiUrl) {
       try {
         const apiOrigin = new URL(configuredApiUrl, window.location.href);
         const localApi = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(apiOrigin.hostname);
@@ -209,7 +205,7 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {[
-                { number: "01", title: "Bring your Groq key", detail: "Connect your own Groq account to use cloud conversation." },
+                { number: "01", title: "Choose a model provider", detail: "Use the configured Groq default or another provider enabled by this Shanaya server." },
                 { number: "02", title: "Meet Shanaya", detail: "Enter the companion space with the animated 3D avatar." },
                 { number: "03", title: "Talk your way", detail: "Write a message or turn on voice when you feel like it." },
               ].map((step) => (
@@ -252,11 +248,11 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
               <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] text-slate-400 transition hover:bg-white/[0.05] hover:text-white"><X size={15} /></button>
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-200/15 bg-violet-200/[0.07] text-violet-100"><Sparkles size={17} /></span>
               <p className="mt-6 text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-100/70">Your first step</p>
-              <h2 id="connect-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">Bring your own Groq key.</h2>
-                <p className="mt-3 text-[11px] leading-6 text-slate-400">Connect your key to start a cloud conversation with Shanaya. Groq checks it when you send your first message.</p>
+              <h2 id="connect-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">Connect with Shanaya.</h2>
+                <p className="mt-3 text-[11px] leading-6 text-slate-400">If this server has a model provider configured, you can start right away. You can also add a Groq key for this visit only.</p>
 
               <form className="mt-6" onSubmit={beginConversation}>
-                <label htmlFor="groq-key" className="mb-2 block text-[10px] font-semibold text-slate-200">Groq API key</label>
+                <label htmlFor="groq-key" className="mb-2 block text-[10px] font-semibold text-slate-200">Optional Groq API key</label>
                 <div className="flex items-center rounded-xl border border-white/[0.1] bg-[#080b13] pr-2 transition focus-within:border-violet-300/40">
                   <input
                     id="groq-key"
@@ -275,11 +271,11 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
                   </button>
                 </div>
                 {keyError && <p role="alert" className="mt-2 text-[10px] text-rose-300">{keyError}</p>}
-                <p className="mt-3 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-300/80" />Kept in memory for this visit, sent only with cloud requests, and never stored in your browser.</p>
-                <button type="submit" disabled={!groqApiKey.trim()} className="group mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-200 to-violet-300 text-[11px] font-bold text-[#090d1a] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50">
-                  Enter Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
+                <p className="mt-3 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-300/80" />If provided, the key stays in memory for this visit and is sent only to the Shanaya API for Groq requests.</p>
+                <button type="submit" className="group mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-200 to-violet-300 text-[11px] font-bold text-[#090d1a] transition hover:brightness-105">
+                  Continue to Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
                 </button>
-                <p className="mt-4 text-center text-[9px] text-slate-600">Need a key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-cyan-100/80 underline decoration-cyan-100/25 underline-offset-2 hover:text-cyan-50">Create one at Groq</a></p>
+                <p className="mt-4 text-center text-[9px] text-slate-600">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-cyan-100/80 underline decoration-cyan-100/25 underline-offset-2 hover:text-cyan-50">Create one at Groq</a></p>
               </form>
             </div>
           </section>

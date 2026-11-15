@@ -2,6 +2,29 @@ require("dotenv").config();
 
 const cors = require("cors");
 const express = require("express");
+const {
+  defaultModelFor,
+  defaultProviderId,
+  listProviders,
+  modelChain,
+  providerKey,
+  resolveProvider,
+} = require("./providers/catalog");
+const {
+  discoverProviderModels,
+  requestWithProviderFallback,
+} = require("./providers/runtime");
+
+// Preserve the previous single-provider environment variables as aliases for
+// the generic custom OpenAI-compatible provider.
+if (process.env.CLOUD_API_URL && !process.env.CUSTOM_BASE_URL) process.env.CUSTOM_BASE_URL = process.env.CLOUD_API_URL;
+if (process.env.CLOUD_API_KEY && !process.env.CUSTOM_API_KEY && process.env.CLOUD_API_URL) process.env.CUSTOM_API_KEY = process.env.CLOUD_API_KEY;
+if (process.env.CLOUD_MODEL && !process.env.CUSTOM_MODEL && process.env.CLOUD_API_URL) process.env.CUSTOM_MODEL = process.env.CLOUD_MODEL;
+if (process.env.CLOUD_MODEL_FALLBACKS && !process.env.CUSTOM_MODELS && process.env.CLOUD_API_URL) process.env.CUSTOM_MODELS = process.env.CLOUD_MODEL_FALLBACKS;
+if (!process.env.CLOUD_API_URL && process.env.CLOUD_API_KEY && !process.env.GROQ_API_KEY) process.env.GROQ_API_KEY = process.env.CLOUD_API_KEY;
+if (!process.env.CLOUD_API_URL && process.env.CLOUD_MODEL && !process.env.GROQ_MODEL) process.env.GROQ_MODEL = process.env.CLOUD_MODEL;
+if (!process.env.CLOUD_API_URL && process.env.CLOUD_MODEL_FALLBACKS && !process.env.GROQ_MODEL_FALLBACKS) process.env.GROQ_MODEL_FALLBACKS = process.env.CLOUD_MODEL_FALLBACKS;
+if (process.env.CLOUD_API_URL && !process.env.SHANAYA_DEFAULT_PROVIDER) process.env.SHANAYA_DEFAULT_PROVIDER = "custom";
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
@@ -22,60 +45,25 @@ const corsOrigin = (origin, callback) => {
   }
   return callback(null, false);
 };
-const defaultGroqApiUrl = "https://api.groq.com/openai/v1/chat/completions";
-const cloudApiUrl = process.env.GROQ_API_URL || process.env.CLOUD_API_URL || defaultGroqApiUrl;
-const isGroqProvider = (() => {
-  try {
-    const url = new URL(cloudApiUrl);
-    return url.protocol === "https:" && url.hostname === "api.groq.com" && !url.port;
-  } catch {
-    return false;
-  }
-})();
-const defaultGroqModels = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.1-8b-instant"];
-const cloudApiKey = isGroqProvider
-  ? process.env.GROQ_API_KEY || process.env.CLOUD_API_KEY
-  : process.env.CLOUD_API_KEY || process.env.GROQ_API_KEY;
-const configuredPrimaryModels = (
-  process.env.GROQ_MODEL ||
-  process.env.CLOUD_MODEL ||
-  ""
-)
-  .split(",")
-  .map((model) => model.trim())
-  .filter(Boolean);
-const configuredFallbacks = (
-  process.env.GROQ_MODEL_FALLBACKS ||
-  process.env.CLOUD_MODEL_FALLBACKS ||
-  ""
-)
-  .split(",")
-  .map((model) => model.trim())
-  .filter(Boolean);
-const primaryCloudModel = configuredPrimaryModels[0] || configuredFallbacks[0] || (isGroqProvider ? defaultGroqModels[0] : "");
-const fallbackCloudModels = isGroqProvider
-  ? (configuredFallbacks.length
-    // Keep the requested small Groq model in the chain even when deployment config
-    // supplies a custom fallback list; de-duplication below preserves its order.
-    ? [...configuredFallbacks, "llama-3.1-8b-instant"]
-    : defaultGroqModels.filter((model) => model !== primaryCloudModel))
-  : configuredFallbacks;
-const cloudModels = [...new Set([
-  primaryCloudModel,
-  ...configuredPrimaryModels.slice(1),
-  ...fallbackCloudModels,
-].filter(Boolean))];
-const cloudRequestTimeout = Math.max(3_000, Math.min(120_000, Number(process.env.CLOUD_REQUEST_TIMEOUT_MS) || 10_000));
-const cloudProvider = isGroqProvider ? "Groq" : "Custom";
-const ollamaBaseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/+$/, "");
-const ollamaModel = process.env.OLLAMA_MODEL || "gurubot/self-after-dark:latest";
+const configuredDefaultProvider = resolveProvider({ id: defaultProviderId() });
+const cloudApiKey = providerKey(configuredDefaultProvider);
+const cloudModels = modelChain(configuredDefaultProvider, defaultModelFor(configuredDefaultProvider));
+const cloudRequestTimeout = Math.max(3_000, Math.min(120_000, Number(process.env.CLOUD_REQUEST_TIMEOUT_MS) || 60_000));
+const cloudProvider = configuredDefaultProvider.label;
 
-function getRequestCloudApiKey(req) {
+function getRequestProviderApiKey(req, provider) {
   const suppliedKey = req.get("x-groq-api-key")?.trim();
-  if (!suppliedKey) return cloudApiKey;
+  if (!suppliedKey) return providerKey(provider);
   // A visitor-provided Groq key may only go to Groq's official HTTPS API.
-  if (!isGroqProvider) {
-    const error = new Error("Visitor-provided Groq keys require the official Groq API endpoint.");
+  let officialGroq = false;
+  try {
+    const url = new URL(provider.baseUrl);
+    officialGroq = provider.id === "groq" && url.protocol === "https:" && url.hostname === "api.groq.com" && !url.port;
+  } catch {
+    officialGroq = false;
+  }
+  if (!officialGroq) {
+    const error = new Error("A visitor-provided Groq key can only be used with the official Groq API endpoint.");
     error.status = 400;
     throw error;
   }
@@ -85,6 +73,23 @@ function getRequestCloudApiKey(req) {
     throw error;
   }
   return suppliedKey;
+}
+
+function getRequestProvider(req, providerId) {
+  let provider;
+  try {
+    provider = resolveProvider({ id: providerId });
+  } catch (error) {
+    error.status = 400;
+    throw error;
+  }
+  const apiKey = getRequestProviderApiKey(req, provider);
+  if (!provider.local && provider.id !== "custom" && !apiKey) {
+    const error = new Error(`Configure ${provider.envKey || "provider credentials"} on the server or use a Groq key for Groq.`);
+    error.status = 503;
+    throw error;
+  }
+  return { provider, apiKey };
 }
 const systemPrompt = [
   "You are Shanaya, a warm, attentive, candid companion and capable personal assistant. Sound natural and emotionally perceptive, while staying honest that you are an AI and never inventing real-world personal experiences.",
@@ -113,11 +118,35 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", provider: cloudProvider, ready: Boolean(cloudApiKey && cloudModels.length) });
+  res.json({ status: "ok", provider: cloudProvider, ready: Boolean((cloudApiKey || configuredDefaultProvider.local) && cloudModels.length) });
 });
 
-app.get("/api/models", (_req, res) => {
-  res.json({ provider: cloudProvider, defaultModel: cloudModels[0] || "", models: cloudModels });
+app.get("/api/providers", (_req, res) => {
+  const providers = listProviders().map(({ id, label, kind, local, free, docs, requiresKey, configured, defaultModel }) => ({
+    id, label, kind, local, free, docs, requiresKey, configured, defaultModel,
+  }));
+  res.json({ defaultProvider: defaultProviderId(), providers });
+});
+
+app.get("/api/models", async (req, res) => {
+  const providerId = typeof req.query.provider === "string" && req.query.provider.trim()
+    ? req.query.provider.trim()
+    : defaultProviderId();
+  try {
+    const { provider, apiKey } = getRequestProvider(req, providerId);
+    const { models, liveModels } = await discoverProviderModels(provider, apiKey, Math.min(5_000, cloudRequestTimeout));
+    const configuredModel = defaultModelFor(provider);
+    const defaultModel = liveModels.includes(configuredModel) ? configuredModel : liveModels[0] || configuredModel;
+    const requestedModels = modelChain(provider, defaultModel);
+    return res.json({
+      provider: provider.label,
+      providerId: provider.id,
+      defaultModel,
+      models: [...new Set([...requestedModels, ...models])].slice(0, 200),
+    });
+  } catch (error) {
+    return res.status(error.status || 400).json({ error: error.message || "Could not load models for this provider." });
+  }
 });
 
 app.get("/api/pinecall/token", async (_req, res) => {
@@ -180,75 +209,30 @@ function parseAssistantOutput(content) {
   return { reply: content.trim().replace(/^```(?:[a-z0-9_-]+)?\s*/i, "").replace(/\s*```$/, ""), emotion: "neutral" };
 }
 
-function isNetworkFailure(error) {
-  const code = error && typeof error === "object" ? error.code : undefined;
-  return error instanceof TypeError
-    || ["AbortError", "TimeoutError"].includes(error?.name)
-    || ["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EAI_AGAIN", "ETIMEDOUT"].includes(code);
-}
-
 async function requestCloud(messages, models = cloudModels, apiKey = cloudApiKey) {
-  if (!apiKey || models.length === 0) throw new Error("Add GROQ_API_KEY (or CLOUD_API_KEY for an alternate provider) to server/.env to enable cloud AI.");
-
-  let lastError;
-  for (const model of models) {
-    try {
-      const response = await fetch(cloudApiUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "system", content: systemPrompt }, ...messages],
-          response_format: { type: "json_object" },
-          temperature: 0.7,
-          max_completion_tokens: 700,
-        }),
-        signal: AbortSignal.timeout(cloudRequestTimeout),
-      });
-      const completion = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const error = new Error(`Cloud endpoint returned HTTP ${response.status}.`);
-        error.status = response.status;
-        throw error;
-      }
-      const content = completion.choices?.[0]?.message?.content?.trim();
-      if (content) return parseAssistantOutput(content);
-      lastError = new Error(`${model} returned an empty response.`);
-    } catch (error) {
-      lastError = error;
-      if (isNetworkFailure(error)) {
-        console.warn(`Cloud model ${model} could not reach its provider; skipping the remaining cloud models.`);
-        break;
-      }
-      if (error.status === 401 || error.status === 403) break;
-      if (error.status === 429) console.warn(`Cloud model ${model} was rate limited; trying the next configured model.`);
-      else console.warn(`Cloud model ${model} failed; trying the next configured model.`);
-    }
-  }
-  throw lastError || new Error("No cloud models are configured.");
+  if (!apiKey || models.length === 0) throw new Error(`Configure a key for ${configuredDefaultProvider.label} to enable cloud AI.`);
+  const message = await requestWithProviderFallback({
+    provider: configuredDefaultProvider,
+    apiKey,
+    requestedModel: models[0] || defaultModelFor(configuredDefaultProvider),
+    messages,
+    systemPrompt,
+    timeoutMs: cloudRequestTimeout,
+  });
+  return parseAssistantOutput(message.content || "");
 }
 
 async function requestOllama(messages) {
-  const response = await fetch(`${ollamaBaseUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: ollamaModel,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-      format: "json",
-      stream: false,
-      options: { temperature: 0.7 },
-    }),
-    signal: AbortSignal.timeout(120_000),
+  const provider = resolveProvider({ id: "ollama" });
+  const message = await requestWithProviderFallback({
+    provider,
+    apiKey: providerKey(provider),
+    requestedModel: defaultModelFor(provider),
+    messages,
+    systemPrompt,
+    timeoutMs: 120_000,
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `Ollama returned HTTP ${response.status}.`);
-  const content = data.message?.content?.trim();
-  if (!content) throw new Error("Ollama returned an empty response.");
-  return parseAssistantOutput(content);
+  return parseAssistantOutput(message.content || "");
 }
 
 function isValidAgentMessage(message) {
@@ -275,66 +259,28 @@ function normalizeTools(tools) {
 }
 
 async function requestCloudAgent(messages, tools, models = cloudModels, apiKey = cloudApiKey) {
-  if (!apiKey || models.length === 0) throw new Error("Add GROQ_API_KEY (or CLOUD_API_KEY for an alternate provider) to server/.env to enable cloud AI.");
-  let lastError;
-  for (const model of models) {
-    try {
-      const response = await fetch(cloudApiUrl, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: `${systemPrompt} When useful, call the provided tools. Never say an action succeeded before the tool result confirms it.` },
-            ...messages,
-          ],
-          tools,
-          tool_choice: "auto",
-          temperature: 0.4,
-          max_completion_tokens: 900,
-        }),
-        signal: AbortSignal.timeout(cloudRequestTimeout),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const error = new Error(`Cloud endpoint returned HTTP ${response.status}.`);
-        error.status = response.status;
-        throw error;
-      }
-      const message = data.choices?.[0]?.message;
-      if (message && (typeof message.content === "string" || Array.isArray(message.tool_calls))) return message;
-      lastError = new Error(`${model} returned neither a reply nor a tool request.`);
-    } catch (error) {
-      lastError = error;
-      if (isNetworkFailure(error)) {
-        console.warn(`Cloud agent model ${model} could not reach its provider; skipping the remaining cloud models.`);
-        break;
-      }
-      if (error.status === 401 || error.status === 403) break;
-      if (error.status === 429) console.warn(`Cloud agent model ${model} was rate limited; trying the next configured model.`);
-      else console.warn(`Cloud agent model ${model} failed; trying the next configured model.`);
-    }
-  }
-  throw lastError || new Error("No cloud agent models are configured.");
+  return requestWithProviderFallback({
+    provider: configuredDefaultProvider,
+    apiKey,
+    requestedModel: models[0] || defaultModelFor(configuredDefaultProvider),
+    messages,
+    tools,
+    systemPrompt,
+    timeoutMs: cloudRequestTimeout,
+  });
 }
 
 async function requestOllamaAgent(messages, tools) {
-  const response = await fetch(`${ollamaBaseUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: ollamaModel,
-      messages: [{ role: "system", content: `${systemPrompt} Use the provided tools when they help. Never claim an action succeeded before a tool result confirms it.` }, ...messages],
-      tools,
-      stream: false,
-      options: { temperature: 0.4 },
-    }),
-    signal: AbortSignal.timeout(120_000),
+  const provider = resolveProvider({ id: "ollama" });
+  return requestWithProviderFallback({
+    provider,
+    apiKey: providerKey(provider),
+    requestedModel: defaultModelFor(provider),
+    messages,
+    tools,
+    systemPrompt,
+    timeoutMs: 120_000,
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `Ollama returned HTTP ${response.status}.`);
-  if (!data.message || (typeof data.message.content !== "string" && !Array.isArray(data.message.tool_calls))) throw new Error("Ollama returned neither a reply nor a tool request.");
-  return data.message;
 }
 
 app.post("/api/agent", async (req, res) => {
@@ -345,18 +291,20 @@ app.post("/api/agent", async (req, res) => {
   }
   const tools = normalizeTools(req.body?.tools);
   if (!tools) return res.status(400).json({ error: "The agent tool schemas are invalid." });
+  const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || defaultProviderId());
+  let provider;
   let requestApiKey;
-  if (mode === "cloud") {
-    try {
-      requestApiKey = getRequestCloudApiKey(req);
-    } catch (error) {
-      return res.status(error.status || 400).json({ error: error.message });
-    }
+  try {
+    ({ provider, apiKey: requestApiKey } = getRequestProvider(req, providerId));
+  } catch (error) {
+    return res.status(error.status || 400).json({ error: error.message });
   }
-  const selectedModels = mode === "cloud" && typeof model === "string"
-    ? (cloudModels.includes(model) ? [model, ...cloudModels.filter((candidate) => candidate !== model)] : null)
-    : cloudModels;
-  if (!selectedModels) return res.status(400).json({ error: "The selected cloud model is not configured on this server." });
+  if (typeof model === "string" && (model.length > 200 || /[\r\n]/.test(model))) {
+    return res.status(400).json({ error: "The selected model identifier is invalid." });
+  }
+  const requestedModel = typeof model === "string" && model.trim() ? model.trim() : defaultModelFor(provider);
+  const selectedModels = modelChain(provider, requestedModel);
+  if (!selectedModels.length) return res.status(400).json({ error: `No model is configured for ${provider.label}.` });
 
   try {
     const normalizedMessages = messages.map((message) => ({
@@ -365,21 +313,26 @@ app.post("/api/agent", async (req, res) => {
       ...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
       ...(message.tool_calls ? { tool_calls: message.tool_calls } : {}),
     }));
-    const message = mode === "ollama"
-      ? await requestOllamaAgent(normalizedMessages, tools)
-      : await requestCloudAgent(normalizedMessages, tools, selectedModels, requestApiKey);
+    const message = await requestWithProviderFallback({
+      provider,
+      apiKey: requestApiKey,
+      requestedModel: selectedModels[0],
+      messages: normalizedMessages,
+      tools,
+      systemPrompt,
+      timeoutMs: provider.local ? 120_000 : cloudRequestTimeout,
+    });
     return res.json({ message: { content: typeof message.content === "string" ? message.content : "", tool_calls: Array.isArray(message.tool_calls) ? message.tool_calls : [] } });
   } catch (error) {
-    console.error(`${mode} agent request failed (${error?.name || "request error"}).`);
-    const missingCloudSettings = mode === "cloud" && (!requestApiKey || cloudModels.length === 0);
-    const rejectedUserKey = mode === "cloud" && (error?.status === 401 || error?.status === 403);
-    const status = missingCloudSettings ? 503 : rejectedUserKey ? error.status : 502;
+    console.error(`${provider.label} agent request failed (${error?.name || "request error"}).`);
+    const rejectedKey = error?.status === 401 || error?.status === 403;
+    const status = rejectedKey ? error.status : 502;
     return res.status(status).json({
-      error: mode === "ollama"
+      error: mode === "ollama" || provider.local
         ? "Could not reach Ollama or its model does not support tool calling."
-        : rejectedUserKey
-          ? "Groq rejected this API key. Check that the key is valid and active."
-          : "Cloud AI could not complete an agent step with the configured models.",
+        : rejectedKey
+          ? `${provider.label} rejected the configured API key. Check that the key is valid and active.`
+          : `${provider.label} could not complete an agent step with the configured models.`,
     });
   }
 });
@@ -422,7 +375,7 @@ app.post("/api/desktop/computer", async (req, res) => {
   try {
     const anthropic = new (require("@anthropic-ai/sdk"))({ apiKey });
     const result = await anthropic.messages.create({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
+      model: process.env.ANTHROPIC_DESKTOP_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
       max_tokens: 1400,
       system: "You are Shanaya, a warm, attentive, natural-sounding desktop assistant. Silently infer the user's intent, entities, constraints, earlier-turn references, and emotional cues; understand informal language and typos without correcting them unless asked. Respond specifically and proportionately, with natural variation and no canned filler. Stay honest that you are an AI; do not invent personal experiences. Take initiative within the stated task and use the provided computer tool when useful. Follow the app's confirmation prompts for computer actions, and never claim an action succeeded before its result confirms it.",
       tools: [{
@@ -460,37 +413,43 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "Each message needs a valid role and non-empty content up to 4,000 characters." });
   }
 
+  const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || defaultProviderId());
+  let provider;
   let requestApiKey;
-  if (mode === "cloud") {
-    try {
-      requestApiKey = getRequestCloudApiKey(req);
-    } catch (error) {
-      return res.status(error.status || 400).json({ error: error.message });
-    }
+  try {
+    ({ provider, apiKey: requestApiKey } = getRequestProvider(req, providerId));
+  } catch (error) {
+    return res.status(error.status || 400).json({ error: error.message });
   }
-
-  const selectedModels = mode === "cloud" && typeof model === "string"
-    ? (cloudModels.includes(model) ? [model, ...cloudModels.filter((candidate) => candidate !== model)] : null)
-    : cloudModels;
-  if (!selectedModels) return res.status(400).json({ error: "The selected cloud model is not configured on this server." });
+  if (typeof model === "string" && (model.length > 200 || /[\r\n]/.test(model))) {
+    return res.status(400).json({ error: "The selected model identifier is invalid." });
+  }
+  const requestedModel = typeof model === "string" && model.trim() ? model.trim() : defaultModelFor(provider);
+  const selectedModels = modelChain(provider, requestedModel);
+  if (!selectedModels.length) return res.status(400).json({ error: `No model is configured for ${provider.label}.` });
 
   try {
     const normalizedMessages = messages.map(({ role, content }) => ({ role, content: content.trim() }));
-    const result = mode === "ollama"
-      ? await requestOllama(normalizedMessages)
-      : await requestCloud(normalizedMessages, selectedModels, requestApiKey);
+    const message = await requestWithProviderFallback({
+      provider,
+      apiKey: requestApiKey,
+      requestedModel: selectedModels[0],
+      messages: normalizedMessages,
+      systemPrompt,
+      timeoutMs: provider.local ? 120_000 : cloudRequestTimeout,
+    });
+    const result = parseAssistantOutput(message.content || "");
     if (!result.reply) return res.status(502).json({ error: "The AI returned an empty response. Please try again." });
     return res.json(result);
   } catch (error) {
-    console.error(`${mode} chat request failed (${error?.name || "request error"}).`);
-    const missingCloudSettings = mode === "cloud" && (!requestApiKey || cloudModels.length === 0);
-    const rejectedUserKey = mode === "cloud" && (error?.status === 401 || error?.status === 403);
-    const message = mode === "ollama"
+    console.error(`${provider.label} chat request failed (${error?.name || "request error"}).`);
+    const rejectedKey = error?.status === 401 || error?.status === 403;
+    const message = mode === "ollama" || provider.local
       ? "Could not reach your Ollama server. Check that it is running and that OLLAMA_BASE_URL is correct."
-      : rejectedUserKey
-        ? "Groq rejected this API key. Check that the key is valid and active."
-        : "Cloud AI could not respond using the configured model fallback chain.";
-    return res.status(missingCloudSettings ? 503 : rejectedUserKey ? error.status : 502).json({ error: message });
+      : rejectedKey
+        ? `${provider.label} rejected the configured API key. Check that the key is valid and active.`
+        : `${provider.label} could not respond using its configured model fallback chain.`;
+    return res.status(rejectedKey ? error.status : 502).json({ error: message });
   }
 });
 

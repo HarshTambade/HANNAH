@@ -106,6 +106,7 @@ function trimConversation(messages: AgentMessage[]) {
 export async function runAgentTurn(options: {
   mode: InferenceMode;
   model?: string;
+  providerId?: string;
   groqApiKey?: string;
   messages: ChatMessage[];
   generateLocal: (prompt: string, mode: InferenceMode) => Promise<string>;
@@ -135,7 +136,7 @@ export async function runAgentTurn(options: {
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, tools, options.model, options.groqApiKey);
+        const step = await LLMRouter.requestStep(mode, conversation, tools, options.model, options.groqApiKey, options.providerId);
         content = step.content;
         if (step.toolCalls.length > 8) throw new Error("The model requested too many tools at once.");
         toolCalls = step.toolCalls;

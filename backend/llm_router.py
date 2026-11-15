@@ -17,16 +17,32 @@ from openai import AsyncOpenAI
 logger = logging.getLogger("shanaya.llm")
 ALLOWED_EMOTIONS = {"happy", "sad", "cute", "neutral"}
 DEFAULT_GROQ_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    # Graceful model-ID fallback for accounts where the requested Llama IDs
-    # have been retired or are unavailable on their Groq plan.
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
 ]
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+# All of these hosted APIs expose the OpenAI chat-completions protocol. Model
+# IDs can be supplied through *_MODEL(S), so new models and private gateways do
+# not require a code release.
+OPENAI_COMPATIBLE_PROVIDERS = (
+    ("OpenAI", "OPENAI_API_KEY", "OPENAI_BASE_URL", OPENAI_BASE_URL, "OPENAI_MODEL", "OPENAI_MODELS", "gpt-4.1-mini"),
+    ("Gemini", "GEMINI_API_KEY", "GEMINI_BASE_URL", GEMINI_OPENAI_BASE_URL, "GEMINI_MODEL", "GEMINI_MODELS", "gemini-2.5-flash"),
+    ("OpenRouter", "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1", "OPENROUTER_MODEL", "OPENROUTER_MODELS", "openrouter/auto"),
+    ("Together AI", "TOGETHER_API_KEY", "TOGETHER_BASE_URL", "https://api.together.xyz/v1", "TOGETHER_MODEL", "TOGETHER_MODELS", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
+    ("Cerebras", "CEREBRAS_API_KEY", "CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1", "CEREBRAS_MODEL", "CEREBRAS_MODELS", "llama-3.3-70b"),
+    ("DeepSeek", "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1", "DEEPSEEK_MODEL", "DEEPSEEK_MODELS", "deepseek-chat"),
+    ("Mistral", "MISTRAL_API_KEY", "MISTRAL_BASE_URL", "https://api.mistral.ai/v1", "MISTRAL_MODEL", "MISTRAL_MODELS", "mistral-small-latest"),
+    ("xAI", "XAI_API_KEY", "XAI_BASE_URL", "https://api.x.ai/v1", "XAI_MODEL", "XAI_MODELS", "grok-3-mini"),
+    ("Fireworks", "FIREWORKS_API_KEY", "FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1", "FIREWORKS_MODEL", "FIREWORKS_MODELS", "accounts/fireworks/models/llama-v3p3-70b-instruct"),
+    ("NVIDIA NIM", "NVIDIA_API_KEY", "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1", "NVIDIA_MODEL", "NVIDIA_MODELS", "meta/llama-3.3-70b-instruct"),
+    ("SambaNova", "SAMBANOVA_API_KEY", "SAMBANOVA_BASE_URL", "https://api.sambanova.ai/v1", "SAMBANOVA_MODEL", "SAMBANOVA_MODELS", "Meta-Llama-3.3-70B-Instruct"),
+    ("Perplexity", "PERPLEXITY_API_KEY", "PERPLEXITY_BASE_URL", "https://api.perplexity.ai", "PERPLEXITY_MODEL", "PERPLEXITY_MODELS", "sonar"),
+    ("Hyperbolic", "HYPERBOLIC_API_KEY", "HYPERBOLIC_BASE_URL", "https://api.hyperbolic.xyz/v1", "HYPERBOLIC_MODEL", "HYPERBOLIC_MODELS", "meta-llama/Llama-3.3-70B-Instruct"),
+)
 # Keep failed cloud attempts short so an offline device can reach local inference.
 NETWORK_TIMEOUT = httpx.Timeout(15.0, connect=2.5, read=15.0, write=5.0, pool=3.0)
 
@@ -65,24 +81,43 @@ class LLMRouter:
 
     def candidates(self) -> list[Candidate]:
         groq_key = os.getenv("GROQ_API_KEY", "").strip()
-        openai_key = os.getenv("OPENAI_API_KEY", "").strip()
         anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-        gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
         candidates: list[Candidate] = []
 
         if groq_key:
-            # The requested Llama pair always stays first and in order. Any
-            # operator-specific models follow the built-in modern fallbacks.
             configured_models = _csv("GROQ_MODELS")
-            groq_models = list(dict.fromkeys([*DEFAULT_GROQ_MODELS, *configured_models]))
-            candidates.extend(Candidate(1, "Groq", model, groq_key, GROQ_BASE_URL) for model in groq_models)
+            primary_model = os.getenv("GROQ_MODEL", "").strip()
+            groq_models = list(dict.fromkeys([
+                primary_model or DEFAULT_GROQ_MODELS[0],
+                *_csv("GROQ_MODEL_FALLBACKS"),
+                *configured_models,
+                *DEFAULT_GROQ_MODELS,
+            ]))
+            groq_base_url = os.getenv("GROQ_API_URL", GROQ_BASE_URL).strip() or GROQ_BASE_URL
+            candidates.extend(Candidate(1, "Groq", model, groq_key, groq_base_url) for model in groq_models)
 
-        if openai_key:
-            candidates.extend(Candidate(2, "OpenAI", model, openai_key, OPENAI_BASE_URL) for model in _csv("OPENAI_MODELS", "gpt-4o"))
         if anthropic_key:
-            candidates.extend(Candidate(2, "Anthropic", model, anthropic_key) for model in _csv("ANTHROPIC_MODELS", "claude-sonnet-5"))
-        if gemini_key:
-            candidates.extend(Candidate(2, "Gemini", model, gemini_key, GEMINI_OPENAI_BASE_URL) for model in _csv("GEMINI_MODELS", "gemini-3.8-flash"))
+            anthropic_models = _csv("ANTHROPIC_MODELS") or _csv("ANTHROPIC_MODEL") or ["claude-sonnet-4-5"]
+            anthropic_base_url = os.getenv("ANTHROPIC_BASE_URL", "").strip()
+            candidates.extend(Candidate(2, "Anthropic", model, anthropic_key, anthropic_base_url) for model in anthropic_models)
+
+        for label, key_env, base_env, default_base, model_env, models_env, fallback_model in OPENAI_COMPATIBLE_PROVIDERS:
+            api_key = os.getenv(key_env, "").strip()
+            if not api_key:
+                continue
+            models = _csv(models_env) or _csv(model_env) or [fallback_model]
+            base_url = os.getenv(base_env, default_base).strip() or default_base
+            candidates.extend(Candidate(2, label, model, api_key, base_url) for model in models)
+
+        # A self-hosted gateway can require a key or accept unauthenticated
+        # loopback requests. Its model ID is operator-defined.
+        custom_base_url = (os.getenv("CUSTOM_BASE_URL") or os.getenv("CLOUD_API_URL", "")).strip()
+        if custom_base_url.rstrip("/").endswith("/chat/completions"):
+            custom_base_url = custom_base_url.rstrip("/")[:-len("/chat/completions")]
+        custom_models = _csv("CUSTOM_MODELS") or _csv("CUSTOM_MODEL") or _csv("CLOUD_MODEL_FALLBACKS") or _csv("CLOUD_MODEL")
+        if custom_base_url and custom_models:
+            custom_key = (os.getenv("CUSTOM_API_KEY") or os.getenv("CLOUD_API_KEY") or "not-needed").strip()
+            candidates.extend(Candidate(2, "Custom gateway", model, custom_key, custom_base_url) for model in custom_models)
 
         local_path = os.getenv("LLAMA_CPP_MODEL_PATH", "").strip()
         if local_path:
@@ -218,7 +253,10 @@ class LLMRouter:
                 "description": function.get("description", ""),
                 "input_schema": function.get("parameters", {"type": "object", "properties": {}}),
             })
-        client = AsyncAnthropic(api_key=candidate.api_key, timeout=NETWORK_TIMEOUT, max_retries=0)
+        client_options: dict[str, Any] = {"api_key": candidate.api_key, "timeout": NETWORK_TIMEOUT, "max_retries": 0}
+        if candidate.base_url:
+            client_options["base_url"] = candidate.base_url
+        client = AsyncAnthropic(**client_options)
         try:
             params: dict[str, Any] = {
                 "model": candidate.model,

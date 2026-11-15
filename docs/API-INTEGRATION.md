@@ -37,6 +37,7 @@ CLIENT_ORIGIN=http://localhost:5173
 GROQ_API_KEY=replace_with_your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
+SHANAYA_DEFAULT_PROVIDER=groq
 ```
 
 Important variables:
@@ -49,16 +50,23 @@ Important variables:
 | `GROQ_API_KEY` | No | Server-side Groq credential. |
 | `GROQ_MODEL` | No | Primary cloud model. |
 | `GROQ_MODEL_FALLBACKS` | No | Comma-separated fallback models. |
-| `CLOUD_API_URL` | No | OpenAI-compatible completion endpoint when not using Groq. |
-| `CLOUD_API_KEY` | No | Credential for the custom cloud provider. |
+| `SHANAYA_DEFAULT_PROVIDER` | No | Provider ID used by default; defaults to `groq`. |
+| `<PROVIDER>_API_KEY` | For a hosted provider | Server-side key, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`. |
+| `<PROVIDER>_MODEL` / `<PROVIDER>_MODELS` | No | Preferred model and optional comma-separated fallbacks. |
+| `<PROVIDER>_BASE_URL` | No | Optional OpenAI-compatible endpoint override for a configured provider. |
+| `CUSTOM_BASE_URL` / `CUSTOM_API_KEY` | For a custom gateway | OpenAI-compatible gateway URL; the key is optional when the endpoint does not require authentication. Remote URLs must use HTTPS. |
+| `CLOUD_API_URL` / `CLOUD_API_KEY` | Legacy | Preserved aliases for the custom gateway; the custom gateway becomes default when these are used. |
 | `OLLAMA_BASE_URL` | No | Ollama server URL; defaults to `http://localhost:11434`. |
 | `OLLAMA_MODEL` | No | Ollama model used by `mode: "ollama"`. |
 | `CLOUD_REQUEST_TIMEOUT_MS` | No | Cloud request timeout, clamped to 3–120 seconds. |
 | `MITHI_TTS_URL` | No | Optional Mithi `/synthesize` service URL. |
 | `PINECALL_TOKEN_URL` | No | Trusted server-side Pinecall token issuer. |
-| `ANTHROPIC_API_KEY` | No | Enables Electron desktop computer use. |
+| `ANTHROPIC_API_KEY` | No | Enables Anthropic chat, Python provider fallback, and Electron desktop computer use. |
+| `ANTHROPIC_DESKTOP_MODEL` | No | Model for the Electron computer-toolset route; falls back to `ANTHROPIC_MODEL`. |
 | `MCP_ENABLED` | No | Enables the authenticated `/mcp` endpoint when `true`. |
 | `MCP_API_TOKEN` | No | Bearer token of at least 32 characters for remote MCP. |
+
+The Python agent fallback also tries Groq first, then configured Anthropic and OpenAI-compatible providers, followed by local inference. It accepts provider-specific `*_API_KEY`, `*_BASE_URL`, `*_MODEL`, and `*_MODELS` variables, plus `CUSTOM_BASE_URL` and a custom model ID for a gateway.
 
 ## Common response conventions
 
@@ -93,13 +101,22 @@ Returns API and provider readiness without returning credentials:
 
 Use this for deployment checks and client status indicators. `ready: false` means the server is reachable but cloud credentials or models are not configured.
 
+### `GET /api/providers`
+
+Lists provider IDs, display names, protocols, and credential availability. It does not return API keys or provider base URLs. Groq is listed for visitors who enter a session key.
+
 ### `GET /api/models`
 
-Lists models configured for cloud requests:
+Lists models for a selected provider. The server discovers models from the provider when supported and falls back to configured or catalog model IDs:
+
+```text
+GET /api/models?provider=groq
+```
 
 ```json
 {
   "provider": "Groq",
+  "providerId": "groq",
   "defaultModel": "openai/gpt-oss-120b",
   "models": ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
 }
@@ -131,11 +148,11 @@ Successful response:
 
 Supported modes:
 
-- `cloud`: Groq or the configured OpenAI-compatible provider.
+- `cloud`: Groq by default, or any configured provider in the server catalog. OpenAI-compatible APIs, Anthropic Messages, and Ollama use their matching adapters.
 - `ollama`: the configured local Ollama server.
 - WebLLM and native llama.cpp inference run directly in the client and do not use this endpoint.
 
-For a private development installation, a caller may provide a temporary Groq key with `x-groq-api-key`. The server accepts that header only when the configured provider is the official Groq HTTPS API. Do not collect or transmit user keys through an untrusted public deployment; prefer a server-side secret manager.
+For a private installation, a caller may provide a temporary Groq key with `x-groq-api-key`. It is forwarded only to the official Groq HTTPS API. Other provider keys remain on the server. Do not collect or transmit user keys through an untrusted public deployment; prefer a server-side secret manager.
 
 ### `POST /api/agent`
 
@@ -144,6 +161,7 @@ Runs one agent step and returns text and/or tool calls. The client executes appr
 ```json
 {
   "mode": "cloud",
+  "provider": "groq",
   "model": "openai/gpt-oss-120b",
   "messages": [
     {"role": "user", "content": "What is the weather workflow?"}
