@@ -37,7 +37,7 @@
 ### Known residual issues
 - Installer size enforcement now targeted to real installers after excluding unpacked artifacts.
 - Full Electron build not run locally; release job is the authoritative gate.
-- Marketplace, real PAP OAuth, real cloud home provisioning, and real ITU-T mappings remain scaffolds.
+- The client now includes a first-party bundled marketplace for agents and skills, with local install, activation/enablement, and uninstall. Remote discovery, third-party publishing, package signing, and remote updates remain unimplemented. Real PAP OAuth, real cloud home provisioning, and real ITU-T mappings remain scaffolds.
 - Runtime governance, dreaming, and hardware layers are service-level scaffolds integrated into existing systems rather than fully productionized endpoints.
 
 ## Recommended next actions

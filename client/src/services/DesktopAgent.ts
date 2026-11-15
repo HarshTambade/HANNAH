@@ -1,6 +1,7 @@
 import { apiFetch, apiUrl } from "./api";
 import { SafetyGuard } from "./SafetyGuard";
 import { getDesktopBridge } from "./DesktopBridge";
+import { MarketplaceService } from "./MarketplaceService";
 
 function summarizeAction(name: string, input: Record<string, unknown>) {
   if (name === "type") return `Type this exact text: “${String(input.text ?? "")}”`;
@@ -29,7 +30,7 @@ export async function runDesktopAgentTurn(task: string, onActivity: (message: st
     const response = await apiFetch(apiUrl("/api/desktop/computer"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages }),
+      body: JSON.stringify({ messages, marketplaceItemIds: MarketplaceService.getActivePackageIds() }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "Desktop agent request failed.");

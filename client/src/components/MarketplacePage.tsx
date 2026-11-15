@@ -1,0 +1,155 @@
+import { useMemo, useState } from "react";
+import {
+  ArrowLeft, Bot, Check, Download, PackageOpen, Search, ShieldCheck, Sparkles, Trash2,
+} from "lucide-react";
+import { MarketplaceService, type MarketplacePackageType, type MarketplaceState } from "../services/MarketplaceService";
+
+type MarketplacePageProps = { onBack: () => void };
+type TypeFilter = "all" | MarketplacePackageType;
+
+export default function MarketplacePage({ onBack }: MarketplacePageProps) {
+  const [state, setState] = useState(() => MarketplaceService.getState());
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [status, setStatus] = useState("");
+  const packages = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return MarketplaceService.list().filter((item) => {
+      if (typeFilter !== "all" && item.type !== typeFilter) return false;
+      if (!normalizedQuery) return true;
+      return [item.name, item.description, item.category, ...item.tags].join(" ").toLowerCase().includes(normalizedQuery);
+    });
+  }, [query, typeFilter]);
+  const installedCount = state.installedIds.length;
+
+  const update = (action: () => MarketplaceState, successMessage: string) => {
+    try {
+      setState(action());
+      setStatus(successMessage);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "The marketplace action could not be completed.");
+    }
+  };
+
+  const isInstalled = (id: string) => state.installedIds.includes(id);
+
+  return (
+    <main className="landing-page relative h-[100dvh] overflow-y-auto bg-[#070a13] text-slate-100 selection:bg-violet-300/30">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div className="absolute -left-40 top-32 h-[32rem] w-[32rem] rounded-full bg-violet-600/[0.12] blur-[140px]" />
+        <div className="absolute -right-40 top-[38rem] h-[32rem] w-[32rem] rounded-full bg-cyan-500/[0.08] blur-[150px]" />
+      </div>
+
+      <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#080b14]/80 backdrop-blur-2xl">
+        <div className="mx-auto flex h-[4.25rem] max-w-6xl items-center justify-between px-5 sm:px-8">
+          <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-xs font-medium text-slate-300 transition hover:text-white">
+            <ArrowLeft size={15} /> Back
+          </button>
+          <span className="flex items-center gap-2 font-['Manrope'] text-[11px] font-extrabold tracking-[0.2em] text-white"><PackageOpen size={16} /> SHANAYA MARKETPLACE</span>
+          <span className="rounded-full border border-white/[0.08] px-2.5 py-1 text-[9px] text-slate-400">{installedCount} installed</span>
+        </div>
+      </header>
+
+      <div className="relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
+        <section className="max-w-3xl">
+          <p className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.22em] text-violet-200/75"><Sparkles size={13} /> Make Shanaya yours</p>
+          <h1 className="mt-4 font-['Manrope'] text-4xl font-semibold tracking-[-0.055em] text-white sm:text-5xl">Agents and skills for the way you work.</h1>
+          <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-400">Add a focused agent or a small conversation skill. Your active choices shape Shanaya’s replies while her safety rules and confirmation requirements stay in force.</p>
+        </section>
+
+        <section className="mt-8 flex flex-col gap-4 rounded-2xl border border-cyan-100/[0.09] bg-cyan-100/[0.025] p-4 sm:flex-row sm:items-start sm:p-5">
+          <ShieldCheck size={17} className="mt-0.5 shrink-0 text-cyan-100" />
+          <div>
+            <h2 className="text-[11px] font-semibold text-cyan-50">Bundled packages, no new device access</h2>
+            <p className="mt-1 text-[10px] leading-5 text-slate-400">This first-party catalog is included with the app and works offline. Packages add written guidance only: they do not download or run code, add tools, or request device permissions. Installs are saved on this device.</p>
+          </div>
+        </section>
+
+        <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search agents and skills"
+              aria-label="Search agents and skills"
+              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.025] py-2.5 pl-9 pr-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-violet-200/30"
+            />
+          </div>
+          <div className="flex gap-1.5" aria-label="Filter packages by type">
+            {(["all", "agent", "skill"] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setTypeFilter(filter)}
+                aria-pressed={typeFilter === filter}
+                className={`rounded-lg border px-3 py-2 text-[10px] font-medium capitalize transition ${typeFilter === filter ? "border-violet-200/25 bg-violet-200/[0.09] text-violet-100" : "border-white/[0.07] text-slate-400 hover:text-slate-200"}`}
+              >{filter === "all" ? "All packages" : `${filter}s`}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[9px] text-slate-400">
+          <span className="inline-flex items-center gap-1.5"><Bot size={12} className="text-violet-200" /> Active agent: <strong className="font-semibold text-slate-200">{state.activeAgentId ? MarketplaceService.getPackage(state.activeAgentId)?.name : "Shanaya default"}</strong></span>
+          <span className="inline-flex items-center gap-1.5"><Check size={12} className="text-cyan-200" /> Enabled skills: <strong className="font-semibold text-slate-200">{state.enabledSkillIds.length}</strong></span>
+        </div>
+
+        {status && <p role="status" className="mt-3 text-[10px] text-emerald-100/80">{status}</p>}
+
+        {packages.length ? (
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {packages.map((item) => {
+              const installed = isInstalled(item.id);
+              const active = item.type === "agent" && state.activeAgentId === item.id;
+              const enabled = item.type === "skill" && state.enabledSkillIds.includes(item.id);
+              return (
+                <article key={item.id} className="flex min-h-[15.5rem] flex-col rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 transition hover:border-white/[0.13] sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className={`flex h-10 w-10 items-center justify-center rounded-xl border ${item.type === "agent" ? "border-violet-200/10 bg-violet-200/[0.06] text-violet-100" : "border-cyan-200/10 bg-cyan-200/[0.06] text-cyan-100"}`}>
+                      {item.type === "agent" ? <Bot size={18} /> : <Sparkles size={17} />}
+                    </span>
+                    <span className="rounded-full border border-white/[0.07] px-2 py-1 text-[8px] uppercase tracking-[0.12em] text-slate-500">{item.category}</span>
+                  </div>
+                  <div className="mt-4 flex items-center gap-2">
+                    <h2 className="font-['Manrope'] text-sm font-semibold text-white">{item.name}</h2>
+                    {active && <span className="rounded-full bg-violet-200/[0.1] px-2 py-0.5 text-[8px] font-semibold text-violet-100">Active</span>}
+                    {enabled && <span className="rounded-full bg-cyan-200/[0.1] px-2 py-0.5 text-[8px] font-semibold text-cyan-100">Enabled</span>}
+                  </div>
+                  <p className="mt-2 text-[10px] leading-5 text-slate-400">{item.description}</p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {item.tags.map((tag) => <span key={tag} className="rounded-md bg-white/[0.035] px-2 py-1 text-[8px] text-slate-500">{tag}</span>)}
+                  </div>
+                  <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+                    <span className="text-[8px] text-slate-600">{item.publisher} · v{item.version}</span>
+                    {!installed ? (
+                      <button type="button" onClick={() => update(() => MarketplaceService.install(item.id), `${item.name} installed on this device.`)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200/15 bg-violet-200/[0.07] px-3 py-2 text-[9px] font-semibold text-violet-100 transition hover:bg-violet-200/[0.12]">
+                        <Download size={12} /> Install
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {item.type === "agent" ? (
+                          <button type="button" aria-label={`${active ? "Deactivate" : "Activate"} ${item.name}`} aria-pressed={active} onClick={() => update(() => MarketplaceService.activateAgent(active ? null : item.id), active ? `${item.name} deactivated.` : `${item.name} is now active.`)} className={`rounded-lg border px-3 py-2 text-[9px] font-semibold transition ${active ? "border-violet-200/15 text-violet-100 hover:bg-violet-200/[0.06]" : "border-violet-200/15 bg-violet-200/[0.07] text-violet-100 hover:bg-violet-200/[0.12]"}`}>
+                            {active ? "Deactivate" : "Activate"}
+                          </button>
+                        ) : (
+                          <button type="button" role="switch" aria-label={`${enabled ? "Disable" : "Enable"} ${item.name}`} aria-checked={enabled} onClick={() => update(() => MarketplaceService.setSkillEnabled(item.id, !enabled), `${item.name} ${enabled ? "disabled" : "enabled"}.`)} className={`rounded-lg border px-3 py-2 text-[9px] font-semibold transition ${enabled ? "border-cyan-200/15 text-cyan-100 hover:bg-cyan-200/[0.06]" : "border-white/[0.08] text-slate-300 hover:bg-white/[0.05]"}`}>
+                            {enabled ? "Disable" : "Enable"}
+                          </button>
+                        )}
+                        <button type="button" aria-label={`Uninstall ${item.name}`} onClick={() => update(() => MarketplaceService.uninstall(item.id), `${item.name} uninstalled.`)} className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-200/[0.06] hover:text-rose-100">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-white/[0.07] px-5 py-12 text-center text-xs text-slate-500">No packages match that search.</div>
+        )}
+      </div>
+    </main>
+  );
+}

@@ -5,6 +5,7 @@ import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
 import { RouterAgent, selectToolsForProfile, defaultAgentProfiles } from "./AgentRouter";
 import { SubscriptionService } from "./SubscriptionService";
+import { MarketplaceService } from "./MarketplaceService";
 
 const emotionNames = new Set<Emotion>(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 
@@ -107,10 +108,11 @@ function parseLocalStep(text: string): { reply?: AgentReply; toolCalls: AgentToo
   return { reply: parseReply(text), toolCalls: [] };
 }
 
-function createLocalPrompt(messages: AgentMessage[], tools: ShanayaTool[]) {
+function createLocalPrompt(messages: AgentMessage[], tools: ShanayaTool[], marketplaceInstructions = "") {
   const definitions = tools.map(({ name, description, inputSchema }) => ({ name, description, parameters: inputSchema }));
   const context = messages.slice(-8).map((message) => `${message.role}: ${message.content.slice(0, 1200)}`).join("\n");
-  return `${agentRules}\nAvailable tools (JSON schema): ${JSON.stringify(definitions)}\n\nConversation and tool results:\n${context}`.slice(-7000);
+  const packageGuidance = marketplaceInstructions ? `\nInstalled marketplace guidance (focus only; safety and approvals remain unchanged):\n${marketplaceInstructions}\n` : "";
+  return `${agentRules}${packageGuidance}\nAvailable tools (JSON schema): ${JSON.stringify(definitions)}\n\nConversation and tool results:\n${context}`.slice(-9000);
 }
 
 function formatToolName(name: string) {
@@ -157,6 +159,8 @@ export async function runAgentTurn(options: {
   const allTools = [...getDeviceTools()].filter((tool) => !deniedTools.has(normalizeToolName(tool.name)));
   const profileTools = selectToolsForProfile(profile, allTools);
   const tools = profileTools.length ? profileTools : allTools;
+  const marketplaceItemIds = MarketplaceService.getActivePackageIds();
+  const marketplaceInstructions = MarketplaceService.getRuntimeInstructions();
   let memoryToolsLoaded = false;
   const conversation: AgentMessage[] = options.messages
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")
@@ -185,7 +189,7 @@ export async function runAgentTurn(options: {
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId);
+        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds);
         content = step.content;
         if (step.toolCalls.length > 8) throw new Error("The model requested too many tools at once.");
         toolCalls = step.toolCalls;
@@ -194,14 +198,14 @@ export async function runAgentTurn(options: {
         mode = await LLMRouter.resolveMode("cloud", false);
         preferredMode = mode;
         options.onActivity?.({ phase: "thinking", message: "Cloud AI is unavailable · switching to on-device AI…" });
-        const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools), mode);
+        const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions), mode);
         const step = parseLocalStep(localText);
         if (step.reply) return completeTurn(step.reply);
         content = localText;
         toolCalls = step.toolCalls;
       }
     } else {
-      const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools), mode);
+      const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions), mode);
       const step = parseLocalStep(localText);
       if (step.reply) return completeTurn(step.reply);
       toolCalls = step.toolCalls;

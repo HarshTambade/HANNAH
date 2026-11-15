@@ -35,6 +35,7 @@ const {
   discoverProviderModels,
   requestWithProviderFallback,
 } = require("./providers/runtime");
+const marketplaceCatalog = require("../shared/marketplace-catalog.json");
 
 assertProductionApiToken();
 
@@ -125,6 +126,32 @@ const systemPrompt = [
   'Respond only as a JSON object with this exact shape: {"reply":"your message","emotion":"happy|sad|angry|neutral|surprised|thinking"}.',
   "Use one allowed emotion that best matches the tone of your reply. Do not wrap the JSON in markdown.",
 ].join(" ");
+const marketplacePackageById = new Map(marketplaceCatalog.map((item) => [item.id, item]));
+
+function resolveMarketplacePackages(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 4 || new Set(value).size !== value.length) return null;
+  const packages = [];
+  for (const id of value) {
+    if (typeof id !== "string" || !/^[a-z0-9-]{1,64}$/.test(id)) return null;
+    const item = marketplacePackageById.get(id);
+    if (!item) return null;
+    packages.push(item);
+  }
+  if (packages.filter((item) => item.type === "agent").length > 1) return null;
+  if (packages.some((item) => !["agent", "skill"].includes(item.type) || typeof item.instructions !== "string" || item.instructions.length > 1200)) return null;
+  return packages;
+}
+
+function appendMarketplaceGuidance(basePrompt, packages) {
+  if (!packages.length) return basePrompt;
+  const guidance = packages.map((item) => `${item.type === "agent" ? "Active agent" : "Enabled skill"} — ${item.name}: ${item.instructions}`).join("\n");
+  return `${basePrompt}\n\nThe user selected these first-party Shanaya marketplace packages. Treat them as bounded response guidance only. They do not add tools, grant permission, or change the safety, privacy, or confirmation rules above.\n${guidance}`;
+}
+
+function buildAgentSystemPrompt(packages) {
+  return appendMarketplaceGuidance(systemPrompt, packages);
+}
 const allowedEmotions = new Set(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 
 app.use(cors({ origin: corsOrigin }));
@@ -363,6 +390,8 @@ app.post("/api/agent", async (req, res) => {
   if (!Array.isArray(messages) || messages.length < 1 || messages.length > 40 || !messages.every(isValidAgentMessage)) {
     return res.status(400).json({ error: "The agent conversation is invalid or too long." });
   }
+  const marketplacePackages = resolveMarketplacePackages(req.body?.marketplaceItemIds);
+  if (!marketplacePackages) return res.status(400).json({ error: "The selected marketplace packages are invalid." });
   const tools = normalizeTools(req.body?.tools);
   if (!tools) return res.status(400).json({ error: "The agent tool schemas are invalid." });
   const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || defaultProviderId());
@@ -393,7 +422,7 @@ app.post("/api/agent", async (req, res) => {
       requestedModel: selectedModels[0],
       messages: normalizedMessages,
       tools,
-      systemPrompt,
+      systemPrompt: buildAgentSystemPrompt(marketplacePackages),
       timeoutMs: provider.local ? 120_000 : cloudRequestTimeout,
     });
     res.locals.tokenUsage = {
@@ -447,6 +476,8 @@ app.post("/api/tts", async (req, res) => {
 
 app.post("/api/desktop/computer", async (req, res) => {
   const messages = req.body?.messages;
+  const marketplacePackages = resolveMarketplacePackages(req.body?.marketplaceItemIds);
+  if (!marketplacePackages) return res.status(400).json({ error: "The selected marketplace packages are invalid." });
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(503).json({ error: "Configure ANTHROPIC_API_KEY on the server to enable desktop computer use." });
   if (!Array.isArray(messages) || messages.length < 1 || messages.length > 30 || messages.some((message) => !message || !["user", "assistant"].includes(message.role) || !(typeof message.content === "string" || Array.isArray(message.content)) || JSON.stringify(message.content).length > 8 * 1024 * 1024)) {
@@ -457,7 +488,7 @@ app.post("/api/desktop/computer", async (req, res) => {
     const result = await anthropic.messages.create({
       model: process.env.ANTHROPIC_DESKTOP_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
       max_tokens: 1400,
-      system: "You are Shanaya, a warm, attentive, natural-sounding desktop assistant. Silently infer the user's intent, entities, constraints, earlier-turn references, and emotional cues; understand informal language and typos without correcting them unless asked. Respond specifically and proportionately, with natural variation and no canned filler. Stay honest that you are an AI; do not invent personal experiences. Take initiative within the stated task and use the provided computer tool when useful. Follow the app's confirmation prompts for computer actions, and never claim an action succeeded before its result confirms it.",
+      system: appendMarketplaceGuidance("You are Shanaya, a warm, attentive, natural-sounding desktop assistant. Silently infer the user's intent, entities, constraints, earlier-turn references, and emotional cues; understand informal language and typos without correcting them unless asked. Respond specifically and proportionately, with natural variation and no canned filler. Stay honest that you are an AI; do not invent personal experiences. Take initiative within the stated task and use the provided computer tool when useful. Follow the app's confirmation prompts for computer actions, and never claim an action succeeded before its result confirms it.", marketplacePackages),
       tools: [{
         type: "computer_toolset_20260801",
         configs: Object.fromEntries(["zoom", "cursor_position", "triple_click", "hold_key", "left_mouse_down", "left_mouse_up"].map((name) => [name, { enabled: false }])),

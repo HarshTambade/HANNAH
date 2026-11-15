@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from "react";
 import {
   Aperture, ArrowDown, ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole,
-  MessageCircle, Mic2, ShieldCheck, Sparkles, X,
+  MessageCircle, Mic2, PackageOpen, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
 
 type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
+  onMarketplace: () => void;
   onSetup?: () => void;
 };
 
@@ -44,7 +45,7 @@ const highlights = [
   },
 ];
 
-export default function LandingPage({ onStart, onIntegrations, onSetup }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onMarketplace, onSetup }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [apiToken, setApiToken] = useState("");
   const [groqApiKey, setGroqApiKey] = useState("");
@@ -112,6 +113,7 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
             <a href="#how-it-works" className="text-xs text-slate-400 transition hover:text-white">How it works</a>
             <a href="#modes" className="text-xs text-slate-400 transition hover:text-white">Hybrid AI</a>
             <a href="#privacy" className="text-xs text-slate-400 transition hover:text-white">Your privacy</a>
+            <button type="button" onClick={onMarketplace} className="text-xs text-slate-400 transition hover:text-white">Marketplace</button>
             <button type="button" onClick={onIntegrations} className="text-xs text-slate-400 transition hover:text-white">Integrations</button>
             {onSetup && <button type="button" onClick={onSetup} className="text-xs text-slate-400 transition hover:text-white">First-time setup</button>}
             <a href="/about/" className="text-xs text-slate-400 transition hover:text-white">About</a>
@@ -160,9 +162,14 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
               </a>
             </div>
 
-            <button type="button" onClick={onIntegrations} className="mt-3 inline-flex items-center gap-2 text-left text-[10px] font-medium text-slate-500 transition hover:text-cyan-100">
-              <Cable size={13} /> Connect Shanaya to another app with the API or MCP
-            </button>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+              <button type="button" onClick={onIntegrations} className="inline-flex items-center gap-2 text-left text-[10px] font-medium text-slate-500 transition hover:text-cyan-100">
+                <Cable size={13} /> Connect Shanaya to another app with the API or MCP
+              </button>
+              <button type="button" onClick={onMarketplace} className="inline-flex items-center gap-2 text-left text-[10px] font-medium text-slate-500 transition hover:text-violet-100">
+                <PackageOpen size={13} /> Browse agents and skills
+              </button>
+            </div>
 
             <div className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/[0.07] pt-5 text-[10px] text-slate-500">
               <span className="inline-flex items-center gap-2"><ShieldCheck size={13} className="text-cyan-200/70" /> Your key, your choice</span>

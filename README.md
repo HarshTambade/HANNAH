@@ -44,6 +44,7 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 - [Configuration](#configuration)
 - [Inference modes](#inference-modes)
 - [Agent runtime and device tools](#agent-runtime-and-device-tools)
+- [Agent and skill marketplace](#agent-and-skill-marketplace)
 - [MCP integration](#mcp-integration)
 - [Desktop computer use](#desktop-computer-use)
 - [Voice and calls](#voice-and-calls)
@@ -78,6 +79,7 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 - **One codebase, multiple surfaces:** run as a Vite web app/PWA, a Capacitor iOS or Android app, or a Capacitor Electron desktop app.
 - **Secret-safe key handling:** server credentials stay on the server and never enter `VITE_*`; a visitor's Groq key stays in page memory and is sent only in a request header to the app API.
 - **Visible integrations:** the app includes an API and MCP guide with endpoint summaries, a copyable REST example, and a local MCP client configuration.
+- **Agent and skill marketplace:** browse a bundled first-party catalog, install agents or skills on this device, and activate them across supported companion modes. Packages add prompt guidance only; they do not download code, add tools, or request device permissions.
 - **Accessible responsive UI:** mobile safe areas, keyboard-friendly controls, status messages, and responsive layouts are built into the client.
 - **Governed autonomy:** zero-trust policy enforcement, guardian agent review, cognitive risk scoring, and a user-facing accountability dashboard.
 - **Layered memory:** session, consolidated long-term, and persona-invariant memory with evolution and dreaming consolidation.
@@ -210,6 +212,7 @@ Every /api route except /api/health requires Authorization: Bearer SHANAYA_API_T
 | Presentation | [`client/src/App.tsx`](./client/src/App.tsx) | Composes the avatar surface, branding, and chat experience. |
 | Chat orchestration | [`client/src/components/ChatUI.tsx`](./client/src/components/ChatUI.tsx) | Selects inference mode, shows tool activity/results, manages voice controls, errors, and model readiness. |
 | Agent runtime and routing | [`client/src/services/AgentRuntime.ts`](./client/src/services/AgentRuntime.ts) and [`client/src/services/LLMRouter.ts`](./client/src/services/LLMRouter.ts) | Runs up to eight tool turns and selects cloud, Ollama, Python fallback, WebLLM, or native offline inference. |
+| Agent and skill marketplace | [`client/src/components/MarketplacePage.tsx`](./client/src/components/MarketplacePage.tsx), [`client/src/services/MarketplaceService.ts`](./client/src/services/MarketplaceService.ts), and [`shared/marketplace-catalog.json`](./shared/marketplace-catalog.json) | Installs and activates first-party prompt guidance locally; it does not add executable packages or tools. |
 | Safety and device tools | [`client/src/services/DeviceTools.ts`](./client/src/services/DeviceTools.ts) and [`client/src/services/SafetyGuard.ts`](./client/src/services/SafetyGuard.ts) | Provides confirmed device actions and the user approval boundary. |
 | Native agent | [`client/src/services/MobileAgent.ts`](./client/src/services/MobileAgent.ts) | Initializes optional MobileClaw, local LanceDB memory, and MobileCron on iOS/Android. |
 | Avatar rendering | [`client/src/components/AvatarScene.tsx`](./client/src/components/AvatarScene.tsx) | Loads the GLB model, applies emotion morphs/poses, and renders the Three.js scene. |
@@ -522,6 +525,12 @@ Cloud and Ollama modes use an eight-round bounded tool loop so Shanaya can compl
 On iOS and Android, MobileClaw initializes `capacitor-native-agent`, `capacitor-lancedb`, and `capacitor-mobilecron`. Its vector store uses a local hash embedding fallback and stays in the app sandbox. Add an Anthropic API key in Settings to route online turns through MobileClaw; the native plugin stores the key and sends requests directly to Anthropic. Native turns use MobileClaw's skill runner with an explicit tool allowlist, so its general file, code, and Git tools are not exposed to Shanaya's chat. The registered device tools and memory deletion tool retain their own confirmation checks. Without a key, online requests use the server's configured OpenAI-compatible endpoint. Offline turns use the downloaded GGUF model and can call local memory tools.
 
 The registered device tools include app-private file listing, UTF-8 file reads, confirmed file writes/deletes, `open_app`, `get_device_status`, `get_battery_status`, `toggle_setting`, `send_message`, and `make_call`. File tools are confined to Shanaya's private app storage; cloud-mode reads send file contents to the selected model provider. Shanaya asks before file changes, SMS drafts, calls, flashlight changes, and computer input. SMS and calls open the system composer/dialer; the user taps Send or Call. iOS and Android block third-party Wi-Fi and Bluetooth toggles, so Shanaya explains how to change those in system controls. Notification reading, access to arbitrary device files, and shell execution are not enabled. Device access is limited to APIs and permissions provided by each operating system; the app cannot grant itself unrestricted control.
+
+## Agent and skill marketplace
+
+Open **Marketplace** from the landing page or conversation header. Install an agent, then activate it to make it the single active specialist; install skills and enable the ones you want. Installed and enabled choices are stored in this device's local storage and can be removed at any time.
+
+The catalog is bundled in `shared/marketplace-catalog.json`. Its entries contribute prompt guidance to the web, Ollama, Python fallback, local-model, MobileClaw, and desktop companion paths. They do not add tools, bypass SafetyGuard, request permissions, or execute downloaded code. The catalog is first-party and offline; remote discovery, third-party publishing, package signing, and remote updates are not implemented.
 
 ## MCP integration
 

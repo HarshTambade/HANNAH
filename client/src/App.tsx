@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Aperture, Cable, House } from "lucide-react";
+import { Aperture, Cable, House, PackageOpen } from "lucide-react";
 import AvatarScene, { type AvatarMotion } from "./components/AvatarScene";
 import ChatUI from "./components/ChatUI";
 import IntegrationsPage from "./components/IntegrationsPage";
 import LandingPage from "./components/LandingPage";
+import MarketplacePage from "./components/MarketplacePage";
 import Onboarding, { type OnboardingResult } from "./components/Onboarding";
 import PlatformDownloads from "./components/PlatformDownloads";
 import type { Emotion, InferenceMode } from "./types";
@@ -21,7 +22,7 @@ const emotionColors: Record<Emotion, string> = {
 // Any stored value means onboarding has been seen. It is intentionally separate
 // from provider preferences so clearing chat data never re-triggers setup.
 const ONBOARDING_STORAGE_KEY = "shanaya.onboarding.v1";
-type Screen = "onboarding" | "landing" | "companion" | "integrations";
+type Screen = "onboarding" | "landing" | "companion" | "integrations" | "marketplace";
 
 function rememberOnboarding() {
   try {
@@ -36,6 +37,7 @@ export default function App() {
   // still available from the landing page for users who want it.
   const [screen, setScreen] = useState<Screen>("landing");
   const [integrationReturnScreen, setIntegrationReturnScreen] = useState<"landing" | "companion">("landing");
+  const [marketplaceReturnScreen, setMarketplaceReturnScreen] = useState<"landing" | "companion">("landing");
   const [groqApiKey, setGroqApiKey] = useState("");
   const [preferredMode, setPreferredMode] = useState<InferenceMode>("cloud");
   const [emotion, setEmotion] = useState<Emotion>("neutral");
@@ -43,6 +45,10 @@ export default function App() {
 
   if (screen === "integrations") {
     return <IntegrationsPage onBack={() => setScreen(integrationReturnScreen)} />;
+  }
+
+  if (screen === "marketplace") {
+    return <MarketplacePage onBack={() => setScreen(marketplaceReturnScreen)} />;
   }
 
   if (screen === "onboarding") {
@@ -74,6 +80,7 @@ export default function App() {
           setScreen("companion");
         }}
         onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
+        onMarketplace={() => { setMarketplaceReturnScreen("landing"); setScreen("marketplace"); }}
         onSetup={() => setScreen("onboarding")}
       />
     );
@@ -157,6 +164,13 @@ export default function App() {
                 className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-[10px] text-slate-400 transition hover:bg-white/[0.04] hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
               >
                 <Cable size={13} /> <span className="hidden sm:inline">Integrations</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMarketplaceReturnScreen("companion"); setScreen("marketplace"); }}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-[10px] text-slate-400 transition hover:bg-white/[0.04] hover:text-violet-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50"
+              >
+                <PackageOpen size={13} /> <span className="hidden sm:inline">Marketplace</span>
               </button>
               <a href="/about/" className="rounded-lg px-2 py-2 text-[11px] text-slate-400 transition hover:bg-white/[0.04] hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50">
                 About

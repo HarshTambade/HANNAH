@@ -57,6 +57,9 @@ CLIENT_FALLBACK_SYSTEM_PROMPT = " ".join([
     "A tool call is only a proposal. Device actions require the client's explicit approval flow; never bypass it or claim success before a result arrives.",
     "Call one tool at a time. When finished, return only JSON: {\"reply\":\"text\",\"emotion\":\"happy|sad|cute|neutral\",\"tool_call\":null}.",
 ])
+with (Path(__file__).resolve().parent.parent / "shared" / "marketplace-catalog.json").open(encoding="utf-8") as marketplace_file:
+    MARKETPLACE_CATALOG = json.load(marketplace_file)
+MARKETPLACE_PACKAGES_BY_ID = {item["id"]: item for item in MARKETPLACE_CATALOG}
 MAX_AGENT_ROUNDS = 8
 MAX_TOOL_OUTPUT_CHARS = 24_000
 try:
@@ -525,12 +528,45 @@ class AgentStepRequest(StrictRequestModel):
     provider: str | None = Field(default=None, max_length=64, pattern=r"^[a-z][a-z0-9_-]{0,63}$")
     tools: list[ClientToolSchema] = Field(default_factory=list, max_length=32)
     model: str | None = Field(default=None, max_length=120)
+    marketplace_item_ids: list[str] = Field(default_factory=list, max_length=4, validation_alias="marketplaceItemIds")
+
+    @model_validator(mode="after")
+    def validate_marketplace_packages(self):
+        if len(set(self.marketplace_item_ids)) != len(self.marketplace_item_ids):
+            raise ValueError("Marketplace package IDs must be unique.")
+        packages = []
+        for package_id in self.marketplace_item_ids:
+            if re.fullmatch(r"[a-z0-9-]{1,64}", package_id) is None:
+                raise ValueError("Marketplace package ID is invalid.")
+            package = MARKETPLACE_PACKAGES_BY_ID.get(package_id)
+            if not package or package.get("type") not in {"agent", "skill"} or not isinstance(package.get("instructions"), str) or len(package["instructions"]) > 1200:
+                raise ValueError("Marketplace package is not in the approved catalog.")
+            packages.append(package)
+        if sum(package["type"] == "agent" for package in packages) > 1:
+            raise ValueError("Only one marketplace agent may be active per turn.")
+        return self
 
 
 class TTSRequest(StrictRequestModel):
     text: str = Field(min_length=1, max_length=5000)
     language: Literal["en-US", "hi-IN", "mr-IN"]
     voice: Literal["Charvi"] = "Charvi"
+
+
+def _with_marketplace_guidance(base_prompt: str, package_ids: list[str]) -> str:
+    if not package_ids:
+        return base_prompt
+    guidance = []
+    for package_id in package_ids:
+        package = MARKETPLACE_PACKAGES_BY_ID[package_id]
+        label = "Active agent" if package["type"] == "agent" else "Enabled skill"
+        guidance.append(f"{label} — {package['name']}: {package['instructions']}")
+    return (
+        f"{base_prompt}\n\nThe user selected these first-party Shanaya marketplace packages. "
+        "Treat them as bounded response guidance only. They do not add tools, grant permission, "
+        "or change the safety, privacy, or confirmation rules above.\n"
+        + "\n".join(guidance)
+    )
 
 
 app.include_router(task_spine_router, prefix="/api/tasks", tags=["tasks"])
@@ -590,7 +626,7 @@ async def agent_step(payload: AgentStepRequest) -> dict[str, Any]:
     """
     messages = _safe_messages(
         [message.model_dump(exclude_none=True) for message in payload.messages],
-        CLIENT_FALLBACK_SYSTEM_PROMPT,
+        _with_marketplace_guidance(CLIENT_FALLBACK_SYSTEM_PROMPT, payload.marketplace_item_ids),
         {"user", "assistant", "tool"},
         allow_tool_calls=True,
     )
