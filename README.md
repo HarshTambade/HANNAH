@@ -10,9 +10,9 @@
   <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-source--available-orange" alt="Source-available license"></a>
 </p>
 
-Shanaya is a source-available AI companion built for natural conversation across web, mobile, and desktop environments. It combines a responsive React interface, a real-time 3D avatar, emotion-aware responses, multilingual voice interaction, cloud and local inference, and offline-capable native AI.
+Shanaya is a source-available AI companion built for natural conversation across web, mobile, and desktop environments. It combines a responsive React interface, a real-time 3D avatar, emotion-aware responses, multilingual voice interaction, cloud and local inference, offline-capable native AI, governed autonomy, layered long-term memory, end-to-end encrypted cross-device sync, embodied hardware continuity, and agent-to-agent ecosystem interoperability.
 
-> **Project status:** Active development. [Release v1.0.2](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/tag/v1.0.2) provides Android, macOS, Windows, and Linux packages. An installable iOS IPA still requires Apple signing. The [QA audit](./docs/QA-AUDIT-2026-11-11.md) records the tested paths, known issues, and platform limits.
+> **Project status:** Active development. [Release v1.0.3](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/tag/v1.0.3) provides Android, macOS, Windows, and Linux packages. An installable iOS IPA still requires Apple signing. The [platform audit](./AUDIT.md) records tested paths, productionized services, and remaining release validation.
 
 ## Downloads
 
@@ -24,9 +24,9 @@ Shanaya is a source-available AI companion built for natural conversation across
   <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/latest/download/Shanaya-Linux.AppImage"><img alt="Linux AppImage downloads" src="https://img.shields.io/badge/Linux-AppImage-FCC624?logo=linux&logoColor=black"></a>
 </p>
 
-The current [GitHub Release](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/tag/v1.0.2) includes an Android APK, macOS DMG, Windows EXE, and Linux AppImage. Linux DEB output is optional and appears when the runner produces it. A normal build on `main` uploads temporary [Actions artifacts](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/actions/workflows/build.yml); a `v*` tag or a manual workflow run with release publishing enabled creates a versioned release.
+The current [GitHub Release](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/latest) includes an Android APK, macOS DMG, Windows EXE, and Linux AppImage. Linux DEB output is optional and appears when the runner produces it. A normal build on `main` uploads temporary [Actions artifacts](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/actions/workflows/build.yml); a `v*` tag or a manual workflow run with release publishing enabled creates a versioned release.
 
-**iOS note:** Release v1.0.2 has no installable IPA because Apple signing is not configured. The release includes an installation note, and the workflow run stores the unsigned Xcode archive as an Actions artifact. Device installation requires a signed IPA distributed through TestFlight or the App Store.
+**iOS note:** The latest release has no installable IPA because Apple signing is not configured. The release includes an installation note, and the workflow run stores the unsigned Xcode archive as an Actions artifact. Device installation requires a signed IPA distributed through TestFlight or the App Store.
 
 The in-app **Downloads** menu points to these latest release assets by default. Set `VITE_ANDROID_DOWNLOAD_URL`, `VITE_IOS_DOWNLOAD_URL`, `VITE_MACOS_DOWNLOAD_URL`, `VITE_WINDOWS_DOWNLOAD_URL`, or `VITE_LINUX_DOWNLOAD_URL` to override a link with a store listing or another host.
 
@@ -35,6 +35,11 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 - [Highlights](#highlights)
 - [Downloads](#downloads)
 - [Architecture](#architecture)
+- [Governed autonomy and trust](#governed-autonomy-and-trust)
+- [Layered memory and dreaming](#layered-memory-and-dreaming)
+- [Cross-device continuity](#cross-device-continuity)
+- [Embodied and ambient presence](#embodied-and-ambient-presence)
+- [Agent marketplace and ecosystem](#agent-marketplace-and-ecosystem)
 - [How a message works](#how-a-message-works)
 - [Runtime capability matrix](#runtime-capability-matrix)
 - [Data lifecycle](#data-lifecycle)
@@ -54,7 +59,7 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 - [Project structure](#project-structure)
 - [Development](#development)
 - [Testing and quality](#testing-and-quality)
-- [QA audit report](./docs/QA-AUDIT-2026-11-11.md)
+- [Platform audit report](./AUDIT.md)
 - [Deployment](#deployment)
 - [Observability and launch operations](./docs/OBSERVABILITY.md)
 - [Operations runbook](./docs/OPERATIONS_RUNBOOK.md)
@@ -79,13 +84,13 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 - **One codebase, multiple surfaces:** run as a Vite web app/PWA, a Capacitor iOS or Android app, or a Capacitor Electron desktop app.
 - **Secret-safe key handling:** server credentials stay on the server and never enter `VITE_*`; a visitor's Groq key stays in page memory and is sent only in a request header to the app API.
 - **Visible integrations:** the app includes an API and MCP guide with endpoint summaries, a copyable REST example, and a local MCP client configuration.
-- **Agent and skill marketplace:** browse a bundled first-party catalog, install agents or skills on this device, and activate them across supported companion modes. Packages add prompt guidance only; they do not download code, add tools, or request device permissions.
+- **Governed autonomy:** zero-trust policy enforcement, GuardianAgent review with strictness levels, cognitive risk scoring, kill switch, and a user-facing Agent Accountability Dashboard.
+- **Agent and skill marketplace:** guardian-gated publishing, review, and retirement of specialist agents and persona packs; listings are prompt guidance only — no executable packages, added tools, or device permissions.
+- **Layered memory:** session memory, consolidated long-term memory, persona invariants, dreaming consolidation with quality gate, and encrypted export/import.
+- **Cross-device continuity:** end-to-end encrypted CRDT sync, agent-native cloud home (provision/migrate across regions), self-hostable opaque relay, and SyncStatus indicator.
+- **Embodied and ambient presence:** hardware bridge with mutual-TLS WebSocket pairing, companion cast multi-agent sessions, spatial context panel, and HybridIntelligenceRouter split between edge and cloud.
 - **Accessible responsive UI:** mobile safe areas, keyboard-friendly controls, status messages, and responsive layouts are built into the client.
-- **Governed autonomy:** zero-trust policy enforcement, guardian agent review, cognitive risk scoring, and a user-facing accountability dashboard.
-- **Layered memory:** session, consolidated long-term, and persona-invariant memory with evolution and dreaming consolidation.
-- **Cross-device continuity:** end-to-end encrypted sync, agent-native cloud home, and a self-hostable relay.
-- **Embodied and ambient presence:** hardware bridge, companion cast, and spatial context panels.
-- **Compliance and trust:** regulatory mapping, safety dashboards, and exportable compliance reports.
+- **Compliance and trust:** regulatory mapping (FTC, EU AI Act, Singapore IMDA), safety dashboards, exportable compliance reports, age-verification hooks, and ITU-T forward-compatible identity mapping.
 
 ## Product principles
 
@@ -105,28 +110,63 @@ flowchart TB
     User["User"] --> Web["Web / PWA"]
     User --> Mobile["iOS / Android<br/>Capacitor"]
     User --> Desktop["macOS / Windows / Linux<br/>Capacitor Electron"]
+    User --> Hardware["Embodied hardware<br/>Raspberry Pi / companion robot"]
 
     subgraph Client["Shared client · client/src"]
         UI["React UI<br/>landing · chat · integrations · downloads"]
-        Runtime["AgentRuntime<br/>up to 8 tool turns"]
-        Router{"LLMRouter<br/>network-aware provider selection"}
-        Guard["SafetyGuard<br/>approval boundary"]
+        Runtime["AgentRuntime<br/>bounded tool turns"]
+        Router{"LLMRouter<br/>on-device / cloud routing"}
+        Guard["GuardianAgent<br/>zero-trust review · strictness"]
+        Policy["PolicyEnforcementLayer<br/>rate limits · allow-list"]
+        Kill["Kill Switch<br/>halt + resume"]
+        Cognitive["CognitiveRiskEngine<br/>CRF 2.0 risk scoring"]
+        Readiness["CognitiveReadinessEngine<br/>busy · focused · fatigued · open"]
         Tools["DeviceTools<br/>allow-listed actions"]
         Scene["AvatarScene<br/>Three.js · GLB · emotion"]
-        Voice["SpeechService / VoiceService<br/>recognition · synthesis · TalkMode"]
+        Voice["SpeechService / OnDeviceVoicePipeline<br/>recognition · synthesis"]
         Native["Optional MobileClaw agent<br/>iOS / Android"]
-        Memory["LanceDB memory + MobileCron<br/>app-private native storage"]
+        Memory["MemoryService<br/>session · long_term · persona"]
+        NeuroSym["NeuroSymbolicReasoner<br/>symbolic constraint check"]
+        Dream["DreamingConsolidator<br/>idle consolidation + quality gate"]
+        Evo["MemoryEvolutionEngine<br/>user model synthesis"]
+        Emo["EmotionalStateModel<br/>trajectory tracking"]
+        Accountability["AgentAccountabilityDashboard<br/>inspect · edit · reset"]
         UI --> Runtime
         UI --> Scene
         UI --> Voice
         UI --> Native
+        UI --> Accountability
         Runtime --> Router
-        Runtime --> Guard --> Tools
-        Native --> Memory
+        Runtime --> Guard
+        Guard --> Cognitive
+        Guard --> Policy
+        Policy --> Kill
+        Cognitive --> Readiness
+        Runtime --> Memory
+        Memory --> Dream
+        Memory --> Evo
+        Memory --> Emo
+        NeuroSym -.->|gate| Runtime
+        Dream -.->|async via Task Spine| Memory
     end
     Web --> UI
     Mobile --> UI
     Desktop --> UI
+    Hardware -.->|mTLS WebSocket| HardwareBridge["HardwareBridgeService<br/>audio · vision · actuators"]
+
+    subgraph TaskSpine["Task Spine · asynchronous background work"]
+        Spine["TaskSpineService / backend/task_spine.py<br/>create · list · pause · resume · cancel · approve"]
+        Runner["background_agent_runner.py<br/>polls spine, runs in worker thread, never blocks chat"]
+        Executor["side_effect_executor.py<br/>delayed execution after undo window"]
+        Spine -.-> Runner
+        Spine -.-> Executor
+    end
+
+    subgraph Ledger["Side-effect ledger · undo window"]
+        LedgerSvc["SideEffectLedger / backend/side_effect_ledger.py<br/>record · list · undo · execute"]
+        Undo["/api/undo · /api/side-effects<br/>reversible within delay window"]
+        LedgerSvc -.-> Undo
+    end
 
     Router -->|browser / Electron local| WebLLM["WebLLM + WebGPU"]
     Router -->|native offline model| GGUF["llama.cpp + GGUF<br/>iOS / Android"]
@@ -137,7 +177,7 @@ flowchart TB
     subgraph Hosting["Vercel rewrites or separately hosted Express"]
         Edge{"Incoming paths<br/>/ · /api/* · /mcp"}
         SPA["Vite static app / PWA"]
-        API["Express API<br/>health · models · chat · agent"]
+        API["Express API<br/>health · models · chat · agent · tasks · side-effects · undo"]
         MCPHTTP["Optional Streamable HTTP MCP<br/>bearer-token protected"]
         Edge -->|/| SPA
         Edge -->|/api/*| API
@@ -163,6 +203,12 @@ flowchart TB
         MCPTools --> API
     end
 
+    subgraph PAP["Personal Agent Protocol (PAP) adapter"]
+        PAPAdapter["PAPAdapter<br/>discover /.well-known/pap.json · OAuth · scoped actions"]
+        PAPSettings["PAPSettings<br/>view · revoke per-business permissions"]
+        PAPAdapter -.->|authenticate + execute| PAPSettings
+    end
+
     subgraph Python["Optional local Python service · backend/"]
         FastAPI["FastAPI model-step fallback<br/>localhost only"]
         PyProvider["Python-configured model provider"]
@@ -176,9 +222,136 @@ flowchart TB
         Standalone --> Audit
         Standalone --> Sandbox
     end
+
+    subgraph Sync["Cross-device continuity · E2E encrypted"]
+        SyncSvc["SyncService<br/>CRDT ops · opaque encrypted payloads"]
+        Relay["Self-hostable relay server/sync-relay.js<br/>stores only ciphertext; never inspects"]
+        SyncStatus["SyncStatus UI<br/>last sync · pending ops · connected"]
+        SyncSvc -.->|E2E encrypted| Relay
+        SyncSvc --> SyncStatus
+    end
+
+    subgraph Marketplace["Agent + skill marketplace"]
+        MarketplaceSvc["SpecialistMarketplace<br/>publish · review · retire · download"]
+        GuardianCheck["GuardianAgent review before publication"]
+        MarketplaceSvc -.-> GuardianCheck
+    end
+
+    subgraph CloudHome["Agent-native cloud home"]
+        HomeSvc["AgentNativeHomeService<br/>provision · migrate · connection registry"]
+        ConnReg["AppConnectionRegistry<br/>CLI / API / MCP / GUI per service"]
+        HomeSvc --> ConnReg
+    end
+
+    subgraph Cast["Companion cast · multi-agent"]
+        CastOrch["CastOrchestrator<br/>route · solo / cast mode"]
+        CastUI["Cast toggle · labeled sub-agent messages"]
+        CastOrch --> CastUI
+    end
+
+    subgraph Collective["Governed collective intelligence"]
+        Collective["GovernedCollectiveIntelligence<br/>members · quarantine · attestation"]
+        Poisoning["CollectivePoisoningDetector<br/>anomalous contribution quarantine"]
+        Collective --> Poisoning
+    end
+
+    subgraph Governance["Relational governance & compliance"]
+        Relational["RelationalGovernanceService<br/>dependency signals · transparency report"]
+        Compliance["ComplianceEvidenceGenerator<br/>continuous audit-ready evidence"]
+        RegDashboard["RegulatoryDashboard<br/>real-time compliance status"]
+        Relational --> Compliance
+        Compliance --> RegDashboard
+    end
+
+    subgraph Ecosystem["Ecosystem interoperability"]
+        Interop["AgentInteropService<br/>AIPF · NLIP · ShanayaInteropProfile"]
+        ITU["IdentityInteropLayer<br/>ITU-T X.aiidm forward-compatible identity"]
+        Interop -.-> ITU
+    end
+
+    MCP["MCP integration"] -.->|expose core capabilities| Interop
 ```
 
 The main Android/iOS apps are Capacitor projects under [`client/android`](./client/android) and [`client/ios`](./client/ios). The released desktop packages wrap the same client in Capacitor Electron. [`apps/desktop`](./apps/desktop) is a separate Python-enabled Electron shell; it starts the local FastAPI service by default. The example bridge in `client/electron-agent` is an optional integration and is not the default desktop package path.
+
+### Governed autonomy and trust
+
+Shanaya enforces zero-trust runtime governance so no action is taken by the agent without an explicit policy decision:
+
+- **GuardianAgent** evaluates every proposed tool call and proactive action before execution. It assesses semantic intent (not just syntax), detects multi-turn attack patterns, and applies a configurable strictness level (permissive / balanced / strict). The Guardian has final veto authority and logs every decision with its full risk vector to the audit trail.
+- **PolicyEnforcementLayer** is configured at the platform level (not modifiable by the agent) and enforces rate limits, tool allow-lists, and data access boundaries for every action.
+- **Kill Switch** immediately halts all agent activity (tool calls, proactive messages, background tasks) and surfaces a clear UI state with a Resume button. Kill events are logged to the audit trail.
+- **CognitiveRiskEngine** scores every proposed action against CRF 2.0 dimensions (epistemic uncertainty, readiness deficit, behavioral vulnerability, consequence severity, intent uncertainty, memory uncertainty, environmental risk, action irreversibility). When the score exceeds the threshold, the agent suppresses the action entirely — not queued, not confirmation-prompted — and logs the suppression reason.
+- **CognitiveReadinessEngine** estimates the user's cognitive state (busy, focused, fatigued, open to interruption) and modulates the risk threshold: low readiness raises the bar for proactive intervention.
+- **CredentialBroker** holds provider API keys and never exposes them to AgentRuntime. All provider calls go through the Broker, which injects credentials at the network boundary and redacts them from responses.
+- **EgressPolicy** denies all outbound network calls by default; explicit allow-list entries are required for each destination and request shape.
+- **PermissionState** enforces monotonic attenuation: once revoked during a session, a permission cannot be re-granted without new explicit user approval.
+- **SideEffectLedger** records every irreversible action with action type, target, timestamp, delay window (default 30s), and status (pending / executed / undone). SafetyGuard writes to the ledger instead of executing immediately; the executor polls and executes only after the delay window expires without an undo request. An `/api/undo` endpoint and in-chat Undo button appear for reversible actions within their delay window.
+
+See [`SAFETY_GOVERNANCE.md`](./SAFETY_GOVERNANCE.md), [`SAFETY_MATURITY.md`](./SAFETY_MATURITY.md), and [`REGULATORY_COMPLIANCE.md`](./REGULATORY_COMPLIANCE.md) for the governance model, maturity mapping, and regulatory compliance details.
+
+### Layered memory and dreaming
+
+Shanaya maintains three memory layers with distinct retention semantics:
+
+- **Session memory** — the active conversation context for the current turn.
+- **Consolidated long-term memory** — summarized and indexed past interactions, processed asynchronously by the **MemoryConsolidator** via the Task Spine (never in the request path). Extracts durable facts, detects superseded facts, and updates the memory index.
+- **Persona invariants** — core character traits, user preferences, and relationship anchors that must not decay. Persona invariants have no time-based decay; episodic facts use usage-weighted retention rather than wall-clock recency.
+
+**MemoryEvolutionEngine** runs asynchronously via the Task Spine to abstract patterns across episodic memories into "insights," detect evolving preferences, and synthesize a "user model" document that can be injected into the system prompt.
+
+**DreamingConsolidator** runs during detected idle periods (via CognitiveReadinessEngine), reviews recent sessions, identifies and corrects errors, extracts durable rules and strategies, and updates the knowledge base. A **MemoryQualityGate** prevents knowledge bloat by prioritizing strategies, plans, and tested rules over transient observations, capping memory files per domain, and requiring a usefulness prediction before committing new memories.
+
+**MemoryConflictPanel** (in the Accountability Dashboard) shows detected contradictions and superseded facts and lets the user explicitly resolve them ("This fact is current" / "This fact is outdated").
+
+Users can view, edit, and delete stored memories through **MemoryPanel.tsx**, and explicitly reset persona anchors. **MemoryExportService** exports the full memory profile (raw events, atomic facts, cross-domain patterns, persona anchors) as a portable encrypted archive; **MemoryImportService** restores or migrates it to another device or account.
+
+### Cross-device continuity
+
+**SyncService** uses CRDTs (Yjs-style) for the memory store, task spine state, and side-effect ledger. All synced payloads are end-to-end encrypted before leaving the device; the relay stores only opaque encrypted payloads and forwards CRDT operations — it cannot validate, log, or inspect content.
+
+A self-hostable relay ([`server/sync-relay.js`](./server/sync-relay.js)) provides the minimal sync adapter. **SyncStatus.tsx** shows last sync time, pending operations, and whether the current device is in end-to-end encrypted sync with others.
+
+See [`SYNC_PRIVACY.md`](./SYNC_PRIVACY.md) for the threat model and self-hosting instructions.
+
+**AgentNativeHomeService** provisions a durable, always-on execution environment (self-hosted container or VM) per user that persists across sessions and holds persistent app connections (OAuth tokens, MCP endpoints) as a unified entry point. **AppConnectionRegistry** stores agent-adapted interfaces (CLI/API/MCP/GUI) per connected service; the agent prefers agent-adapted interfaces over GUI automation and logs latency/success-rate differences. **CloudHomeStatus.tsx** shows uptime, active app connections, and last sync time; a "Migrate Home" option transfers the home to a new region or provider without losing state.
+
+### Embodied and ambient presence
+
+**HardwareBridgeService** pairs Shanaya with external hardware companions (e.g., Raspberry Pi 5-based devices) over a local network using a minimal secure protocol (WebSocket with mutual TLS) for audio streaming (microphone/speaker), vision frames (camera), and basic actuator commands.
+
+**HybridIntelligenceRouter** on the bridge splits time-sensitive tasks (voice activity detection, gesture recognition, local navigation) to the edge device, while conversational reasoning and memory operations go to the cloud or local LLM when offline. It logs the split ratio and latency per task type.
+
+**HardwareSettings.tsx** lets the user pair/unpair devices, view device health (battery, connectivity), and configure which modalities are streamed (audio, video, sensor).
+
+**AmbientPresenceService** treats spatial context (user location, gaze direction, nearby people, active devices) as a first-class input. **PresenceManifestationManager** allows Shanaya to manifest across multiple device surfaces (earbuds, smart display, XR headset, mobile, desktop) while maintaining a single continuous identity, memory, and conversation state, with seamless device handoff. **SpatialContextPanel** shows what spatial data is being processed, lets the user toggle each sensor/modality, and reviews a log of spatial context events.
+
+### Agent marketplace and ecosystem
+
+**SpecialistMarketplace** supports guardian-gated publishing, review, and retirement of specialist agents and persona packs. Listings are prompt guidance only — they do not download executable code, add tools, or request device permissions. Each proposed listing passes through the GuardianAgent for safety review and requires explicit user approval before publication.
+
+**AgentInteropService** exposes Shanaya's core capabilities via the existing MCP server using a ShanayaInteropProfile schema (capabilities, permissions, costs). **RemoteAgentRegistry** discovers and delegates tasks to external specialized agents with transparency (UI shows "Delegating to [Agent Name]" and requires user approval).
+
+**ToolSynthesisService** / **SpecialistSynthesisService** proposes new specialist agents when the MemoryEvolutionEngine detects a recurring task category no existing specialist handles well. New specialist creation passes through GuardianAgent and requires explicit user approval. The **SpecialistAgentRegistry** tracks lineage, performance, and cost, with a "Retire" option.
+
+**KYBERNETES** governance module provides a one-way brake preventing specialist proliferation beyond a configurable cap (default 10 active specialists), hysteresis to avoid rapid create/retire cycles, and a "Big Red Button" that pauses all specialist creation and rolls back to a stable snapshot.
+
+**PAPAdapter** implements the Personal Agent Protocol (PAP) v1.0: discovers PAP files at a business's domain (`/.well-known/pap.json`), authenticates via OAuth, requests scoped permissions based on user intent, and executes allowed actions returning results for user confirmation before finalizing. **PAPSettings.tsx** lets the user view and revoke PAP permissions per business and see a log of PAP interactions.
+
+**IdentityInteropLayer** aligns the ATEPProfileGenerator with the ITU-T canonical agentic AI identity data model (X.aiidm), representing Shanaya's intent, capabilities, autonomy spectrum, delegation chain, and governance bindings. See [`ITU_T_IDENTITY_MAPPING.md`](./ITU_T_IDENTITY_MAPPING.md) for the field mapping and forward-compatibility plan.
+
+### Neuro-symbolic reasoning
+
+**NeuroSymbolicReasoner** combines neural fact extraction with a symbolic reasoning engine to verify consistency of proposed actions, memory updates, and persona-consistent responses before execution. It enforces graph-constrained action spaces: proposed actions that violate the PersonaKernel, user-established preferences, or safety constraints are rejected at the symbolic layer with a verifiable explanation logged to the audit trail. A symbolic memory consolidation pass runs during DreamingConsolidator to reconcile neural-extracted facts against the symbolic knowledge base.
+
+### Collective intelligence
+
+**GovernedCollectiveIntelligence** federates with external agent collectives via a CollectiveMemoryProtocol for sharing knowledge across agents, with cryptographic attestation of provenance and a zero-trust admission policy for new members. **CollectivePoisoningDetector** monitors for anomalous knowledge contributions using the CognitiveRiskEngine and GuardianAgent; suspicious contributions are quarantined and require human review before propagation. **CollectiveDashboard** shows active collectives, member agents, shared knowledge statistics, and quarantine events.
+
+### Relational governance
+
+**RelationalGovernanceService** monitors for dependency signals (excessive usage, emotional reliance) and deception risks (over-anthropomorphization) while preserving user autonomy. It defines configurable thresholds and escalation paths (suggest a break, surface resources, adjust proactive behavior). A **RelationalTransparencyReport** documents what the platform can and cannot see, what the agent retains, and what rights the user has (export, delete, migrate); it updates on every major configuration change.
+
 
 ### Message and tool flow
 
@@ -224,6 +397,40 @@ Every /api route except /api/health requires Authorization: Bearer SHANAYA_API_T
 | Optional Python service | [`backend/main.py`](./backend/main.py) | Provides a localhost model-step fallback and an approval-gated standalone tool flow with audit logging and a Docker sandbox. |
 | Alternate desktop shell | [`apps/desktop`](./apps/desktop) | Runs the separate Python-enabled Electron shell; it is distinct from the Capacitor Electron release packages. |
 | Packaging | [`client/capacitor.config.ts`](./client/capacitor.config.ts) and [`client/vite.config.ts`](./client/vite.config.ts) | Defines native app identity, PWA behavior, caching, and development proxying. |
+| Task Spine | [`client/src/services/TaskSpineService.ts`](./client/src/services/TaskSpineService.ts), [`backend/task_spine.py`](./backend/task_spine.py), [`scripts/background_agent_runner.py`](./scripts/background_agent_runner.py) | Asynchronous background tasks: create, list, pause, resume, cancel, approve pending irreversible actions; worker-thread runner never blocks chat. |
+| Side-effect ledger | [`client/src/services/SideEffectLedger.ts`](./client/src/services/SideEffectLedger.ts), [`backend/side_effect_ledger.py`](./backend/side_effect_ledger.py), [`scripts/side_effect_executor.py`](./scripts/side_effect_executor.py) | Records irreversible actions with delay window and undo; executor polls and executes after the window expires. |
+| Perception bus | [`client/src/services/PerceptionBus.ts`](./client/src/services/PerceptionBus.ts) | Unified event schema with five consent-gated sources (window, directory, repository, inbox, presence); subscribe/unsubscribe + health endpoint. |
+| Agent router | [`client/src/services/AgentRouter.ts`](./client/src/services/AgentRouter.ts) | RouterAgent classifies requests into task types and delegates to FreelanceAgent / ResearchAgent with profile-scoped tools. |
+| Agent profiles | [`agent_profiles.yaml`](./agent_profiles.yaml) | Configurable model tier, allowed tools, max iterations, timeout per task type. |
+| Guardian agent | [`client/src/services/GuardianAgent.ts`](./client/src/services/GuardianAgent.ts) | Zero-trust supervisor: strictness levels, multi-turn attack detection, semantic intent assessment, risk vector, veto authority. |
+| Policy enforcement | [`client/src/services/PolicyEnforcementLayer.ts`](./client/src/services/PolicyEnforcementLayer.ts) | Platform-level allow-list, rate limits, and data access boundaries enforced before every action. |
+| Kill switch | [`client/src/services/KillSwitch.ts`](./client/src/services/KillSwitch.ts) | Immediate halt of all agent activity with clear UI state and resume button; logged to audit trail. |
+| Cognitive risk | [`client/src/services/CognitiveRiskEngine.ts`](./client/src/services/CognitiveRiskEngine.ts), [`client/src/services/CognitiveReadinessEngine.ts`](./client/src/services/CognitiveReadinessEngine.ts) | CRF 2.0 risk scoring per action; readiness-based threshold modulation; deterministic silence when risk exceeds threshold. |
+| Memory service | [`client/src/services/MemoryService.ts`](./client/src/services/MemoryService.ts) | Three layers: session, consolidated long-term, persona invariants; usage-weighted retention; no time-based decay for persona. |
+| Memory evolution | [`client/src/services/MemoryEvolutionEngine.ts`](./client/src/services/MemoryEvolutionEngine.ts) | Asynchronously abstracts episodic memories into insights and a user model via Task Spine. |
+| Dreaming | [`client/src/services/DreamingConsolidator.ts`](./client/src/services/DreamingConsolidator.ts), [`client/src/services/CognitiveReadinessEngine.ts`](./client/src/services/CognitiveReadinessEngine.ts) | Idle-period consolidation, error correction, durable rule extraction, quality gate against knowledge bloat. |
+| Emotional state | [`client/src/services/EmotionalStateModel.ts`](./client/src/services/EmotionalStateModel.ts), [`client/src/services/ProactiveEmotionalPolicy.ts`](./client/src/services/ProactiveEmotionalPolicy.ts) | Emotional trajectory tracking and bounded proactive support offers. |
+| Credential broker | [`client/src/services/CredentialBroker.ts`](./client/src/services/CredentialBroker.ts) | Holds provider API keys; never exposes them to AgentRuntime; injects at network boundary, redacts from responses. |
+| Egress policy | [`client/src/services/EgressPolicy.ts`](./client/src/services/EgressPolicy.ts) | Deny-by-default outbound network allow-list with request-shape validation. |
+| Permission state | [`client/src/services/PermissionState.ts`](./client/src/services/PermissionState.ts) | Monotonic attenuation: revoked permissions cannot be re-granted in-session without new explicit approval. |
+| Sync service | [`client/src/services/SyncService.ts`](./client/src/services/SyncService.ts), [`server/sync-relay.js`](./server/sync-relay.js) | CRDT sync of memory, task spine, and side-effect ledger; E2E encrypted before leaving device; opaque relay. |
+| Cloud home | [`client/src/services/AgentNativeHomeService.ts`](./client/src/services/AgentNativeHomeService.ts), [`client/src/services/AppConnectionRegistry.ts`](./client/src/services/AppConnectionRegistry.ts) | Durable always-on execution environment; unified app connection registry (CLI/API/MCP/GUI); region migration. |
+| Hardware bridge | [`client/src/services/HardwareBridgeService.ts`](./client/src/services/HardwareBridgeService.ts) | Mutual-TLS WebSocket pairing with companion hardware; audio, vision, actuator, expression, gesture, interruption commands. |
+| Companion cast | [`client/src/services/CastOrchestrator.ts`](./client/src/services/CastOrchestrator.ts) | Routes messages to solo Shanaya or cast of Research/Coding/Casual companions; spontaneous contribution. |
+| Marketplace | [`client/src/services/SpecialistMarketplace.ts`](./client/src/services/SpecialistMarketplace.ts) | Guardian-gated publish/review/retire of specialist agents and persona packs; revenue-sharing scaffold. |
+| PAP adapter | [`client/src/services/PAPAdapter.ts`](./client/src/services/PAPAdapter.ts) | Discovers `/.well-known/pap.json`, OAuth scoped authentication, allowed-action execution pending user confirmation. |
+| ITU-T identity | [`client/src/services/IdentityInteropLayer.ts`](./client/src/services/IdentityInteropLayer.ts) | Forward-compatible ITU-T X.aiidm agentic identity mapping. |
+| Neuro-symbolic | [`client/src/services/NeuroSymbolicReasoner.ts`](./client/src/services/NeuroSymbolicReasoner.ts) | Symbolic constraint verification of actions, memory updates, and persona-consistent responses before execution. |
+| Collective intelligence | [`client/src/services/GovernedCollectiveIntelligence.ts`](./client/src/services/GovernedCollectiveIntelligence.ts) | Federated multi-agent collaboration with zero-trust admission and poisoning detection. |
+| Relational governance | [`client/src/services/RelationalGovernanceService.ts`](./client/src/services/RelationalGovernanceService.ts) | Dependency signal monitoring, deception-risk detection, triadic relationship transparency report. |
+| Oversight | [`client/src/services/OversightMetricsService.ts`](./client/src/services/OversightMetricsService.ts), [`client/src/services/RehearsalMode.ts`](./client/src/services/RehearsalMode.ts) | Agentic Oversight Index (AOI = U − λP) tracking; rehearsal mode for sandboxed workflow validation. |
+| Agent insurance | [`client/src/services/AgentInsuranceLedger.ts`](./client/src/services/AgentInsuranceLedger.ts) | Auditable execution trace for fund-moving, code-changing, or account-modifying actions with collateral and claim status. |
+| Token budget | [`client/src/services/TokenBudgetService.ts`](./client/src/services/TokenBudgetService.ts) | Per-component and per-task token budgets with hard cap and "task budget exhausted" state. |
+| Tracing | [`client/src/services/Tracing.ts`](./client/src/services/Tracing.ts) | OpenTelemetry-compatible batch tracing: model calls, tool invocations, memory retrieval, sub-agent delegation. |
+| Circuit breaker | [`client/src/services/CircuitBreaker.ts`](./client/src/services/CircuitBreaker.ts) | Disables tools after 3 consecutive failures for the session. |
+| Loop detection | [`client/src/services/LoopDetection.ts`](./client/src/services/LoopDetection.ts) | Blocks identical consecutive tool calls beyond threshold of 3; logs intervention to audit. |
+| Latency budgets | [`client/src/services/latency_budgets.ts`](./client/src/services/latency_budgets.ts) | Budgets for inline suggestion, full generation, summary, tool call; warns when exceeded. |
+| Observability | [`client/src/services/Observability.ts`](./client/src/services/Observability.ts) | Routing ratio, consolidation latency/success, persona retention, sync conflict metrics. |
 
 ### Runtime data and trust boundaries
 
@@ -663,15 +870,15 @@ For a physical phone, `localhost` means the phone itself. Use a reachable HTTPS 
 
 ### Build artifacts and installation
 
-The GitHub Actions workflow builds the web, mobile, and Electron targets on pull requests, pushes to `main`, version tags, and manual runs. Successful `v*` tag builds publish a GitHub Release with stable platform package names. A manual run can also publish one by enabling the release input and providing a `vMAJOR.MINOR.PATCH` tag. A normal `main` build uploads temporary Actions artifacts and does not create a release. Release [v1.0.2](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/tag/v1.0.2) currently contains the following downloadable packages:
+The GitHub Actions workflow builds the web, mobile, and Electron targets on pull requests, pushes to `main`, version tags, and manual runs. Successful `v*` tag builds publish a GitHub Release with stable platform package names. A manual run can also publish one by enabling the release input and providing a `vMAJOR.MINOR.PATCH` tag. A normal `main` build uploads temporary Actions artifacts and does not create a release. The latest release contains the following downloadable packages:
 
 | Platform | Release asset | Format and installation notes |
 | --- | --- | --- |
-| Android | `Shanaya-Android.apk` | Available in v1.0.2. CI uses release signing only when Android signing secrets are configured; otherwise it creates a debug APK. |
-| iOS | No IPA in v1.0.2; `iOS-Installation.txt` | Apple signing is not configured. The unsigned Xcode archive is a workflow artifact, not a device-installable app. A signed IPA requires Apple credentials and distribution through TestFlight or the App Store. |
-| macOS | `Shanaya-macOS.dmg` | Available in v1.0.2. Electron installer; signing and notarization depend on Apple credentials. |
-| Windows | `Shanaya-Windows.exe` | Available in v1.0.2. Electron installer; Authenticode signing depends on configured credentials. |
-| Linux | `Shanaya-Linux.AppImage` | Available in v1.0.2. A DEB package may also be produced by the Linux runner, but is not included in the current release. |
+| Android | `Shanaya-Android.apk` | Latest release. CI uses release signing only when Android signing secrets are configured; otherwise it creates a debug APK. |
+| iOS | No IPA; `iOS-Installation.txt` | Apple signing is not configured. The unsigned Xcode archive is a workflow artifact, not a device-installable app. A signed IPA requires Apple credentials and distribution through TestFlight or the App Store. |
+| macOS | `Shanaya-macOS.dmg` | Latest release. Electron installer; signing and notarization depend on Apple credentials. |
+| Windows | `Shanaya-Windows.exe` | Latest release. Electron installer; Authenticode signing depends on configured credentials. |
+| Linux | `Shanaya-Linux.AppImage` | Latest release. A DEB package may also be produced by the Linux runner, but is not included in the current release. |
 | Web/PWA | Actions artifact `shanaya-web-pwa` | Static `dist` bundle from a workflow run. Deploy to HTTPS static hosting or preview with `npm run preview --prefix client`. |
 
 Create and push a version tag to build and publish installers:
