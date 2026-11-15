@@ -105,172 +105,106 @@ Shanaya is designed around a few principles that should guide new features:
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    User["User"] --> Web["Web / PWA"]
-    User --> Mobile["iOS / Android<br/>Capacitor"]
-    User --> Desktop["macOS / Windows / Linux<br/>Capacitor Electron"]
-    User --> Hardware["Embodied hardware<br/>Raspberry Pi / companion robot"]
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px">
+  <div style="flex:1;min-width:200px;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);border:1px solid #bae6fd;border-radius:16px;padding:20px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.06)">
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0369a1;margin-bottom:10px">Plug-in &nbsp;·&nbsp; Shanaya AI</div>
+    <h2 style="font-size:27px;line-height:1.25;margin:0 0 10px 0;color:#0f172a;font-weight:700">A private, governed AI companion</h2>
+    <p style="font-size:13px;line-height:1.6;color:#334155;margin:0">Shanaya runs across web, mobile, and desktop with zero-trust governance, layered memory, E2E-encrypted sync, and embodied hardware continuity.</p>
+  </div>
+</div>
 
-    subgraph Client["Shared client · client/src"]
-        UI["React UI<br/>landing · chat · integrations · downloads"]
-        Runtime["AgentRuntime<br/>bounded tool turns"]
-        Router{"LLMRouter<br/>on-device / cloud routing"}
-        Guard["GuardianAgent<br/>zero-trust review · strictness"]
-        Policy["PolicyEnforcementLayer<br/>rate limits · allow-list"]
-        Kill["Kill Switch<br/>halt + resume"]
-        Cognitive["CognitiveRiskEngine<br/>CRF 2.0 risk scoring"]
-        Readiness["CognitiveReadinessEngine<br/>busy · focused · fatigued · open"]
-        Tools["DeviceTools<br/>allow-listed actions"]
-        Scene["AvatarScene<br/>Three.js · GLB · emotion"]
-        Voice["SpeechService / OnDeviceVoicePipeline<br/>recognition · synthesis"]
-        Native["Optional MobileClaw agent<br/>iOS / Android"]
-        Memory["MemoryService<br/>session · long_term · persona"]
-        NeuroSym["NeuroSymbolicReasoner<br/>symbolic constraint check"]
-        Dream["DreamingConsolidator<br/>idle consolidation + quality gate"]
-        Evo["MemoryEvolutionEngine<br/>user model synthesis"]
-        Emo["EmotionalStateModel<br/>trajectory tracking"]
-        Accountability["AgentAccountabilityDashboard<br/>inspect · edit · reset"]
-        UI --> Runtime
-        UI --> Scene
-        UI --> Voice
-        UI --> Native
-        UI --> Accountability
-        Runtime --> Router
-        Runtime --> Guard
-        Guard --> Cognitive
-        Guard --> Policy
-        Policy --> Kill
-        Cognitive --> Readiness
-        Runtime --> Memory
-        Memory --> Dream
-        Memory --> Evo
-        Memory --> Emo
-        NeuroSym -.->|gate| Runtime
-        Dream -.->|async via Task Spine| Memory
-    end
-    Web --> UI
-    Mobile --> UI
-    Desktop --> UI
-    Hardware -.->|mTLS WebSocket| HardwareBridge["HardwareBridgeService<br/>audio · vision · actuators"]
+### Capability overview
 
-    subgraph TaskSpine["Task Spine · asynchronous background work"]
-        Spine["TaskSpineService / backend/task_spine.py<br/>create · list · pause · resume · cancel · approve"]
-        Runner["background_agent_runner.py<br/>polls spine, runs in worker thread, never blocks chat"]
-        Executor["side_effect_executor.py<br/>delayed execution after undo window"]
-        Spine -.-> Runner
-        Spine -.-> Executor
-    end
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:24px">
 
-    subgraph Ledger["Side-effect ledger · undo window"]
-        LedgerSvc["SideEffectLedger / backend/side_effect_ledger.py<br/>record · list · undo · execute"]
-        Undo["/api/undo · /api/side-effects<br/>reversible within delay window"]
-        LedgerSvc -.-> Undo
-    end
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#0ea5e9;margin-bottom:8px">Zero-Trust Governance</div>
+  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">GuardianAgent · Kill Switch</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Semantic intent assessment, multi-turn attack detection, policy allow-lists, and final veto authority over every action.</div>
+</div>
 
-    Router -->|browser / Electron local| WebLLM["WebLLM + WebGPU"]
-    Router -->|native offline model| GGUF["llama.cpp + GGUF<br/>iOS / Android"]
-    Router -->|cloud / Ollama| Edge
-    Tools -->|permissioned OS actions| OS["Device OS APIs"]
-    Native -->|native key configured| Anthropic["Anthropic API"]
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#22c55e;margin-bottom:8px">Layered Memory</div>
+  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Session · Long-Term · Persona</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Usage-weighted retention, dreaming consolidation, and persona invariants that never decay.</div>
+</div>
 
-    subgraph Hosting["Vercel rewrites or separately hosted Express"]
-        Edge{"Incoming paths<br/>/ · /api/* · /mcp"}
-        SPA["Vite static app / PWA"]
-        API["Express API<br/>health · models · chat · agent · tasks · side-effects · undo"]
-        MCPHTTP["Optional Streamable HTTP MCP<br/>bearer-token protected"]
-        Edge -->|/| SPA
-        Edge -->|/api/*| API
-        Edge -->|/mcp when enabled| MCPHTTP
-        API --> Computer["Optional desktop computer endpoint"]
-        API --> VoiceAPI["TTS + Pinecall token endpoints"]
-    end
-    SPA -. serves .-> Web
-    SPA -. serves packaged web assets to .-> Mobile
-    SPA -. serves packaged web assets to .-> Desktop
-    API --> Cloud["Groq default · provider catalog · OpenAI-compatible / Anthropic / Ollama"]
-    API --> Ollama["Ollama host"]
-    API --> AnthropicComputer["Anthropic computer-use API"]
-    VoiceAPI --> Mithi["Optional Mithi TTS"]
-    VoiceAPI --> Pinecall["Pinecall token issuer + voice service"]
-    Voice -->|optional TTS request / call token| VoiceAPI
-    Voice -->|short-lived call session| Pinecall
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#a855f7;margin-bottom:8px">Cross-Device Sync</div>
+  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">CRDT · E2E Encrypted</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Opaque encrypted payloads forwarded by a self-hostable relay that cannot inspect content.</div>
+</div>
 
-    subgraph MCP["MCP clients"]
-        Host["MCP host"] -->|HTTPS + bearer token| MCPHTTP
-        Stdio["Local stdio process"] --> MCPTools["Shanaya MCP tools"]
-        MCPHTTP --> MCPTools
-        MCPTools --> API
-    end
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#f59e0b;margin-bottom:8px">Embodied Presence</div>
+  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">mTLS WebSocket Bridge</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Audio, vision, actuation, and expression streaming to companion hardware.</div>
+</div>
 
-    subgraph PAP["Personal Agent Protocol (PAP) adapter"]
-        PAPAdapter["PAPAdapter<br/>discover /.well-known/pap.json · OAuth · scoped actions"]
-        PAPSettings["PAPSettings<br/>view · revoke per-business permissions"]
-        PAPAdapter -.->|authenticate + execute| PAPSettings
-    end
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#10b981;margin-bottom:8px">Agent Ecosystem</div>
+  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">AAIF · PAP · Typed-Rails</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Portable agent definitions, Personal Agent Protocol, and formal typed-rail collective governance.</div>
+</div>
 
-    subgraph Python["Optional local Python service · backend/"]
-        FastAPI["FastAPI model-step fallback<br/>localhost only"]
-        PyProvider["Python-configured model provider"]
-        Standalone["Standalone Python tool agent"]
-        Approval["Approval WebSocket<br/>standalone Python tool flow"]
-        Audit["Redacted, hash-chained audit log"]
-        Sandbox["Docker code sandbox<br/>network disabled"]
-        Router -.->|retryable Express failure| FastAPI
-        FastAPI --> PyProvider -->|one model step| Router
-        Standalone --> Approval
-        Standalone --> Audit
-        Standalone --> Sandbox
-    end
+</div>
 
-    subgraph Sync["Cross-device continuity · E2E encrypted"]
-        SyncSvc["SyncService<br/>CRDT ops · opaque encrypted payloads"]
-        Relay["Self-hostable relay server/sync-relay.js<br/>stores only ciphertext; never inspects"]
-        SyncStatus["SyncStatus UI<br/>last sync · pending ops · connected"]
-        SyncSvc -.->|E2E encrypted| Relay
-        SyncSvc --> SyncStatus
-    end
+### Runtime layers
 
-    subgraph Marketplace["Agent + skill marketplace"]
-        MarketplaceSvc["SpecialistMarketplace<br/>publish · review · retire · download"]
-        GuardianCheck["GuardianAgent review before publication"]
-        MarketplaceSvc -.-> GuardianCheck
-    end
+Shanaya's request path flows through five clean layers, each with a single responsibility:
 
-    subgraph CloudHome["Agent-native cloud home"]
-        HomeSvc["AgentNativeHomeService<br/>provision · migrate · connection registry"]
-        ConnReg["AppConnectionRegistry<br/>CLI / API / MCP / GUI per service"]
-        HomeSvc --> ConnReg
-    end
+<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:16px;margin-bottom:20px">
+  <div style="flex:0 0 auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px">
+    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Ingress</div>
+    <div style="font-size:12px;font-weight:600;color:#0f172a">Web · Mobile · Desktop · Hardware</div>
+  </div>
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Routing</div>
+    <div style="font-size:12px;font-weight:600;color:#0f172a">LLMRouter · on-device / cloud</div>
+  </div>
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:160px;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Governance</div>
+    <div style="font-size:12px;font-weight:600;color:#0f172a">Guardian · Policy · Kill Switch</div>
+  </div>
+  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
+    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Memory</div>
+    <div style="font-size:12px;font-weight:600;color:#0f172a">Router · Graph + Vector</div>
+  </div>
+  <div style="flex:0 0 auto;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px">
+    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Response</div>
+    <div style="font-size:12px;font-weight:600;color:#0f172a">Avatar · Voice · UI</div>
+  </div>
+</div>
 
-    subgraph Cast["Companion cast · multi-agent"]
-        CastOrch["CastOrchestrator<br/>route · solo / cast mode"]
-        CastUI["Cast toggle · labeled sub-agent messages"]
-        CastOrch --> CastUI
-    end
+### Hosting & deployment
 
-    subgraph Collective["Governed collective intelligence"]
-        Collective["GovernedCollectiveIntelligence<br/>members · quarantine · attestation"]
-        Poisoning["CollectivePoisoningDetector<br/>anomalous contribution quarantine"]
-        Collective --> Poisoning
-    end
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px">
 
-    subgraph Governance["Relational governance & compliance"]
-        Relational["RelationalGovernanceService<br/>dependency signals · transparency report"]
-        Compliance["ComplianceEvidenceGenerator<br/>continuous audit-ready evidence"]
-        RegDashboard["RegulatoryDashboard<br/>real-time compliance status"]
-        Relational --> Compliance
-        Compliance --> RegDashboard
-    end
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px">Client</div>
+  <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">React · Vite · PWA</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Web app, Capacitor iOS/Android, Capacitor Electron.</div>
+</div>
 
-    subgraph Ecosystem["Ecosystem interoperability"]
-        Interop["AgentInteropService<br/>AIPF · NLIP · ShanayaInteropProfile"]
-        ITU["IdentityInteropLayer<br/>ITU-T X.aiidm forward-compatible identity"]
-        Interop -.-> ITU
-    end
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px">API</div>
+  <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">Express · Node.js</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Health, models, chat, agent, tasks, side-effects, undo endpoints.</div>
+</div>
 
-    MCP["MCP integration"] -.->|expose core capabilities| Interop
-```
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px">MCP</div>
+  <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">Streamable HTTP · stdio</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Bearer-token protected tool exposure to MCP hosts.</div>
+</div>
+
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
+  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px">Relay</div>
+  <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">Self-hostable sync relay</div>
+  <div style="font-size:12px;color:#64748b;line-height:1.5">Stores only opaque encrypted CRDT payloads; never inspects content.</div>
+</div>
+
+</div>
 
 The main Android/iOS apps are Capacitor projects under [`client/android`](./client/android) and [`client/ios`](./client/ios). The released desktop packages wrap the same client in Capacitor Electron. [`apps/desktop`](./apps/desktop) is a separate Python-enabled Electron shell; it starts the local FastAPI service by default. The example bridge in `client/electron-agent` is an optional integration and is not the default desktop package path.
 
