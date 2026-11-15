@@ -7,10 +7,6 @@ const pages = {
     title: "Shanaya — Your AI Companion | 3D Avatar & Voice Chat",
     description: "Meet Shanaya, an expressive AI companion for thoughtful conversation, multilingual voice chat, and a living 3D avatar. Bring your own Groq key to begin.",
   },
-  about: {
-    title: "About Shanaya | Private AI Companion with Voice & 3D Avatar",
-    description: "Learn how Shanaya combines an animated 3D AI avatar, multilingual voice conversation, cloud and local AI, offline-capable inference, and confirmation-gated device actions.",
-  },
 } as const;
 
 type SeoOptions = { mode: string };
@@ -98,7 +94,6 @@ function structuredData(siteOrigin: string, pagePath: string, page: (typeof page
         description: pages.home.description,
         image: imageUrl,
         browserRequirements: "Requires a modern browser with JavaScript enabled",
-        softwareHelp: { "@type": "CreativeWork", url: `${appUrl}about/` },
         publisher: { "@id": `${appUrl}#organization` },
         featureList: [
           "Responsive 3D avatar with emotion-aware expressions",
@@ -141,8 +136,8 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
   return {
     name: "shanaya-seo",
     transformIndexHtml(html, context) {
-      const pagePath = context.path.includes("/about/") ? "/about/" : "/";
-      const page = pagePath === "/about/" ? pages.about : pages.home;
+      const pagePath = "/";
+      const page = pages.home;
       const image = siteOrigin ? new URL("/social-card.svg", siteOrigin).toString() : "/social-card.svg";
       const canonical = indexable ? new URL(pagePath, siteOrigin).toString() : "";
       const tags = [
@@ -189,8 +184,8 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
 
       if (indexable) {
         const today = new Date().toISOString().slice(0, 10);
-        const sitemapUrls = ["/", "/about/"].map((path) => (
-          `  <url><loc>${new URL(path, siteOrigin).toString()}</loc><lastmod>${today}</lastmod><changefreq>${path === "/" ? "weekly" : "monthly"}</changefreq><priority>${path === "/" ? "1.0" : "0.7"}</priority></url>`
+        const sitemapUrls = ["/"].map((path) => (
+          `  <url><loc>${new URL(path, siteOrigin).toString()}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>`
         )).join("\n");
         this.emitFile({
           type: "asset",

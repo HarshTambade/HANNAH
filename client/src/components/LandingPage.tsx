@@ -9,7 +9,6 @@ type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
   onMarketplace: () => void;
-  onSetup?: () => void;
 };
 
 const highlights = [
@@ -45,7 +44,7 @@ const highlights = [
   },
 ];
 
-export default function LandingPage({ onStart, onIntegrations, onMarketplace, onSetup }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onMarketplace }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [apiToken, setApiToken] = useState("");
   const [groqApiKey, setGroqApiKey] = useState("");
@@ -115,8 +114,6 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
             <a href="#privacy" className="text-xs text-slate-400 transition hover:text-white">Your privacy</a>
             <button type="button" onClick={onMarketplace} className="text-xs text-slate-400 transition hover:text-white">Marketplace</button>
             <button type="button" onClick={onIntegrations} className="text-xs text-slate-400 transition hover:text-white">Integrations</button>
-            {onSetup && <button type="button" onClick={onSetup} className="text-xs text-slate-400 transition hover:text-white">First-time setup</button>}
-            <a href="/about/" className="text-xs text-slate-400 transition hover:text-white">About</a>
           </nav>
 
           <button
@@ -318,7 +315,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
         <footer className="border-t border-white/[0.06]">
           <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-6 text-[9px] text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
             <span>© {new Date().getFullYear()} Shanaya · A thoughtful AI companion.</span>
-            <div className="flex items-center gap-5"><button type="button" onClick={onIntegrations} className="transition hover:text-slate-200">API & Integrations</button><a href="/about/" className="transition hover:text-slate-200">About</a><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-slate-200">Source & project details</a></div>
+            <div className="flex items-center gap-5"><button type="button" onClick={onIntegrations} className="transition hover:text-slate-200">API & Integrations</button><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-slate-200">Source & project details</a></div>
           </div>
         </footer>
       </div>

@@ -5,7 +5,6 @@ import ChatUI from "./components/ChatUI";
 import IntegrationsPage from "./components/IntegrationsPage";
 import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
-import Onboarding, { type OnboardingResult } from "./components/Onboarding";
 import PlatformDownloads from "./components/PlatformDownloads";
 import type { Emotion, InferenceMode } from "./types";
 import { setApiAccessToken } from "./services/api";
@@ -19,22 +18,9 @@ const emotionColors: Record<Emotion, string> = {
   thinking: "#c084fc",
 };
 
-// Any stored value means onboarding has been seen. It is intentionally separate
-// from provider preferences so clearing chat data never re-triggers setup.
-const ONBOARDING_STORAGE_KEY = "shanaya.onboarding.v1";
-type Screen = "onboarding" | "landing" | "companion" | "integrations" | "marketplace";
-
-function rememberOnboarding() {
-  try {
-    window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "complete");
-  } catch {
-    // Setup may reappear when storage is unavailable; the app still works.
-  }
-}
+type Screen = "landing" | "companion" | "integrations" | "marketplace";
 
 export default function App() {
-  // The public URL should open on the landing page. First-run privacy setup is
-  // still available from the landing page for users who want it.
   const [screen, setScreen] = useState<Screen>("landing");
   const [integrationReturnScreen, setIntegrationReturnScreen] = useState<"landing" | "companion">("landing");
   const [marketplaceReturnScreen, setMarketplaceReturnScreen] = useState<"landing" | "companion">("landing");
@@ -51,25 +37,6 @@ export default function App() {
     return <MarketplacePage onBack={() => setScreen(marketplaceReturnScreen)} />;
   }
 
-  if (screen === "onboarding") {
-    const completeOnboarding = (result: OnboardingResult) => {
-      setApiAccessToken(result.apiToken);
-      setGroqApiKey(result.groqApiKey);
-      setPreferredMode(result.preferredMode);
-      rememberOnboarding();
-      setScreen("companion");
-    };
-    return (
-      <Onboarding
-        onComplete={completeOnboarding}
-        onSkip={() => {
-          rememberOnboarding();
-          setScreen("landing");
-        }}
-      />
-    );
-  }
-
   if (screen === "landing") {
     return (
       <LandingPage
@@ -81,7 +48,6 @@ export default function App() {
         }}
         onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
         onMarketplace={() => { setMarketplaceReturnScreen("landing"); setScreen("marketplace"); }}
-        onSetup={() => setScreen("onboarding")}
       />
     );
   }
@@ -172,9 +138,6 @@ export default function App() {
               >
                 <PackageOpen size={13} /> <span className="hidden sm:inline">Marketplace</span>
               </button>
-              <a href="/about/" className="rounded-lg px-2 py-2 text-[11px] text-slate-400 transition hover:bg-white/[0.04] hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50">
-                About
-              </a>
               <PlatformDownloads />
             </div>
           </header>

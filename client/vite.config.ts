@@ -58,7 +58,6 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       input: {
         main: resolve(projectRoot, "index.html"),
-        about: resolve(projectRoot, "about/index.html"),
       },
       output: {
         manualChunks(id) {
