@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import { Aperture, RotateCcw } from "lucide-react";
 import App from "./App";
+import AgeGateGuard from "./components/AgeGateGuard";
 import "./index.css";
 import { initClientTelemetry } from "./services/telemetry";
 
@@ -37,7 +38,9 @@ function CrashFallback() {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Sentry.ErrorBoundary fallback={<CrashFallback />} showDialog={false}>
-      <App />
+      <AgeGateGuard>
+        <App />
+      </AgeGateGuard>
     </Sentry.ErrorBoundary>
   </React.StrictMode>,
 );

@@ -14,6 +14,11 @@ export type OnboardingResult = {
   apiToken: string;
   groqApiKey: string;
   preferredMode: OnboardingPreferredMode;
+  profile: {
+    name: string;
+    voicePitch: "low" | "medium" | "high";
+    memoryAnchor: string;
+  };
 };
 
 type OnboardingProps = {
@@ -21,7 +26,7 @@ type OnboardingProps = {
   onSkip: () => void;
 };
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 const privacyPoints = [
   {
@@ -58,6 +63,9 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
   const [showKey, setShowKey] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [localChoice, setLocalChoice] = useState<"native" | "webllm" | "ollama" | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [voicePitch, setVoicePitch] = useState<"low" | "medium" | "high">("medium");
+  const [memoryAnchor, setMemoryAnchor] = useState("");
   const [modelStatus, setModelStatus] = useState<OfflineModelStatus>("checking");
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -155,11 +163,21 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
   }
 
   function finish() {
+    const profile = {
+      name: profileName.trim(),
+      voicePitch,
+      memoryAnchor: memoryAnchor.trim(),
+    };
+    try {
+      window.localStorage.setItem("shanaya.profile.v1", JSON.stringify(profile));
+    } catch {
+      // Best effort.
+    }
     if (path === "cloud") {
-      onComplete({ apiToken: apiToken.trim(), groqApiKey: groqApiKey.trim(), preferredMode: "cloud" });
+      onComplete({ apiToken: apiToken.trim(), groqApiKey: groqApiKey.trim(), preferredMode: "cloud", profile });
       return;
     }
-    onComplete({ apiToken: "", groqApiKey: "", preferredMode: contextualMode });
+    onComplete({ apiToken: "", groqApiKey: "", preferredMode: contextualMode, profile });
   }
 
   const primaryButton = "group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-200 to-violet-300 px-5 text-[11px] font-bold text-[#090d1a] shadow-[0_10px_40px_rgba(111,119,255,0.18)] transition hover:-translate-y-0.5 hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100/70";
@@ -471,6 +489,65 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
               </p>
             </div>
           )}
+
+          {step === 3 && (
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-violet-200/15 bg-violet-200/[0.045] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-violet-100/80">
+                <Sparkles size={11} /> Character anchoring
+              </span>
+              <h1 className="mt-4 font-['Manrope'] text-2xl font-semibold tracking-[-0.045em] text-white sm:text-3xl">Make Shanaya yours.</h1>
+              <p className="mt-3 max-w-xl text-[12px] leading-6 text-slate-400">
+                These details are stored locally and used to personalize future conversations. They are never sent to a cloud provider unless you choose cloud inference.
+              </p>
+
+              <div className="mt-6 space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-semibold text-slate-200">Name Shanaya can use for you</span>
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(event) => setProfileName(event.target.value)}
+                    placeholder="Your preferred name"
+                    maxLength={40}
+                    className="w-full rounded-xl border border-white/[0.1] bg-[#080b13] px-3.5 py-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-violet-300/40"
+                  />
+                </label>
+
+                <div>
+                  <span className="mb-2 block text-[10px] font-semibold text-slate-200">Voice pitch preference</span>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(["low", "medium", "high"] as const).map((pitch) => (
+                      <button
+                        key={pitch}
+                        type="button"
+                        onClick={() => setVoicePitch(pitch)}
+                        aria-pressed={voicePitch === pitch}
+                        className={`rounded-2xl border p-3 text-left transition ${voicePitch === pitch ? "border-violet-300/35 bg-violet-300/[0.08]" : "border-white/[0.07] bg-white/[0.02] hover:border-white/[0.14]"}`}
+                      >
+                        <span className="block font-['Manrope'] text-[12px] font-semibold text-slate-100">{pitch[0].toUpperCase() + pitch.slice(1)}</span>
+                        <span className="mt-1 block text-[9px] leading-4 text-slate-400">
+                          {pitch === "low" ? "Warm and grounded." : pitch === "medium" ? "Balanced and natural." : "Bright and light."}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="block">
+                  <span className="mb-2 block text-[10px] font-semibold text-slate-200">One memory anchor phrase</span>
+                  <input
+                    type="text"
+                    value={memoryAnchor}
+                    onChange={(event) => setMemoryAnchor(event.target.value)}
+                    placeholder="A phrase Shanaya should remember"
+                    maxLength={120}
+                    className="w-full rounded-xl border border-white/[0.1] bg-[#080b13] px-3.5 py-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-violet-300/40"
+                  />
+                  <p className="mt-1.5 text-[9px] leading-5 text-slate-500">Optional. You can update or delete it later in Settings.</p>
+                </label>
+              </div>
+            </div>
+          )}
         </section>
 
         <footer className="flex items-center justify-between gap-3 border-t border-white/[0.07] pt-4">
@@ -489,6 +566,10 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
             </button>
           ) : step === 1 ? (
             <button type="button" onClick={nextFromSetup} className={primaryButton}>
+              Continue <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
+            </button>
+          ) : step === 2 ? (
+            <button type="button" onClick={() => setStep(3)} className={primaryButton}>
               Continue <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
             </button>
           ) : (
