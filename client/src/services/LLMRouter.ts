@@ -124,7 +124,27 @@ function parsePromptToolCalls(content: string): unknown[] {
   return [];
 }
 
+export type RoutingDecision = { useOnDevice: boolean; reason: string };
+
 export class LLMRouter {
+  static logRoutingDecision(decision: RoutingDecision) {
+    try {
+      console.info("[LLMRouter]", decision.useOnDevice ? "on-device" : "cloud", decision.reason);
+    } catch {
+      // Best effort.
+    }
+  }
+
+  static routeTask(prompt: string): RoutingDecision {
+    const text = prompt.toLowerCase();
+    if (/research|compare|analyze|large context|code generation|refactor/.test(text)) {
+      return { useOnDevice: false, reason: "complex reasoning or code generation beyond on-device threshold" };
+    }
+    if (/weather|status|battery|hello|how are you|simple/.test(text)) {
+      return { useOnDevice: true, reason: "everyday task suitable for on-device model" };
+    }
+    return { useOnDevice: true, reason: "default to on-device for emotional chat and simple Q&A" };
+  }
   static async resolveMode(preferred: InferenceMode, browserConnected: boolean) {
     if (!browserConnected) return resolveInferenceMode(preferred, false);
     const network = await getNetworkStatus().catch(() => ({ connected: browserConnected }));
