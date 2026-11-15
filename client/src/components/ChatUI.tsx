@@ -21,12 +21,14 @@ import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentR
 import { clearMobileAgentConversation, getMobileAgentStatus, removeMobileAgentApiKey, runMobileAgentTurn, setMobileAgentApiKey } from "../services/MobileAgent";
 import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuardrails";
 import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent";
+import { trackEvent } from "../services/events";
 import {
   SubscriptionService,
   isSubscriptionError,
   type SubscriptionQuota,
 } from "../services/SubscriptionService";
 import FeedbackModal from "./FeedbackModal";
+import FirstSessionCoach from "./FirstSessionCoach";
 import PricingModal from "./PricingModal";
 import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
@@ -148,6 +150,19 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [pricingReason, setPricingReason] = useState("");
   const [quota, setQuota] = useState<SubscriptionQuota>(() => SubscriptionService.getQuota());
+
+  useEffect(() => {
+    trackEvent("chat_opened");
+    const startedAt = Date.now();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") trackEvent("app_foregrounded");
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      trackEvent("session_duration", { seconds: Math.round((Date.now() - startedAt) / 1000) });
+    };
+  }, []);
   const [nativeStatus, setNativeStatus] = useState<OfflineModelStatus>("checking");
   const [isPreparingNative, setIsPreparingNative] = useState(false);
   const [nativeAgentStatus, setNativeAgentStatus] = useState({ available: false, initialized: false, hasApiKey: false });
@@ -447,6 +462,10 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       } else {
         setQuota(SubscriptionService.getQuota());
       }
+      const userTurns = messages.filter((message) => message.role === "user").length + 1;
+      if (userTurns === 1) trackEvent("first_message_sent");
+      if (userTurns === 3) trackEvent("third_message_sent");
+      if (transcript !== undefined) trackEvent("voice_used");
       setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply }]);
       onEmotionChange(result.emotion);
       if (speakReply) {
@@ -980,6 +999,10 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
 
       <div ref={scrollRef} className="chat-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <div className="mx-auto flex max-w-[720px] flex-col gap-3">
+          <FirstSessionCoach
+            messageCount={messages.filter((message) => message.role === "user").length}
+            onSuggestion={(suggestion) => setInput(suggestion)}
+          />
           {messages.map((message, index) => {
             const isUser = message.role === "user";
             const isSystem = message.role === "system";

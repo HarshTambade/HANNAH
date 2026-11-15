@@ -271,10 +271,11 @@ async function callProviderMeasured({ provider, apiKey, model, messages, tools, 
 
   if (provider.kind === "anthropic") {
     const converted = toAnthropicMessages([{ role: "system", content: system }, ...messages]);
-    const anthropicTools = (tools || []).map((tool) => ({
+    const anthropicTools = (tools || []).map((tool, index, all) => ({
       name: tool.function.name,
       description: tool.function.description,
       input_schema: tool.function.parameters,
+      ...(index === all.length - 1 ? { cache_control: { type: "ephemeral" } } : {}),
     }));
     const data = await requestJson(anthropicUrl(provider.baseUrl, "messages"), {
       method: "POST",
@@ -285,7 +286,7 @@ async function callProviderMeasured({ provider, apiKey, model, messages, tools, 
       },
       body: JSON.stringify({
         model,
-        system: converted.system,
+        system: [{ type: "text", text: converted.system, cache_control: { type: "ephemeral" } }],
         messages: converted.messages,
         max_tokens: tools?.length ? 1400 : 900,
         ...(anthropicTools.length ? { tools: anthropicTools } : {}),
@@ -375,6 +376,10 @@ async function requestWithProviderFallback({ provider, apiKey, requestedModel, m
         ttfbMs: result.ttfbMs,
         totalMs: result.totalMs,
       });
+      if (result.message && typeof result.message === "object") {
+        result.message.usage = result.usage;
+        result.message.model = model;
+      }
       return result.message;
     } catch (error) {
       lastError = error;

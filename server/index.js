@@ -22,6 +22,7 @@ const {
   createFeedbackHandler,
 } = require("./feedback");
 const { createContentReportHandler } = require("./content-reports");
+const { tokenUsageMiddleware } = require("./cost-tracking");
 const {
   defaultModelFor,
   defaultProviderId,
@@ -128,12 +129,14 @@ const allowedEmotions = new Set(["happy", "sad", "angry", "neutral", "surprised"
 
 app.use(cors({ origin: corsOrigin }));
 app.use("/api", requireApiToken);
+app.use("/api", tokenUsageMiddleware);
 const rateLimits = rateLimitSettings();
 app.post("/api/chat", createRateLimiter(rateLimits.chat));
 app.post("/api/agent", createRateLimiter(rateLimits.agent));
 app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
 app.post("/api/feedback", createRateLimiter(rateLimits.feedback));
 app.post("/api/report-content", createRateLimiter(rateLimits.contentReport));
+app.post("/api/events", createRateLimiter(rateLimits.events));
 app.use(express.json({ limit: "12mb" }));
 
 if (process.env.NODE_ENV !== "production") {
@@ -162,6 +165,24 @@ app.get("/api/health/agent", async (_req, res) => {
       error: "The local agent health probe could not run.",
     });
   }
+});
+
+app.get("/api/presence", (_req, res) => {
+  const lines = [
+    "Shanaya is reviewing her notes from yesterday.",
+    "Shanaya is tidying up her memory index.",
+    "Shanaya is ready when you are.",
+  ];
+  const index = new Date().getUTCDate() % lines.length;
+  res.json({ status: lines[index], generatedAt: new Date().toISOString() });
+});
+
+app.post("/api/events", (req, res) => {
+  const event = typeof req.body?.event === "string" ? req.body.event.trim().slice(0, 80) : "";
+  if (!event) return res.status(400).json({ error: "An event name is required." });
+  // Metadata only: no message text, prompts, or credentials.
+  console.info(JSON.stringify({ type: "client_event", event, timestamp: new Date().toISOString(), platform: req.body?.platform, appVersion: req.body?.appVersion }));
+  res.status(202).json({ ok: true });
 });
 
 app.post("/api/feedback", createFeedbackHandler());
@@ -368,6 +389,12 @@ app.post("/api/agent", async (req, res) => {
       systemPrompt,
       timeoutMs: provider.local ? 120_000 : cloudRequestTimeout,
     });
+    res.locals.tokenUsage = {
+      provider: provider.id || provider.label,
+      model: message.model || requestedModel,
+      inputTokens: message.usage?.promptTokens,
+      outputTokens: message.usage?.completionTokens,
+    };
     return res.json({ message: { content: typeof message.content === "string" ? message.content : "", tool_calls: Array.isArray(message.tool_calls) ? message.tool_calls : [] } });
   } catch (error) {
     console.error(`${provider.label} agent request failed (${error?.name || "request error"}).`);
@@ -484,6 +511,12 @@ app.post("/api/chat", async (req, res) => {
       systemPrompt,
       timeoutMs: provider.local ? 120_000 : cloudRequestTimeout,
     });
+    res.locals.tokenUsage = {
+      provider: provider.id || provider.label,
+      model: message.model || requestedModel,
+      inputTokens: message.usage?.promptTokens,
+      outputTokens: message.usage?.completionTokens,
+    };
     const result = parseAssistantOutput(message.content || "");
     if (!result.reply) return res.status(502).json({ error: "The AI returned an empty response. Please try again." });
     return res.json(result);

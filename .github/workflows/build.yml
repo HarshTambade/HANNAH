@@ -130,6 +130,7 @@ jobs:
       - run: npx cap add @capawesome/capacitor-electron
         working-directory: client
       - name: Verify generated Electron project
+        shell: bash
         run: |
           if [ ! -f client/electron/package.json ]; then
             echo "Capacitor Electron did not create client/electron/package.json." >&2
@@ -187,6 +188,45 @@ jobs:
           name: shanaya-electron-${{ matrix.os }}
           path: client/electron/dist/**
           if-no-files-found: error
+
+  redteam:
+    name: Red-team suite
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SHANAYA_API_TOKEN != '' && secrets.GROQ_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci --ignore-scripts
+        working-directory: server
+      - name: Start Shanaya API
+        working-directory: server
+        env:
+          NODE_ENV: production
+          PORT: "3001"
+          SHANAYA_API_TOKEN: ${{ secrets.SHANAYA_API_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          SHANAYA_RATE_LIMIT_AGENT_MAX: "1000"
+        run: |
+          npm start &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+      - name: Run red-team suite
+        env:
+          SHANAYA_API_URL: http://127.0.0.1:3001
+          SHANAYA_API_TOKEN: ${{ secrets.SHANAYA_API_TOKEN }}
+        run: python scripts/run_redteam.py
+      - name: Stop Shanaya API
+        if: always()
+        run: pkill -f "node.*index.js" || true
 
   android:
     name: Android

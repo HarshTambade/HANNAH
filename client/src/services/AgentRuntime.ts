@@ -6,6 +6,27 @@ import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenO
 import { SubscriptionService } from "./SubscriptionService";
 
 const emotionNames = new Set<Emotion>(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
+
+/** Lightweight intent-based tool trimming to reduce prompt tokens. */
+function selectRelevantTools(allTools: ShanayaTool[], conversation: AgentMessage[]): ShanayaTool[] {
+  if (allTools.length <= 4) return allTools;
+  const text = conversation
+    .filter((message) => message.role === "user")
+    .map((message) => message.content.toLowerCase())
+    .join(" ");
+  if (!text.trim()) return allTools;
+
+  const matched = allTools.filter((tool) => {
+    const haystack = `${tool.name} ${tool.description}`.toLowerCase();
+    const keywords = haystack.split(/[^a-z0-9_]+/).filter((word) => word.length >= 4);
+    return keywords.some((keyword) => text.includes(keyword));
+  });
+
+  // Keep a small core set even when keyword matching is uncertain.
+  const coreNames = new Set(["get_device_status", "get_battery_status"]);
+  const result = allTools.filter((tool) => coreNames.has(tool.name) || matched.includes(tool));
+  return result.length ? result : allTools;
+}
 const hardMaxIterations = 20;
 
 export type AgentPhase = "thinking" | "acting" | "tool-result";
@@ -154,10 +175,11 @@ export async function runAgentTurn(options: {
     options.onActivity?.({ phase: "thinking", message: "Shanaya is thinking…" });
     let content = "";
     let toolCalls: AgentToolCall[] = [];
+    const activeTools = selectRelevantTools(tools, conversation);
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, tools, options.model, options.groqApiKey, options.providerId);
+        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId);
         content = step.content;
         if (step.toolCalls.length > 8) throw new Error("The model requested too many tools at once.");
         toolCalls = step.toolCalls;
@@ -166,14 +188,14 @@ export async function runAgentTurn(options: {
         mode = await LLMRouter.resolveMode("cloud", false);
         preferredMode = mode;
         options.onActivity?.({ phase: "thinking", message: "Cloud AI is unavailable · switching to on-device AI…" });
-        const localText = await options.generateLocal(createLocalPrompt(conversation, tools), mode);
+        const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools), mode);
         const step = parseLocalStep(localText);
         if (step.reply) return completeTurn(step.reply);
         content = localText;
         toolCalls = step.toolCalls;
       }
     } else {
-      const localText = await options.generateLocal(createLocalPrompt(conversation, tools), mode);
+      const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools), mode);
       const step = parseLocalStep(localText);
       if (step.reply) return completeTurn(step.reply);
       toolCalls = step.toolCalls;

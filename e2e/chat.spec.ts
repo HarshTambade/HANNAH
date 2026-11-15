@@ -45,6 +45,7 @@ test("sends a chat message and renders the returned emotion in the WebGL avatar"
 
   await page.addInitScript(() => {
     window.localStorage.setItem("shanaya.onboarding.v1", "complete");
+    window.localStorage.setItem("shanaya.subscription.v1", JSON.stringify({ tier: "premium", day: "2026-11-15", used: 0 }));
   });
   await page.goto("/");
   const webglAvailable = await page.evaluate(() => {

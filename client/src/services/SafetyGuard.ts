@@ -1,5 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { Dialog } from "@capacitor/dialog";
+import { trackEvent } from "./events";
 import { getDesktopBridge } from "./DesktopBridge";
 
 export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file";
@@ -41,6 +42,7 @@ function describeAction(action: SensitiveAction, args: Record<string, unknown>) 
 export class SafetyGuard {
   static async confirm(action: SensitiveAction, args: Record<string, unknown>) {
     const message = describeAction(action, args);
+    let approved = false;
     if (Capacitor.isNativePlatform()) {
       try {
         const result = await Dialog.confirm({
@@ -49,12 +51,16 @@ export class SafetyGuard {
           okButtonTitle: "Continue",
           cancelButtonTitle: "Cancel",
         });
-        return result.value;
+        approved = result.value;
+        trackEvent(approved ? "tool_confirmation_approved" : "tool_confirmation_rejected", { action });
+        return approved;
       } catch {
         // Electron/WebView builds may not have the native Dialog implementation installed.
       }
     }
-    return typeof window !== "undefined" && window.confirm(message);
+    approved = typeof window !== "undefined" && window.confirm(message);
+    trackEvent(approved ? "tool_confirmation_approved" : "tool_confirmation_rejected", { action });
+    return approved;
   }
 
   static async require(action: SensitiveAction, args: Record<string, unknown>) {
