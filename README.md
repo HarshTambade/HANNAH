@@ -201,6 +201,7 @@ The `client` service is public at `/`. The server handles `/api/*`; its `/mcp` r
 | AI services | [`client/src/services/AIService.ts`](./client/src/services/AIService.ts) | Handles native GGUF download, llama.cpp initialization, offline generation, and network-aware routing. |
 | Speech services | [`client/src/services/SpeechService.ts`](./client/src/services/SpeechService.ts) and [`client/src/services/VoiceService.ts`](./client/src/services/VoiceService.ts) | Provides speech synthesis and speech recognition integrations. |
 | API boundary | [`server/index.js`](./server/index.js) | Provides health/model, chat/agent, TTS, Pinecall token, and optional desktop computer endpoints; calls configured providers. |
+| Provider catalog and adapters | [`server/providers/catalog.js`](./server/providers/catalog.js) and [`server/providers/runtime.js`](./server/providers/runtime.js) | Defines supported providers, model presets, environment overrides, endpoint normalization, model discovery, and provider-specific request handling. |
 | MCP integration | [`server/mcp-core.mjs`](./server/mcp-core.mjs), [`server/mcp-http.mjs`](./server/mcp-http.mjs), and [`server/mcp-stdio.mjs`](./server/mcp-stdio.mjs) | Exposes Shanaya tools to local stdio clients or token-protected Streamable HTTP clients. |
 | Optional Python service | [`backend/main.py`](./backend/main.py) | Provides a localhost model-step fallback and an approval-gated standalone tool flow with audit logging and a Docker sandbox. |
 | Alternate desktop shell | [`apps/desktop`](./apps/desktop) | Runs the separate Python-enabled Electron shell; it is distinct from the Capacitor Electron release packages. |
@@ -858,45 +859,57 @@ Fetches credentials from the configured trusted Pinecall token issuer. It return
 
 ```text
 .
-├── .github/workflows/build.yml       # CI build workflow
+├── .github/workflows/build.yml       # CI build and release workflow
+├── .env.example                      # Root development configuration
+├── package.json                      # Root scripts and workspace declarations
 ├── client/
 │   ├── public/
-│   │   ├── icon.svg                  # PWA/app icon
-│   │   └── models/avatar.glb         # 3D avatar
+│   │   ├── draco/                    # Draco decoder assets
+│   │   ├── models/avatar.glb         # 3D avatar
+│   │   └── icon.svg                  # PWA/app icon
 │   ├── src/
-│   │   ├── components/               # Chat UI and avatar scene
-│   │   ├── services/                 # AI, network, speech, and calls
-│   │   ├── App.tsx                   # Application composition
-│   │   ├── index.css                 # Global styles
+│   │   ├── components/               # Chat, avatar, landing, integrations, downloads
+│   │   ├── services/                 # Routing, agent, tools, native, speech, calls, API
+│   │   ├── App.tsx                   # Application composition and route state
+│   │   ├── index.css                 # Global styles and responsive layout
+│   │   ├── main.tsx                  # React/Vite entry point
 │   │   └── types.ts                  # Shared client types
 │   ├── android/                      # Android Studio project and Gradle wrapper
 │   ├── ios/                          # Xcode project and Swift app lifecycle
 │   ├── config/PrivacyInfo.xcprivacy  # iOS privacy manifest source
-│   ├── scripts/                      # Asset/build helpers
+│   ├── scripts/                      # Avatar compression and native build patches
 │   ├── .env.example                  # Client configuration template
 │   ├── capacitor.config.ts           # Native app configuration
 │   ├── package.json                  # Client scripts/dependencies
 │   └── vite.config.ts                # Vite/PWA/proxy configuration
 ├── apps/
-│   ├── frontend/                     # Python-edition React/R3F client
-│   ├── mobile/                       # Capacitor iOS and Android shell
+│   ├── frontend/                     # Alternate standalone React/R3F client
+│   ├── mobile/                       # Capacitor mobile configuration
 │   └── desktop/                      # Electron shell and restricted preload
 ├── backend/
-│   ├── main.py                       # Bounded FastAPI agent and approval WebSocket
+│   ├── main.py                       # FastAPI model-step fallback and agent flow
+│   ├── run.py                        # Local backend entry point
+│   ├── llm_router.py                 # Python provider routing
 │   ├── audit_logger.py               # Redacted hash-chained JSONL audit log
 │   └── tools/                        # Allow-listed tools and Docker code sandbox
 ├── ebpf/
 │   ├── main.bpf.c                    # Metadata-only syscall sensor
 │   └── loader.py                     # Opt-in BCC loader
+├── docs/
+│   ├── API-INTEGRATION.md             # API and MCP integration guide
+│   └── QA-AUDIT-*.md                  # Release QA findings and platform limits
 ├── server/
 │   ├── .env.example                  # Server configuration template
 │   ├── index.js                     # Express API, agent router, desktop and TTS proxies
+│   ├── providers/
+│   │   ├── catalog.js                # Provider definitions, model presets, and overrides
+│   │   └── runtime.js                # Provider URL resolution and request runtime
 │   ├── mcp-core.mjs                 # Shared MCP tools and Shanaya API bridge
 │   ├── mcp-http.mjs                 # Authenticated Streamable HTTP transport
 │   ├── mcp-stdio.mjs                # Local MCP stdio transport
 │   ├── mithi_tts_service.py         # Optional Charvi TTS service wrapper
 │   └── package.json                  # Server scripts/dependencies
-├── package.json                     # Root scripts and apps/* npm workspaces
+├── vercel.json                       # Vercel client/server routing
 ├── LICENSE                           # Source-available project license
 └── README.md
 ```
