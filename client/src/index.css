@@ -177,3 +177,123 @@ textarea {
     opacity: 1;
   }
 }
+
+/* ===== Design system: reference-style light aesthetic ===== */
+.glass-card {
+  background-color: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px -4px rgba(0,0,0,0.04);
+}
+.glass-card-strong {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px -8px rgba(0,0,0,0.06);
+}
+.gradient-text {
+  background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #0ea5e9, #f59e0b, #10b981);
+}
+.donut-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: conic-gradient(#0ea5e9 0% 25%, #f59e0b 25% 57%, #10b981 57% 76%, #8b5cf6 76% 100%);
+  -webkit-mask: radial-gradient(circle at center, transparent 66%, black 67%);
+  mask: radial-gradient(circle at center, transparent 66%, black 67%);
+}
+.donut-ring-sm {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: conic-gradient(#0ea5e9 0% 47%, #f59e0b 47% 96%, #8b5cf6 96% 100%);
+  -webkit-mask: radial-gradient(circle at center, transparent 62%, black 63%);
+  mask: radial-gradient(circle at center, transparent 62%, black 63%);
+}
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+}
+.donut-value {
+  font-weight: 800;
+  font-size: 20px;
+  color: #0f172a;
+  line-height: 1;
+}
+.donut-label {
+  font-size: 10px;
+  color: #64748b;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid;
+}
+.metric-card {
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px -8px rgba(0,0,0,0.06);
+  padding: 1.5rem;
+}
+.metric-value {
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 40px;
+  color: #0f172a;
+  line-height: 1.1;
+}
+.metric-sub {
+  font-size: 11px;
+  color: #64748b;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 0.5px;
+}
+.section-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.section-title {
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  color: #0f172a;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+.section-desc {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+/* Ensure light-mode cards render well on the dark app shell when embedded */
+.app-shell-light {
+  background: #f8fafc;
+  color: #0f172a;
+}
+

@@ -5,9 +5,59 @@ export default {
     extend: {
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
-        ink: "#080b14",
+        ink: "#0f172a",
+        slate: {
+          50: "#f8fafc",
+          100: "#f1f5f9",
+          200: "#e2e8f0",
+          300: "#cbd5e1",
+          400: "#94a3b8",
+          500: "#64748b",
+          600: "#475569",
+          700: "#334155",
+          800: "#1e293b",
+          900: "#0f172a",
+        },
+        brand: {
+          50: "#f0f9ff",
+          100: "#e0f2fe",
+          500: "#0ea5e9",
+          600: "#0284c7",
+        },
+        amber: {
+          50: "#fffbeb",
+          100: "#fef3c7",
+          500: "#f59e0b",
+        },
+        emerald: {
+          50: "#ecfdf5",
+          100: "#d1fae5",
+          500: "#10b981",
+        },
+        violet: {
+          50: "#f5f3ff",
+          100: "#ede9fe",
+          500: "#8b5cf6",
+        },
+        rose: {
+          50: "#fff1f2",
+          100: "#ffe4e6",
+          500: "#f43f5e",
+        },
+      },
+      borderRadius: {
+        card: "16px",
+        pill: "9999px",
+      },
+      boxShadow: {
+        soft: "0 4px 20px -4px rgba(0, 0, 0, 0.04)",
+        "soft-lg": "0 8px 32px -8px rgba(0, 0, 0, 0.06)",
+      },
+      animation: {
+        "ping-slow": "ping 3s cubic-bezier(0, 0, 0.2, 1) infinite",
       },
     },
   },

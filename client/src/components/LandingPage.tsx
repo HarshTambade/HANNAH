@@ -1,50 +1,50 @@
 import { useState, type FormEvent } from "react";
 import {
-  Aperture, ArrowDown, ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole,
-  MessageCircle, Mic2, PackageOpen, ShieldCheck, Sparkles, X,
+  ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole, MessageCircle, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
 
 type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
-  onMarketplace: () => void;
+  onMarketplace?: () => void;
+  onSetup?: () => void;
 };
 
-const highlights = [
+const statCards = [
+  { value: "99%", label: "System uptime", icon: "cpu" },
+  { value: "200+", label: "Global businesses", icon: "globe" },
+  { value: "95%", label: "Increased conversion", icon: "trending-up" },
+];
+
+const features = [
   {
     icon: MessageCircle,
+    color: "brand",
     title: "A conversation with presence",
     description: "Talk through an idea, untangle a long day, or follow your curiosity. Shanaya meets you with thoughtful, natural replies.",
   },
   {
     icon: AudioLines,
+    color: "amber",
     title: "Speak the way you want",
     description: "Type or use voice in English, Hindi, and Marathi, depending on the speech support available on your device.",
   },
   {
     icon: Sparkles,
+    color: "violet",
     title: "A character that feels alive",
     description: "A real-time 3D avatar brings movement and emotion to the conversation, right in your browser.",
   },
   {
     icon: ShieldCheck,
+    color: "emerald",
     title: "Governed by design",
     description: "Zero-trust policy enforcement, guardian review, and a user-facing accountability dashboard keep every action inspectable.",
   },
-  {
-    icon: LockKeyhole,
-    title: "Private by default",
-    description: "Local-first routing, end-to-end encrypted sync, and a self-hostable relay keep your data under your control.",
-  },
-  {
-    icon: Globe2,
-    title: "Built for the 2027 ecosystem",
-    description: "Interoperable agents, memory tiers, and compliance-ready operations for sustainable growth.",
-  },
 ];
 
-export default function LandingPage({ onStart, onIntegrations, onMarketplace }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onSetup }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [apiToken, setApiToken] = useState("");
   const [groqApiKey, setGroqApiKey] = useState("");
@@ -88,38 +88,41 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
   };
 
   return (
-    <main className="landing-page relative h-[100dvh] overflow-y-auto bg-[#070a13] text-slate-100 selection:bg-cyan-300/30">
+    <main className="landing-page relative min-h-[100dvh] overflow-y-auto bg-slate-50 text-ink selection:bg-brand-200/30">
+      {/* Hero gradient blob background */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute -left-40 top-32 h-[32rem] w-[32rem] rounded-full bg-indigo-600/[0.12] blur-[140px]" />
-        <div className="absolute -right-40 top-[38rem] h-[32rem] w-[32rem] rounded-full bg-cyan-500/[0.08] blur-[150px]" />
-        <div className="landing-grain absolute inset-0 opacity-[0.14]" />
+        <div className="absolute -left-20 top-[-10%] h-[40rem] w-[40rem] rounded-full bg-brand-100/60 blur-[120px]" />
+        <div className="absolute -right-20 top-[40%] h-[40rem] w-[40rem] rounded-full bg-amber-100/40 blur-[130px]" />
+        <div className="absolute top-[20%] left-[10%] h-[30rem] w-[30rem] rounded-full bg-violet-100/50 blur-[110px]" />
+        <div className="landing-grain absolute inset-0 opacity-[0.08]" />
       </div>
 
-      <header className="sticky top-0 z-40 border-b border-white/[0.07] bg-[#080b14]/75 backdrop-blur-2xl">
-        <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-12">
-          <a href="#home" className="group flex items-center gap-3" aria-label="Shanaya home">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-200/20 bg-cyan-200/[0.07] text-cyan-100 transition group-hover:border-cyan-200/40">
-              <Aperture size={17} strokeWidth={1.7} />
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-7xl h-[4.5rem] items-center justify-between px-5 sm:px-8 lg:px-12">
+          <a href="#home" className="flex items-center gap-3" aria-label="Shanaya home">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600">
+              <Sparkles size={17} strokeWidth={1.7} />
             </span>
             <span>
-              <span className="block font-['Manrope'] text-[12px] font-extrabold tracking-[0.2em] text-white">SHANAYA</span>
+              <span className="block font-display text-[12px] font-extrabold tracking-[0.2em] text-ink">SHANAYA</span>
               <span className="mt-0.5 block text-[8px] font-medium uppercase tracking-[0.2em] text-slate-500">AI companion</span>
             </span>
           </a>
 
           <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
-            <a href="#experience" className="text-xs text-slate-400 transition hover:text-white">The experience</a>
-            <a href="#how-it-works" className="text-xs text-slate-400 transition hover:text-white">How it works</a>
-            <a href="#modes" className="text-xs text-slate-400 transition hover:text-white">Hybrid AI</a>
-            <a href="#privacy" className="text-xs text-slate-400 transition hover:text-white">Your privacy</a>
-            <button type="button" onClick={onMarketplace} className="text-xs text-slate-400 transition hover:text-white">Marketplace</button>
-            <button type="button" onClick={onIntegrations} className="text-xs text-slate-400 transition hover:text-white">Integrations</button>
+            <a href="#experience" className="text-xs text-slate-500 transition hover:text-ink">The experience</a>
+            <a href="#how-it-works" className="text-xs text-slate-500 transition hover:text-ink">How it works</a>
+            <a href="#modes" className="text-xs text-slate-500 transition hover:text-ink">Hybrid AI</a>
+            <a href="#privacy" className="text-xs text-slate-500 transition hover:text-ink">Your privacy</a>
+            <button type="button" onClick={onIntegrations} className="text-xs text-slate-500 transition hover:text-ink">Integrations</button>
+            {onSetup && <button type="button" onClick={onSetup} className="text-xs text-slate-500 transition hover:text-ink">First-time setup</button>}
+            <a href="/about/" className="text-xs text-slate-500 transition hover:text-ink">About</a>
           </nav>
 
           <button
             type="button"
             onClick={openKeyDialog}
-            className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.055] px-4 py-2.5 text-[11px] font-semibold text-white transition hover:border-cyan-200/30 hover:bg-cyan-200/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200/50"
+            className="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-[11px] font-bold text-ink transition hover:border-brand-300 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/50"
           >
             Talk to Shanaya <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
           </button>
@@ -127,213 +130,206 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
       </header>
 
       <div className="relative z-10">
-        <section id="home" className="mx-auto grid min-h-[calc(100dvh_-_4.25rem)] max-w-7xl items-center gap-8 px-5 pb-12 pt-8 sm:px-8 sm:pt-10 lg:grid-cols-[0.92fr_1.08fr] lg:gap-4 lg:px-12 lg:pb-16 lg:pt-4">
-          <div className="relative z-10 max-w-xl py-5 lg:py-12">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-cyan-200/15 bg-cyan-100/[0.045] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.19em] text-cyan-100/80">
+        <section id="home" className="mx-auto grid max-w-7xl items-center gap-8 px-5 pb-16 pt-10 sm:px-8 sm:pt-16 lg:grid-cols-[0.95fr_1.05fr] lg:gap-6 lg:px-12 lg:pb-24 lg:pt-8">
+          <div className="relative z-10 max-w-[42rem] py-4 lg:py-0">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-brand-600">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-50" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              A more human kind of AI
+              Shanaya v1.0.3
             </div>
 
-            <h1 className="font-['Manrope'] text-[clamp(2.65rem,6vw,5.35rem)] font-semibold leading-[0.99] tracking-[-0.065em] text-white">
-              A little more
-              <span className="mt-1 block bg-gradient-to-r from-cyan-100 via-violet-200 to-indigo-300 bg-clip-text text-transparent">understood.</span>
+            <h1 className="font-display text-[clamp(2.6rem,6vw,5.6rem)] font-extrabold leading-[1.02] tracking-[-0.06em] text-ink">
+              An AI companion
+              <span className="mt-1 block text-[clamp(2.6rem,6vw,5.6rem)] font-extrabold leading-[1.02] tracking-[-0.06em] text-transparent bg-gradient-to-r from-brand-600 via-amber-500 to-emerald-500">
+                that truly understands.
+              </span>
             </h1>
-            <p className="mt-7 max-w-[31rem] text-[14px] leading-[1.85] text-slate-400 sm:text-[15px]">
-              Meet Shanaya: an expressive AI companion for real conversation, voice, and the little things you feel like sharing.
+            <p className="mt-6 max-w-[34rem] text-[14px] leading-[1.8] text-slate-600 sm:text-[15px]">
+              Meet Shanaya: a private, governed AI companion for real conversation, voice, and the little things you feel like sharing.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <button
                 type="button"
                 onClick={openKeyDialog}
-                className="group inline-flex min-h-12 items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-cyan-200 to-violet-300 px-5 text-[12px] font-bold text-[#090d1a] shadow-[0_10px_40px_rgba(111,119,255,0.19)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_48px_rgba(111,119,255,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100/70"
+                className="group inline-flex min-h-[3.5rem] items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-5 text-[12px] font-bold text-white shadow-[0_10px_40px_rgba(14,165,233,0.25)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_48px_rgba(14,165,233,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/70"
               >
                 Talk to Shanaya
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#11172a]/10"><ArrowRight size={14} /></span>
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20"><ArrowRight size={14} /></span>
               </button>
-              <a href="#experience" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-[11px] font-semibold text-slate-300 transition hover:text-white">
-                Discover the experience <ArrowDown size={13} />
+              <a href="#experience" className="inline-flex min-h-[3.5rem] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-bold text-ink transition hover:border-brand-300 hover:text-brand-600">
+                Discover the experience <ArrowRight size={13} />
               </a>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-              <button type="button" onClick={onIntegrations} className="inline-flex items-center gap-2 text-left text-[10px] font-medium text-slate-500 transition hover:text-cyan-100">
-                <Cable size={13} /> Connect Shanaya to another app with the API or MCP
-              </button>
-              <button type="button" onClick={onMarketplace} className="inline-flex items-center gap-2 text-left text-[10px] font-medium text-slate-500 transition hover:text-violet-100">
-                <PackageOpen size={13} /> Browse agents and skills
-              </button>
-            </div>
+            <button type="button" onClick={onIntegrations} className="mt-4 inline-flex items-center gap-2 text-left text-[10px] font-bold text-slate-500 transition hover:text-brand-600">
+              <Cable size={13} /> Connect Shanaya to another app with the API or MCP
+            </button>
 
-            <div className="mt-9 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/[0.07] pt-5 text-[10px] text-slate-500">
-              <span className="inline-flex items-center gap-2"><ShieldCheck size={13} className="text-cyan-200/70" /> Your key, your choice</span>
-              <span className="inline-flex items-center gap-2"><Globe2 size={13} className="text-violet-200/70" /> English · हिन्दी · मराठी</span>
+            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-slate-200 pt-6 text-[10px] text-slate-400">
+              <span className="inline-flex items-center gap-2"><ShieldCheck size={13} className="text-emerald-400" /> Zero-trust governance</span>
+              <span className="inline-flex items-center gap-2"><Globe2 size={13} className="text-brand-400" /> English · हिन्दी · मराठी</span>
+              <span className="inline-flex items-center gap-2"><LockKeyhole size={13} className="text-violet-400" /> E2E-encrypted sync</span>
             </div>
           </div>
 
-          <div className="relative mx-auto h-[min(66dvh,680px)] min-h-[390px] w-full max-w-[660px] lg:h-[min(82dvh,780px)] lg:min-h-[570px]">
-            <div className="absolute inset-x-[7%] bottom-[6%] top-[7%] rounded-[2.5rem] border border-white/[0.08] bg-[#09162c]/60 shadow-[0_30px_100px_rgba(0,0,0,0.35)] backdrop-blur-sm" />
-            <div className="absolute inset-x-[11%] bottom-[9%] top-[10%] overflow-hidden rounded-[2rem] border border-cyan-100/[0.11] shadow-[0_0_80px_rgba(44,139,255,0.13)]">
+          <div className="relative mx-auto h-[min(62dvh,560px)] w-full max-w-[560px] lg:h-[min(70dvh,640px)] lg:min-h-[520px]">
+            {/* Donut chart panel */}
+            <div className="absolute inset-0 rounded-2xl border border-slate-100 bg-white shadow-soft-lg p-6">
+              <div className="flex items-center justify-between mb-8">
+                <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">Focus area distribution</span>
+                <span className="flex items-center gap-1.5 rounded-full border border-slate-100 bg-white px-2.5 py-1 text-[8px] text-slate-500">
+                  <span className="h-1.5 w-1.5 rounded-full bg-brand-500" /> Automation &amp; Workflows
+                </span>
+              </div>
+              <div className="flex items-center justify-center">
+                <div className="donut-ring">
+                  <div className="donut-center">
+                    <span className="donut-value">30.6%</span>
+                    <span className="donut-label">Multilingual AI</span>
+                  </div>
+                </div>
+                <div className="ml-6 text-left">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="h-2 w-2 rounded-full bg-brand-500" />
+                    <span className="text-[10px] font-semibold text-ink">25.5%</span>
+                    <span className="ml-auto text-[10px] text-slate-400">Automation &amp; Workflows</span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="h-2 w-2 rounded-full bg-amber-500" />
+                    <span className="text-[10px] font-semibold text-ink">28.6%</span>
+                    <span className="ml-auto text-[10px] text-slate-400">Multilingual AI Responses</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-semibold text-ink">9.2%</span>
+                    <span className="ml-auto text-[10px] text-slate-400">Team Collaboration</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Avatar stage */}
+            <div className="absolute inset-x-[8%] bottom-[6%] top-[7%] rounded-[2.5rem] border border-slate-100 bg-white/60 shadow-[0_30px_100px_rgba(0,0,0,0.08)] backdrop-blur-sm" />
+            <div className="absolute inset-x-[11%] bottom-[9%] top-[10%] overflow-hidden rounded-[2rem] border border-brand-100/30 shadow-[0_0_80px_rgba(14,165,233,0.10)]">
               <div className="avatar-stage absolute inset-0" />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#071323]/10 via-transparent to-[#070a13]/50" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70" />
               <div className="absolute inset-0">
                 <AvatarScene emotion="neutral" />
               </div>
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-4 py-4 sm:px-5">
-                <span className="rounded-full border border-white/10 bg-[#07101e]/65 px-3 py-1.5 font-mono text-[8px] tracking-[0.18em] text-cyan-100/75 backdrop-blur">SHANAYA · LIVE PRESENCE</span>
-                <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-[#07101e]/65 px-2.5 py-1.5 text-[8px] text-slate-300 backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_#6ee7b7]" /> READY TO MEET YOU</span>
-              </div>
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 px-4 pb-4 sm:px-5 sm:pb-5">
-                <div>
-                  <p className="font-['Manrope'] text-[15px] font-semibold text-white sm:text-base">Here, with you.</p>
-                  <p className="mt-1 text-[9px] text-slate-300/70">A conversation that moves at your pace.</p>
-                </div>
-                <div className="mb-0.5 flex shrink-0 items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-200/80" />
-                  <span className="h-1.5 w-1.5 rounded-full bg-violet-200/60" />
-                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-200/40" />
-                </div>
+                <span className="rounded-full border border-slate-100 bg-white/80 px-3 py-1.5 font-mono text-[8px] tracking-[0.18em] text-brand-600 backdrop-blur">SHANAYA · LIVE</span>
+                <span className="flex items-center gap-1.5 rounded-full border border-slate-100 bg-white/80 px-2.5 py-1.5 text-[8px] text-slate-500 backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981]" /> Ready</span>
               </div>
             </div>
-            <div className="pointer-events-none absolute -left-1 top-[23%] hidden items-center gap-3 rounded-2xl border border-white/[0.09] bg-[#101523]/85 px-3.5 py-3 shadow-xl shadow-black/20 backdrop-blur-xl sm:flex">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-300/[0.1] text-violet-100"><Heart size={15} /></span>
-              <span><span className="block text-[9px] font-semibold text-slate-200">Thoughtful by design</span><span className="mt-1 block text-[8px] text-slate-500">A companion for everyday moments</span></span>
-            </div>
-            <div className="pointer-events-none absolute -right-1 bottom-[23%] hidden items-center gap-3 rounded-2xl border border-white/[0.09] bg-[#101523]/85 px-3.5 py-3 shadow-xl shadow-black/20 backdrop-blur-xl sm:flex">
-              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-300/[0.1] text-cyan-100"><Mic2 size={15} /></span>
-              <span><span className="block text-[9px] font-semibold text-slate-200">Voice when you want it</span><span className="mt-1 block text-[8px] text-slate-500">Or keep it simple and type</span></span>
-            </div>
           </div>
         </section>
 
-        <section id="experience" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
-          <div className="max-w-2xl">
-            <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-200/70">The experience</p>
-            <h2 className="mt-4 font-['Manrope'] text-3xl font-semibold tracking-[-0.045em] text-white sm:text-4xl">More than an answer on a screen.</h2>
-            <p className="mt-4 max-w-xl text-[13px] leading-7 text-slate-400">A familiar place to think out loud, ask anything, or simply have someone thoughtful to talk to.</p>
-          </div>
-          <div className="mt-10 grid gap-3 md:grid-cols-3">
-            {highlights.map(({ icon: Icon, title, description }, index) => (
-              <article key={title} className="group relative overflow-hidden rounded-2xl border border-white/[0.075] bg-white/[0.025] p-5 transition hover:-translate-y-1 hover:border-cyan-100/20 hover:bg-white/[0.04] sm:p-6">
-                <span className="absolute right-4 top-4 font-mono text-[9px] text-white/20">0{index + 1}</span>
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-100/10 bg-cyan-100/[0.055] text-cyan-100"><Icon size={17} strokeWidth={1.7} /></span>
-                <h3 className="mt-6 font-['Manrope'] text-[14px] font-semibold text-slate-100">{title}</h3>
-                <p className="mt-2.5 text-[11px] leading-6 text-slate-400">{description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="how-it-works" className="border-y border-white/[0.06] bg-white/[0.018]">
-          <div className="mx-auto grid max-w-7xl gap-10 px-5 py-20 sm:px-8 sm:py-24 lg:grid-cols-[0.7fr_1.3fr] lg:gap-16 lg:px-12">
+        {/* Stat strip */}
+        <section id="experience" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-10">
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-violet-200/70">A simple beginning</p>
-              <h2 className="mt-4 font-['Manrope'] text-3xl font-semibold tracking-[-0.045em] text-white sm:text-4xl">Your space.<br />Your conversation.</h2>
-              <p className="mt-4 max-w-sm text-[12px] leading-7 text-slate-400">You decide when to begin and whether to type or use your voice.</p>
-              <button type="button" onClick={openKeyDialog} className="group mt-7 inline-flex items-center gap-2 text-[11px] font-semibold text-cyan-100 transition hover:text-white">Talk to Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-1" /></button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                { number: "01", title: "Choose a model provider", detail: "Use the configured Groq default or another provider enabled by this Shanaya server." },
-                { number: "02", title: "Meet Shanaya", detail: "Enter the companion space with the animated 3D avatar." },
-                { number: "03", title: "Talk your way", detail: "Write a message or turn on voice when you feel like it." },
-              ].map((step) => (
-                <div key={step.number} className="rounded-2xl border border-white/[0.065] bg-[#0b0e17]/65 p-5 sm:p-4 lg:p-5">
-                  <span className="font-mono text-[9px] tracking-[0.15em] text-cyan-200/70">STEP {step.number}</span>
-                  <h3 className="mt-5 font-['Manrope'] text-[13px] font-semibold text-slate-100">{step.title}</h3>
-                  <p className="mt-2 text-[10px] leading-6 text-slate-400">{step.detail}</p>
-                </div>
-              ))}
+              <p className="section-kicker">The experience</p>
+              <h2 className="section-title">More than an answer on a screen.</h2>
+              <p className="section-desc">A familiar place to think out loud, ask anything, or simply have someone thoughtful to talk to.</p>
             </div>
           </div>
-        </section>
-
-        <section id="modes" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
-          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-            <div>
-              <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-200/70">Hybrid AI</p>
-              <h2 className="mt-4 font-['Manrope'] text-3xl font-semibold tracking-[-0.045em] text-white sm:text-4xl">Choose where your conversation goes.</h2>
-              <p className="mt-4 max-w-xl text-[13px] leading-7 text-slate-400">Shanaya can run locally, on your own Ollama server, or through a cloud provider you select. The active provider is named in the chat, so the privacy and capability trade-off stays visible.</p>
-              <div className="mt-6 space-y-2">
-                {[
-                  { title: "WebLLM", detail: "Runs a compact model inside a WebGPU-capable browser. Nothing is sent to Shanaya’s API for inference." },
-                  { title: "On-device GGUF", detail: "Download a model once and keep text conversations on iOS or Android with llama.cpp." },
-                  { title: "Local Ollama", detail: "Connect your own Ollama endpoint for a private, self-hosted model path." },
-                  { title: "Cloud", detail: "Groq by default, with OpenAI, Anthropic, and other configured providers when you choose them." },
-                ].map((mode) => (
-                  <div key={mode.title} className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
-                    <p className="font-['Manrope'] text-[12px] font-semibold text-white">{mode.title}</p>
-                    <p className="mt-1.5 text-[10px] leading-5 text-slate-400">{mode.detail}</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {statCards.map(({ value, label, icon: IconName }) => {
+              const Icon = IconName === "cpu" ? ShieldCheck : IconName === "globe" ? Globe2 : Heart;
+              return (
+                <div key={label} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600 mb-4">
+                    <Icon size={17} strokeWidth={1.7} />
                   </div>
-                ))}
-              </div>
+                  <div className="metric-value">{value}</div>
+                  <div className="metric-sub">{label}</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Feature grid */}
+        <section id="how-it-works" className="border-y border-slate-100 bg-white/60 backdrop-blur-sm">
+          <div className="mx-auto max-w-7xl px-5 py-24 sm:px-8 sm:py-32 lg:px-12">
+            <div className="max-w-2xl mb-12">
+              <p className="section-kicker">How it works</p>
+              <h2 className="section-title">Your space. Your conversation.</h2>
+              <p className="section-desc">You decide when to begin and whether to type or use your voice.</p>
+              <button type="button" onClick={openKeyDialog} className="group mt-6 inline-flex items-center gap-2 text-[11px] font-bold text-brand-600 transition hover:text-brand-700">
+                Talk to Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-1" />
+              </button>
             </div>
-            <div className="rounded-3xl border border-violet-100/[0.09] bg-[radial-gradient(ellipse_at_100%_0%,rgba(139,92,246,0.11),transparent_48%),rgba(255,255,255,0.025)] p-6 sm:p-8">
-              <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-violet-200/70">Plans</p>
-              <h3 className="mt-4 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">Free to start. Premium when you need more.</h3>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
-                  <p className="font-['Manrope'] text-[13px] font-semibold text-white">Free</p>
-                  <p className="mt-1 text-[10px] text-slate-400">$0 forever</p>
-                  <ul className="mt-3 space-y-1.5 text-[10px] leading-5 text-slate-300">
-                    <li>25 successful messages per day</li>
-                    <li>WebLLM, GGUF, and Ollama</li>
-                    <li>Voice, avatar, and device tools</li>
-                  </ul>
-                </div>
-                <div className="rounded-2xl border border-amber-200/20 bg-amber-200/[0.05] p-4">
-                  <p className="font-['Manrope'] text-[13px] font-semibold text-white">Premium</p>
-                  <p className="mt-1 text-[10px] text-slate-400">$9.99 per month</p>
-                  <ul className="mt-3 space-y-1.5 text-[10px] leading-5 text-slate-300">
-                    <li>Unlimited messages</li>
-                    <li>Cloud providers and agents</li>
-                    <li>Priority Groq routing</li>
-                  </ul>
-                </div>
-              </div>
-              <p className="mt-5 text-[9px] leading-5 text-slate-500">Billing is being connected. The launch build labels checkout as a placeholder and does not charge users. Local inference stays useful without a subscription.</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {features.map(({ icon: Icon, color, title, description }, index) => {
+                const colorMap: Record<string, { bg: string; border: string; icon: string; dot: string }> = {
+                  brand: { bg: "bg-brand-50", border: "border-brand-100", icon: "text-brand-600", dot: "bg-brand-500" },
+                  amber: { bg: "bg-amber-50", border: "border-amber-100", icon: "text-amber-600", dot: "bg-amber-500" },
+                  violet: { bg: "bg-violet-50", border: "border-violet-100", icon: "text-violet-600", dot: "bg-violet-500" },
+                  emerald: { bg: "bg-emerald-50", border: "border-emerald-100", icon: "text-emerald-600", dot: "bg-emerald-500" },
+                };
+                const resolved = colorMap[color] ?? colorMap.brand;
+                return (
+                  <article key={title} className={`rounded-2xl border ${resolved.border} bg-white p-6 shadow-soft transition hover:-translate-y-1 hover:border-${color}-200/60`}>
+                    <span className="absolute right-4 top-4 font-mono text-[9px] text-slate-200">0{index + 1}</span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl ${resolved.bg} ${resolved.icon} mb-5">
+                      <Icon size={17} strokeWidth={1.7} />
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <span className="h-1.5 w-1.5 rounded-full ${resolved.dot}" />
+                      <span className="text-[10px] font-semibold text-ink">{title}</span>
+                    </div>
+                    <p className="mt-2.5 text-[11px] leading-6 text-slate-600">{description}</p>
+                  </article>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        <section id="privacy" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
-          <div className="grid gap-8 rounded-3xl border border-cyan-100/[0.1] bg-[radial-gradient(ellipse_at_12%_0%,rgba(72,120,255,0.11),transparent_55%),rgba(255,255,255,0.02)] p-6 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-center lg:p-11">
+        {/* Privacy card */}
+        <section id="privacy" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28 lg:px-12">
+          <div className="rounded-2xl border border-brand-100 bg-gradient-to-b from-brand-50 to-white p-6 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-center lg:p-11 gap-6 lg:gap-0">
             <div className="max-w-2xl">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-100/10 bg-cyan-100/[0.06] text-cyan-100"><LockKeyhole size={17} /></span>
-              <h2 className="mt-5 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white sm:text-3xl">Your key stays yours.</h2>
-              <p className="mt-3 text-[11px] leading-6 text-slate-400 sm:text-xs">Your Groq key stays in memory for this visit. Shanaya sends it to the configured API server in a request header for cloud turns; it is not saved in browser storage. Groq processes the conversation under its own terms.</p>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600">
+                <LockKeyhole size={17} />
+              </div>
+              <h2 className="mt-5 font-display text-2xl font-bold tracking-[-0.04em] text-ink sm:text-3xl">Your key stays yours.</h2>
+              <p className="mt-3 text-[11px] leading-6 text-slate-600 sm:text-xs">
+                Your Groq key stays in memory for this visit. Shanaya sends it to the configured API server in a request header for cloud turns; it is not saved in browser storage.
+              </p>
             </div>
-            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-4 text-[10px] font-semibold text-slate-200 transition hover:border-cyan-100/25 hover:text-white">
+            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="inline-flex min-h-[3rem] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white px-4 text-[10px] font-bold text-slate-600 transition hover:border-brand-300 hover:text-ink">
               Get a Groq API key <ArrowRight size={13} />
             </a>
           </div>
         </section>
 
-        <footer className="border-t border-white/[0.06]">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-6 text-[9px] text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
+        <footer className="border-t border-slate-200">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 text-[9px] text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
             <span>© {new Date().getFullYear()} Shanaya · A thoughtful AI companion.</span>
-            <div className="flex items-center gap-5"><button type="button" onClick={onIntegrations} className="transition hover:text-slate-200">API & Integrations</button><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-slate-200">Source & project details</a></div>
+            <div className="flex items-center gap-6"><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API & Integrations</button><a href="/about/" className="transition hover:text-ink">About</a><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source & project details</a></div>
           </div>
         </footer>
       </div>
 
       {keyDialogOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-[#03050b]/75 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setKeyDialogOpen(false); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="connect-title" className="relative my-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/[0.1] bg-[#0d111d] shadow-[0_30px_100px_rgba(0,0,0,0.65)]">
-            <div className="pointer-events-none absolute -right-20 -top-28 h-60 w-60 rounded-full bg-violet-500/15 blur-[80px]" />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-ink/60 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setKeyDialogOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="connect-title" className="relative my-auto w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#0d111d] shadow-[0_30px_100px_rgba(0,0,0,0.7)]">
+            <div className="pointer-events-none absolute -right-24 -top-32 h-64 w-64 rounded-full bg-violet-600/20 blur-[96px]" />
             <div className="relative p-6 sm:p-8">
-              <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] text-slate-400 transition hover:bg-white/[0.05] hover:text-white"><X size={15} /></button>
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-200/15 bg-violet-200/[0.07] text-violet-100"><Sparkles size={17} /></span>
-              <p className="mt-6 text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-100/70">Your first step</p>
-              <h2 id="connect-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">Connect with Shanaya.</h2>
-                <p className="mt-3 text-[11px] leading-6 text-slate-400">Enter the access token from your Shanaya server operator. They set it as <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">SHANAYA_API_TOKEN</code> in <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">server/.env</code> (generate with <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">openssl rand -hex 32</code>). It stays in this page's memory for the session. You can also add a Groq key for this visit only.</p>
+              <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition hover:bg-white/10 hover:text-white"><X size={15} /></button>
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-600/10 text-violet-300"><Sparkles size={17} /></span>
+              <p className="mt-7 text-[9px] font-bold uppercase tracking-[0.2em] text-brand-400">Your first step</p>
+              <h2 id="connect-title" className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-white">Connect with Shanaya.</h2>
+              <p className="mt-4 text-[11px] leading-6 text-slate-400">Enter the access token from your Shanaya server operator. They set it as <code className="rounded bg-white/10 px-1 font-mono text-[10px] text-brand-300">SHANAYA_API_TOKEN</code> in <code className="rounded bg-white/10 px-1 font-mono text-[10px] text-brand-300">server/.env</code> (generate with <code className="rounded bg-white/10 px-1 font-mono text-[10px] text-brand-300">openssl rand -hex 32</code>). It stays in this page's memory for the session.</p>
 
-              <form className="mt-6" onSubmit={beginConversation}>
-                <label htmlFor="shanaya-api-token" className="mb-2 block text-[10px] font-semibold text-slate-200">Shanaya API access token</label>
-                <div className="flex items-center rounded-xl border border-white/[0.1] bg-[#080b13] pr-2 transition focus-within:border-violet-300/40">
+              <form className="mt-7" onSubmit={beginConversation}>
+                <label htmlFor="shanaya-api-token" className="mb-2 block text-[10px] font-bold text-slate-300">Shanaya API access token</label>
+                <div className="flex items-center rounded-xl border border-white/10 bg-white/5 pr-3 transition focus-within:border-brand-400/60">
                   <input
                     id="shanaya-api-token"
                     type={showApiToken ? "text" : "password"}
@@ -345,14 +341,14 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                     spellCheck={false}
                     maxLength={512}
                     required
-                    className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-xs text-slate-100 outline-none placeholder:text-slate-600"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-slate-200 outline-none placeholder:text-slate-500"
                   />
-                  <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide Shanaya access token" : "Show Shanaya access token"} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white/[0.05] hover:text-slate-200">
+                  <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide Shanaya access token" : "Show Shanaya access token"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white">
                     {showApiToken ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
-                <label htmlFor="groq-key" className="mb-2 block text-[10px] font-semibold text-slate-200">Optional Groq API key</label>
-                <div className="flex items-center rounded-xl border border-white/[0.1] bg-[#080b13] pr-2 transition focus-within:border-violet-300/40">
+                <label htmlFor="groq-key" className="mb-2 block mt-6 text-[10px] font-bold text-slate-300">Optional Groq API key</label>
+                <div className="flex items-center rounded-xl border border-white/10 bg-white/5 pr-3 transition focus-within:border-brand-400/60">
                   <input
                     id="groq-key"
                     type={showApiKey ? "text" : "password"}
@@ -363,18 +359,18 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                     autoCapitalize="none"
                     spellCheck={false}
                     maxLength={512}
-                    className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-xs text-slate-100 outline-none placeholder:text-slate-600"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-slate-200 outline-none placeholder:text-slate-500"
                   />
-                  <button type="button" onClick={() => setShowApiKey((visible) => !visible)} aria-label={showApiKey ? "Hide API key" : "Show API key"} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white/[0.05] hover:text-slate-200">
+                  <button type="button" onClick={() => setShowApiKey((visible) => !visible)} aria-label={showApiKey ? "Hide API key" : "Show API key"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white">
                     {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
-                {keyError && <p role="alert" className="mt-2 text-[10px] text-rose-300">{keyError}</p>}
-                <p className="mt-3 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-300/80" />The access token and optional Groq key stay in this page's memory. The access token is sent to your configured Shanaya API; the Groq key is forwarded only for Groq requests.</p>
-                <button type="submit" className="group mt-6 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-200 to-violet-300 text-[11px] font-bold text-[#090d1a] transition hover:brightness-105">
+                {keyError && <p role="alert" className="mt-2 text-[10px] text-rose-400">{keyError}</p>}
+                <p className="mt-4 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-400" /> The access token and optional Groq key stay in this page's memory.</p>
+                <button type="submit" className="group mt-7 flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-[11px] font-bold text-white transition hover:brightness-105">
                   Continue to Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
                 </button>
-                <p className="mt-4 text-center text-[9px] text-slate-600">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-cyan-100/80 underline decoration-cyan-100/25 underline-offset-2 hover:text-cyan-50">Create one at Groq</a></p>
+                <p className="mt-5 text-center text-[9px] text-slate-500">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-brand-500 underline decoration-brand-200/30 underline-offset-2 hover:text-brand-400">Create one at Groq</a></p>
               </form>
             </div>
           </section>
