@@ -16,6 +16,7 @@ const kotlinBuildscript = `buildscript {
 `;
 
 const moduleGradleFiles = [
+  "node_modules/@elizaos/capacitor-talkmode/android/build.gradle",
   "node_modules/@pinecall/ionic/android/build.gradle",
   "node_modules/capacitor-lancedb/android/build.gradle",
   "node_modules/capacitor-mobile-claw/android/build.gradle",
@@ -31,7 +32,7 @@ for (const relativePath of moduleGradleFiles) {
   let patchedSource = source;
 
   if (
-    patchedSource.includes("apply plugin: 'kotlin-android'") &&
+    /apply plugin:\s*['"](?:kotlin-android|org\.jetbrains\.kotlin\.android)['"]/.test(patchedSource) &&
     !patchedSource.includes("buildscript {")
   ) {
     patchedSource = `${kotlinBuildscript}${patchedSource}`;
