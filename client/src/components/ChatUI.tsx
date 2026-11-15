@@ -29,6 +29,7 @@ import {
 } from "../services/SubscriptionService";
 import FeedbackModal from "./FeedbackModal";
 import FirstSessionCoach from "./FirstSessionCoach";
+import TaskPanel from "./TaskPanel";
 import PricingModal from "./PricingModal";
 import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
@@ -1007,6 +1008,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             messageCount={messages.filter((message) => message.role === "user").length}
             onSuggestion={(suggestion) => setInput(suggestion)}
           />
+          <TaskPanel />
           {messages.map((message, index) => {
             const isUser = message.role === "user";
             const isSystem = message.role === "system";
