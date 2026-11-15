@@ -54,6 +54,7 @@ export default defineConfig(({ mode }) => ({
     })] : []),
   ],
   build: {
+    chunkSizeWarningLimit: 1100,
     rollupOptions: {
       input: {
         main: resolve(projectRoot, "index.html"),

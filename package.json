@@ -1,6 +1,6 @@
 {
   "name": "shanaya-ai-companion",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "private": true,
   "workspaces": [
     "apps/frontend",
