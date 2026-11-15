@@ -76,6 +76,10 @@ textarea {
   scrollbar-width: thin;
 }
 
+.landing-page [id] {
+  scroll-margin-top: 5.5rem;
+}
+
 .landing-grain {
   background-image: radial-gradient(rgba(173, 190, 255, 0.22) 0.55px, transparent 0.55px);
   background-size: 5px 5px;

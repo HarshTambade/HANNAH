@@ -27,8 +27,8 @@ export default defineConfig(({ mode }) => ({
         name: "Shanaya · AI Companion",
         short_name: "Shanaya",
         description: "A multilingual AI companion with a living 3D avatar, voice chat, and optional on-device AI.",
-        theme_color: "#080b14",
-        background_color: "#080b14",
+        theme_color: "#f8fafc",
+        background_color: "#f8fafc",
         display: "standalone",
         start_url: "/",
         icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
@@ -58,6 +58,7 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       input: {
         main: resolve(projectRoot, "index.html"),
+        about: resolve(projectRoot, "about/index.html"),
       },
       output: {
         manualChunks(id) {

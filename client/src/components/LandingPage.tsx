@@ -89,7 +89,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
   };
 
   return (
-    <main className="landing-page relative min-h-[100dvh] overflow-y-auto bg-slate-50 text-ink selection:bg-brand-200/30">
+    <main className="landing-page relative h-[100dvh] overflow-x-hidden overflow-y-auto bg-slate-50 text-ink selection:bg-brand-200/30">
       {/* Hero gradient blob background */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="absolute -left-20 top-[-10%] h-[40rem] w-[40rem] rounded-full bg-brand-100/60 blur-[120px]" />

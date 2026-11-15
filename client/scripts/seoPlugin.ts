@@ -7,6 +7,10 @@ const pages = {
     title: "Shanaya — Your AI Companion | 3D Avatar & Voice Chat",
     description: "Meet Shanaya, an expressive AI companion for thoughtful conversation, multilingual voice chat, and a living 3D avatar. Bring your own Groq key to begin.",
   },
+  about: {
+    title: "About Shanaya — AI Companion, Voice Chat & Privacy",
+    description: "Learn about Shanaya’s conversational features, voice and avatar experience, supported AI modes, privacy boundaries, and integrations.",
+  },
 } as const;
 
 type SeoOptions = { mode: string };
@@ -136,8 +140,12 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
   return {
     name: "shanaya-seo",
     transformIndexHtml(html, context) {
-      const pagePath = "/";
-      const page = pages.home;
+      const requestPath = context.path.split("?")[0];
+      const normalizedPath = requestPath.endsWith("index.html")
+        ? requestPath.slice(0, -"index.html".length)
+        : requestPath;
+      const pagePath = normalizedPath === "/about/" || normalizedPath === "/about" ? "/about/" : "/";
+      const page = pagePath === "/about/" ? pages.about : pages.home;
       const image = siteOrigin ? new URL("/social-card.svg", siteOrigin).toString() : "/social-card.svg";
       const canonical = indexable ? new URL(pagePath, siteOrigin).toString() : "";
       const tags = [
@@ -146,7 +154,7 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
         `<meta name="publisher" content="Shanaya" />`,
         `<meta name="keywords" content="AI companion, AI chatbot, 3D AI avatar, voice AI companion, multilingual AI, offline AI, local AI, WebLLM, private AI assistant" />`,
         `<meta name="referrer" content="strict-origin-when-cross-origin" />`,
-        `<meta name="color-scheme" content="dark" />`,
+        `<meta name="color-scheme" content="light" />`,
         canonical ? `<link rel="canonical" href="${escapeAttribute(canonical)}" />` : "",
         `<link rel="alternate" hreflang="en" href="${escapeAttribute(canonical || pagePath)}" />`,
         `<link rel="author" href="https://github.com/HarshTambade" />`,
@@ -184,8 +192,8 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
 
       if (indexable) {
         const today = new Date().toISOString().slice(0, 10);
-        const sitemapUrls = ["/"].map((path) => (
-          `  <url><loc>${new URL(path, siteOrigin).toString()}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>`
+        const sitemapUrls = ["/", "/about/"].map((path) => (
+          `  <url><loc>${new URL(path, siteOrigin).toString()}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>${path === "/" ? "1.0" : "0.7"}</priority></url>`
         )).join("\n");
         this.emitFile({
           type: "asset",
