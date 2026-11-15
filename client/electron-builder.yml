@@ -2,6 +2,7 @@ appId: com.shanaya.companion
 productName: Shanaya
 artifactName: "${productName}-${os}-${arch}.${ext}"
 asar: true
+compression: maximum
 directories:
   output: dist
   buildResources: assets
@@ -11,6 +12,8 @@ files:
   - generated/**/*
   - assets/**/*
   - package.json
+  - "!**/*.map"
+  - "!**/*.d.ts"
   - from: vendor/node_modules
     to: node_modules
 publish:
@@ -48,3 +51,4 @@ linux:
     - AppImage
     - deb
   category: Utility
+  maintainer: "Shanaya contributors <support@shanaya.app>"

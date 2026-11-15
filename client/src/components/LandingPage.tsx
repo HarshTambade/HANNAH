@@ -259,7 +259,7 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-violet-200/15 bg-violet-200/[0.07] text-violet-100"><Sparkles size={17} /></span>
               <p className="mt-6 text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-100/70">Your first step</p>
               <h2 id="connect-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">Connect with Shanaya.</h2>
-                <p className="mt-3 text-[11px] leading-6 text-slate-400">Enter the access token from your Shanaya server operator. It stays in this page's memory for the session. You can also add a Groq key for this visit only.</p>
+                <p className="mt-3 text-[11px] leading-6 text-slate-400">Enter the access token from your Shanaya server operator. They set it as <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">SHANAYA_API_TOKEN</code> in <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">server/.env</code> (generate with <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">openssl rand -hex 32</code>). It stays in this page's memory for the session. You can also add a Groq key for this visit only.</p>
 
               <form className="mt-6" onSubmit={beginConversation}>
                 <label htmlFor="shanaya-api-token" className="mb-2 block text-[10px] font-semibold text-slate-200">Shanaya API access token</label>

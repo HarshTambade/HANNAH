@@ -15,8 +15,18 @@ if (releaseRequested && !/^v\d+\.\d+\.\d+(?:[.-][0-9A-Za-z.-]+)?$/.test(releaseT
 const electronPackagePath = resolve(electronRoot, "package.json");
 const electronPackage = JSON.parse(readFileSync(electronPackagePath, "utf8"));
 electronPackage.version = releaseRequested ? releaseTag.slice(1) : appPackage.version;
-electronPackage.dependencies = { ...electronPackage.dependencies, "electron-updater": "^6.6.2" };
-electronPackage.devDependencies = { ...electronPackage.devDependencies, electron: "^45.3.2" };
+// Keep electron-updater in devDependencies so electron-builder does not collect
+// the entire application dependency tree into the packaged app. It is still
+// installed for `capacitor-electron vendor` and copied into vendor/node_modules.
+electronPackage.dependencies = {};
+electronPackage.devDependencies = {
+  ...electronPackage.devDependencies,
+  electron: "^45.3.2",
+  "electron-updater": "^6.6.2",
+};
+electronPackage.homepage = "https://shanaya.app";
+electronPackage.author = "Shanaya contributors";
+electronPackage.description = appPackage.description || "Shanaya desktop companion";
 const packScript = electronPackage.scripts?.pack;
 if (typeof packScript !== "string" || !packScript.includes("electron-builder --config electron-builder.config.js") || !packScript.includes("capacitor-electron vendor")) {
   throw new Error("Could not find the generated Capacitor Electron pack script.");

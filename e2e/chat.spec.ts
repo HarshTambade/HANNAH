@@ -43,6 +43,9 @@ test("sends a chat message and renders the returned emotion in the WebGL avatar"
     await route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "Not mocked" }) });
   });
 
+  await page.addInitScript(() => {
+    window.localStorage.setItem("shanaya.onboarding.v1", "complete");
+  });
   await page.goto("/");
   const webglAvailable = await page.evaluate(() => {
     const canvas = document.createElement("canvas");

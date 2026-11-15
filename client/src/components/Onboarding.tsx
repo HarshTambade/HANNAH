@@ -315,6 +315,9 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
                     <ShieldCheck size={12} className="mt-0.5 shrink-0 text-emerald-300/80" />
                     The access token is sent only to your configured Shanaya API. Neither credential is saved in browser storage.
                   </p>
+                  <p className="mt-2 text-[9px] leading-5 text-slate-500">
+                    Your server operator sets this token as <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">SHANAYA_API_TOKEN</code> in <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">server/.env</code> (generate with <code className="rounded bg-black/30 px-1 font-mono text-[10px] text-violet-100">openssl rand -hex 32</code>).
+                  </p>
                 </div>
               ) : (
                 <div className="mt-4 space-y-2.5">

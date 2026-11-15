@@ -129,6 +129,12 @@ jobs:
           VITE_AVATAR_MODEL_URL: /models/avatar.draco.glb
       - run: npx cap add @capawesome/capacitor-electron
         working-directory: client
+      - name: Verify generated Electron project
+        run: |
+          if [ ! -f client/electron/package.json ]; then
+            echo "Capacitor Electron did not create client/electron/package.json." >&2
+            exit 1
+          fi
       - name: Apply Electron release configuration
         working-directory: client/electron
         env:
@@ -163,7 +169,9 @@ jobs:
               echo "A Developer ID certificate and Apple notarization credentials are required for a public release." >&2
               exit 1
             fi
-          elif [ "$RUNNER_OS" = "macOS" ] && [ -z "$CSC_LINK" ]; then
+          fi
+          if [ "$ELECTRON_RELEASE_REQUESTED" != "true" ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD WIN_CSC_LINK WIN_CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
             export CSC_IDENTITY_AUTO_DISCOVERY=false
           fi
           # GitHub Releases are published by the dedicated release job below.
