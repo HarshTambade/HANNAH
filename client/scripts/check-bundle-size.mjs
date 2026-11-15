@@ -44,7 +44,7 @@ if (packagePath) {
     process.exit(1);
   }
   const packageArtifacts = listFiles(packagePath)
-    .filter((path) => packageArtifactPattern.test(path) && !/\.blockmap$/i.test(path))
+    .filter((path) => packageArtifactPattern.test(path) && !/\.blockmap$/i.test(path) && !/unpacked/i.test(path))
     .map((path) => ({ path, bytes: statSync(path).size }));
   if (packageArtifacts.length === 0) {
     packagePass = false;
