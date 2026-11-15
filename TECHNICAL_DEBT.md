@@ -14,4 +14,3 @@
 | D10 | Localization | Only en/hi/mr permission strings exist. | P2 | S | Localization maintainer | Additional languages documented. |
 | D11 | Accessibility | Keyboard and screen-reader coverage is limited. | P2 | M | UX maintainer | Axe checks in CI. |
 | D12 | Observability | No automated alert for audit chain failure. | P0 | S | Security maintainer | Alert fires on chain mismatch. |
-PY

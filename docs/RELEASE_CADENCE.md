@@ -40,4 +40,3 @@ Shanaya ships on a monthly cadence. The goal is to turn support, audit, and usag
 - Pricing, billing, and entitlement changes require a separate review.
 - Privacy or data-flow changes require legal review before publication.
 - Roll back or hotfix if a P0 appears within 48 hours.
-PY

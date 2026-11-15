@@ -19,4 +19,3 @@
 - Sustained, high-quality contributions.
 - Demonstrated understanding of the module.
 - Review and trust from existing maintainers.
-PY

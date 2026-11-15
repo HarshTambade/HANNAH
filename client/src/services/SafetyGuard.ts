@@ -2,6 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { Dialog } from "@capacitor/dialog";
 import { trackEvent } from "./events";
 import { getDesktopBridge } from "./DesktopBridge";
+import { SideEffectLedger } from "./SideEffectLedger";
 
 export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file";
 
@@ -53,6 +54,9 @@ export class SafetyGuard {
         });
         approved = result.value;
         trackEvent(approved ? "tool_confirmation_approved" : "tool_confirmation_rejected", { action });
+        if (approved) {
+          SideEffectLedger.record(`safety_guard:${action}`, String(args.target ?? args.path ?? args.recipient ?? args.summary ?? action));
+        }
         return approved;
       } catch {
         // Electron/WebView builds may not have the native Dialog implementation installed.
@@ -60,6 +64,9 @@ export class SafetyGuard {
     }
     approved = typeof window !== "undefined" && window.confirm(message);
     trackEvent(approved ? "tool_confirmation_approved" : "tool_confirmation_rejected", { action });
+    if (approved) {
+      SideEffectLedger.record(`safety_guard:${action}`, String(args.target ?? args.path ?? args.recipient ?? args.summary ?? action));
+    }
     return approved;
   }
 
@@ -73,6 +80,7 @@ export class SafetyGuard {
     const bridge = getDesktopBridge();
     const token = await bridge?.confirmAction(action, args);
     if (!token) throw new Error("Action cancelled. Shanaya did not control the desktop.");
+    SideEffectLedger.record(`desktop:${action}`, String(args.summary ?? args.target ?? action));
     return token;
   }
 }

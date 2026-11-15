@@ -24,4 +24,3 @@
 - [ ] Update privacy policy and terms if data flows changed.
 - [ ] Update store metadata and screenshots.
 - [ ] Record the compliance review date and owner.
-PY

@@ -17,4 +17,3 @@ Shanaya is governed by a technical steering committee (TSC) of core maintainers.
 - Report vulnerabilities to security@shanaya.app.
 - Do not include live credentials, private conversations, or personal data.
 - The TSC coordinates disclosure and patch release.
-PY

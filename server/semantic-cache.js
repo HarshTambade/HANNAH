@@ -41,4 +41,3 @@ function stats() {
 }
 
 module.exports = { hashPrefix, get, set, stats };
-PY

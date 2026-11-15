@@ -39,4 +39,3 @@ maintenance:
   allowedTools: []
   maxIterations: 4
   timeoutMs: 20000
-PY

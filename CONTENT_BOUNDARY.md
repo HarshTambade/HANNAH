@@ -32,4 +32,3 @@
 | Malware or exploits | Prohibited | Safety policy. | Apple 1.2, Google Play |
 | Non-consensual sexual content | Prohibited | Safety policy and store rules. | Apple 1.2, Google Play |
 | Self-harm instructions | Prohibited | Safety policy. | Apple 1.2, Google Play |
-PY

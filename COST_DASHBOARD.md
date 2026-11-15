@@ -29,4 +29,3 @@ Trigger an automatic model downgrade when any of the following is true for 24 ho
 - Disable high-capability cloud for non-essential turns.
 - Reduce tool schema size and prompt length.
 - Re-evaluate after 24 hours or on the next release.
-PY

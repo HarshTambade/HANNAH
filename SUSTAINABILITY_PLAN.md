@@ -18,4 +18,3 @@
 - Paid support for organizations.
 - Commercial license option for hosted or branded deployments.
 - Goal: fund at least one full-time maintainer if adoption grows.
-PY

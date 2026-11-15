@@ -16,4 +16,3 @@
 - D8: Surface cost reports.
 - D9: Add mock provider for red-team CI.
 - Review P2 items for next sprint.
-PY

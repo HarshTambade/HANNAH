@@ -3,6 +3,7 @@ import { executeShanayaTool, getDeviceTools, type ShanayaTool } from "./DeviceTo
 import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentToolCall } from "./LLMRouter";
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
+import { RouterAgent, selectToolsForProfile, defaultAgentProfiles } from "./AgentRouter";
 import { SubscriptionService } from "./SubscriptionService";
 
 const emotionNames = new Set<Emotion>(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
@@ -148,9 +149,14 @@ export async function runAgentTurn(options: {
     ...policy.toolDenyList,
     ...(options.toolDenyList ?? []).map((name) => normalizeToolName(name)),
   ]);
-  const requestedIterations = options.maxIterations ?? policy.maxIterations;
+  const routerAgent = new RouterAgent(defaultAgentProfiles);
+  const taskType = routerAgent.classify(options.messages.map((m) => m.content).join(" "));
+  const profile = routerAgent.selectProfile(taskType);
+  const requestedIterations = options.maxIterations ?? profile.maxIterations ?? policy.maxIterations;
   const maxIterations = Math.max(1, Math.min(hardMaxIterations, Math.floor(requestedIterations)));
-  const tools = [...getDeviceTools()].filter((tool) => !deniedTools.has(normalizeToolName(tool.name)));
+  const allTools = [...getDeviceTools()].filter((tool) => !deniedTools.has(normalizeToolName(tool.name)));
+  const profileTools = selectToolsForProfile(profile, allTools);
+  const tools = profileTools.length ? profileTools : allTools;
   let memoryToolsLoaded = false;
   const conversation: AgentMessage[] = options.messages
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")

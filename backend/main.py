@@ -31,6 +31,7 @@ init_sentry()
 from backend.audit_logger import audit_logger
 from backend.llm_router import ALLOWED_EMOTIONS, LLMRouterError, router
 from backend.task_spine import router as task_spine_router
+from backend.side_effect_ledger import router as side_effect_router, undo as undo_side_effect
 from backend.tools import code_executor, gui_control, system_control, web_agent
 from backend.tools.security import canonical_arguments as _canonical_arguments
 from backend.tools.security import grant_tool_authority
@@ -533,6 +534,21 @@ class TTSRequest(StrictRequestModel):
 
 
 app.include_router(task_spine_router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(side_effect_router, prefix="/api/side-effects", tags=["side-effects"])
+
+
+@app.post("/api/undo")
+async def undo_action(payload: dict[str, Any]) -> dict[str, Any]:
+    entry_id = payload.get("id")
+    if not isinstance(entry_id, str) or not entry_id:
+        raise HTTPException(status_code=400, detail="Side effect id is required.")
+    entry = undo_side_effect(entry_id)
+    return {
+        "id": entry.id,
+        "action": entry.action,
+        "target": entry.target,
+        "status": entry.status,
+    }
 
 
 @app.get("/api/health")

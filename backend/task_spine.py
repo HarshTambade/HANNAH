@@ -107,6 +107,32 @@ async def resume(task_id: str) -> dict[str, Any]:
     return _serialize(update_task(task_id, status="pending"))
 
 
+@router.post("/{task_id}/start")
+async def start(task_id: str) -> dict[str, Any]:
+    task = get_task(task_id)
+    if task.status not in {"pending", "paused"}:
+        raise HTTPException(status_code=409, detail="Task cannot be started.")
+    return _serialize(update_task(task_id, status="running", progress=task.progress or 0.05))
+
+
+@router.post("/{task_id}/progress")
+async def progress(task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    task = get_task(task_id)
+    if task.status in {"completed", "cancelled", "failed"}:
+        raise HTTPException(status_code=409, detail="Task is already finished.")
+    changes: dict[str, Any] = {}
+    if "progress" in payload:
+        try:
+            changes["progress"] = max(0.0, min(1.0, float(payload["progress"])))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Progress must be a number.")
+    if "status" in payload and payload["status"] in {"pending", "running", "paused"}:
+        changes["status"] = payload["status"]
+    if "pendingAction" in payload:
+        changes["pending_action"] = payload["pendingAction"]
+    return _serialize(update_task(task_id, **changes))
+
+
 @router.post("/{task_id}/cancel")
 async def cancel(task_id: str) -> dict[str, Any]:
     task = get_task(task_id)

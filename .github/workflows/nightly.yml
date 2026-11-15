@@ -50,8 +50,11 @@ jobs:
           SHANAYA_API_URL=http://127.0.0.1:3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" python scripts/run_redteam.py
       - name: P0 debt regression check
         run: |
-          if grep -R "HITL bypass" client/src/services/SafetyGuard.ts; then
+          set -euo pipefail
+          # Fail if any P0 debt regression is detected (for example a HITL bypass).
+          if grep -Rni "HITL bypass\|bypass.*approval\|skip.*confirmation" client/src server scripts backend; then
             echo "P0 debt regression detected" >&2
             exit 1
           fi
-PY
+          npm test --prefix client
+          python3 -m pytest -q backend/tests

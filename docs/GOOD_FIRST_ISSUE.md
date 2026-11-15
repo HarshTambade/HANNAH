@@ -24,4 +24,3 @@ Shanaya welcomes focused, well-scoped contributions. These areas are designed to
 - `localization`
 - `provider`
 - `tooling`
-PY
