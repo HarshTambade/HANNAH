@@ -42,6 +42,8 @@ test("all API paths except health reject unauthenticated requests", async () => 
     ["POST", "/api/tts"],
     ["POST", "/api/desktop/computer"],
     ["POST", "/api/chat"],
+    ["POST", "/api/feedback"],
+    ["GET", "/api/health/agent"],
     ["GET", "/api/not-a-route"],
   ];
   for (const [method, path] of cases) {

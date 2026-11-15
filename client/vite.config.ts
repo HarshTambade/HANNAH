@@ -5,11 +5,16 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { visualizer } from "rollup-plugin-visualizer";
 import { mobileClawVitePlugin } from "capacitor-mobile-claw/vite-plugin";
+import packageJson from "./package.json";
 import { shanayaSeoPlugin } from "./scripts/seoPlugin";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig(({ mode }) => ({
+  define: {
+    // Exposed through services/appInfo.ts for feedback and error reports.
+    __SHANAYA_APP_VERSION__: JSON.stringify(packageJson.version),
+  },
   plugins: [
     react(),
     mobileClawVitePlugin(),

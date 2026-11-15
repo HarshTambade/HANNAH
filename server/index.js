@@ -1,5 +1,13 @@
 require("dotenv").config();
 
+// Initialize error tracking before Express is imported so its instrumentation
+// can wrap the framework. With no SENTRY_DSN this is a no-op.
+const {
+  initServerSentry,
+  setupSentryErrorHandler,
+} = require("./observability/sentry");
+initServerSentry();
+
 const cors = require("cors");
 const express = require("express");
 const {
@@ -8,6 +16,11 @@ const {
   rateLimitSettings,
   requireApiToken,
 } = require("./api-security");
+const { checkAgentHealth } = require("./health");
+const {
+  closeFeedbackStores,
+  createFeedbackHandler,
+} = require("./feedback");
 const {
   defaultModelFor,
   defaultProviderId,
@@ -118,6 +131,7 @@ const rateLimits = rateLimitSettings();
 app.post("/api/chat", createRateLimiter(rateLimits.chat));
 app.post("/api/agent", createRateLimiter(rateLimits.agent));
 app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
+app.post("/api/feedback", createRateLimiter(rateLimits.feedback));
 app.use(express.json({ limit: "12mb" }));
 
 if (process.env.NODE_ENV !== "production") {
@@ -134,6 +148,21 @@ if (process.env.NODE_ENV !== "production") {
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", provider: cloudProvider, ready: Boolean((cloudApiKey || configuredDefaultProvider.local) && cloudModels.length) });
 });
+
+app.get("/api/health/agent", async (_req, res) => {
+  try {
+    const health = await checkAgentHealth();
+    return res.status(health.httpStatus).json(health);
+  } catch {
+    return res.status(503).json({
+      status: "unavailable",
+      checkedAt: new Date().toISOString(),
+      error: "The local agent health probe could not run.",
+    });
+  }
+});
+
+app.post("/api/feedback", createFeedbackHandler());
 
 app.get("/api/providers", (_req, res) => {
   const providers = listProviders().map(({ id, label, kind, local, free, docs, requiresKey, configured, defaultModel }) => ({
@@ -467,6 +496,20 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// Sentry must see route errors before the final responder. Its Express error
+// middleware captures the event and forwards it; the response never includes
+// provider messages, stack traces, or user payloads.
+setupSentryErrorHandler(app);
+app.use((error, _req, res, _next) => {
+  if (res.headersSent) return;
+  if (error?.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "The request body must be valid JSON." });
+  }
+  console.error(`Shanaya API request failed (${error?.name || "request error"}).`);
+  const status = Number.isInteger(error?.status) && error.status >= 400 && error.status < 600 ? error.status : 500;
+  return res.status(status).json({ error: "The Shanaya API could not complete this request." });
+});
+
 async function startServer() {
   assertProductionApiToken();
   const mcpEnabled = process.env.MCP_ENABLED === "true";
@@ -487,6 +530,9 @@ async function startServer() {
       console.error(`Shanaya API could not start (${error.code || error.name || "startup error"}).`);
     }
     process.exitCode = 1;
+  });
+  server.on("close", () => {
+    void closeFeedbackStores();
   });
 }
 

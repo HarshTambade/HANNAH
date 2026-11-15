@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+declare const __SHANAYA_APP_VERSION__: string;
+
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
   readonly VITE_PYTHON_FALLBACK_URL?: string;
@@ -12,4 +14,9 @@ interface ImportMetaEnv {
   readonly VITE_MACOS_DOWNLOAD_URL?: string;
   readonly VITE_WINDOWS_DOWNLOAD_URL?: string;
   readonly VITE_LINUX_DOWNLOAD_URL?: string;
+  readonly VITE_APP_VERSION?: string;
+  readonly VITE_SENTRY_DSN?: string;
+  readonly VITE_SENTRY_ENVIRONMENT?: string;
+  readonly VITE_SENTRY_RELEASE?: string;
+  readonly VITE_SENTRY_TRACES_SAMPLE_RATE?: string;
 }

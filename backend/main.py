@@ -24,6 +24,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 load_dotenv()
 
+from backend.sentry_setup import init_sentry
+
+init_sentry()
+
 from backend.audit_logger import audit_logger
 from backend.llm_router import ALLOWED_EMOTIONS, LLMRouterError, router
 from backend.tools import code_executor, gui_control, system_control, web_agent

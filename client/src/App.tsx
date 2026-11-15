@@ -4,8 +4,9 @@ import AvatarScene, { type AvatarMotion } from "./components/AvatarScene";
 import ChatUI from "./components/ChatUI";
 import IntegrationsPage from "./components/IntegrationsPage";
 import LandingPage from "./components/LandingPage";
+import Onboarding, { type OnboardingResult } from "./components/Onboarding";
 import PlatformDownloads from "./components/PlatformDownloads";
-import type { Emotion } from "./types";
+import type { Emotion, InferenceMode } from "./types";
 import { setApiAccessToken } from "./services/api";
 
 const emotionColors: Record<Emotion, string> = {
@@ -17,17 +18,59 @@ const emotionColors: Record<Emotion, string> = {
   thinking: "#c084fc",
 };
 
+// Any stored value means onboarding has been seen. It is intentionally separate
+// from provider preferences so clearing chat data never re-triggers setup.
+const ONBOARDING_STORAGE_KEY = "shanaya.onboarding.v1";
+type Screen = "onboarding" | "landing" | "companion" | "integrations";
+
+function hasSeenOnboarding() {
+  try {
+    return window.localStorage.getItem(ONBOARDING_STORAGE_KEY) !== null;
+  } catch {
+    // If storage is unavailable, avoid showing setup on every visit.
+    return true;
+  }
+}
+
+function rememberOnboarding() {
+  try {
+    window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "complete");
+  } catch {
+    // Setup may reappear when storage is unavailable; the app still works.
+  }
+}
+
 export default function App() {
-  // A fresh visit to the root URL always starts on the landing page. Companion
-  // access is a deliberate in-session transition from its Talk to Shanaya CTA.
-  const [screen, setScreen] = useState<"landing" | "companion" | "integrations">("landing");
+  // First launch starts with privacy setup. Later visits to the root URL start
+  // on the landing page; companion access stays a deliberate in-session choice.
+  const [screen, setScreen] = useState<Screen>(() => (hasSeenOnboarding() ? "landing" : "onboarding"));
   const [integrationReturnScreen, setIntegrationReturnScreen] = useState<"landing" | "companion">("landing");
   const [groqApiKey, setGroqApiKey] = useState("");
+  const [preferredMode, setPreferredMode] = useState<InferenceMode>("cloud");
   const [emotion, setEmotion] = useState<Emotion>("neutral");
   const [motion, setMotion] = useState<AvatarMotion>("loading");
 
   if (screen === "integrations") {
     return <IntegrationsPage onBack={() => setScreen(integrationReturnScreen)} />;
+  }
+
+  if (screen === "onboarding") {
+    const completeOnboarding = (result: OnboardingResult) => {
+      setApiAccessToken(result.apiToken);
+      setGroqApiKey(result.groqApiKey);
+      setPreferredMode(result.preferredMode);
+      rememberOnboarding();
+      setScreen("companion");
+    };
+    return (
+      <Onboarding
+        onComplete={completeOnboarding}
+        onSkip={() => {
+          rememberOnboarding();
+          setScreen("landing");
+        }}
+      />
+    );
   }
 
   if (screen === "landing") {
@@ -36,6 +79,7 @@ export default function App() {
         onStart={({ apiToken, groqApiKey }) => {
           setApiAccessToken(apiToken);
           setGroqApiKey(groqApiKey);
+          setPreferredMode("cloud");
           setScreen("companion");
         }}
         onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
@@ -104,6 +148,7 @@ export default function App() {
                 onClick={() => {
                   setApiAccessToken("");
                   setGroqApiKey("");
+                  setPreferredMode("cloud");
                   setEmotion("neutral");
                   setScreen("landing");
                 }}
@@ -128,7 +173,7 @@ export default function App() {
             </div>
           </header>
           <div className="min-h-0 flex-1">
-            <ChatUI panel groqApiKey={groqApiKey} onEmotionChange={setEmotion} />
+            <ChatUI panel groqApiKey={groqApiKey} initialMode={preferredMode} onEmotionChange={setEmotion} />
           </div>
         </section>
       </div>

@@ -7,12 +7,15 @@ import json
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
+
+from backend.llm_telemetry import start_llm_trace
 
 logger = logging.getLogger("shanaya.llm")
 ALLOWED_EMOTIONS = {"happy", "sad", "cute", "neutral"}
@@ -166,14 +169,34 @@ class LLMRouter:
     ) -> ModelResponse:
         errors: list[str] = []
         cloud_unreachable = False
-        for candidate in self._ordered_candidates(preferred_model):
+        ordered = self._ordered_candidates(preferred_model)
+        trace = start_llm_trace(
+            provider=ordered[0].provider if ordered else "none",
+            requested_model=preferred_model or (ordered[0].model if ordered else ""),
+            operation="agent" if tools else "chat",
+        )
+        if not ordered:
+            error = LLMRouterError("All configured model routes failed: no API keys or local model are configured")
+            trace.fail(error)
+            raise error
+
+        for index, candidate in enumerate(ordered):
             # A broken network path should not make every cloud model wait for
             # its own timeout. Try the first local candidate immediately.
             if cloud_unreachable and candidate.tier < 3:
                 continue
+            attempt_started = time.perf_counter()
             try:
                 result = await self._call(candidate, messages, tools or [])
-                return self._normalize(result, candidate)
+                normalized = self._normalize(result, candidate)
+                elapsed_ms = (time.perf_counter() - attempt_started) * 1000
+                trace.succeed(
+                    model=candidate.model,
+                    usage=self._usage_for(candidate, result),
+                    ttfb_ms=elapsed_ms,
+                    total_ms=elapsed_ms,
+                )
+                return normalized
             except Exception as exc:  # Provider errors intentionally trigger the next candidate.
                 error_name = type(exc).__name__
                 errors.append(f"{candidate.provider}/{candidate.model}: {error_name}")
@@ -183,8 +206,44 @@ class LLMRouter:
                     logger.warning("Model request failed for %s/%s (%s)", candidate.provider, candidate.model, error_name)
                 if candidate.tier < 3 and self._is_transport_failure(exc):
                     cloud_unreachable = True
+                next_candidate = next(
+                    (item for item in ordered[index + 1:] if not (cloud_unreachable and item.tier < 3)),
+                    None,
+                )
+                trace.record_failure(
+                    model=candidate.model,
+                    error=exc,
+                    duration_ms=(time.perf_counter() - attempt_started) * 1000,
+                    next_model=next_candidate.model if next_candidate else None,
+                )
         details = "; ".join(errors) if errors else "no API keys or local model are configured"
-        raise LLMRouterError(f"All configured model routes failed: {details}")
+        error = LLMRouterError(f"All configured model routes failed: {details}")
+        trace.fail(error)
+        raise error
+
+    @staticmethod
+    def _usage_for(candidate: Candidate, response: Any) -> dict[str, Any] | None:
+        """Return numeric token counts only; never keep response content."""
+        if candidate.provider == "Anthropic":
+            usage = getattr(response, "usage", None)
+            prompt = getattr(usage, "input_tokens", None)
+            completion = getattr(usage, "output_tokens", None)
+        elif isinstance(response, dict):
+            usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+            prompt = usage.get("prompt_tokens", usage.get("input_tokens"))
+            completion = usage.get("completion_tokens", usage.get("output_tokens"))
+        else:
+            usage = getattr(response, "usage", None)
+            prompt = getattr(usage, "prompt_tokens", None) if usage is not None else None
+            completion = getattr(usage, "completion_tokens", None) if usage is not None else None
+        if isinstance(prompt, bool) or not isinstance(prompt, (int, float)):
+            prompt = None
+        if isinstance(completion, bool) or not isinstance(completion, (int, float)):
+            completion = None
+        if prompt is None and completion is None:
+            return None
+        total = (prompt or 0) + (completion or 0) if prompt is not None or completion is not None else None
+        return {"promptTokens": prompt, "completionTokens": completion, "totalTokens": total}
 
     async def _call(self, candidate: Candidate, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> Any:
         if candidate.provider == "Anthropic":

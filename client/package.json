@@ -45,6 +45,7 @@
     "@pinecall/ionic": "^0.2.1",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
+    "@sentry/react": "^10.78.0",
     "@stomp/stompjs": "^7.5.0",
     "capacitor-lancedb": "^0.2.2",
     "capacitor-mobile-claw": "^2.5.1",

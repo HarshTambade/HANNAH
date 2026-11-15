@@ -55,6 +55,7 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 - [Testing and quality](#testing-and-quality)
 - [QA audit report](./docs/QA-AUDIT-2026-11-11.md)
 - [Deployment](#deployment)
+- [Observability and launch operations](./docs/OBSERVABILITY.md)
 - [Security and privacy](#security-and-privacy)
 - [Store submission checklist](./STORE_SUBMISSION_CHECKLIST.md)
 - [Troubleshooting and FAQ](#troubleshooting-and-faq)
@@ -1060,6 +1061,8 @@ The application should show an actionable error when:
 - A Pinecall token issuer is missing, unreachable, or returns malformed credentials.
 
 For production operations, monitor availability and latency separately for the client, API, cloud provider, Ollama host, token issuer, and model download host. Log request IDs, status codes, provider names, durations, and error categories without logging message content by default.
+
+Phase 7 adds optional Sentry error tracking, metadata-only LLM traces, Langfuse export, `scripts/audit_monitor.py`, authenticated `GET /api/health/agent` probes, in-app feedback, and first-run onboarding. See [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) for configuration, the trace schema, privacy scrubbers, and the launch checklist.
 
 ## Security and privacy
 

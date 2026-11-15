@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } fr
 import { Capacitor } from "@capacitor/core";
 import { useBrowserLLM } from "use-browser-llm";
 import {
-  ArrowUp, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, Mic, MicOff, Phone, PhoneOff,
+  ArrowUp, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
   RotateCcw, Settings2, Smartphone, Speaker, VolumeX, X,
 } from "lucide-react";
 import type { ChatMessage, Emotion, InferenceMode, SpeechLanguage } from "../types";
@@ -21,6 +21,7 @@ import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentR
 import { clearMobileAgentConversation, getMobileAgentStatus, removeMobileAgentApiKey, runMobileAgentTurn, setMobileAgentApiKey } from "../services/MobileAgent";
 import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuardrails";
 import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent";
+import FeedbackModal from "./FeedbackModal";
 import MemoryControls from "./MemoryControls";
 
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
@@ -86,15 +87,16 @@ type ChatUIProps = {
   onEmotionChange: (emotion: Emotion) => void;
   panel?: boolean;
   groqApiKey: string;
+  initialMode?: InferenceMode;
 };
 
 type ApiStatus = "checking" | "connected" | "offline" | "misconfigured";
 type CloudProviderOption = { id: string; label: string; local: boolean; configured: boolean; defaultModel?: string };
 
-export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: ChatUIProps) {
+export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, initialMode = "cloud" }: ChatUIProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<InferenceMode>("cloud");
+  const [mode, setMode] = useState<InferenceMode>(initialMode);
   const [cloudProviders, setCloudProviders] = useState<CloudProviderOption[]>([]);
   const [cloudProviderId, setCloudProviderId] = useState(() => {
     try {
@@ -127,6 +129,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
   const [isLoading, setIsLoading] = useState(false);
   const [prepareWebFallback, setPrepareWebFallback] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [nativeStatus, setNativeStatus] = useState<OfflineModelStatus>("checking");
   const [isPreparingNative, setIsPreparingNative] = useState(false);
   const [nativeAgentStatus, setNativeAgentStatus] = useState({ available: false, initialized: false, hasApiKey: false });
@@ -720,6 +723,15 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
+            onClick={() => setIsFeedbackOpen(true)}
+            aria-label="Send feedback"
+            title="Send feedback"
+            className="rounded-xl border border-white/[0.08] p-2.5 text-slate-300 transition hover:bg-white/[0.06]"
+          >
+            <MessageSquarePlus size={15} />
+          </button>
+          <button
+            type="button"
             onClick={() => setIsSettingsOpen((open) => !open)}
             aria-expanded={isSettingsOpen}
             aria-label="Inference and privacy settings"
@@ -1082,6 +1094,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey }: C
               : "On-device inference · messages stay on this device"}
         </p>
       </div>
+
+      <FeedbackModal open={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} inferenceMode={effectiveMode} />
     </section>
   );
 }

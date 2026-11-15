@@ -88,6 +88,7 @@ function rateLimitSettings() {
     chat: { limit: positiveInteger(process.env.SHANAYA_RATE_LIMIT_CHAT_MAX, 30, 100_000), windowMs },
     agent: { limit: positiveInteger(process.env.SHANAYA_RATE_LIMIT_AGENT_MAX, 60, 100_000), windowMs },
     desktop: { limit: positiveInteger(process.env.SHANAYA_RATE_LIMIT_DESKTOP_MAX, 20, 100_000), windowMs },
+    feedback: { limit: positiveInteger(process.env.SHANAYA_RATE_LIMIT_FEEDBACK_MAX, 10, 100_000), windowMs },
   };
 }
 

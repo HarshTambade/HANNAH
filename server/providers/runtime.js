@@ -8,6 +8,7 @@ const {
   resolveProvider,
   validateBaseUrl,
 } = require("./catalog");
+const { createLlmTrace } = require("../observability/llm-tracing");
 
 function withPath(baseUrl, suffix) {
   const url = new URL(baseUrl);
@@ -194,11 +195,59 @@ function providerHeaders(provider, apiKey) {
   return headers;
 }
 
-async function callProvider({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs }) {
+/** Extract only numeric token counts; never retain provider response content. */
+function extractUsage(providerKind, data) {
+  const usage = data?.usage && typeof data.usage === "object" ? data.usage : {};
+  if (providerKind === "anthropic") {
+    return {
+      promptTokens: usage.input_tokens,
+      completionTokens: usage.output_tokens,
+      totalTokens: Number.isFinite(usage.input_tokens) && Number.isFinite(usage.output_tokens)
+        ? usage.input_tokens + usage.output_tokens
+        : undefined,
+    };
+  }
+  if (providerKind === "ollama") {
+    return {
+      promptTokens: data?.prompt_eval_count,
+      completionTokens: data?.eval_count,
+      totalTokens: Number.isFinite(data?.prompt_eval_count) && Number.isFinite(data?.eval_count)
+        ? data.prompt_eval_count + data.eval_count
+        : undefined,
+    };
+  }
+  const promptTokens = usage.prompt_tokens ?? usage.input_tokens;
+  const completionTokens = usage.completion_tokens ?? usage.output_tokens;
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: usage.total_tokens ?? (
+      Number.isFinite(promptTokens) && Number.isFinite(completionTokens) ? promptTokens + completionTokens : undefined
+    ),
+  };
+}
+
+async function callProviderMeasured({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs }) {
   const system = `${systemPrompt}${tools?.length ? " When useful, call the provided tools. Never say an action succeeded before the tool result confirms it." : ""}`;
+  let attemptStartedAt = Date.now();
+  let firstResponseAt;
+  const resetTiming = () => {
+    attemptStartedAt = Date.now();
+    firstResponseAt = undefined;
+  };
+  const timing = () => ({
+    ttfbMs: firstResponseAt === undefined ? undefined : firstResponseAt - attemptStartedAt,
+    totalMs: Date.now() - attemptStartedAt,
+  });
+  const requestJson = async (url, init) => {
+    const response = await fetch(url, init);
+    if (firstResponseAt === undefined) firstResponseAt = Date.now();
+    return readProviderJson(response);
+  };
+
   if (provider.kind === "ollama") {
     const ollamaMessages = [{ role: "system", content: system }, ...messages];
-    const data = await readProviderJson(await fetch(ollamaUrl(provider.baseUrl, "chat"), {
+    const data = await requestJson(ollamaUrl(provider.baseUrl, "chat"), {
       method: "POST",
       headers: providerHeaders(provider, apiKey),
       body: JSON.stringify({
@@ -209,11 +258,15 @@ async function callProvider({ provider, apiKey, model, messages, tools, systemPr
         options: { temperature: tools?.length ? 0.4 : 0.7 },
       }),
       signal: AbortSignal.timeout(timeoutMs),
-    }));
+    });
     if (!data.message || (typeof data.message.content !== "string" && !Array.isArray(data.message.tool_calls))) {
       throw new Error("Ollama returned neither a reply nor a tool request.");
     }
-    return normalizeOpenAiMessage(data.message);
+    return {
+      message: normalizeOpenAiMessage(data.message),
+      usage: extractUsage("ollama", data),
+      ...timing(),
+    };
   }
 
   if (provider.kind === "anthropic") {
@@ -223,7 +276,7 @@ async function callProvider({ provider, apiKey, model, messages, tools, systemPr
       description: tool.function.description,
       input_schema: tool.function.parameters,
     }));
-    const data = await readProviderJson(await fetch(anthropicUrl(provider.baseUrl, "messages"), {
+    const data = await requestJson(anthropicUrl(provider.baseUrl, "messages"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -238,8 +291,12 @@ async function callProvider({ provider, apiKey, model, messages, tools, systemPr
         ...(anthropicTools.length ? { tools: anthropicTools } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),
-    }));
-    return normalizeAnthropicMessage(data);
+    });
+    return {
+      message: normalizeAnthropicMessage(data),
+      usage: extractUsage("anthropic", data),
+      ...timing(),
+    };
   }
 
   const url = openAiChatUrl(provider.baseUrl);
@@ -252,28 +309,39 @@ async function callProvider({ provider, apiKey, model, messages, tools, systemPr
   };
   let data;
   try {
-    data = await readProviderJson(await fetch(url, {
+    data = await requestJson(url, {
       method: "POST",
       headers: providerHeaders(provider, apiKey),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
-    }));
+    });
   } catch (error) {
     if (error.status !== 400 || !/max_completion_tokens/i.test(error.providerMessage || "")) throw error;
+    resetTiming();
     const compatibleBody = { ...body, max_tokens: body.max_completion_tokens };
     delete compatibleBody.max_completion_tokens;
-    data = await readProviderJson(await fetch(url, {
+    data = await requestJson(url, {
       method: "POST",
       headers: providerHeaders(provider, apiKey),
       body: JSON.stringify(compatibleBody),
       signal: AbortSignal.timeout(timeoutMs),
-    }));
+    });
   }
   const message = data.choices?.[0]?.message;
   if (!message || (typeof message.content !== "string" && !Array.isArray(message.tool_calls))) {
     throw new Error("The provider returned neither a reply nor a tool request.");
   }
-  return normalizeOpenAiMessage(message);
+  return {
+    message: normalizeOpenAiMessage(message),
+    usage: extractUsage(provider.kind, data),
+    ...timing(),
+  };
+}
+
+/** Backwards-compatible provider call that returns only the normalized message. */
+async function callProvider(args) {
+  const result = await callProviderMeasured(args);
+  return result.message;
 }
 
 function isNetworkFailure(error) {
@@ -285,19 +353,47 @@ function isNetworkFailure(error) {
 
 async function requestWithProviderFallback({ provider, apiKey, requestedModel, messages, tools, systemPrompt, timeoutMs }) {
   const models = modelChain(provider, requestedModel || defaultModelFor(provider));
-  if (!models.length) throw new Error(`No model is configured for ${provider.label}.`);
+  const trace = createLlmTrace({
+    provider,
+    requestedModel: requestedModel || models[0] || defaultModelFor(provider),
+    operation: tools?.length ? "agent" : "chat",
+  });
+  if (!models.length) {
+    const error = new Error(`No model is configured for ${provider.label}.`);
+    trace.fail(error);
+    throw error;
+  }
   let lastError;
-  for (const model of models) {
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    const attemptStartedAt = Date.now();
     try {
-      return await callProvider({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs });
+      const result = await callProviderMeasured({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs });
+      trace.succeed({
+        model,
+        usage: result.usage,
+        ttfbMs: result.ttfbMs,
+        totalMs: result.totalMs,
+      });
+      return result.message;
     } catch (error) {
       lastError = error;
-      if (isNetworkFailure(error) || error.status === 401 || error.status === 403) break;
+      const stop = isNetworkFailure(error) || error.status === 401 || error.status === 403;
+      const nextModel = stop ? null : models[index + 1] || null;
+      trace.recordFailure({
+        model,
+        error,
+        durationMs: Date.now() - attemptStartedAt,
+        nextModel,
+      });
+      if (stop) break;
       if (error.status === 429) console.warn(`${provider.label} model ${model} was rate limited; trying the next configured model.`);
       else console.warn(`${provider.label} model ${model} failed; trying the next configured model.`);
     }
   }
-  throw lastError || new Error(`No ${provider.label} models are configured.`);
+  const finalError = lastError || new Error(`No ${provider.label} models are configured.`);
+  trace.fail(finalError);
+  throw finalError;
 }
 
 async function discoverProviderModels(provider, apiKey, timeoutMs) {
@@ -346,7 +442,9 @@ async function discoverProviderModels(provider, apiKey, timeoutMs) {
 module.exports = {
   anthropicUrl,
   callProvider,
+  callProviderMeasured,
   discoverProviderModels,
+  extractUsage,
   isNetworkFailure,
   openAiChatUrl,
   providerConfigured,
