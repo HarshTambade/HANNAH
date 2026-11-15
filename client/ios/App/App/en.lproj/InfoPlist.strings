@@ -1,0 +1,3 @@
+"NSMicrophoneUsageDescription" = "Shanaya uses the microphone so you can speak with your companion. Audio is processed only when you start a voice turn or call.";
+"NSSpeechRecognitionUsageDescription" = "Shanaya uses speech recognition to turn your voice into a message. Depending on your device and settings, recognition may use Apple's servers.";
+"NSLocalNetworkUsageDescription" = "Shanaya connects to Ollama or a local AI model host on your network when you choose local inference. Local network access is not used for cloud AI.";

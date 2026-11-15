@@ -7,4 +7,6 @@ export type SpeechLanguage = "en-US" | "hi-IN" | "mr-IN";
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
+  /** Stable id for content reporting and list keys. */
+  id?: string;
 };

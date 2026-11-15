@@ -36,18 +36,24 @@ function ensureUsageDescriptions() {
 
   let source = readFileSync(filePath, "utf8");
   const additions = [];
+  if (!source.includes("<key>CFBundleLocalizations</key>")) {
+    additions.push("    <key>CFBundleLocalizations</key>\n    <array>\n        <string>en</string>\n        <string>hi</string>\n        <string>mr</string>\n    </array>");
+  }
   if (!source.includes("<key>NSMicrophoneUsageDescription</key>")) {
-    additions.push("    <key>NSMicrophoneUsageDescription</key>\n    <string>Shanaya uses the microphone so you can speak with your companion.</string>");
+    additions.push("    <key>NSMicrophoneUsageDescription</key>\n    <string>Shanaya uses the microphone so you can speak with your companion. Audio is processed only when you start a voice turn or call.</string>");
   }
   if (!source.includes("<key>NSSpeechRecognitionUsageDescription</key>")) {
-    additions.push("    <key>NSSpeechRecognitionUsageDescription</key>\n    <string>Shanaya uses speech recognition to turn your voice into a message.</string>");
+    additions.push("    <key>NSSpeechRecognitionUsageDescription</key>\n    <string>Shanaya uses speech recognition to turn your voice into a message. Depending on your device and settings, recognition may use Apple's servers.</string>");
+  }
+  if (!source.includes("<key>NSLocalNetworkUsageDescription</key>")) {
+    additions.push("    <key>NSLocalNetworkUsageDescription</key>\n    <string>Shanaya connects to Ollama or a local AI model host on your network when you choose local inference. Local network access is not used for cloud AI.</string>");
   }
   if (!additions.length) return;
   const rootDictionaryEnd = source.lastIndexOf("</dict>");
   if (rootDictionaryEnd < 0) throw new Error("Could not find the Info.plist dictionary end tag.");
   source = `${source.slice(0, rootDictionaryEnd)}${additions.join("\n")}\n${source.slice(rootDictionaryEnd)}`;
   writeFileSync(filePath, source);
-  console.log("Added microphone and speech recognition usage descriptions to iOS Info.plist.");
+  console.log("Added localized usage descriptions to iOS Info.plist.");
 }
 
 function ensurePrivacyManifest() {

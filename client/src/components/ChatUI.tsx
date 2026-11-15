@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } fr
 import { Capacitor } from "@capacitor/core";
 import { useBrowserLLM } from "use-browser-llm";
 import {
-  ArrowUp, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
+  ArrowUp, Bot, Cpu, Crown, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
   RotateCcw, Settings2, Smartphone, Speaker, VolumeX, X,
 } from "lucide-react";
 import type { ChatMessage, Emotion, InferenceMode, SpeechLanguage } from "../types";
@@ -21,14 +21,29 @@ import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentR
 import { clearMobileAgentConversation, getMobileAgentStatus, removeMobileAgentApiKey, runMobileAgentTurn, setMobileAgentApiKey } from "../services/MobileAgent";
 import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuardrails";
 import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent";
+import {
+  SubscriptionService,
+  isSubscriptionError,
+  type SubscriptionQuota,
+} from "../services/SubscriptionService";
 import FeedbackModal from "./FeedbackModal";
+import PricingModal from "./PricingModal";
+import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
 
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
 const welcomeMessage: ChatMessage = {
+  id: "shanaya-welcome",
   role: "assistant",
   content: "Hey, I’m Shanaya. It’s lovely to meet you. What’s on your mind?",
 };
+
+function createMessageId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 const modeDetails: Record<InferenceMode, { label: string; description: string; icon: typeof Globe2 }> = {
   cloud: { label: "Groq Cloud", description: "Groq is the default; other configured model providers are available", icon: Globe2 },
@@ -130,6 +145,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [prepareWebFallback, setPrepareWebFallback] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
+  const [pricingReason, setPricingReason] = useState("");
+  const [quota, setQuota] = useState<SubscriptionQuota>(() => SubscriptionService.getQuota());
   const [nativeStatus, setNativeStatus] = useState<OfflineModelStatus>("checking");
   const [isPreparingNative, setIsPreparingNative] = useState(false);
   const [nativeAgentStatus, setNativeAgentStatus] = useState({ available: false, initialized: false, hasApiKey: false });
@@ -340,6 +358,17 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       return false;
     }
 
+    // Check before appending the user message so a blocked turn leaves the
+    // conversation untouched. AgentRuntime repeats this check before provider
+    // work; the desktop and MobileClaw paths rely on this pre-flight.
+    const subscription = SubscriptionService.canSendMessage(effectiveMode);
+    setQuota(subscription.quota);
+    if (!subscription.allowed) {
+      setPricingReason(subscription.message || "Upgrade to Premium to continue.");
+      setIsPricingOpen(true);
+      return false;
+    }
+
     isSubmittingTurnRef.current = true;
     const activeVoiceSession = voiceSessionRef.current;
     if (activeVoiceSession) {
@@ -353,7 +382,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       }
     }
 
-    const nextMessages = [...messages, { role: "user" as const, content }];
+    const nextMessages = [...messages, { id: createMessageId(), role: "user" as const, content }];
     const guardedContent = screenIncomingPrompt(content);
     setMessages(nextMessages);
     setInput("");
@@ -365,6 +394,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     let spokenReply: Promise<void> | null = null;
     try {
       let result: { reply: string; emotion: Emotion };
+      let countedOutsideRuntime = false;
       const publishActivity = (message: string, acting = false) => {
         setAgentActivity({ phase: acting ? "acting" : "thinking", message });
         if (!acting && message && !message.toLowerCase().includes("thinking") && !message.toLowerCase().includes("examining") && !message.toLowerCase().includes("screenshot")) {
@@ -375,9 +405,11 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       if (effectiveMode === "desktop") {
         const reply = await runDesktopAgentTurn(guardedContent, publishActivity);
         result = parseAIResponse(reply);
+        countedOutsideRuntime = true;
       } else if (effectiveMode === "mobileclaw" && isNative && isOnline && nativeAgentStatus.hasApiKey) {
         const response = await runMobileAgentTurn(content, publishActivity);
         result = parseAIResponse(response);
+        countedOutsideRuntime = true;
       } else {
         result = await runAgentTurn({
           mode: effectiveMode,
@@ -410,7 +442,12 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         });
       }
 
-      setMessages((current) => [...current, { role: "assistant", content: result.reply }]);
+      if (countedOutsideRuntime) {
+        setQuota(SubscriptionService.recordMessage());
+      } else {
+        setQuota(SubscriptionService.getQuota());
+      }
+      setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply }]);
       onEmotionChange(result.emotion);
       if (speakReply) {
         setVoiceStatus("Shanaya is speaking…");
@@ -421,7 +458,13 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           .finally(() => setIsSpeaking(false));
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
+      if (isSubscriptionError(requestError)) {
+        setQuota(requestError.quota);
+        setPricingReason(requestError.message);
+        setIsPricingOpen(true);
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
+      }
     } finally {
       setIsLoading(false);
       setAgentActivity(null);
@@ -723,6 +766,27 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
+            onClick={() => {
+              setPricingReason("");
+              setIsPricingOpen(true);
+            }}
+            aria-label={quota.tier === "premium"
+              ? "Premium plan active. View plans"
+              : `Free plan, ${quota.remaining ?? 0} of ${quota.limit ?? 25} messages left today. View plans`}
+            title={quota.tier === "premium" ? "Premium" : "Upgrade to Premium"}
+            className={`flex items-center gap-1.5 rounded-xl border p-2.5 transition sm:px-2.5 ${
+              quota.tier === "premium"
+                ? "border-amber-200/20 bg-amber-200/[0.06] text-amber-100 hover:bg-amber-200/[0.1]"
+                : "border-white/[0.08] text-slate-300 hover:bg-white/[0.06]"
+            }`}
+          >
+            <Crown size={15} />
+            <span className="hidden text-[10px] font-semibold sm:inline">
+              {quota.tier === "premium" ? "Premium" : `${quota.remaining ?? 0}/${quota.limit ?? 25}`}
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={() => setIsFeedbackOpen(true)}
             aria-label="Send feedback"
             title="Send feedback"
@@ -921,11 +985,18 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             const isSystem = message.role === "system";
             if (isSystem) return <div key={`${index}-system`} role="status" className="mx-8 rounded-xl border border-emerald-300/10 bg-emerald-300/[0.035] px-3 py-2 text-[10px] leading-relaxed text-emerald-100/70">{message.content}</div>;
             return (
-              <div key={`${index}-${message.role}`} className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-                {!isUser && <div className="mb-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-violet-300/15 bg-violet-400/[0.08] text-violet-200"><Bot size={11} /></div>}
-                <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[12px] leading-relaxed ${isUser ? "rounded-br-md bg-gradient-to-br from-indigo-500 to-violet-600 text-white" : "rounded-bl-md border border-white/[0.05] bg-[#171b28]/85 text-slate-200"}`}>
-                  {message.content}
+              <div key={`${index}-${message.role}`} className="flex flex-col gap-1">
+                <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
+                  {!isUser && <div className="mb-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-violet-300/15 bg-violet-400/[0.08] text-violet-200"><Bot size={11} /></div>}
+                  <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[12px] leading-relaxed ${isUser ? "rounded-br-md bg-gradient-to-br from-indigo-500 to-violet-600 text-white" : "rounded-bl-md border border-white/[0.05] bg-[#171b28]/85 text-slate-200"}`}>
+                    {message.content}
+                  </div>
                 </div>
+                {!isUser && message.id && message.id !== "shanaya-welcome" && (
+                  <div className="pl-8">
+                    <ReportButton messageId={message.id} inferenceMode={effectiveMode} />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -943,6 +1014,21 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             <p className="pl-8 text-xs text-amber-200/80">WebGPU is unavailable. Reconnect or use the Capacitor app for native offline AI.</p>
           )}
           {error && <div role="alert" className="ml-8 rounded-xl border border-rose-400/15 bg-rose-400/[0.06] px-3 py-2 text-xs text-rose-100/90">{error}</div>}
+          {quota.tier === "free" && quota.remaining === 0 && (
+            <div className="ml-8 rounded-xl border border-amber-300/15 bg-amber-300/[0.05] px-3 py-2.5 text-[10px] leading-5 text-amber-50/85">
+              <span className="font-semibold text-amber-100">You’ve used today’s {quota.limit ?? 25} free messages.</span> Local models reset at local midnight.
+              <button
+                type="button"
+                onClick={() => {
+                  setPricingReason("Unlock unlimited messages and cloud models with Premium.");
+                  setIsPricingOpen(true);
+                }}
+                className="ml-1.5 font-semibold text-amber-200 underline decoration-amber-200/30 underline-offset-2 transition hover:text-amber-100"
+              >
+                Upgrade to Premium
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1096,6 +1182,18 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       </div>
 
       <FeedbackModal open={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} inferenceMode={effectiveMode} />
+      <PricingModal
+        open={isPricingOpen}
+        onClose={() => setIsPricingOpen(false)}
+        quota={quota}
+        reason={pricingReason}
+        onPreviewPremium={import.meta.env.DEV
+          ? () => {
+            setQuota(SubscriptionService.setTier("premium"));
+            setPricingReason("");
+          }
+          : undefined}
+      />
     </section>
   );
 }

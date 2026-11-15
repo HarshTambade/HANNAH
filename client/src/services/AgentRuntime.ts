@@ -3,6 +3,7 @@ import { executeShanayaTool, getDeviceTools, type ShanayaTool } from "./DeviceTo
 import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentToolCall } from "./LLMRouter";
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
+import { SubscriptionService } from "./SubscriptionService";
 
 const emotionNames = new Set<Emotion>(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 const hardMaxIterations = 20;
@@ -117,6 +118,10 @@ export async function runAgentTurn(options: {
   generateLocal: (prompt: string, mode: InferenceMode) => Promise<string>;
   onActivity?: (activity: AgentActivity) => void;
 }): Promise<AgentReply> {
+  // Free tier: local inference only, 25 successful turns per local day.
+  // Throwing a SubscriptionError before any provider request keeps the paywall
+  // out of the network path and lets the UI show a precise upgrade prompt.
+  SubscriptionService.assertCanSend(options.mode);
   const policy = getAgentRuntimePolicy();
   const deniedTools = new Set([
     ...policy.toolDenyList,
@@ -130,6 +135,10 @@ export async function runAgentTurn(options: {
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")
     .map(({ role, content }) => ({ role, content: role === "user" ? screenIncomingPrompt(content) : content }));
   let preferredMode = options.mode;
+  const completeTurn = (reply: AgentReply) => {
+    SubscriptionService.recordMessage();
+    return reply;
+  };
 
   for (let turn = 0; turn < maxIterations; turn += 1) {
     let mode = await LLMRouter.resolveMode(preferredMode, typeof navigator === "undefined" || navigator.onLine);
@@ -159,18 +168,18 @@ export async function runAgentTurn(options: {
         options.onActivity?.({ phase: "thinking", message: "Cloud AI is unavailable · switching to on-device AI…" });
         const localText = await options.generateLocal(createLocalPrompt(conversation, tools), mode);
         const step = parseLocalStep(localText);
-        if (step.reply) return step.reply;
+        if (step.reply) return completeTurn(step.reply);
         content = localText;
         toolCalls = step.toolCalls;
       }
     } else {
       const localText = await options.generateLocal(createLocalPrompt(conversation, tools), mode);
       const step = parseLocalStep(localText);
-      if (step.reply) return step.reply;
+      if (step.reply) return completeTurn(step.reply);
       toolCalls = step.toolCalls;
     }
 
-    if (toolCalls.length === 0) return parseReply(content);
+    if (toolCalls.length === 0) return completeTurn(parseReply(content));
     if (toolCalls.length > 8) throw new Error("The local model requested too many tools at once.");
     conversation.push({
       role: "assistant",

@@ -6,8 +6,9 @@ This is the release handoff checklist for Shanaya. Repository configuration is p
 
 - [x] App icon and launch artwork exist in the checked-in PWA, Android, and iOS asset sets. Verify legibility and safe areas in each current store preview.
 - [ ] Capture current screenshots on real devices for every required phone, tablet, and desktop listing size. Remove personal data and developer tools from screenshots.
-- [ ] Publish a public privacy policy URL and add it to every store listing. It must describe cloud-provider message processing, the optional Anthropic integration, microphone/speech processing, device actions, on-device memory, retention, deletion, and contact details.
-- [ ] Publish terms of service and a support/contact URL. Confirm the legal entity, contact details, jurisdiction, and effective date with the owner.
+- [ ] Publish a public privacy policy URL and add it to every store listing. The draft in [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) describes cloud-provider message processing, the optional Anthropic integration, microphone/speech processing, device actions, on-device memory, retention, deletion, and contact details. Replace the operator placeholders before publishing.
+- [ ] Publish terms of service and a support/contact URL. Confirm the legal entity, contact details, jurisdiction, and effective date with the owner. Use [TERMS_OF_SERVICE.md](./TERMS_OF_SERVICE.md) as the starting draft.
+- [ ] Replace the placeholder domain, contact addresses, dateline, and pricing/billing status in [LAUNCH_KIT.md](./LAUNCH_KIT.md) and [PRESS_RELEASE.md](./PRESS_RELEASE.md) with launch-day values.
 - [ ] Complete each store's content/age-rating questionnaire and provide accurate short and long descriptions, category, keywords, and release notes.
 - [ ] Review every SDK and enabled provider's privacy, retention, data residency, and acceptable-use terms. Complete a data inventory before filling in store privacy disclosures.
 - [ ] Verify accessibility, localized listing copy, icon/splash appearance, and permission prompts on actual target hardware.
@@ -45,7 +46,8 @@ The workflow fails a release run if the iOS signing variable or any required sig
 - [x] `client/android/variables.gradle` targets API 36. As of August 31, 2026, Google Play requires new apps and updates to target Android 16 / API 36 or higher for standard mobile apps; recheck the [target API policy](https://developer.android.com/google/play/requirements/target-sdk) before each submission.
 - [x] Release workflow builds a signed APK and Android App Bundle (AAB) when signing credentials are present.
 - [ ] Configure `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` repository secrets. Back up the upload/release key securely; do not replace it casually.
-- [ ] Create the Play Console app record, enroll in Play App Signing, upload the AAB, complete the Data safety form, content rating, target-audience, ads, app-access, and privacy-policy fields.
+- [ ] Create the Play Console app record, enroll in Play App Signing, upload the AAB, complete the Data safety form, content rating, target-audience, ads, app-access, and privacy-policy fields. Use [DATA_SAFETY_FORM.md](./DATA_SAFETY_FORM.md) as the draft answer map and re-verify it against the exact release build.
+- [ ] Confirm the on-call roster, alerts, key-rotation procedure, Sentry triage levels, and audit-log review cadence in [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md) before enabling production traffic.
 - [ ] Add internal testers, test install/update flows, and review Android permission declarations and prominent disclosures.
 - [ ] Start with a Play Console staged rollout, monitor crash/ANR and support signals, and halt or roll back if the release regresses.
 - [ ] Check Android developer identity verification requirements for direct distribution in addition to Play Console requirements.

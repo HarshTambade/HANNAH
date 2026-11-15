@@ -43,6 +43,7 @@ test("all API paths except health reject unauthenticated requests", async () => 
     ["POST", "/api/desktop/computer"],
     ["POST", "/api/chat"],
     ["POST", "/api/feedback"],
+    ["POST", "/api/report-content"],
     ["GET", "/api/health/agent"],
     ["GET", "/api/not-a-route"],
   ];
@@ -62,6 +63,19 @@ test("a valid bearer token can call protected endpoints", async () => {
   });
   assert.equal(response.status, 200);
   assert.ok(Array.isArray((await response.json()).providers));
+});
+
+test("content reporting is authenticated and validates metadata-only bodies", async () => {
+  const response = await fetch(baseUrl + "/api/report-content", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ messageId: "short", reason: "other" }),
+  });
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /message id/i);
 });
 
 test("an incorrect bearer token is rejected", async () => {

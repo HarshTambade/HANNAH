@@ -12,6 +12,12 @@
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>hi</string>
+		<string>mr</string>
+	</array>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -67,8 +73,10 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Shanaya uses the microphone so you can speak with your companion.</string>
+    <string>Shanaya uses the microphone so you can speak with your companion. Audio is processed only when you start a voice turn or call.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Shanaya uses speech recognition to turn your voice into a message.</string>
+    <string>Shanaya uses speech recognition to turn your voice into a message. Depending on your device and settings, recognition may use Apple's servers.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Shanaya connects to Ollama or a local AI model host on your network when you choose local inference. Local network access is not used for cloud AI.</string>
 </dict>
 </plist>

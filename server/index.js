@@ -21,6 +21,7 @@ const {
   closeFeedbackStores,
   createFeedbackHandler,
 } = require("./feedback");
+const { createContentReportHandler } = require("./content-reports");
 const {
   defaultModelFor,
   defaultProviderId,
@@ -132,6 +133,7 @@ app.post("/api/chat", createRateLimiter(rateLimits.chat));
 app.post("/api/agent", createRateLimiter(rateLimits.agent));
 app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
 app.post("/api/feedback", createRateLimiter(rateLimits.feedback));
+app.post("/api/report-content", createRateLimiter(rateLimits.contentReport));
 app.use(express.json({ limit: "12mb" }));
 
 if (process.env.NODE_ENV !== "production") {
@@ -163,6 +165,7 @@ app.get("/api/health/agent", async (_req, res) => {
 });
 
 app.post("/api/feedback", createFeedbackHandler());
+app.post("/api/report-content", createContentReportHandler());
 
 app.get("/api/providers", (_req, res) => {
   const providers = listProviders().map(({ id, label, kind, local, free, docs, requiresKey, configured, defaultModel }) => ({
