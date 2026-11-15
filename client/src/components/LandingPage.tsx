@@ -95,6 +95,7 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
           <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
             <a href="#experience" className="text-xs text-slate-400 transition hover:text-white">The experience</a>
             <a href="#how-it-works" className="text-xs text-slate-400 transition hover:text-white">How it works</a>
+            <a href="#modes" className="text-xs text-slate-400 transition hover:text-white">Hybrid AI</a>
             <a href="#privacy" className="text-xs text-slate-400 transition hover:text-white">Your privacy</a>
             <button type="button" onClick={onIntegrations} className="text-xs text-slate-400 transition hover:text-white">Integrations</button>
             {onSetup && <button type="button" onClick={onSetup} className="text-xs text-slate-400 transition hover:text-white">First-time setup</button>}
@@ -227,6 +228,54 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
                   <p className="mt-2 text-[10px] leading-6 text-slate-400">{step.detail}</p>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="modes" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-200/70">Hybrid AI</p>
+              <h2 className="mt-4 font-['Manrope'] text-3xl font-semibold tracking-[-0.045em] text-white sm:text-4xl">Choose where your conversation goes.</h2>
+              <p className="mt-4 max-w-xl text-[13px] leading-7 text-slate-400">Shanaya can run locally, on your own Ollama server, or through a cloud provider you select. The active provider is named in the chat, so the privacy and capability trade-off stays visible.</p>
+              <div className="mt-6 space-y-2">
+                {[
+                  { title: "WebLLM", detail: "Runs a compact model inside a WebGPU-capable browser. Nothing is sent to Shanaya’s API for inference." },
+                  { title: "On-device GGUF", detail: "Download a model once and keep text conversations on iOS or Android with llama.cpp." },
+                  { title: "Local Ollama", detail: "Connect your own Ollama endpoint for a private, self-hosted model path." },
+                  { title: "Cloud", detail: "Groq by default, with OpenAI, Anthropic, and other configured providers when you choose them." },
+                ].map((mode) => (
+                  <div key={mode.title} className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-4">
+                    <p className="font-['Manrope'] text-[12px] font-semibold text-white">{mode.title}</p>
+                    <p className="mt-1.5 text-[10px] leading-5 text-slate-400">{mode.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-3xl border border-violet-100/[0.09] bg-[radial-gradient(ellipse_at_100%_0%,rgba(139,92,246,0.11),transparent_48%),rgba(255,255,255,0.025)] p-6 sm:p-8">
+              <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-violet-200/70">Plans</p>
+              <h3 className="mt-4 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">Free to start. Premium when you need more.</h3>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
+                  <p className="font-['Manrope'] text-[13px] font-semibold text-white">Free</p>
+                  <p className="mt-1 text-[10px] text-slate-400">$0 forever</p>
+                  <ul className="mt-3 space-y-1.5 text-[10px] leading-5 text-slate-300">
+                    <li>25 successful messages per day</li>
+                    <li>WebLLM, GGUF, and Ollama</li>
+                    <li>Voice, avatar, and device tools</li>
+                  </ul>
+                </div>
+                <div className="rounded-2xl border border-amber-200/20 bg-amber-200/[0.05] p-4">
+                  <p className="font-['Manrope'] text-[13px] font-semibold text-white">Premium</p>
+                  <p className="mt-1 text-[10px] text-slate-400">$9.99 per month</p>
+                  <ul className="mt-3 space-y-1.5 text-[10px] leading-5 text-slate-300">
+                    <li>Unlimited messages</li>
+                    <li>Cloud providers and agents</li>
+                    <li>Priority Groq routing</li>
+                  </ul>
+                </div>
+              </div>
+              <p className="mt-5 text-[9px] leading-5 text-slate-500">Billing is being connected. The launch build labels checkout as a placeholder and does not charge users. Local inference stays useful without a subscription.</p>
             </div>
           </div>
         </section>
