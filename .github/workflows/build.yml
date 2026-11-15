@@ -192,7 +192,6 @@ jobs:
   redteam:
     name: Red-team suite
     runs-on: ubuntu-latest
-    if: ${{ secrets.SHANAYA_API_TOKEN != '' && secrets.GROQ_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -203,30 +202,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: npm ci --ignore-scripts
-        working-directory: server
-      - name: Start Shanaya API
-        working-directory: server
+      - name: Run red-team suite
         env:
-          NODE_ENV: production
-          PORT: "3001"
           SHANAYA_API_TOKEN: ${{ secrets.SHANAYA_API_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          SHANAYA_RATE_LIMIT_AGENT_MAX: "1000"
         run: |
-          npm start &
+          if [ -z "$SHANAYA_API_TOKEN" ] || [ -z "$GROQ_API_KEY" ]; then
+            echo "Red-team secrets are not configured; skipping."
+            exit 0
+          fi
+          npm ci --ignore-scripts --prefix server
+          (cd server && NODE_ENV=production PORT=3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" GROQ_API_KEY="$GROQ_API_KEY" SHANAYA_RATE_LIMIT_AGENT_MAX=1000 npm start &) 
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:3001/api/health >/dev/null; then break; fi
             sleep 1
           done
-      - name: Run red-team suite
-        env:
-          SHANAYA_API_URL: http://127.0.0.1:3001
-          SHANAYA_API_TOKEN: ${{ secrets.SHANAYA_API_TOKEN }}
-        run: python scripts/run_redteam.py
-      - name: Stop Shanaya API
-        if: always()
-        run: pkill -f "node.*index.js" || true
+          SHANAYA_API_URL=http://127.0.0.1:3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" python scripts/run_redteam.py
+          pkill -f "node.*index.js" || true
 
   android:
     name: Android
