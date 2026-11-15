@@ -208,88 +208,140 @@ Shanaya's request path flows through five clean layers, each with a single respo
 
 ### System architecture diagram
 
-<div style="margin:24px 0">
+```mermaid
+flowchart TB
+    %% User Interfaces
+    UI[("User Interfaces<br/>Web · PWA · iOS · Android ·<br/>macOS · Windows · Linux<br/>Companion Hardware")]:::ui
 
-<div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;margin-bottom:14px">Shanaya platform architecture — layered, governed, privacy-first</div>
+    subgraph Client["Client Runtime · client/src"]
+        direction TB
+        UIR["React UI · ChatUI ·<br/>Dashboards · Panels"]:::client
+        RT["AgentRuntime<br/>bounded tool turns"]:::client
+        Router["LLMRouter<br/>on-device / cloud routing"]:::client
+        Guard["GuardianAgent<br/>zero-trust review"]:::client
+        Policy["PolicyEnforcementLayer<br/>rate limits · allow-list"]:::client
+        Kill["Kill Switch<br/>halt + resume"]:::client
+        CogRisk["CognitiveRiskEngine<br/>CRF 2.0 scoring"]:::client
+        Memory["MemoryService<br/>session · long_term · persona"]:::client
+        MemoryRouter["MemoryRouter<br/>graph + vector + hybrid"]:::client
+        Avatar["AvatarScene ·<br/>Three.js emotion"]:::client
+        Voice["SpeechService /<br/>OnDeviceVoicePipeline"]:::client
+    end
 
-<!-- Layer 1: User Interface -->
-<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
-  <div style="flex:0 0 auto;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 14px;min-width:120px;text-align:center">
-    <div style="font-size:10px;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">User interfaces</div>
-    <div style="font-size:11.5px;color:#0f172a;font-weight:600">Web · PWA</div>
-    <div style="font-size:11.5px;color:#0f172a">iOS · Android</div>
-    <div style="font-size:11.5px;color:#0f172a">macOS · Windows · Linux</div>
-    <div style="font-size:11.5px;color:#0f172a">Companion hardware</div>
-  </div>
-  <div style="width:28px;height:4px;background:#cbd5e1;border-radius:2px;align-self:center"></div>
-</div>
+    subgraph TaskSpine["Task Spine · asynchronous background work"]
+        direction TB
+        Spine["TaskSpineService<br/>create · list · pause · resume · cancel · approve"]:::spine
+        Runner["background_agent_runner.py<br/>polls spine · worker thread"]:::spine
+        Executor["side_effect_executor.py<br/>delayed execution after undo window"]:::spine
+    end
 
-<!-- Layer 2: Client -->
-<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:160px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#0ea5e9;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Client runtime · client/src</div>
-    <div style="font-size:11.5px;color:#334155">AgentRuntime · LLMRouter</div>
-    <div style="font-size:11.5px;color:#334155">GuardianAgent · Kill Switch</div>
-    <div style="font-size:11.5px;color:#334155">CognitiveRiskEngine</div>
-    <div style="font-size:11.5px;color:#334155">MemoryService · Router</div>
-    <div style="font-size:11.5px;color:#334155">AvatarScene · VoiceService</div>
-  </div>
-  <div style="width:28px;height:4px;background:#cbd5e1;border-radius:2px;align-self:center"></div>
-</div>
+    subgraph Ledger["Side-effect ledger · undo window"]
+        LedgerSvc["SideEffectLedger<br/>record · list · undo · execute"]:::ledger
+        UndoAPI["/api/undo · /api/side-effects<br/>reversible within delay window"]:::ledger
+    end
 
-<!-- Layer 3: API -->
-<div style="display:flex;gap:8px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">API gateway · server/</div>
-    <div style="font-size:11.5px;color:#334155">Express · Node.js</div>
-    <div style="font-size:11.5px;color:#334155">/api/health · /api/chat · /api/agent</div>
-    <div style="font-size:11.5px;color:#334155">/api/tasks · /api/side-effects · /api/undo</div>
-    <div style="font-size:11.5px;color:#334155">Bearer-token auth · Rate limiting</div>
-  </div>
-  <div style="width:28px;height:4px;background:#cbd5e1;border-radius:2px;align-self:center"></div>
-</div>
+    subgraph API["API Gateway · server/"]
+        direction TB
+        APISrv["Express · Node.js<br/>/api/health · /api/chat · /api/agent"]:::api
+        Tasks["/api/tasks · /api/side-effects · /api/undo"]:::api
+        Auth["Bearer-token auth ·<br/>rate limiting"]:::api
+    end
 
-<!-- Layer 4: Core services -->
-<div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px;flex-wrap:wrap">
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:130px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#a855f7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Governance &amp; Safety</div>
-    <div style="font-size:11px;color:#334155">PolicyEnforcementLayer</div>
-    <div style="font-size:11px;color:#334155">SideEffectLedger + Undo</div>
-    <div style="font-size:11px;color:#334155">TypedRails (Tiers 1–3)</div>
-  </div>
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:130px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Memory &amp; Task</div>
-    <div style="font-size:11px;color:#334155">MemoryRouter · Graph + Vector</div>
-    <div style="font-size:11px;color:#334155">Task Spine · background_agent_runner</div>
-    <div style="font-size:11px;color:#334155">DreamingConsolidator</div>
-  </div>
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:140px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Sync &amp; Continuity</div>
-    <div style="font-size:11px;color:#334155">SyncService · CRDT · E2E</div>
-    <div style="font-size:11px;color:#334155">Self-hostable relay</div>
-    <div style="font-size:11px;color:#334155">AgentNativeHomeService</div>
-  </div>
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:140px;text-align:center;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Ecosystem &amp; Identity</div>
-    <div style="font-size:11px;color:#334155">AAIF · PAP adapter</div>
-    <div style="font-size:11px;color:#334155">IdentityInteropLayer</div>
-    <div style="font-size:11px;color:#334155">HardwareBridgeService</div>
-  </div>
-</div>
+    subgraph MCP["MCP Integration"]
+        MCPHTTP["Streamable HTTP MCP<br/>bearer-token protected"]:::mcp
+        MCPStdIO["Local stdio process"]:::mcp
+        MCPTools["Shanaya MCP tools"]:::mcp
+    end
 
-<!-- Layer 5: Infrastructure -->
-<div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;flex-wrap:wrap">
-  <div style="flex:0 0 auto;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px;text-align:center">
-    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Infrastructure &amp; external</div>
-    <div style="font-size:11.5px;color:#334155">Groq · Ollama · Anthropic · OpenAI</div>
-    <div style="font-size:11.5px;color:#334155">MCP · WebSocket (mTLS)</div>
-    <div style="font-size:11.5px;color:#334155">Self-hosted relay · Sentry</div>
-  </div>
-</div>
+    subgraph PAP["Personal Agent Protocol"]
+        PAPAdapter["PAPAdapter<br/>discover /.well-known/pap.json · OAuth"]:::pap
+        PAPExec["Scoped action execution<br/>pending user confirmation"]:::pap
+    end
 
-<p style="font-size:10px;color:#94a3b8;text-align:center;margin-top:12px">Data flows bottom-up through governance gates; every irreversible action is recorded in the SideEffectLedger with an undo window.</p>
+    subgraph Python["Optional local Python service · backend/"]
+        FastAPI["FastAPI model-step fallback<br/>localhost only"]:::python
+        PyProvider["Python-configured model provider"]:::python
+        Sandbox["Docker code sandbox<br/>network disabled"]:::python
+        PyAudit["Redacted, hash-chained<br/>audit log"]:::python
+    end
 
-</div>
+    subgraph Sync["Cross-device continuity · E2E encrypted"]
+        SyncSvc["SyncService<br/>CRDT ops · opaque encrypted payloads"]:::sync
+        Relay["Self-hostable relay<br/>stores only ciphertext"]:::sync
+        CloudHome["AgentNativeHomeService<br/>provision · migrate · connection registry"]:::sync
+    end
+
+    subgraph Cast["Companion cast · multi-agent"]
+        CastOrch["CastOrchestrator<br/>route · solo / cast mode"]:::cast
+        CastUI["Cast toggle · labeled sub-agent<br/>messages"]:::cast
+    end
+
+    subgraph Collective["Governed collective intelligence"]
+        Collective["GovernedCollectiveIntelligence<br/>members · quarantine · attestation"]:::collective
+        Poisoning["CollectivePoisoningDetector<br/>anomalous contribution quarantine"]:::collective
+        TypedRails["TypedRails<br/>tiered autonomy 1–3 ·<br/>rail enforcement audit"]:::collective
+    end
+
+    subgraph Governance["Relational governance & compliance"]
+        Relational["RelationalGovernanceService<br/>dependency signals · transparency report"]:::gov
+        Compliance["ComplianceEvidenceGenerator<br/>continuous audit-ready evidence"]:::gov
+        RegDashboard["RegulatoryDashboard<br/>real-time compliance status"]:::gov
+    end
+
+    subgraph Ecosystem["Ecosystem interoperability"]
+        Interop["AgentInteropService<br/>AIPF · NLIP · ShanayaInteropProfile"]:::eco
+        ITU["IdentityInteropLayer<br/>ITU-T X.aiidm identity"]:::eco
+        AAIF["AAIF portable agent definitions<br/>version-controlled registry"]:::eco
+    end
+
+    subgraph Infra["Infrastructure & external"]
+        Cloud["Groq · Ollama · Anthropic ·<br/>OpenAI · local models"]:::infra
+        HW["HardwareBridgeService<br/>mTLS WebSocket ·<br/>audio · vision · actuators"]:::infra
+        Sentry["Sentry observability"]:::infra
+    end
+
+    %% Connections
+    UI --> Client
+    Client --> RT
+    RT --> Router
+    Router --> Guard
+    Guard --> Policy
+    Policy --> Kill
+    CogRisk --> Guard
+    RT --> Memory
+    Memory --> MemoryRouter
+    Memory --> Dream
+    NeuroSym -.->|gate| RT
+
+    RT -.->|retryable failure| FastAPI
+    APISrv --> Cloud
+    MCPHTTP --> MCPTools
+    MCPTools --> APISrv
+    PAPAdapter --> PAPExec
+    SyncSvc -.->|E2E encrypted| Relay
+    SyncSvc --> CloudHome
+    CastOrch --> CastUI
+    Collective --> Poisoning
+    TypedRails --> Collective
+    Interop -.-> ITU
+    AAIF -.-> ITU
+    MCP["MCP integration"] -.->|expose core capabilities| Interop
+
+    classDef ui fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#0f172a
+    classDef client fill:#fff,stroke:#bae6fd,stroke-width:2px,color:#0f172a
+    classDef spine fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#0f172a
+    classDef ledger fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#0f172a
+    classDef api fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#0f172a
+    classDef mcp fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,color:#0f172a
+    classDef pap fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#0f172a
+    classDef python fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#0f172a
+    classDef sync fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#0f172a
+    classDef cast fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#0f172a
+    classDef collective fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#0f172a
+    classDef gov fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#0f172a
+    classDef eco fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#0f172a
+    classDef infra fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,color:#0f172a
+```
 
 The main Android/iOS apps are Capacitor projects under [`client/android`](./client/android) and [`client/ios`](./client/ios). The released desktop packages wrap the same client in Capacitor Electron. [`apps/desktop`](./apps/desktop) is a separate Python-enabled Electron shell; it starts the local FastAPI service by default. The example bridge in `client/electron-agent` is an optional integration and is not the default desktop package path.
 
