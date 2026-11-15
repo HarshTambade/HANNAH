@@ -91,7 +91,7 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
             </div>
 
             <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
-              <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2.5">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
                 <span className="inline-flex items-center gap-2 text-[9px] font-bold text-slate-500"><Terminal size={12} /> Quick example</span>
                 <button type="button" onClick={() => void copy(apiExample, "api")} className="inline-flex items-center gap-1.5 text-[9px] text-slate-600 transition hover:text-ink" aria-label="Copy API example">
                   {copied === "api" ? <Check size={12} /> : <Clipboard size={12} />}{copied === "api" ? "Copied" : "Copy"}
@@ -126,7 +126,7 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
             </div>
 
             <div className="mt-5 rounded-2xl border border-slate-200 bg-white shadow-soft">
-              <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <span className="inline-flex items-center gap-2 text-[9px] font-bold text-slate-500"><Server size={12} /> Local desktop / IDE setup</span>
                 <button type="button" onClick={() => void copy(localMcpConfig, "mcp")} className="inline-flex items-center gap-1.5 text-[9px] text-slate-600 transition hover:text-ink" aria-label="Copy local MCP configuration">
                   {copied === "mcp" ? <Check size={12} /> : <Clipboard size={12} />}{copied === "mcp" ? "Copied" : "Copy"}

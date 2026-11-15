@@ -6,8 +6,8 @@
 
 :root {
   font-family: "DM Sans", sans-serif;
-  color: #f2f3f9;
-  background: #080b14;
+  color: #1e293b;
+  background: #f8fafc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -139,7 +139,7 @@ textarea {
   }
 
   .app-layout > section:first-child {
-    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    border-right: 1px solid #e2e8f0;
     border-bottom: 0;
   }
 

@@ -1,20 +1,20 @@
 import { useState, type FormEvent } from "react";
 import {
-  ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole, MessageCircle, ShieldCheck, Sparkles, X,
+  ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole, Menu, MessageCircle, PackageOpen, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
 
 type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
-  onMarketplace?: () => void;
+  onMarketplace: () => void;
   onSetup?: () => void;
 };
 
 const statCards = [
-  { value: "99%", label: "System uptime", icon: "cpu" },
-  { value: "200+", label: "Global businesses", icon: "globe" },
-  { value: "95%", label: "Increased conversion", icon: "trending-up" },
+  { value: "3", label: "Voice languages", icon: "globe" },
+  { value: "6", label: "Inference options", icon: "cpu" },
+  { value: "Local", label: "Inference available", icon: "local" },
 ];
 
 const features = [
@@ -44,8 +44,9 @@ const features = [
   },
 ];
 
-export default function LandingPage({ onStart, onIntegrations, onSetup }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onMarketplace, onSetup }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [apiToken, setApiToken] = useState("");
   const [groqApiKey, setGroqApiKey] = useState("");
   const [showApiToken, setShowApiToken] = useState(false);
@@ -114,10 +115,22 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
             <a href="#how-it-works" className="text-xs text-slate-500 transition hover:text-ink">How it works</a>
             <a href="#modes" className="text-xs text-slate-500 transition hover:text-ink">Hybrid AI</a>
             <a href="#privacy" className="text-xs text-slate-500 transition hover:text-ink">Your privacy</a>
+            <button type="button" onClick={onMarketplace} className="text-xs text-slate-500 transition hover:text-ink">Marketplace</button>
             <button type="button" onClick={onIntegrations} className="text-xs text-slate-500 transition hover:text-ink">Integrations</button>
             {onSetup && <button type="button" onClick={onSetup} className="text-xs text-slate-500 transition hover:text-ink">First-time setup</button>}
             <a href="/about/" className="text-xs text-slate-500 transition hover:text-ink">About</a>
           </nav>
+
+          <button
+            type="button"
+            aria-label={mobileNavigationOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileNavigationOpen}
+            aria-controls="main-mobile-navigation"
+            onClick={() => setMobileNavigationOpen((open) => !open)}
+            className="mr-2 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 md:hidden"
+          >
+            {mobileNavigationOpen ? <X size={17} /> : <Menu size={17} />}
+          </button>
 
           <button
             type="button"
@@ -127,6 +140,24 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
             Talk to Shanaya <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
           </button>
         </div>
+        {mobileNavigationOpen && (
+          <nav id="main-mobile-navigation" aria-label="Mobile main navigation" className="border-t border-slate-200 bg-white/95 px-5 py-3 shadow-soft md:hidden">
+            <div className="mx-auto flex max-w-7xl flex-col gap-1">
+              {[
+                ["The experience", "#experience"],
+                ["How it works", "#how-it-works"],
+                ["Hybrid AI", "#modes"],
+                ["Your privacy", "#privacy"],
+              ].map(([label, href]) => (
+                <a key={href} href={href} onClick={() => setMobileNavigationOpen(false)} className="rounded-lg px-3 py-2.5 text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">{label}</a>
+              ))}
+              <button type="button" onClick={() => { setMobileNavigationOpen(false); onMarketplace(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">Marketplace</button>
+              <button type="button" onClick={() => { setMobileNavigationOpen(false); onIntegrations(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">Integrations</button>
+              {onSetup && <button type="button" onClick={() => { setMobileNavigationOpen(false); onSetup(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">First-time setup</button>}
+              <a href="/about/" onClick={() => setMobileNavigationOpen(false)} className="rounded-lg px-3 py-2.5 text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">About</a>
+            </div>
+          </nav>
+        )}
       </header>
 
       <div className="relative z-10">
@@ -164,9 +195,14 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
               </a>
             </div>
 
-            <button type="button" onClick={onIntegrations} className="mt-4 inline-flex items-center gap-2 text-left text-[10px] font-bold text-slate-500 transition hover:text-brand-600">
-              <Cable size={13} /> Connect Shanaya to another app with the API or MCP
-            </button>
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+              <button type="button" onClick={onIntegrations} className="inline-flex items-center gap-2 text-left text-[10px] font-bold text-slate-500 transition hover:text-brand-600">
+                <Cable size={13} /> Connect Shanaya to another app with the API or MCP
+              </button>
+              <button type="button" onClick={onMarketplace} className="inline-flex items-center gap-2 text-left text-[10px] font-bold text-slate-500 transition hover:text-violet-600">
+                <PackageOpen size={13} /> Browse agents and skills
+              </button>
+            </div>
 
             <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-slate-200 pt-6 text-[10px] text-slate-400">
               <span className="inline-flex items-center gap-2"><ShieldCheck size={13} className="text-emerald-400" /> Zero-trust governance</span>
@@ -176,52 +212,20 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
           </div>
 
           <div className="relative mx-auto h-[min(62dvh,560px)] w-full max-w-[560px] lg:h-[min(70dvh,640px)] lg:min-h-[520px]">
-            {/* Donut chart panel */}
-            <div className="absolute inset-0 rounded-2xl border border-slate-100 bg-white shadow-soft-lg p-6">
-              <div className="flex items-center justify-between mb-8">
-                <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">Focus area distribution</span>
-                <span className="flex items-center gap-1.5 rounded-full border border-slate-100 bg-white px-2.5 py-1 text-[8px] text-slate-500">
-                  <span className="h-1.5 w-1.5 rounded-full bg-brand-500" /> Automation &amp; Workflows
-                </span>
-              </div>
-              <div className="flex items-center justify-center">
-                <div className="donut-ring">
-                  <div className="donut-center">
-                    <span className="donut-value">30.6%</span>
-                    <span className="donut-label">Multilingual AI</span>
-                  </div>
-                </div>
-                <div className="ml-6 text-left">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="h-2 w-2 rounded-full bg-brand-500" />
-                    <span className="text-[10px] font-semibold text-ink">25.5%</span>
-                    <span className="ml-auto text-[10px] text-slate-400">Automation &amp; Workflows</span>
-                  </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="h-2 w-2 rounded-full bg-amber-500" />
-                    <span className="text-[10px] font-semibold text-ink">28.6%</span>
-                    <span className="ml-auto text-[10px] text-slate-400">Multilingual AI Responses</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] font-semibold text-ink">9.2%</span>
-                    <span className="ml-auto text-[10px] text-slate-400">Team Collaboration</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Avatar stage */}
-            <div className="absolute inset-x-[8%] bottom-[6%] top-[7%] rounded-[2.5rem] border border-slate-100 bg-white/60 shadow-[0_30px_100px_rgba(0,0,0,0.08)] backdrop-blur-sm" />
-            <div className="absolute inset-x-[11%] bottom-[9%] top-[10%] overflow-hidden rounded-[2rem] border border-brand-100/30 shadow-[0_0_80px_rgba(14,165,233,0.10)]">
+            <div className="absolute inset-x-[8%] bottom-[4%] top-[4%] rounded-[2.5rem] border border-slate-200 bg-white/80 shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-sm" />
+            <div className="absolute inset-x-[11%] bottom-[7%] top-[7%] overflow-hidden rounded-[2rem] border border-brand-100/60 shadow-[0_0_80px_rgba(14,165,233,0.10)]">
               <div className="avatar-stage absolute inset-0" />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70" />
               <div className="absolute inset-0">
                 <AvatarScene emotion="neutral" />
               </div>
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-4 py-4 sm:px-5">
-                <span className="rounded-full border border-slate-100 bg-white/80 px-3 py-1.5 font-mono text-[8px] tracking-[0.18em] text-brand-600 backdrop-blur">SHANAYA · LIVE</span>
-                <span className="flex items-center gap-1.5 rounded-full border border-slate-100 bg-white/80 px-2.5 py-1.5 text-[8px] text-slate-500 backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#10b981]" /> Ready</span>
+                <span className="rounded-full border border-white/60 bg-white/85 px-3 py-1.5 font-mono text-[8px] tracking-[0.18em] text-brand-700 backdrop-blur">SHANAYA · LIVE</span>
+                <span className="flex items-center gap-1.5 rounded-full border border-white/60 bg-white/85 px-2.5 py-1.5 text-[8px] text-slate-600 backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" /> Ready</span>
+              </div>
+              <div className="pointer-events-none absolute inset-x-4 bottom-4 flex items-center justify-between gap-2 rounded-xl border border-white/50 bg-white/85 px-3 py-2 text-[9px] text-slate-600 backdrop-blur sm:inset-x-5 sm:bottom-5">
+                <span>3 voice languages</span><span className="h-1 w-1 rounded-full bg-slate-400" /><span>Cloud and local AI</span>
               </div>
             </div>
           </div>
@@ -273,13 +277,13 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
                 };
                 const resolved = colorMap[color] ?? colorMap.brand;
                 return (
-                  <article key={title} className={`rounded-2xl border ${resolved.border} bg-white p-6 shadow-soft transition hover:-translate-y-1 hover:border-${color}-200/60`}>
+                  <article key={title} className={`relative rounded-2xl border ${resolved.border} bg-white p-6 shadow-soft transition hover:-translate-y-1 hover:border-brand-200`}>
                     <span className="absolute right-4 top-4 font-mono text-[9px] text-slate-200">0{index + 1}</span>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl ${resolved.bg} ${resolved.icon} mb-5">
+                    <div className={`mb-5 flex h-10 w-10 items-center justify-center rounded-xl ${resolved.bg} ${resolved.icon}`}>
                       <Icon size={17} strokeWidth={1.7} />
                     </div>
                     <div className="flex items-center gap-1.5 mt-2">
-                      <span className="h-1.5 w-1.5 rounded-full ${resolved.dot}" />
+                      <span className={`h-1.5 w-1.5 rounded-full ${resolved.dot}`} />
                       <span className="text-[10px] font-semibold text-ink">{title}</span>
                     </div>
                     <p className="mt-2.5 text-[11px] leading-6 text-slate-600">{description}</p>
@@ -290,9 +294,31 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
           </div>
         </section>
 
+        <section id="modes" className="border-y border-slate-100 bg-white/65 backdrop-blur-sm">
+          <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
+            <div className="max-w-2xl">
+              <p className="section-kicker">Hybrid AI</p>
+              <h2 className="section-title">Choose where Shanaya thinks.</h2>
+              <p className="section-desc">Use a hosted model, a browser model, or a model on your own device or server.</p>
+            </div>
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              {[
+                { title: "Cloud providers", detail: "Choose a provider configured by your server operator. Cloud requests need an internet connection." },
+                { title: "Browser and local server", detail: "Run WebLLM in a WebGPU browser or connect to an Ollama endpoint you control." },
+                { title: "On-device models", detail: "Prepare a llama.cpp model in the iOS or Android app, then use it offline." },
+              ].map((mode) => (
+                <article key={mode.title} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
+                  <h3 className="font-display text-sm font-bold text-ink">{mode.title}</h3>
+                  <p className="mt-2 text-[11px] leading-6 text-slate-600">{mode.detail}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Privacy card */}
         <section id="privacy" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28 lg:px-12">
-          <div className="rounded-2xl border border-brand-100 bg-gradient-to-b from-brand-50 to-white p-6 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-center lg:p-11 gap-6 lg:gap-0">
+          <div className="grid gap-6 rounded-2xl border border-brand-100 bg-gradient-to-b from-brand-50 to-white p-6 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-center lg:gap-0 lg:p-11">
             <div className="max-w-2xl">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600">
                 <LockKeyhole size={17} />
@@ -311,25 +337,25 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
         <footer className="border-t border-slate-200">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 text-[9px] text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
             <span>© {new Date().getFullYear()} Shanaya · A thoughtful AI companion.</span>
-            <div className="flex items-center gap-6"><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API & Integrations</button><a href="/about/" className="transition hover:text-ink">About</a><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source & project details</a></div>
+            <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="/about/" className="transition hover:text-ink">About</a><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
           </div>
         </footer>
       </div>
 
       {keyDialogOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-ink/60 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setKeyDialogOpen(false); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="connect-title" className="relative my-auto w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#0d111d] shadow-[0_30px_100px_rgba(0,0,0,0.7)]">
-            <div className="pointer-events-none absolute -right-24 -top-32 h-64 w-64 rounded-full bg-violet-600/20 blur-[96px]" />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-ink/45 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setKeyDialogOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="connect-title" className="relative my-auto w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20">
+            <div className="pointer-events-none absolute -right-24 -top-32 h-64 w-64 rounded-full bg-brand-100/80 blur-[96px]" />
             <div className="relative p-6 sm:p-8">
-              <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition hover:bg-white/10 hover:text-white"><X size={15} /></button>
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-violet-500/20 bg-violet-600/10 text-violet-300"><Sparkles size={17} /></span>
-              <p className="mt-7 text-[9px] font-bold uppercase tracking-[0.2em] text-brand-400">Your first step</p>
-              <h2 id="connect-title" className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-white">Connect with Shanaya.</h2>
-              <p className="mt-4 text-[11px] leading-6 text-slate-400">Enter the access token from your Shanaya server operator. They set it as <code className="rounded bg-white/10 px-1 font-mono text-[10px] text-brand-300">SHANAYA_API_TOKEN</code> in <code className="rounded bg-white/10 px-1 font-mono text-[10px] text-brand-300">server/.env</code> (generate with <code className="rounded bg-white/10 px-1 font-mono text-[10px] text-brand-300">openssl rand -hex 32</code>). It stays in this page's memory for the session.</p>
+              <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-ink"><X size={15} /></button>
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600"><Sparkles size={17} /></span>
+              <p className="mt-7 text-[9px] font-bold uppercase tracking-[0.2em] text-brand-700">Your first step</p>
+              <h2 id="connect-title" className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-ink">Connect with Shanaya.</h2>
+              <p className="mt-4 text-[11px] leading-6 text-slate-600">Enter the access token from your Shanaya server operator. They set it as <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">SHANAYA_API_TOKEN</code> in <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">server/.env</code> (generate with <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">openssl rand -hex 32</code>). It stays in this page's memory for the session.</p>
 
               <form className="mt-7" onSubmit={beginConversation}>
-                <label htmlFor="shanaya-api-token" className="mb-2 block text-[10px] font-bold text-slate-300">Shanaya API access token</label>
-                <div className="flex items-center rounded-xl border border-white/10 bg-white/5 pr-3 transition focus-within:border-brand-400/60">
+                <label htmlFor="shanaya-api-token" className="mb-2 block text-[10px] font-bold text-slate-700">Shanaya API access token</label>
+                <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 pr-3 transition focus-within:border-brand-400/60">
                   <input
                     id="shanaya-api-token"
                     type={showApiToken ? "text" : "password"}
@@ -341,14 +367,14 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
                     spellCheck={false}
                     maxLength={512}
                     required
-                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-slate-200 outline-none placeholder:text-slate-500"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-ink outline-none placeholder:text-slate-400"
                   />
-                  <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide Shanaya access token" : "Show Shanaya access token"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white">
+                  <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide Shanaya access token" : "Show Shanaya access token"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
                     {showApiToken ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
-                <label htmlFor="groq-key" className="mb-2 block mt-6 text-[10px] font-bold text-slate-300">Optional Groq API key</label>
-                <div className="flex items-center rounded-xl border border-white/10 bg-white/5 pr-3 transition focus-within:border-brand-400/60">
+                <label htmlFor="groq-key" className="mb-2 block mt-6 text-[10px] font-bold text-slate-700">Optional Groq API key</label>
+                <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 pr-3 transition focus-within:border-brand-400/60">
                   <input
                     id="groq-key"
                     type={showApiKey ? "text" : "password"}
@@ -359,18 +385,18 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
                     autoCapitalize="none"
                     spellCheck={false}
                     maxLength={512}
-                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-slate-200 outline-none placeholder:text-slate-500"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-ink outline-none placeholder:text-slate-400"
                   />
-                  <button type="button" onClick={() => setShowApiKey((visible) => !visible)} aria-label={showApiKey ? "Hide API key" : "Show API key"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white">
+                  <button type="button" onClick={() => setShowApiKey((visible) => !visible)} aria-label={showApiKey ? "Hide API key" : "Show API key"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
                     {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
                 {keyError && <p role="alert" className="mt-2 text-[10px] text-rose-400">{keyError}</p>}
-                <p className="mt-4 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-400" /> The access token and optional Groq key stay in this page's memory.</p>
+                <p className="mt-4 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-600" /> The access token and optional Groq key stay in this page's memory.</p>
                 <button type="submit" className="group mt-7 flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-[11px] font-bold text-white transition hover:brightness-105">
                   Continue to Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
                 </button>
-                <p className="mt-5 text-center text-[9px] text-slate-500">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-brand-500 underline decoration-brand-200/30 underline-offset-2 hover:text-brand-400">Create one at Groq</a></p>
+                <p className="mt-5 text-center text-[9px] text-slate-500">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-brand-700 underline decoration-brand-200/30 underline-offset-2 hover:text-brand-800">Create one at Groq</a></p>
               </form>
             </div>
           </section>

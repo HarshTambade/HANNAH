@@ -766,8 +766,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       ? nativeStatus === "available"
       : true;
   const settingsPosition = panel
-    ? "absolute inset-x-2 top-14 bottom-[7.5rem] z-40 overflow-y-auto rounded-2xl border border-white/10 bg-[#111622]/[0.98] p-4 shadow-2xl shadow-black/60 backdrop-blur-2xl"
-    : "absolute bottom-[calc(100%+0.5rem)] right-3 z-40 max-h-[min(75dvh,42rem)] w-[min(380px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-white/10 bg-[#111622]/95 p-4 shadow-2xl shadow-black/60 backdrop-blur-2xl md:right-[max(calc((100vw-42rem)/2),1rem)]";
+    ? "absolute inset-x-2 top-14 bottom-[7.5rem] z-40 overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur-2xl"
+    : "absolute bottom-[calc(100%+0.5rem)] right-3 z-40 max-h-[min(75dvh,42rem)] w-[min(380px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur-2xl md:right-[max(calc((100vw-42rem)/2),1rem)]";
 
   return (
     <section className={panel
@@ -777,7 +777,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-600">
             <Bot size={17} />
-            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#111521] ${isOnline && (effectiveMode !== "cloud" || apiStatus === "connected") ? "bg-emerald-400" : "bg-amber-300"}`} />
+            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white ${isOnline && (effectiveMode !== "cloud" || apiStatus === "connected") ? "bg-emerald-500" : "bg-amber-500"}`} />
           </div>
           <div className="min-w-0">
             <h1 className="truncate font-['Manrope'] text-sm font-bold text-ink">Shanaya</h1>
@@ -808,8 +808,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             title={quota.tier === "premium" ? "Premium" : "Upgrade to Premium"}
             className={`flex items-center gap-1.5 rounded-xl border p-2.5 transition sm:px-2.5 ${
               quota.tier === "premium"
-                ? "border-amber-200/20 bg-amber-200/[0.06] text-amber-100 hover:bg-amber-200/[0.1]"
-                : "border-white/[0.08] text-slate-300 hover:bg-white/[0.06]"
+              ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >
             <Crown size={15} />
@@ -822,7 +822,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             onClick={() => setIsFeedbackOpen(true)}
             aria-label="Send feedback"
             title="Send feedback"
-            className="rounded-xl border border-white/[0.08] p-2.5 text-slate-300 transition hover:bg-white/[0.06]"
+            className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50"
           >
             <MessageSquarePlus size={15} />
           </button>
@@ -831,7 +831,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             onClick={() => setIsSettingsOpen((open) => !open)}
             aria-expanded={isSettingsOpen}
             aria-label="Inference and privacy settings"
-            className="flex items-center gap-2 rounded-xl border border-white/[0.08] p-2.5 text-slate-300 transition hover:bg-white/[0.06]"
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50"
           >
             {isSettingsOpen ? <X size={15} /> : <Settings2 size={15} />}
             {panel && <span className="hidden text-[10px] font-medium sm:inline">{isSettingsOpen ? "Close" : "Settings"}</span>}
@@ -841,7 +841,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             onClick={resetConversation}
             disabled={isLoading}
             aria-label="Start a new conversation"
-            className="rounded-xl border border-white/[0.08] p-2.5 text-slate-300 transition hover:bg-white/[0.06] disabled:opacity-40"
+            className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
           >
             <RotateCcw size={15} />
           </button>
@@ -891,7 +891,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
 
             {effectiveMode === "cloud" && (
               <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50 p-3">
-                <label htmlFor="cloud-provider" className="mb-1.5 block text-xs font-semibold text-slate-300">Model provider</label>
+                <label htmlFor="cloud-provider" className="mb-1.5 block text-xs font-semibold text-slate-700">Model provider</label>
                 <select
                   id="cloud-provider"
                   value={cloudProviderId}
@@ -902,17 +902,17 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
                     setCloudModel("");
                   }}
                   disabled={isLoading || cloudProviders.length === 0}
-                  className="mb-3 w-full rounded-lg border border-white/[0.08] bg-[#111521] px-2.5 py-2 text-xs text-ink outline-none focus:border-violet-300/30 disabled:opacity-50"
+                  className="mb-3 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-ink outline-none focus:border-brand-300 disabled:opacity-50"
                 >
                   {cloudProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}{provider.id === "groq" ? " · default" : ""}</option>)}
                 </select>
-                <label htmlFor="cloud-model" className="mb-1.5 block text-xs font-semibold text-slate-300">{cloudProvider} model</label>
+                <label htmlFor="cloud-model" className="mb-1.5 block text-xs font-semibold text-slate-700">{cloudProvider} model</label>
                 <select
                   id="cloud-model"
                   value={cloudModel}
                   onChange={(event) => setCloudModel(event.target.value)}
                   disabled={isLoading || cloudModels.length === 0}
-                  className="w-full rounded-lg border border-white/[0.08] bg-[#111521] px-2.5 py-2 text-xs text-ink outline-none focus:border-violet-300/30 disabled:opacity-50"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-ink outline-none focus:border-brand-300 disabled:opacity-50"
                 >
                   {cloudModels.length === 0
                     ? <option value="">Waiting for server model settings…</option>
@@ -930,7 +930,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
                     type="button"
                     onClick={() => void handlePrepareNative()}
                     disabled={isPreparingNative}
-                    className="mt-2 block w-full rounded-lg bg-violet-500/20 px-3 py-2 font-medium text-violet-100 transition hover:bg-violet-500/30 disabled:opacity-50"
+                    className="mt-2 block w-full rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 font-medium text-violet-700 transition hover:bg-violet-100 disabled:opacity-50"
                   >
                     {isPreparingNative ? `Downloading · ${Math.round(modelDownloadProgress)}%` : "Download offline model"}
                   </button>
@@ -944,26 +944,26 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             )}
             {effectiveMode === "ollama" && (
               <p className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
-                Configure <code className="text-violet-200">OLLAMA_BASE_URL</code> and <code className="text-violet-200">OLLAMA_MODEL</code> in <code className="text-violet-200">server/.env</code>.
+                Configure <code className="text-violet-700">OLLAMA_BASE_URL</code> and <code className="text-violet-700">OLLAMA_MODEL</code> in <code className="text-violet-700">server/.env</code>.
               </p>
             )}
 
             {isNative && (
               <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50 p-3">
-                <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-300">
-                  <KeyRound size={13} className="text-violet-200" /> Native agent runtime
+                <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <KeyRound size={13} className="text-violet-600" /> Native agent runtime
                   <span className={`ml-auto h-1.5 w-1.5 rounded-full ${nativeAgentStatus.hasApiKey ? "bg-emerald-400" : "bg-slate-600"}`} />
                 </div>
                 {nativeAgentStatus.hasApiKey ? (
                   <>
                     <p className="text-[11px] leading-relaxed text-slate-600">MobileClaw is ready. Its Anthropic key is stored by the native plugin on this device. Select MobileClaw · Anthropic above to use it; Groq remains the default cloud model.</p>
-                    <button type="button" onClick={() => void removeMobileAgentKey()} disabled={isRemovingMobileApiKey} className="mt-2 rounded-lg border border-white/[0.08] px-2.5 py-1.5 text-[10px] text-slate-300 transition hover:bg-white/[0.05] disabled:opacity-50">{isRemovingMobileApiKey ? "Removing…" : "Remove saved Anthropic key"}</button>
+                    <button type="button" onClick={() => void removeMobileAgentKey()} disabled={isRemovingMobileApiKey} className="mt-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">{isRemovingMobileApiKey ? "Removing…" : "Remove saved Anthropic key"}</button>
                   </>
                 ) : (
                   <>
                     <p className="mb-2 text-[11px] leading-relaxed text-slate-500">Add an Anthropic API key to use the native Rust agent and its on-device LanceDB memory. The key is stored by the native agent plugin.</p>
                     <div className="flex gap-2">
-                      <input type="password" value={mobileApiKey} onChange={(event) => setMobileApiKey(event.target.value)} placeholder="Anthropic API key" aria-label="Anthropic API key" autoComplete="off" className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-black/20 px-2.5 py-2 text-xs text-ink outline-none placeholder:text-slate-600 focus:border-violet-300/30" />
+                      <input type="password" value={mobileApiKey} onChange={(event) => setMobileApiKey(event.target.value)} placeholder="Anthropic API key" aria-label="Anthropic API key" autoComplete="off" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-ink outline-none placeholder:text-slate-400 focus:border-violet-300" />
                       <button type="button" onClick={() => void saveMobileAgentKey()} disabled={!mobileApiKey.trim() || isSavingMobileApiKey} className="rounded-lg bg-brand-100 px-3 text-xs font-medium text-brand-600 disabled:opacity-40">{isSavingMobileApiKey ? "Saving…" : "Connect"}</button>
                     </div>
                   </>
@@ -974,14 +974,14 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             {isNative && <MemoryControls />}
 
             {effectiveMode === "desktop" && (
-              <div className="mt-3 rounded-lg border border-amber-200/10 bg-amber-200/[0.04] px-3 py-2 text-xs leading-relaxed text-amber-100/75">
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
                 Desktop screenshots and task instructions are sent to the configured Anthropic API. Shanaya asks before each keyboard or mouse action.
               </div>
             )}
 
-            <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/15 p-3">
-              <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-300">
-                <LockKeyhole size={13} className="text-emerald-300" /> Privacy and voice
+            <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+              <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <LockKeyhole size={13} className="text-emerald-600" /> Privacy and voice
               </div>
               <p className="text-[11px] leading-relaxed text-slate-600">
                 {!isOnline
@@ -994,19 +994,19 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       </header>
 
       {!isOnline && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-amber-200/10 bg-amber-200/[0.05] px-4 py-2 text-[10px] font-medium text-amber-100/80">
+        <div className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] font-medium text-amber-800">
           <LockKeyhole size={12} /> Offline mode · AI requests stay on this device
         </div>
       )}
 
       {effectiveMode === "cloud" && apiStatus === "offline" && (
-        <div role="alert" className="shrink-0 border-b border-rose-300/10 bg-rose-300/[0.05] px-4 py-2 text-[10px] leading-relaxed text-rose-100/80">
-          Shanaya’s API server is not reachable. From the project root, run <code className="text-rose-100">npm run dev</code> to start the API and client together. The app will retry automatically.
+        <div role="alert" className="shrink-0 border-b border-rose-200 bg-rose-50 px-4 py-2 text-[10px] leading-relaxed text-rose-700">
+          Shanaya’s API server is not reachable. From the project root, run <code className="text-rose-800">npm run dev</code> to start the API and client together. The app will retry automatically.
         </div>
       )}
       {effectiveMode === "cloud" && apiStatus === "misconfigured" && (
-        <div role="alert" className="shrink-0 border-b border-amber-200/10 bg-amber-200/[0.05] px-4 py-2 text-[10px] leading-relaxed text-amber-100/80">
-          Cloud model discovery failed{apiError ? `: ${apiError}` : "."} Add <code className="text-amber-100">GROQ_API_KEY</code> to <code className="text-amber-100">server/.env</code>, or enter a valid Groq key on the landing page. The model selector appears once a provider returns models.
+        <div role="alert" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] leading-relaxed text-amber-800">
+          Cloud model discovery failed{apiError ? `: ${apiError}` : "."} Add <code className="text-amber-900">GROQ_API_KEY</code> to <code className="text-amber-900">server/.env</code>, or enter a valid Groq key on the landing page. The model selector appears once a provider returns models.
         </div>
       )}
 
@@ -1074,7 +1074,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           {error && <div role="alert" className="ml-8 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
           {quota.tier === "free" && quota.remaining === 0 && (
             <div className="ml-8 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-[10px] leading-5 text-amber-700">
-              <span className="font-semibold text-amber-100">You’ve used today’s {quota.limit ?? 25} free messages.</span> Local models reset at local midnight.
+              <span className="font-semibold text-amber-800">You’ve used today’s {quota.limit ?? 25} free messages.</span> Local models reset at local midnight.
               <button
                 type="button"
                 onClick={() => {
@@ -1094,7 +1094,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         <div className="absolute inset-0 z-50 flex flex-col overflow-hidden bg-white px-4 pb-4 pt-5 sm:px-6 sm:pb-5 shadow-soft-lg">
           <div className="flex shrink-0 items-center justify-between">
             <div>
-              <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-violet-200/75">Shanaya · virtual call</p>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-violet-700">Shanaya · virtual call</p>
               <p className="mt-1 text-[10px] text-slate-500">In-app conversation · no phone network</p>
             </div>
             <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[9px] font-medium text-emerald-700">CONNECTED</span>
@@ -1103,8 +1103,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           <div className="flex shrink-0 flex-col items-center pb-5 pt-6 text-center sm:pt-8">
             <div className="relative flex h-24 w-24 items-center justify-center rounded-full border border-brand-200 bg-brand-50 shadow-[0_0_70px_rgba(14,165,233,0.22)] sm:h-28 sm:w-28">
               <span className="absolute inset-0 animate-ping rounded-full border border-violet-200/15 [animation-duration:3s]" />
-              <span className="absolute inset-2 rounded-full border border-white/[0.06]" />
-              <Bot size={38} strokeWidth={1.35} className="text-violet-100 sm:h-11 sm:w-11" />
+              <span className="absolute inset-2 rounded-full border border-brand-100" />
+              <Bot size={38} strokeWidth={1.35} className="text-violet-700 sm:h-11 sm:w-11" />
             </div>
             <h2 className="mt-4 font-['Manrope'] text-xl font-semibold text-ink">Shanaya</h2>
             <p className="mt-1 text-xs text-slate-500">{formatDuration(callDuration)} · {isListening ? "Listening to you" : isLoading ? agentActivity?.message || "Thinking…" : isSpeaking ? "Speaking to you" : isCallMicEnabled ? "Ready to listen" : "Microphone muted"}</p>
@@ -1113,7 +1113,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           <div ref={callLogRef} className="chat-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-100 bg-white p-3 shadow-soft">
             {messages.filter((message) => message.role === "user" || message.role === "assistant").slice(1).slice(-6).map((message, index) => (
               <div key={`${index}-${message.role}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                <p className={`max-w-[88%] rounded-2xl px-3 py-2 text-[11px] leading-relaxed ${message.role === "user" ? "rounded-br-md bg-violet-500/80 text-white" : "rounded-bl-md border border-white/[0.06] bg-white/[0.05] text-ink"}`}>
+                <p className={`max-w-[88%] rounded-2xl px-3 py-2 text-[11px] leading-relaxed ${message.role === "user" ? "rounded-br-md bg-brand-600 text-white" : "rounded-bl-md border border-slate-100 bg-slate-50 text-ink"}`}>
                   {message.content}
                 </p>
               </div>
@@ -1121,7 +1121,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             {messages.filter((message) => message.role === "user" || message.role === "assistant").length <= 1 && (
               <p className="py-4 text-center text-[11px] text-slate-500">{isCallMicEnabled ? "Your microphone is live. Say hello when you’re ready." : "Unmute the microphone to start talking."} Shanaya will answer out loud.</p>
             )}
-            {error && <p role="alert" className="rounded-xl border border-rose-300/10 bg-rose-300/[0.05] px-3 py-2 text-[10px] text-rose-100/90">{error}</p>}
+            {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] text-rose-700">{error}</p>}
           </div>
 
           <div className="flex shrink-0 items-center justify-center gap-4 pt-5">
@@ -1129,7 +1129,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               type="button"
               onClick={toggleCallMicrophone}
               aria-label={isCallMicEnabled ? "Mute microphone" : "Unmute microphone"}
-              className={`flex h-14 w-14 items-center justify-center rounded-full border transition ${isCallMicEnabled ? "border-violet-200/30 bg-violet-400/25 text-violet-50 shadow-[0_0_28px_rgba(167,139,250,0.28)]" : "border-white/10 bg-white/[0.07] text-ink hover:bg-white/[0.12]"}`}
+              className={`flex h-14 w-14 items-center justify-center rounded-full border transition ${isCallMicEnabled ? "border-brand-600 bg-brand-600 text-white shadow-[0_0_28px_rgba(14,165,233,0.25)]" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               {isCallMicEnabled ? <Mic size={21} /> : <MicOff size={21} />}
             </button>
@@ -1137,7 +1137,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               type="button"
               onClick={toggleCallSpeaker}
               aria-label={isCallSpeakerOn ? "Mute Shanaya's voice" : "Enable Shanaya's voice"}
-              className={`flex h-12 w-12 items-center justify-center rounded-full border transition ${isCallSpeakerOn ? "border-white/10 bg-white/[0.07] text-ink hover:bg-white/[0.12]" : "border-amber-200/20 bg-amber-200/10 text-amber-100"}`}
+              className={`flex h-12 w-12 items-center justify-center rounded-full border transition ${isCallSpeakerOn ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50" : "border-amber-200 bg-amber-50 text-amber-700"}`}
             >
               {isCallSpeakerOn ? <Speaker size={18} /> : <VolumeX size={18} />}
             </button>
@@ -1186,7 +1186,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             onClick={() => void toggleVoiceInput()}
             aria-label={isListening ? "Stop voice input" : "Start voice input"}
             title={isListening ? "Stop listening" : "Speak to Shanaya"}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-medium transition ${isListening ? "border-rose-300/20 bg-rose-300/[0.1] text-rose-100" : "border-violet-300/15 bg-violet-300/[0.06] text-violet-100 hover:bg-violet-300/[0.12]"}`}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-medium transition ${isListening ? "border-rose-200 bg-rose-50 text-rose-700" : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"}`}
           >
             <Mic size={12} /> {isListening ? "Listening" : "Speak"}
           </button>
