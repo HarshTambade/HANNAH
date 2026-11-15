@@ -27,6 +27,21 @@ const highlights = [
     title: "A character that feels alive",
     description: "A real-time 3D avatar brings movement and emotion to the conversation, right in your browser.",
   },
+  {
+    icon: ShieldCheck,
+    title: "Governed by design",
+    description: "Zero-trust policy enforcement, guardian review, and a user-facing accountability dashboard keep every action inspectable.",
+  },
+  {
+    icon: LockKeyhole,
+    title: "Private by default",
+    description: "Local-first routing, end-to-end encrypted sync, and a self-hostable relay keep your data under your control.",
+  },
+  {
+    icon: Globe2,
+    title: "Built for the 2027 ecosystem",
+    description: "Interoperable agents, memory tiers, and compliance-ready operations for sustainable growth.",
+  },
 ];
 
 export default function LandingPage({ onStart, onIntegrations, onSetup }: LandingPageProps) {

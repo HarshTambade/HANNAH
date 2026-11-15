@@ -79,6 +79,11 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 - **Secret-safe key handling:** server credentials stay on the server and never enter `VITE_*`; a visitor's Groq key stays in page memory and is sent only in a request header to the app API.
 - **Visible integrations:** the app includes an API and MCP guide with endpoint summaries, a copyable REST example, and a local MCP client configuration.
 - **Accessible responsive UI:** mobile safe areas, keyboard-friendly controls, status messages, and responsive layouts are built into the client.
+- **Governed autonomy:** zero-trust policy enforcement, guardian agent review, cognitive risk scoring, and a user-facing accountability dashboard.
+- **Layered memory:** session, consolidated long-term, and persona-invariant memory with evolution and dreaming consolidation.
+- **Cross-device continuity:** end-to-end encrypted sync, agent-native cloud home, and a self-hostable relay.
+- **Embodied and ambient presence:** hardware bridge, companion cast, and spatial context panels.
+- **Compliance and trust:** regulatory mapping, safety dashboards, and exportable compliance reports.
 
 ## Product principles
 
