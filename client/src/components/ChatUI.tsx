@@ -771,17 +771,17 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
 
   return (
     <section className={panel
-      ? "relative mx-auto flex h-full min-h-0 w-full max-w-none flex-col overflow-hidden rounded-[22px] border border-white/[0.09] bg-[#0b0e17]/90 shadow-[0_18px_70px_rgba(0,0,0,0.38)] backdrop-blur-2xl sm:rounded-[26px]"
-      : "relative mx-auto flex max-h-[48dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[26px] border border-white/10 bg-[#0b0e17]/75 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-2xl"}>
-      <header className="flex shrink-0 items-center justify-between border-b border-white/[0.07] px-4 py-3 md:px-5">
+      ? "relative mx-auto flex h-full min-h-0 w-full max-w-none flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-soft-lg sm:rounded-[26px]"
+      : "relative mx-auto flex max-h-[48dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-soft-lg"}>
+      <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 md:px-5 bg-white/80 backdrop-blur-sm">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-violet-300/20 bg-violet-400/[0.1] text-violet-200">
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-600">
             <Bot size={17} />
             <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#111521] ${isOnline && (effectiveMode !== "cloud" || apiStatus === "connected") ? "bg-emerald-400" : "bg-amber-300"}`} />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate font-['Manrope'] text-sm font-bold text-slate-100">Shanaya</h1>
-            <p className="truncate text-[10px] text-slate-400">
+            <h1 className="truncate font-['Manrope'] text-sm font-bold text-ink">Shanaya</h1>
+            <p className="truncate text-[10px] text-slate-500">
               {!isOnline
                 ? `Offline · ${selectedMode.label}`
                 : effectiveMode === "cloud" && apiStatus === "offline"
@@ -1045,8 +1045,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             return (
               <div key={`${index}-${message.role}`} className="flex flex-col gap-1">
                 <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-                  {!isUser && <div className="mb-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-violet-300/15 bg-violet-400/[0.08] text-violet-200"><Bot size={11} /></div>}
-                  <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[12px] leading-relaxed ${isUser ? "rounded-br-md bg-gradient-to-br from-indigo-500 to-violet-600 text-white" : "rounded-bl-md border border-white/[0.05] bg-[#171b28]/85 text-slate-200"}`}>
+                  {!isUser && <div className="mb-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-600"><Bot size={11} /></div>}
+                  <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[12px] leading-relaxed ${isUser ? "rounded-br-md bg-brand-50 border border-brand-100 text-ink" : "rounded-bl-md border border-slate-100 bg-slate-50 text-ink"}`}>
                     {message.content}
                   </div>
                 </div>
