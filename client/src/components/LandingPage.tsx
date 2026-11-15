@@ -8,6 +8,7 @@ import AvatarScene from "./AvatarScene";
 type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
+  onSetup?: () => void;
 };
 
 const highlights = [
@@ -28,7 +29,7 @@ const highlights = [
   },
 ];
 
-export default function LandingPage({ onStart, onIntegrations }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onSetup }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [apiToken, setApiToken] = useState("");
   const [groqApiKey, setGroqApiKey] = useState("");
@@ -96,6 +97,7 @@ export default function LandingPage({ onStart, onIntegrations }: LandingPageProp
             <a href="#how-it-works" className="text-xs text-slate-400 transition hover:text-white">How it works</a>
             <a href="#privacy" className="text-xs text-slate-400 transition hover:text-white">Your privacy</a>
             <button type="button" onClick={onIntegrations} className="text-xs text-slate-400 transition hover:text-white">Integrations</button>
+            {onSetup && <button type="button" onClick={onSetup} className="text-xs text-slate-400 transition hover:text-white">First-time setup</button>}
             <a href="/about/" className="text-xs text-slate-400 transition hover:text-white">About</a>
           </nav>
 

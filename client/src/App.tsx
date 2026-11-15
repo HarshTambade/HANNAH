@@ -23,15 +23,6 @@ const emotionColors: Record<Emotion, string> = {
 const ONBOARDING_STORAGE_KEY = "shanaya.onboarding.v1";
 type Screen = "onboarding" | "landing" | "companion" | "integrations";
 
-function hasSeenOnboarding() {
-  try {
-    return window.localStorage.getItem(ONBOARDING_STORAGE_KEY) !== null;
-  } catch {
-    // If storage is unavailable, avoid showing setup on every visit.
-    return true;
-  }
-}
-
 function rememberOnboarding() {
   try {
     window.localStorage.setItem(ONBOARDING_STORAGE_KEY, "complete");
@@ -41,9 +32,9 @@ function rememberOnboarding() {
 }
 
 export default function App() {
-  // First launch starts with privacy setup. Later visits to the root URL start
-  // on the landing page; companion access stays a deliberate in-session choice.
-  const [screen, setScreen] = useState<Screen>(() => (hasSeenOnboarding() ? "landing" : "onboarding"));
+  // The public URL should open on the landing page. First-run privacy setup is
+  // still available from the landing page for users who want it.
+  const [screen, setScreen] = useState<Screen>("landing");
   const [integrationReturnScreen, setIntegrationReturnScreen] = useState<"landing" | "companion">("landing");
   const [groqApiKey, setGroqApiKey] = useState("");
   const [preferredMode, setPreferredMode] = useState<InferenceMode>("cloud");
@@ -83,6 +74,7 @@ export default function App() {
           setScreen("companion");
         }}
         onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
+        onSetup={() => setScreen("onboarding")}
       />
     );
   }
