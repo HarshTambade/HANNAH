@@ -49,30 +49,22 @@ function PlanCard({
 
   return (
     <article
-      className={`relative flex h-full flex-col overflow-hidden rounded-2xl border p-4 sm:p-5 ${
-        isPremium
-          ? "border-violet-300/25 bg-[radial-gradient(ellipse_at_90%_0%,rgba(139,92,246,0.2),transparent_60%),rgba(139,92,246,0.06)] shadow-[0_18px_50px_rgba(76,29,149,0.18)]"
-          : "border-white/[0.08] bg-white/[0.02]"
-      }`}
+      className={`relative flex h-full flex-col overflow-hidden rounded-2xl border p-4 sm:p-5 shadow-soft ${isPremium ? "border-brand-200 bg-brand-50" : "border-slate-100 bg-white"}`}
     >
       {isPremium && (
-        <span className="absolute right-3 top-3 rounded-full border border-amber-200/20 bg-amber-200/[0.08] px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-amber-100/90">
+        <span className="absolute right-3 top-3 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-amber-600">
           Most capable
         </span>
       )}
-      <span className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
-        isPremium
-          ? "border-amber-200/20 bg-amber-200/[0.08] text-amber-100"
-          : "border-cyan-200/15 bg-cyan-200/[0.05] text-cyan-100"
-      }`}>
+      <span className={`flex h-10 w-10 items-center justify-center rounded-xl border ${isPremium ? "border-amber-200 bg-amber-50 text-amber-600" : "border-cyan-200 bg-cyan-50 text-cyan-600"}`}>
         <Icon size={17} />
       </span>
-      <h3 className="mt-3 font-['Manrope'] text-base font-semibold text-white">{plan.name}</h3>
+      <h3 className="mt-3 font-['Manrope'] text-base font-semibold text-ink">{plan.name}</h3>
       <p className="mt-1 flex items-baseline gap-1">
-        <span className="font-['Manrope'] text-2xl font-bold tracking-[-0.04em] text-white">{plan.priceLabel}</span>
-        <span className="text-[10px] text-slate-400">{plan.cadence}</span>
+        <span className="font-['Manrope'] text-2xl font-bold tracking-[-0.04em] text-ink">{plan.priceLabel}</span>
+        <span className="text-[10px] text-slate-500">{plan.cadence}</span>
       </p>
-      <p className="mt-2 text-[10px] leading-5 text-slate-400">
+      <p className="mt-2 text-[10px] leading-5 text-slate-500">
         {isPremium
           ? "Unlimited cloud and local conversations with priority Groq routing."
           : "Local, private conversations with a generous daily allowance."}
@@ -91,13 +83,7 @@ function PlanCard({
         type="button"
         onClick={onChoose}
         disabled={isCurrent || busy}
-        className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[11px] font-semibold transition disabled:cursor-default ${
-          isCurrent
-            ? "border border-white/[0.08] bg-white/[0.03] text-slate-400"
-            : isPremium
-              ? "bg-gradient-to-r from-violet-500 to-indigo-500 text-white shadow-lg shadow-violet-950/30 hover:from-violet-400 hover:to-indigo-400"
-              : "border border-white/[0.1] bg-white/[0.04] text-slate-200 hover:bg-white/[0.07]"
-        }`}
+        className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-[11px] font-semibold transition disabled:cursor-default ${isCurrent ? "border border-slate-200 bg-white text-slate-500 hover:bg-slate-50" : isPremium ? "bg-gradient-to-r from-brand-600 to-violet-600 text-white shadow-soft hover:brightness-105" : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
       >
         {busy && <Loader2 size={13} className="animate-spin" />}
         {isCurrent ? "Current plan" : plan.cta}
@@ -158,35 +144,35 @@ export default function PricingModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[85] flex items-center justify-center overflow-y-auto bg-[#03050b]/85 p-4 backdrop-blur-md"
+      className="fixed inset-0 z-[85] flex items-center justify-center overflow-y-auto bg-ink/60 p-4 backdrop-blur-md"
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="pricing-title"
-        className="relative my-auto w-full max-w-2xl overflow-hidden rounded-3xl border border-white/[0.1] bg-[#0d111d] shadow-[0_30px_110px_rgba(0,0,0,0.75)]"
+        className="relative my-auto w-full max-w-2xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft-lg"
       >
-        <div className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-violet-500/15 blur-[90px]" />
-        <div className="pointer-events-none absolute -bottom-32 -left-20 h-56 w-56 rounded-full bg-cyan-400/[0.08] blur-[90px]" />
+        <div className="pointer-events-none absolute -right-24 -top-28 h-64 w-64 rounded-full bg-brand-100/30 blur-[90px]" />
+        <div className="pointer-events-none absolute -bottom-32 -left-20 h-56 w-56 rounded-full bg-cyan-100/30 blur-[90px]" />
         <div className="relative p-5 sm:p-7">
           <button
             type="button"
             aria-label="Close pricing"
             onClick={onClose}
-            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] text-slate-400 transition hover:bg-white/[0.05] hover:text-white"
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-ink"
           >
             <X size={15} />
           </button>
 
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-200/20 bg-amber-200/[0.07] text-amber-100">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-100 bg-amber-50 text-amber-600">
             <Sparkles size={18} />
           </span>
-          <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-amber-100/70">Shanaya plans</p>
-          <h2 id="pricing-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">
+          <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-amber-600">Shanaya plans</p>
+          <h2 id="pricing-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-ink">
             Keep the conversation going.
           </h2>
-          <p className="mt-2 max-w-lg text-[11px] leading-6 text-slate-400">
+          <p className="mt-2 max-w-lg text-[11px] leading-6 text-slate-500">
             Free keeps every private, on-device path available. Premium adds unlimited messages, cloud models, and the cloud-backed agents.
           </p>
 
@@ -200,16 +186,16 @@ export default function PricingModal({
                 ? "Premium active"
                 : `${quota.remaining ?? 0} of ${quota.limit ?? 25} free messages left today`}
             </span>
-            <span className="rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-2.5 py-1 text-emerald-100/80">
+            <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-emerald-600">
               Cancel anytime
             </span>
-            <span className="rounded-full border border-cyan-300/15 bg-cyan-300/[0.05] px-2.5 py-1 text-cyan-100/80">
+            <span className="rounded-full border border-cyan-100 bg-cyan-50 px-2.5 py-1 text-cyan-600">
               Local models stay local
             </span>
           </div>
 
           {reason && (
-            <div className="mt-4 rounded-xl border border-amber-300/15 bg-amber-300/[0.06] px-3 py-2.5 text-[10px] leading-5 text-amber-50/90">
+            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-[10px] leading-5 text-amber-700">
               {reason}
             </div>
           )}
@@ -220,21 +206,21 @@ export default function PricingModal({
           </div>
 
           {notice && (
-            <div ref={noticeRef} role="status" className="mt-4 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.055] px-3 py-2.5 text-[10px] leading-5 text-cyan-50/85">
+            <div ref={noticeRef} role="status" className="mt-4 rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-2.5 text-[10px] leading-5 text-cyan-700">
               {notice}
             </div>
           )}
 
-          <div className="mt-5 flex flex-col gap-2 border-t border-white/[0.06] pt-4 text-[9px] leading-5 text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-5 flex flex-col gap-2 border-t border-slate-200 pt-4 text-[9px] leading-5 text-slate-500 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex items-center gap-1.5">
-              <Zap size={11} className="text-violet-300" />
+              <Zap size={11} className="text-brand-600" />
               Billing is a placeholder until store or Stripe checkout is connected.
             </p>
             {onPreviewPremium && quota.tier === "free" && (
               <button
                 type="button"
                 onClick={onPreviewPremium}
-                className="self-start rounded-lg border border-white/[0.08] px-2.5 py-1 text-[9px] font-semibold text-slate-300 transition hover:bg-white/[0.05] sm:self-auto"
+                className="self-start rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[9px] font-semibold text-slate-600 transition hover:bg-slate-50 sm:self-auto"
               >
                 Preview Premium locally
               </button>

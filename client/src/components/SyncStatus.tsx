@@ -11,7 +11,7 @@ export default function SyncStatus() {
   }, []);
 
   return (
-    <div className="text-[8px] text-slate-400">
+    <div className="text-[8px] text-slate-500">
       {status.encrypted ? "E2E encrypted" : "Not encrypted"} · pending {status.pendingOps} · last sync {status.lastSyncAt ?? "never"}
     </div>
   );
