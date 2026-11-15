@@ -126,6 +126,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [cloudModel, setCloudModel] = useState("");
   const [cloudProvider, setCloudProvider] = useState("Groq");
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
+  const [apiError, setApiError] = useState("");
   const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("en-US");
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
@@ -215,6 +216,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             && typeof (item as CloudProviderOption).label === "string" && !(item as CloudProviderOption).local
             && ((item as CloudProviderOption).configured || (item as CloudProviderOption).id === "groq")));
         setCloudProviders(providers);
+        setApiError("");
         let storedProvider: string | null = null;
         try {
           storedProvider = window.localStorage.getItem("shanaya.cloudProvider");
@@ -258,6 +260,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         const models = data.models.filter((model: unknown): model is string => typeof model === "string" && model.length > 0);
         setCloudModels(models);
         setCloudProvider(typeof data.provider === "string" ? data.provider : "Groq");
+        setApiError("");
         setApiStatus(models.length ? "connected" : "misconfigured");
         let storedModel: string | null = null;
         try {
@@ -266,11 +269,12 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           storedModel = null;
         }
         setCloudModel(models.includes(storedModel || "") ? storedModel! : data.defaultModel || models[0] || "");
-      } catch {
+      } catch (error) {
         if (active) {
           setApiStatus("misconfigured");
           setCloudModels([]);
           setCloudModel("");
+          setApiError(error instanceof Error ? error.message : "Model discovery failed.");
         }
       }
     };
@@ -993,7 +997,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       )}
       {effectiveMode === "cloud" && apiStatus === "misconfigured" && (
         <div role="alert" className="shrink-0 border-b border-amber-200/10 bg-amber-200/[0.05] px-4 py-2 text-[10px] leading-relaxed text-amber-100/80">
-          The API server is online, but no model key is available. Add a provider key such as <code className="text-amber-100">GROQ_API_KEY</code> to <code className="text-amber-100">server/.env</code>, or enter your Groq key on the landing page.
+          Cloud model discovery failed{apiError ? `: ${apiError}` : "."} Add <code className="text-amber-100">GROQ_API_KEY</code> to <code className="text-amber-100">server/.env</code>, or enter a valid Groq key on the landing page. The model selector appears once a provider returns models.
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
-  ArrowDown, ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole,
+  Aperture, ArrowDown, ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole,
   MessageCircle, Mic2, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
@@ -84,7 +84,7 @@ export default function LandingPage({ onStart, onIntegrations, onSetup }: Landin
         <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-12">
           <a href="#home" className="group flex items-center gap-3" aria-label="Shanaya home">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-200/20 bg-cyan-200/[0.07] text-cyan-100 transition group-hover:border-cyan-200/40">
-              <Sparkles size={17} strokeWidth={1.7} />
+              <Aperture size={17} strokeWidth={1.7} />
             </span>
             <span>
               <span className="block font-['Manrope'] text-[12px] font-extrabold tracking-[0.2em] text-white">SHANAYA</span>

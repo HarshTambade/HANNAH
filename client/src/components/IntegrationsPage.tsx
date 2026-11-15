@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  ArrowLeft, ArrowUpRight, Check, Clipboard, Code2, KeyRound, Network,
+  Aperture, ArrowLeft, ArrowUpRight, Check, Clipboard, Code2, KeyRound, Network,
   PlugZap, Server, ShieldCheck, Terminal,
 } from "lucide-react";
 import { apiUrl } from "../services/api";
@@ -56,7 +56,7 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
           <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-xs font-medium text-slate-300 transition hover:text-white">
             <ArrowLeft size={15} /> Back
           </button>
-          <span className="font-['Manrope'] text-[11px] font-extrabold tracking-[0.2em] text-white">SHANAYA</span>
+          <span className="flex items-center gap-2 font-['Manrope'] text-[11px] font-extrabold tracking-[0.2em] text-white"><Aperture size={16} strokeWidth={1.7} /> SHANAYA</span>
           <span className="w-12" aria-hidden="true" />
         </div>
       </header>
