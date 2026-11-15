@@ -13,6 +13,8 @@ logs/
 node_modules/
 **/node_modules/
 client/dist/
+client/test-results/
+client/playwright-report/
 server/dist/
 apps/frontend/dist/
 __pycache__/

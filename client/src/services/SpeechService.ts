@@ -66,8 +66,8 @@ export class SpeechService {
         const audioBlob = await response.blob();
         if (audioBlob.size > 0) {
           const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
           try {
-            const audio = new Audio(audioUrl);
             audio.playbackRate = 0.96;
             await new Promise<void>((resolve, reject) => {
               audio.onended = () => resolve();
@@ -76,6 +76,11 @@ export class SpeechService {
             });
             return "Charvi · Mithi v1 Flash";
           } finally {
+            audio.pause();
+            audio.onended = null;
+            audio.onerror = null;
+            audio.removeAttribute("src");
+            audio.load();
             URL.revokeObjectURL(audioUrl);
           }
         }

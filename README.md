@@ -987,16 +987,30 @@ Run server commands with `npm run <command> --prefix server`.
 
 ## Testing and quality
 
-M1.5 added a Node API security suite. On this revision, the server suite passes seven cases and the primary client production build/type-check succeeds. The older QA report findings below describe its 2026-11-11 baseline; M1.5 addresses the API authentication/rate-limit finding but does not re-audit dependency advisories.
+The security and quality workflow runs a client dependency audit, Vitest, backend Pytest, and a Playwright browser smoke test. The client audit currently has no high or critical findings; six low or moderate advisories remain in the Workbox/PWA dependency tree. `npm audit fix --force` currently proposes downgrading `vite-plugin-pwa` to 1.1.0, so it is not used because that is a breaking change to the installed PWA toolchain.
 
-The repository currently provides a production build/type-check command rather than a dedicated unit, component, or browser end-to-end test suite. The [QA audit report](./docs/QA-AUDIT-2026-11-11.md) documents the latest checks across the primary client/PWA, Express API, Python source, Electron entry points, native project metadata, CI packaging, and current release assets.
+Run the same checks locally:
 
-The audit recorded a conditional pass for the primary web/API build and release packaging. It also found provider-backed API routes without application-level authentication or rate limits, 75 production dependency advisories in the client graph (6 critical, 27 high, 42 moderate), a TypeScript error in the separate `apps/frontend` build, and no physical-device smoke tests. Cloud model, Ollama, TTS, Pinecall, and Anthropic provider calls were not made during the API smoke checks. See the report for evidence, limits, and remediation priorities.
+```bash
+npm audit --prefix client --audit-level=high
+npm test --prefix client
+python3 -m pip install -r backend/requirements-test.txt
+python3 -m pytest -q backend/tests
+npm run test:e2e --prefix client
+npm run build --prefix client
+```
+
+The client security tests cover the Groq model retry path, local fallback, HITL confirmation, and agent tool-result loop. Backend tests reject unexpected request fields, verify that tool execution waits for its WebSocket approval token, and validate the audit log hash chain. The Playwright test uses a mocked API so it needs no provider key; it checks WebGL, sends a message, and verifies that the avatar receives the returned emotion while its model motion is active.
+
+The older [QA audit report](./docs/QA-AUDIT-2026-11-11.md) records its 2026-11-11 baseline and limitations. Its dependency counts and unimplemented test findings predate this hardening work. No physical-device or live provider verification is implied by the automated checks.
 
 Before opening a pull request:
 
 ```bash
 npm run build
+npm test --prefix client
+python3 -m pytest -q backend/tests
+npm run test:e2e --prefix client
 git diff --check
 ```
 
@@ -1012,12 +1026,12 @@ Manually verify:
 
 The automated build and API smoke results above are not a substitute for a device install. In particular, the current iOS release has no signed IPA, and the audit did not exercise permissions, speech, calls, app resume, or offline model downloads on physical devices.
 
-### Recommended future test layers
+### Remaining test layers
 
-- **Unit tests:** response parsing, emotion normalization, inference-mode resolution, environment validation, and API input validation.
+- **Unit tests:** more response parsing, emotion normalization, inference-mode resolution, and environment validation cases.
 - **Component tests:** chat submission states, provider selection, errors, model preparation, and voice controls.
-- **Integration tests:** `/api/health`, `/api/chat`, provider fallbacks, malformed provider output, and Pinecall issuer failures.
-- **End-to-end tests:** a browser smoke test covering startup, message submission, avatar emotion updates, offline fallback, and accessibility basics.
+- **Integration tests:** provider HTTP adapters, malformed upstream responses, and Pinecall issuer failures.
+- **End-to-end tests:** full provider-backed flows, offline fallback, mobile WebGL performance, and accessibility basics.
 - **Native smoke tests:** model download interruption/retry, microphone permissions, speech recognition, and app resume behavior.
 
 ## Error behavior and observability

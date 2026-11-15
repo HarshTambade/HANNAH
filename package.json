@@ -20,6 +20,7 @@
     "dev:ebpf": "sudo python3 ebpf/loader.py --enable-kernel-senses"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "concurrently": "^9.1.2"
   }
 }
