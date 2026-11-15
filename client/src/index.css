@@ -297,3 +297,96 @@ textarea {
   color: #0f172a;
 }
 
+/* ===== Light button variants ===== */
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[11px] font-bold transition;
+  background: linear-gradient(to bottom right, #0ea5e9, #8b5cf6);
+  color: #ffffff;
+  box-shadow: 0 10px 40px -10px rgba(14, 165, 233, 0.25);
+}
+.btn-primary:hover {
+  filter: brightness(1.05);
+}
+.btn-primary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.btn-outline {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[11px] font-bold transition border border-slate-200 bg-white text-ink;
+}
+.btn-outline:hover {
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+}
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-xl px-3 py-2 text-[10px] text-slate-500 transition bg-white/50 border border-transparent;
+}
+.btn-ghost:hover {
+  background-color: rgba(255, 255, 255, 0.8);
+  color: #0f172a;
+}
+
+/* ===== Light input variants ===== */
+.input-light {
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[11px] text-ink outline-none placeholder:text-slate-400;
+}
+.input-light:focus {
+  border-color: #0ea5e9;
+  ring: 1px solid #0ea5e9;
+}
+.input-dark-fallback {
+  @apply w-full rounded-lg border border-white/10 bg-[#111521] px-3 py-2.5 text-[11px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-violet-300/40;
+}
+
+/* ===== Light badge / pill variants ===== */
+.badge {
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[9px] font-bold border;
+}
+.badge-brand {
+  @apply border-brand-100 bg-brand-50 text-brand-600;
+}
+.badge-emerald {
+  @apply border-emerald-100 bg-emerald-50 text-emerald-600;
+}
+.badge-amber {
+  @apply border-amber-100 bg-amber-50 text-amber-600;
+}
+.badge-violet {
+  @apply border-violet-100 bg-violet-50 text-violet-600;
+}
+.badge-slate {
+  @apply border-slate-100 bg-slate-50 text-slate-600;
+}
+.badge-rose {
+  @apply border-rose-100 bg-rose-50 text-rose-600;
+}
+
+/* ===== Light text styles ===== */
+.text-ink { color: #0f172a; }
+.text-slate-600-custom { color: #64748b; }
+.text-slate-500-custom { color: #94a3b8; }
+.text-brand-600-custom { color: #0284c7; }
+.font-display { font-family: "Manrope", ui-sans-serif, system-ui, sans-serif; }
+
+/* ===== Light dividers ===== */
+.divider {
+  height: 1px;
+  border: none;
+  background: #e2e8f0;
+  margin: 1rem 0;
+}
+
+/* ===== Light list item ===== */
+.list-item {
+  @apply flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2.5 text-[11px] transition;
+}
+.list-item:hover {
+  border-color: #0ea5e9;
+  background: #f0f9ff;
+}
+
+/* ===== Section header pattern (kicker + title + desc) ===== */
+.section-block {
+  @apply mb-8;
+}
+
