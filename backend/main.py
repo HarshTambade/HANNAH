@@ -30,6 +30,7 @@ init_sentry()
 
 from backend.audit_logger import audit_logger
 from backend.llm_router import ALLOWED_EMOTIONS, LLMRouterError, router
+from backend.task_spine import router as task_spine_router
 from backend.tools import code_executor, gui_control, system_control, web_agent
 from backend.tools.security import canonical_arguments as _canonical_arguments
 from backend.tools.security import grant_tool_authority
@@ -529,6 +530,9 @@ class TTSRequest(StrictRequestModel):
     text: str = Field(min_length=1, max_length=5000)
     language: Literal["en-US", "hi-IN", "mr-IN"]
     voice: Literal["Charvi"] = "Charvi"
+
+
+app.include_router(task_spine_router, prefix="/api/tasks", tags=["tasks"])
 
 
 @app.get("/api/health")

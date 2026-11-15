@@ -167,6 +167,13 @@ app.get("/api/health/agent", async (_req, res) => {
   }
 });
 
+app.post("/api/undo", (req, res) => {
+  const id = typeof req.body?.id === "string" ? req.body.id : "";
+  if (!id) return res.status(400).json({ error: "An action id is required." });
+  console.info(JSON.stringify({ type: "undo_requested", id, timestamp: new Date().toISOString() }));
+  res.status(202).json({ ok: true, id });
+});
+
 app.get("/api/presence", (_req, res) => {
   const lines = [
     "Shanaya is reviewing her notes from yesterday.",
