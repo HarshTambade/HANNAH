@@ -29,9 +29,17 @@ function readTasks(): Task[] {
   }
 }
 
+const MAX_TASKS = 100;
+
+/** Keep every saved automation; only plain tasks are capped (newest first). */
+function capTasks(tasks: Task[]) {
+  let plain = 0;
+  return tasks.filter((task) => task.kind === "workflow" || (plain += 1) <= MAX_TASKS);
+}
+
 function writeTasks(tasks: Task[]) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks.slice(0, 100)));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(capTasks(tasks)));
   } catch {
     // Best effort.
   }
@@ -93,7 +101,11 @@ export const TaskSpineService = {
       const response = await apiFetch(apiUrl("/api/tasks"));
       if (!response.ok) return;
       const tasks = await response.json();
-      if (Array.isArray(tasks)) writeTasks(tasks as Task[]);
+      if (!Array.isArray(tasks)) return;
+      // The server doesn't store automations; keep the ones saved on this device.
+      const remote = tasks as Task[];
+      const localWorkflows = readTasks().filter((task) => task.kind === "workflow" && !remote.some((item) => item.id === task.id));
+      writeTasks([...localWorkflows, ...remote]);
     } catch {
       // Local state remains authoritative when the backend is unavailable.
     }

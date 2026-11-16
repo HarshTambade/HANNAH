@@ -13,9 +13,10 @@
  *                reminder). The run pauses until you approve or deny it.
  *   output       shows a notification, speaks the result, or only records it
  *
- * Runs and their step results are kept on this device (the latest 50).
+ * Agent tasks use the AI chosen in chat (provider, model, your key) with no
+ * tools. Runs and their step results are kept on this device (the latest 50).
  */
-import { apiFetch, apiUrl } from "./api";
+import { getSessionGroqKey } from "./api";
 import { MemoryService } from "./MemoryService";
 import { ReminderService, notificationPermission } from "./ReminderService";
 import { TaskSpineService } from "./TaskSpineService";
@@ -193,24 +194,67 @@ export type AutomationDeps = {
   now: () => number;
 };
 
-async function askHannah(prompt: string) {
-  const response = await apiFetch(apiUrl("/api/chat"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: "cloud", messages: [{ role: "user", content: prompt.slice(0, 4_000) }] }),
-    signal: AbortSignal.timeout(90_000),
-  });
-  const body = await response.json().catch(() => ({})) as { reply?: string; error?: string };
-  if (!response.ok) throw new Error(body.error || `HANNAH's server answered ${response.status}.`);
-  if (!body.reply) throw new Error("HANNAH returned an empty reply.");
-  return body.reply;
+function storedSetting(key: string) {
+  try {
+    return window.localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
 }
 
+/**
+ * The AI that agent tasks use: the same mode, provider and model chosen in
+ * chat, so a routine answers like chat does and uses the same key. Exported for tests.
+ */
+export function automationModel(): { mode: "cloud" | "ollama"; providerId: string; model?: string } {
+  const chatMode = storedSetting("hannah.chat.mode");
+  if (chatMode === "webllm" || chatMode === "native") {
+    throw new Error("Agent tasks need a cloud model or Ollama. Chat is set to an on-device model, which only runs while you chat. Pick a cloud model or Ollama in chat, then run this again.");
+  }
+  if (chatMode === "ollama") return { mode: "ollama", providerId: "ollama", model: storedSetting("hannah.ollamaModel") || undefined };
+  const providerId = storedSetting("hannah.cloudProvider") || "groq";
+  return { mode: "cloud", providerId, model: storedSetting(`hannah.cloudModel:${providerId}`) || undefined };
+}
+
+const ASK_TIMEOUT_MS = 120_000;
+
+/** One agent turn with no tools: the task can't change anything without an approval step. */
+async function askHannah(prompt: string) {
+  const { mode, providerId, model } = automationModel();
+  const { runAgentTurn } = await import("./AgentRuntime");
+  const result = await runAgentTurn({
+    mode,
+    providerId,
+    model,
+    groqApiKey: getSessionGroqKey() || undefined,
+    messages: [{ role: "user", content: prompt.slice(0, 4_000) }],
+    allowedTools: [],
+    maxIterations: 2,
+    agentLabel: "Automation",
+    signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+    // Automations don't load an in-browser model in the background.
+    generateLocal: async (_prompt, _mode, cause) => {
+      throw cause instanceof Error ? cause : new Error("HANNAH's AI didn't answer. Try again in a moment.");
+    },
+  });
+  if (result.outcome === "stopped") throw new Error("HANNAH didn't answer within 2 minutes, so the run stopped.");
+  if (result.outcome) throw new Error(result.reply || "HANNAH didn't complete this task.");
+  if (!result.reply.trim()) throw new Error("HANNAH returned an empty reply.");
+  return result.reply;
+}
+
+export const AUTOMATION_OUTPUT_EVENT = "hannah:automation-output";
+export type AutomationOutput = { title: string; body: string; kind: "result" | "approval" };
+
 function showNotification(title: string, body: string) {
-  window.dispatchEvent(new CustomEvent("hannah:automation-output", { detail: { title, body } }));
+  const kind: AutomationOutput["kind"] = title.endsWith("needs your approval") ? "approval" : "result";
+  // The in-app toast (AppShell) cancels the event when it shows it.
+  const shownInApp = !window.dispatchEvent(new CustomEvent<AutomationOutput>(AUTOMATION_OUTPUT_EVENT, { detail: { title, body, kind }, cancelable: true }));
+  if (shownInApp && document.visibilityState === "visible" && document.hasFocus()) return;
   if (notificationPermission() !== "granted") return;
   try {
-    new Notification(title, { body: body.slice(0, 300) });
+    const notification = new Notification(title, { body: body.slice(0, 300), tag: `hannah-automation-${title}` });
+    notification.onclick = () => { window.focus(); notification.close(); };
   } catch {
     // Some WebViews expose Notification but can't construct it.
   }
@@ -389,6 +433,27 @@ export const AutomationService = {
   },
 
   /**
+   * Runs that were still "running" when HANNAH closed or reloaded can't
+   * continue; mark them failed so they don't look stuck forever.
+   */
+  recoverInterrupted(now = Date.now()) {
+    const runs = readRuns();
+    let changed = false;
+    for (const run of runs) {
+      if (run.status !== "running" || now - run.startedAt < 10 * 60_000) continue;
+      for (const step of run.steps) {
+        if (step.status === "running") { step.status = "failed"; step.error = "Interrupted."; }
+        else if (step.status === "pending") step.status = "skipped";
+      }
+      run.status = "failed";
+      run.error = "HANNAH was closed or reloaded before this run finished.";
+      run.finishedAt = now;
+      changed = true;
+    }
+    if (changed) writeJson(RUNS_KEY, runs);
+  },
+
+  /**
    * Start every enabled workflow whose time has come. A run missed while
    * HANNAH was closed happens once ("catch-up"), not once per missed slot.
    */
@@ -414,11 +479,20 @@ let ticking = false;
 /** Check for due automations every 30 seconds while HANNAH is open. */
 export function startAutomationRunner() {
   if (runnerTimer !== undefined || typeof window === "undefined") return () => undefined;
+  AutomationService.recoverInterrupted();
   const tick = async () => {
     if (ticking) return;
     ticking = true;
     try {
-      await AutomationService.runDue();
+      // With HANNAH open in two tabs, only one runs a due automation.
+      const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+      if (locks?.request) {
+        await locks.request("hannah-automations", { ifAvailable: true }, async (lock) => { if (lock) await AutomationService.runDue(); });
+      } else {
+        await AutomationService.runDue();
+      }
+    } catch (error) {
+      console.warn("[automations] check failed", error);
     } finally {
       ticking = false;
     }

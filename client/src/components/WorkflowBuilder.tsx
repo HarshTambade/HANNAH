@@ -8,7 +8,7 @@ import { Bot, Check, Clock3, GitBranch, Pencil, Play, Plus, Save, ShieldCheck, S
 import { TaskSpineService } from "../services/TaskSpineService";
 import type { WorkflowNodeKind, WorkflowSchema } from "../services/WorkflowSchema";
 import {
-  AUTOMATION_EVENT, AutomationService, describeSchedule, outputChannelOf, parseSchedule, toolActionOf, workflowSchedule,
+  AUTOMATION_EVENT, AutomationService, describeSchedule, outputChannelOf, parseSchedule, planSteps, toolActionOf, workflowSchedule,
   type AutomationRun, type OutputChannel, type Schedule, type ToolAction,
 } from "../services/AutomationService";
 import { notificationPermission, requestNotificationPermission } from "../services/ReminderService";
@@ -171,16 +171,28 @@ function BuilderCanvas() {
     if (nodes.filter((node) => node.data.kind === "trigger").length !== 1) return "Use exactly one trigger.";
     if (!nodes.some((node) => node.data.kind === "output")) return "Add an output so you see the result.";
     if (!edges.length) return "Connect the steps from left to right.";
+    let order: WorkflowSchema["nodes"];
+    try {
+      order = planSteps(schema);
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+    // Steps the trigger can't reach never run; say which ones.
+    const unreached = nodes.filter((node) => !order.some((step) => step.id === node.id));
+    if (unreached.length) return `Connect ${unreached.map((node) => `"${node.data.label}"`).join(", ")} to the steps before it. Steps that aren't connected to the trigger never run.`;
     return "";
   }
 
   function save() {
     const problem = validate();
     if (problem) { setNotice(problem); return null; }
+    const isNew = !AutomationService.states().some((item) => item.workflowId === schema.id) && !saved.some((item) => item.id === schema.id);
     TaskSpineService.createWorkflow(schema);
-    const state = AutomationService.reschedule(schema);
-    window.dispatchEvent(new Event(AUTOMATION_EVENT));
     const schedule = workflowSchedule(schema);
+    // A new scheduled automation starts on its schedule; "Run on schedule" turns it off.
+    if (isNew && schedule.type !== "manual" && notificationPermission() === "default") void requestNotificationPermission();
+    const state = isNew && schedule.type !== "manual" ? AutomationService.setEnabled(schema, true) : AutomationService.reschedule(schema);
+    window.dispatchEvent(new Event(AUTOMATION_EVENT));
     setNotice(schedule.type === "manual"
       ? "Saved. This automation runs when you press Run now."
       : state.enabled ? `Saved. Next run: ${formatTime(state.nextRunAt)}.` : `Saved. Turn on "Run on schedule" below to run it ${describeSchedule(schedule).toLowerCase()}.`);
@@ -248,7 +260,7 @@ function BuilderCanvas() {
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" className="btn-outline" onClick={startNew}><Plus size={15} /> New</button>
           <button type="button" className="btn-outline" onClick={() => setShowJson((value) => !value)}><GitBranch size={15} /> {showJson ? "Hide JSON" : "View JSON"}</button>
-          <button type="button" className="btn-outline" disabled={busy !== null} onClick={() => { const workflow = save(); if (workflow) void runNow(workflow); }}><Play size={15} /> Save and run</button>
+          <button type="button" className="btn-outline" disabled={busy !== null} onClick={() => { const workflow = save(); if (workflow) void runNow(workflow); }}><Play size={15} /> {busy === workflowId ? "Running…" : "Save and run"}</button>
           <button type="button" className="btn-primary" onClick={() => save()}><Save size={15} /> Save</button>
         </div>
       </header>
@@ -285,7 +297,7 @@ function BuilderCanvas() {
           <p className="mt-auto rounded-2xl border border-slate-100 bg-white/70 p-3 text-[11px] leading-relaxed text-slate-600">Agent tasks use your connected AI and count toward its usage. Runs and results stay on this device.</p>
         </aside>
         <section className="relative min-h-[460px] overflow-hidden rounded-[2rem] border border-white/70 bg-white/65 shadow-soft-lg backdrop-blur-xl" onDrop={onDrop} onDragOver={(event) => event.preventDefault()} aria-label="Workflow canvas">
-          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onNodeClick={(_event, node) => setSelectedId(node.id)} onPaneClick={() => setSelectedId(null)} fitView deleteKeyCode={["Backspace", "Delete"]}><Background color="#d7def3" gap={22} /><MiniMap nodeColor={(node) => node.type === "trigger" ? "#fde68a" : node.type === "output" ? "#a7f3d0" : node.type === "tool-action" ? "#bae6fd" : "#ddd6fe"} /><Controls /></ReactFlow>
+          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onNodeClick={(_event, node) => setSelectedId(node.id)} onPaneClick={() => setSelectedId(null)} fitView fitViewOptions={{ padding: 0.15 }} minZoom={0.3} deleteKeyCode={["Backspace", "Delete"]}><Background color="#d7def3" gap={22} /><MiniMap className="!hidden md:!block" nodeColor={(node) => node.type === "trigger" ? "#fde68a" : node.type === "output" ? "#a7f3d0" : node.type === "tool-action" ? "#bae6fd" : "#ddd6fe"} /><Controls /></ReactFlow>
         </section>
       </div>
 
@@ -348,7 +360,7 @@ function BuilderCanvas() {
                         <p className="text-xs text-slate-600">{describeSchedule(schedule)}{state.enabled && state.nextRunAt ? ` · next ${formatTime(state.nextRunAt)}` : ""}</p>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        <button type="button" className="btn-ghost" disabled={busy === workflow.id} onClick={() => void runNow(workflow)} aria-label={`Run ${workflow.name} now`}><Play size={14} /> Run now</button>
+                        <button type="button" className="btn-ghost" disabled={busy === workflow.id} onClick={() => void runNow(workflow)} aria-label={`Run ${workflow.name} now`}><Play size={14} /> {busy === workflow.id ? "Running…" : "Run now"}</button>
                         <button type="button" className="btn-ghost" onClick={() => load(workflow)} aria-label={`Edit ${workflow.name}`}><Pencil size={14} /> Edit</button>
                         <button type="button" className="btn-ghost text-rose-700" onClick={() => { TaskSpineService.remove(workflow.id); AutomationService.forget(workflow.id); }} aria-label={`Delete ${workflow.name}`}><Trash2 size={14} /></button>
                       </div>

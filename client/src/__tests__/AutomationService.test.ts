@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AutomationService, describeSchedule, nextRunAt, parseSchedule, planSteps, type AutomationDeps } from "../services/AutomationService";
+
+const agentTurn = vi.hoisted(() => vi.fn());
+vi.mock("../services/AgentRuntime", () => ({ runAgentTurn: agentTurn }));
+vi.mock("../services/api", () => ({ getSessionGroqKey: () => "gsk_visitorkey", apiFetch: vi.fn(), apiUrl: (path: string) => path }));
+import { AutomationService, automationModel, defaultDeps, describeSchedule, nextRunAt, parseSchedule, planSteps, type AutomationDeps } from "../services/AutomationService";
 import { TaskSpineService } from "../services/TaskSpineService";
 import type { WorkflowSchema } from "../services/WorkflowSchema";
 
@@ -134,5 +138,66 @@ describe("running automations", () => {
   it("won't schedule a manual-only workflow", () => {
     const flow = workflow([node("t", "trigger", "Manual"), node("o", "output", "Log")], [["t", "o"]]);
     expect(AutomationService.setEnabled(flow, true).enabled).toBe(false);
+  });
+});
+
+describe("agent tasks use the AI chosen in chat", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { localStorage: memoryStorage(), dispatchEvent: () => true });
+    agentTurn.mockReset();
+  });
+
+  it("uses the chat's provider, model and the visitor's key, with no tools", async () => {
+    window.localStorage.setItem("hannah.chat.mode", "cloud");
+    window.localStorage.setItem("hannah.cloudProvider", "openrouter");
+    window.localStorage.setItem("hannah.cloudModel:openrouter", "some/model");
+    agentTurn.mockResolvedValue({ reply: "Three bullets", emotion: "neutral" });
+    await expect(defaultDeps.ask("Plan my day")).resolves.toBe("Three bullets");
+    const options = agentTurn.mock.calls[0][0];
+    expect(options).toMatchObject({ mode: "cloud", providerId: "openrouter", model: "some/model", groqApiKey: "gsk_visitorkey", allowedTools: [] });
+    expect(options.messages).toEqual([{ role: "user", content: "Plan my day" }]);
+  });
+
+  it("uses Ollama when chat does, and explains that on-device models can't run automations", () => {
+    window.localStorage.setItem("hannah.chat.mode", "ollama");
+    window.localStorage.setItem("hannah.ollamaModel", "llama3.2");
+    expect(automationModel()).toEqual({ mode: "ollama", providerId: "ollama", model: "llama3.2" });
+    window.localStorage.setItem("hannah.chat.mode", "webllm");
+    expect(() => automationModel()).toThrow(/cloud model or Ollama/);
+    window.localStorage.clear?.();
+  });
+
+  it("turns a stopped or declined turn into a failed step instead of a result", async () => {
+    agentTurn.mockResolvedValue({ reply: "Stopped.", emotion: "neutral", outcome: "stopped" });
+    await expect(defaultDeps.ask("Plan my day")).rejects.toThrow(/within 2 minutes/);
+    agentTurn.mockResolvedValue({ reply: "I can't help with that.", emotion: "neutral", outcome: "declined" });
+    await expect(defaultDeps.ask("Plan my day")).rejects.toThrow(/can't help/);
+  });
+});
+
+describe("automation storage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { localStorage: memoryStorage(), dispatchEvent: () => true });
+    vi.stubGlobal("crypto", { randomUUID: () => Math.random().toString(36).slice(2) });
+  });
+
+  it("keeps saved automations when many other tasks are created", () => {
+    const flow = workflow([node("t", "trigger", "T"), node("o", "output", "Log")], [["t", "o"]], "wf-keep");
+    TaskSpineService.createWorkflow(flow);
+    for (let i = 0; i < 150; i += 1) TaskSpineService.create(`Memory consolidation ${i}`, "text");
+    expect(AutomationService.workflows().map((item) => item.id)).toEqual(["wf-keep"]);
+    expect(TaskSpineService.list().filter((task) => task.kind !== "workflow")).toHaveLength(100);
+  });
+
+  it("marks a run that was cut off by a reload as failed", async () => {
+    const flow = workflow([node("t", "trigger", "T"), node("a", "agent-task", "A"), node("o", "output", "Log", { channel: "log" })], [["t", "a"], ["a", "o"]]);
+    const { deps: d } = deps({ ask: () => new Promise<string>(() => undefined) });
+    void AutomationService.run(flow, "manual", d);
+    await Promise.resolve();
+    expect(AutomationService.runs()[0].status).toBe("running");
+    AutomationService.recoverInterrupted(at("2026-11-16T09:00:00"));
+    const run = AutomationService.runs()[0];
+    expect(run.status).toBe("failed");
+    expect(run.steps.map((step) => step.status)).toEqual(["done", "failed", "skipped"]);
   });
 });

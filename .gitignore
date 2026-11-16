@@ -25,6 +25,8 @@ venv/
 *.egg-info/
 build/
 dist/
+# The desktop plugin ships hand-written code in electron/dist (Capacitor's layout), not build output.
+!client/plugins/desktop-tools/electron/dist/
 
 .DS_Store
 

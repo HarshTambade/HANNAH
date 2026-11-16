@@ -779,3 +779,28 @@ button:focus-visible {
     radial-gradient(ellipse at 95% 30%, rgba(146, 184, 218, 0.28), transparent 40%),
     #eef0f4;
 }
+
+/* Automations canvas. The "output" step shares its type name with React Flow's
+   built-in output node, whose default style (150px box, black border) squeezed
+   the step and threw off fit-to-view. Our steps draw their own card. */
+.react-flow__node-output,
+.react-flow__node-output.selected,
+.react-flow__node-output:hover {
+  width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+}
+/* A selected or keyboard-focused step gets a soft brand ring, not a square black box. */
+.react-flow__node:focus,
+.react-flow__node:focus-visible {
+  outline: none;
+}
+.react-flow__node:focus-visible > div {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #8b5cf6;
+}

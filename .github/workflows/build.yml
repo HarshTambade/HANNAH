@@ -243,7 +243,9 @@ jobs:
           set -e
           echo "$output" | tail -n 30
           [ -f "$HANNAH_SMOKE_FILE" ] && cat "$HANNAH_SMOKE_FILE"
-          if ! { echo "$output"; cat "$HANNAH_SMOKE_FILE" 2>/dev/null; } | grep -q "HANNAH_SMOKE_OK"; then
+          smoke_log="$output"$'\n'"$(cat "$HANNAH_SMOKE_FILE" 2>/dev/null || true)"
+          # A here-string, not a pipe: with pipefail, grep -q closing the pipe early fails the step.
+          if ! grep -q "HANNAH_SMOKE_OK" <<< "$smoke_log"; then
             echo "::error::The packaged desktop app didn't start and load its page."
             exit 1
           fi

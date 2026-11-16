@@ -15,6 +15,12 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Automations' "Ask HANNAH" steps failed for most people.** They called the server without the provider, model and API key chosen in chat, so they only worked when the server had its own key. They now use the same AI as chat (cloud provider and model, your key, or Ollama), with no tools. On-device chat models show a clear message instead, because they only run while you chat.
+- Saved automations could disappear: the task list kept only the newest 100 entries, and HANNAH's background memory tasks pushed older automations out. Automations are now always kept.
+- An automation's "Show a notification" result was invisible unless browser notifications were allowed. Results and approval requests now also appear as a card in the app, with a link to Automations.
+- A new scheduled automation was saved switched off, so it never ran until you found "Run on schedule". It now starts on its schedule when you first save it.
+- Saving now refuses steps that aren't connected to the trigger, and says which ones; they'd never run. Runs cut off by a reload no longer stay "Running" forever, and with HANNAH open in two tabs a scheduled automation runs once, not twice.
+- The automation canvas cut off the output step and drew a black box around it; on phones the minimap covered the canvas.
 - **Desktop apps crashed on launch in 1.3.0** (macOS, Windows and Linux). The main process imported the auto-updater in a way that is undefined at runtime. Fixed, and CI now starts each packaged desktop app and fails the build if it doesn't load.
 - Settings (and the sign-in check on the landing page) could crash when the server answered the account check with something other than HANNAH's JSON, for example a web page.
 - The website said the downloadable desktop app can use your screen, mouse and keyboard (computer use). That still needs a desktop app you build yourself, so it's now listed on the roadmap instead.

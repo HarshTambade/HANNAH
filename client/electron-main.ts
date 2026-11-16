@@ -170,18 +170,35 @@ if (process.env.HANNAH_SMOKE_TEST === "1") {
     }
   };
   const timer = setTimeout(() => {
-    report("HANNAH_SMOKE_FAIL: the app page did not load within 60 seconds.");
+    report("HANNAH_SMOKE_FAIL: within 60 seconds the app page did not load or HannahDesktop did not answer.");
     app.exit(1);
   }, 60_000);
+  // Probe from the app page: the bridge works and the files-and-terminal
+  // plugin answers. A build that left the plugin's code out fails here.
+  const probe = `(async () => {
+    const plugin = window.Capacitor.registerPlugin("HannahDesktop");
+    const result = await Promise.race([
+      plugin.recentActivity(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("HannahDesktop didn't answer")), 15000)),
+    ]);
+    if (!Array.isArray(result?.activity)) throw new Error("HannahDesktop answered unexpectedly");
+    return document.title;
+  })()`;
   app.on("browser-window-created", (_event, window) => {
-    window.webContents.once("did-finish-load", () => {
-      void window.webContents.executeJavaScript("document.title").then((title) => {
+    // The splash screen is a window too; only the app page counts.
+    window.webContents.on("did-finish-load", () => {
+      if (!window.webContents.getURL().startsWith("capacitor-electron://")) return;
+      window.webContents.executeJavaScript(probe).then((title) => {
         clearTimeout(timer);
         report(`HANNAH_SMOKE_OK ${app.getVersion()} "${title}"`);
         app.exit(0);
+      }, (error: unknown) => {
+        report(`HANNAH_SMOKE_FAIL: ${error instanceof Error ? error.message : String(error)}`);
+        app.exit(1);
       });
     });
-    window.webContents.once("did-fail-load", (_e, code, description) => {
+    window.webContents.once("did-fail-load", (_e, code, description, url) => {
+      if (!url.startsWith("capacitor-electron://")) return;
       report(`HANNAH_SMOKE_FAIL: ${code} ${description}`);
       app.exit(1);
     });

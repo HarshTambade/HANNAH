@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Brain, Cpu, LayoutDashboard, MessageSquare, Settings2, Users, Workflow } from "lucide-react";
 import { ReminderToasts } from "./Reminders";
+import { AutomationToasts } from "./AutomationToasts";
 import { pathForScreen } from "../routes";
 
 export type AppSection = "conversation" | "companion" | "agents" | "models" | "accountability" | "automations" | "settings";
@@ -89,6 +90,7 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
         </div>
       </nav>
       <ReminderToasts />
+      <AutomationToasts onOpen={() => onNavigate("automations")} />
     </div>
   );
 }

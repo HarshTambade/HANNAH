@@ -187,9 +187,13 @@ test("the Integrations guide covers every integration with readable examples", a
 test("an automation runs, waits for approval before acting, and records the result", async ({ page }) => {
   await connectAsGuest(page);
   const prompts: string[] = [];
-  await page.route("**/api/chat", async (route) => {
-    prompts.push(JSON.parse(route.request().postData() || "{}").messages?.[0]?.content ?? "");
-    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ reply: "1. Ship the release\n2. Reply to Maya\n3. Walk", emotion: "happy" }) });
+  const agentRequests: Array<{ provider: string; key: string | undefined; tools: unknown[] }> = [];
+  // Agent tasks go through the same /api/agent call as chat, with the visitor's key.
+  await page.route("**/api/agent", async (route) => {
+    const body = JSON.parse(route.request().postData() || "{}");
+    prompts.push(body.messages?.[0]?.content ?? "");
+    agentRequests.push({ provider: body.provider, key: route.request().headers()["x-groq-api-key"], tools: body.tools });
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { content: JSON.stringify({ reply: "1. Ship the release\n2. Reply to Maya\n3. Walk", emotion: "happy" }), tool_calls: [] } }) });
   });
   const workflow = {
     version: 1, id: "wf-e2e", name: "Plan and remember", createdAt: "2026-11-16T00:00:00Z", updatedAt: "2026-11-16T00:00:00Z",
@@ -212,6 +216,7 @@ test("an automation runs, waits for approval before acting, and records the resu
   await expect(approval).toContainText("Plan and remember wants to: Save the result to memory");
   await expect(approval).toContainText("Ship the release");
   expect(prompts).toEqual(["Plan my day in three bullets"]);
+  expect(agentRequests).toEqual([{ provider: "groq", key: groqKey, tools: [] }]);
   expect(await page.evaluate(() => localStorage.getItem("hannah.memory.v1") ?? "")).not.toContain("Ship the release");
 
   await approval.getByRole("button", { name: "Approve" }).click();
@@ -223,4 +228,27 @@ test("an automation runs, waits for approval before acting, and records the resu
   // Turning the schedule on shows when it runs next.
   await page.getByRole("checkbox", { name: "Run on schedule" }).check();
   await expect(page.getByText(/Weekdays at 08:00 · next /)).toBeVisible();
+});
+
+test("a new automation built on the canvas starts on its schedule and shows its result in the app", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.route("**/api/agent", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { content: JSON.stringify({ reply: "Focus: finish the release notes.", emotion: "happy" }), tool_calls: [] } }) }));
+  await page.goto("/automations");
+
+  // A step that isn't connected to the trigger would never run, so saving says which one.
+  await page.getByRole("button", { name: /Agent task/ }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Summarize my day" })).toContainText("never run");
+  await page.getByRole("button", { name: "Remove step" }).click();
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved." })).toContainText("Next run:");
+  await expect(page.getByRole("checkbox", { name: "Run on schedule" })).toBeChecked();
+
+  await page.getByRole("button", { name: /^Run .* now$/ }).click();
+  const toast = page.getByRole("status", { name: "Automation" });
+  await expect(toast).toContainText("Focus: finish the release notes.");
+  await expect(page.getByRole("list", { name: "Automation runs" }).getByText("Done", { exact: true })).toBeVisible();
+  await toast.getByRole("button", { name: "Dismiss" }).click();
+  await expect(toast).toBeHidden();
 });
