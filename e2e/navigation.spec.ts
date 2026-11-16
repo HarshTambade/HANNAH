@@ -68,13 +68,13 @@ test("landing scroll keeps the navbar available and About has a built route", as
   await page.goto("/");
 
   const landingScroller = page.locator("main.landing-page");
-  await expect.poll(() => landingScroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  await expect.poll(async () => landingScroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
 
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await navigation.getByRole("link", { name: "How it works" }).click();
   await expect(page.locator("#how-it-works")).toBeInViewport();
   await expect(navigation).toBeInViewport();
-  await expect.poll(() => landingScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(async () => landingScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 
   await page.goto("/about/");
   await expect(page).toHaveTitle(/About Shanaya/);

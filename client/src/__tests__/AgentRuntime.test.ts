@@ -1,16 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InferenceMode } from "../types";
 
-const { executeTool, requestStep, resolveMode, assertCanSend, recordMessage } = vi.hoisted(() => ({
+const { executeTool, requestStep, resolveMode } = vi.hoisted(() => ({
   executeTool: vi.fn(),
   requestStep: vi.fn(),
   resolveMode: vi.fn(),
-  assertCanSend: vi.fn(),
-  recordMessage: vi.fn(),
-}));
-
-vi.mock("../services/SubscriptionService", () => ({
-  SubscriptionService: { assertCanSend, recordMessage },
 }));
 
 vi.mock("../services/DeviceTools", () => ({
@@ -33,8 +27,6 @@ import { runAgentTurn } from "../services/AgentRuntime";
 describe("AgentRuntime tool loop", () => {
   beforeEach(() => {
     executeTool.mockReset().mockResolvedValue({ temperatureC: 22, condition: "sunny" });
-    assertCanSend.mockReset();
-    recordMessage.mockReset();
     resolveMode.mockReset().mockResolvedValue("cloud");
     requestStep.mockReset()
       .mockResolvedValueOnce({
@@ -65,8 +57,6 @@ describe("AgentRuntime tool loop", () => {
       content: JSON.stringify({ temperatureC: 22, condition: "sunny" }),
     }));
     expect(result).toEqual({ reply: "Pune is sunny at 22°C.", emotion: "happy" });
-    expect(assertCanSend).toHaveBeenCalledWith("cloud");
-    expect(recordMessage).toHaveBeenCalledTimes(1);
   });
 
   it("does not execute a tool returned by the model when it is denied by runtime policy", async () => {
@@ -83,8 +73,6 @@ describe("AgentRuntime tool loop", () => {
     })).rejects.toThrow("denied by Shanaya's runtime policy");
 
     expect(executeTool).not.toHaveBeenCalled();
-    expect(assertCanSend).toHaveBeenCalledWith("cloud");
-    expect(recordMessage).not.toHaveBeenCalled();
   });
 
   it("denies shell execution by default even when the model requests it", async () => {

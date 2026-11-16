@@ -4,7 +4,7 @@ import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentToolCal
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
 import { RouterAgent, selectToolsForProfile, defaultAgentProfiles } from "./AgentRouter";
-import { SubscriptionService } from "./SubscriptionService";
+// SubscriptionService removed - app is 100% free with BYOK (Bring Your Own Key)
 import { MarketplaceService } from "./MarketplaceService";
 import { DynamicFewShotInjector } from "./DynamicFewShotInjector";
 import { ChaosEngine } from "./ChaosEngine";
@@ -146,10 +146,6 @@ export async function runAgentTurn(options: {
   generateLocal: (prompt: string, mode: InferenceMode) => Promise<string>;
   onActivity?: (activity: AgentActivity) => void;
 }): Promise<AgentReply> {
-  // Free tier: local inference only, 25 successful turns per local day.
-  // Throwing a SubscriptionError before any provider request keeps the paywall
-  // out of the network path and lets the UI show a precise upgrade prompt.
-  SubscriptionService.assertCanSend(options.mode);
   const policy = getAgentRuntimePolicy();
   const deniedTools = new Set([
     ...policy.toolDenyList,
@@ -173,7 +169,6 @@ export async function runAgentTurn(options: {
     .map(({ role, content }) => ({ role, content: role === "user" ? screenIncomingPrompt(content) : content }));
   let preferredMode = options.mode;
   const completeTurn = (reply: AgentReply) => {
-    SubscriptionService.recordMessage();
     return reply;
   };
 

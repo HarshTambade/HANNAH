@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } fr
 import { Capacitor } from "@capacitor/core";
 import { useBrowserLLM } from "use-browser-llm";
 import {
-  ArrowUp, Bot, Cpu, Crown, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
+  ArrowUp, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
   RotateCcw, Settings2, Smartphone, Speaker, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
 } from "lucide-react";
 import type { ChatMessage, Emotion, InferenceMode, SpeechLanguage } from "../types";
@@ -22,15 +22,9 @@ import { clearMobileAgentConversation, getMobileAgentStatus, removeMobileAgentAp
 import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuardrails";
 import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent";
 import { trackEvent } from "../services/events";
-import {
-  SubscriptionService,
-  isSubscriptionError,
-  type SubscriptionQuota,
-} from "../services/SubscriptionService";
 import FeedbackModal from "./FeedbackModal";
 import FirstSessionCoach from "./FirstSessionCoach";
 import TaskPanel from "./TaskPanel";
-import PricingModal from "./PricingModal";
 import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
 import HITLApprovalCard from "./HITLApprovalCard";
@@ -153,9 +147,6 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [prepareWebFallback, setPrepareWebFallback] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  const [isPricingOpen, setIsPricingOpen] = useState(false);
-  const [pricingReason, setPricingReason] = useState("");
-  const [quota, setQuota] = useState<SubscriptionQuota>(() => SubscriptionService.getQuota());
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editedResponse, setEditedResponse] = useState("");
   const [styleFeedback, setStyleFeedback] = useState<Record<string, string>>({});
@@ -387,16 +378,6 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       return false;
     }
 
-    // Check before appending the user message so a blocked turn leaves the
-    // conversation untouched. AgentRuntime repeats this check before provider
-    // work; the desktop and MobileClaw paths rely on this pre-flight.
-    const subscription = SubscriptionService.canSendMessage(effectiveMode);
-    setQuota(subscription.quota);
-    if (!subscription.allowed) {
-      setPricingReason(subscription.message || "Upgrade to Premium to continue.");
-      setIsPricingOpen(true);
-      return false;
-    }
 
     isSubmittingTurnRef.current = true;
     const activeVoiceSession = voiceSessionRef.current;
@@ -473,9 +454,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       }
 
       if (countedOutsideRuntime) {
-        setQuota(SubscriptionService.recordMessage());
       } else {
-        setQuota(SubscriptionService.getQuota());
       }
       const userTurns = messages.filter((message) => message.role === "user").length + 1;
       if (userTurns === 1) trackEvent("first_message_sent");
@@ -492,13 +471,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           .finally(() => setIsSpeaking(false));
       }
     } catch (requestError) {
-      if (isSubscriptionError(requestError)) {
-        setQuota(requestError.quota);
-        setPricingReason(requestError.message);
-        setIsPricingOpen(true);
-      } else {
-        setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
-      }
+      setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
       setAgentActivity(null);
@@ -800,27 +773,6 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
-            onClick={() => {
-              setPricingReason("");
-              setIsPricingOpen(true);
-            }}
-            aria-label={quota.tier === "premium"
-              ? "Premium plan active. View plans"
-              : `Free plan, ${quota.remaining ?? 0} of ${quota.limit ?? 25} messages left today. View plans`}
-            title={quota.tier === "premium" ? "Premium" : "Upgrade to Premium"}
-            className={`flex items-center gap-1.5 rounded-xl border p-2.5 transition sm:px-2.5 ${
-              quota.tier === "premium"
-              ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            <Crown size={15} />
-            <span className="hidden text-[10px] font-semibold sm:inline">
-              {quota.tier === "premium" ? "Premium" : `${quota.remaining ?? 0}/${quota.limit ?? 25}`}
-            </span>
-          </button>
-          <button
-            type="button"
             onClick={() => setIsFeedbackOpen(true)}
             aria-label="Send feedback"
             title="Send feedback"
@@ -1057,21 +1009,6 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             <p className="pl-8 text-xs text-amber-200/80">WebGPU is unavailable. Reconnect or use the Capacitor app for native offline AI.</p>
           )}
           {error && <div role="alert" className="ml-8 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
-          {quota.tier === "free" && quota.remaining === 0 && (
-            <div className="ml-8 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5 text-[10px] leading-5 text-amber-700">
-              <span className="font-semibold text-amber-800">You’ve used today’s {quota.limit ?? 25} free messages.</span> Local models reset at local midnight.
-              <button
-                type="button"
-                onClick={() => {
-                  setPricingReason("Unlock unlimited messages and cloud models with Premium.");
-                  setIsPricingOpen(true);
-                }}
-                className="ml-1.5 font-semibold text-amber-600 underline decoration-amber-200/40 underline-offset-2 transition hover:text-amber-700"
-              >
-                Upgrade to Premium
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1225,18 +1162,6 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       </div>
 
       <FeedbackModal open={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} inferenceMode={effectiveMode} />
-      <PricingModal
-        open={isPricingOpen}
-        onClose={() => setIsPricingOpen(false)}
-        quota={quota}
-        reason={pricingReason}
-        onPreviewPremium={import.meta.env.DEV
-          ? () => {
-            setQuota(SubscriptionService.setTier("premium"));
-            setPricingReason("");
-          }
-          : undefined}
-      />
     </section>
   );
 }

@@ -17,7 +17,7 @@ import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
 import AvatarScene, { type AvatarMotion } from "./components/AvatarScene";
 import { setApiAccessToken } from "./services/api";
 import type { Emotion } from "./types";
-import Onboarding from "./components/Onboarding";
+
 import type { InferenceMode } from "./types";
 
 type Screen = "landing" | "companion" | "conversation" | "integrations" | "marketplace" | "automations" | "accountability" | "developer";
@@ -32,7 +32,6 @@ export default function App() {
   const [groqApiKey, setGroqApiKey] = useState("");
   const [emotion, setEmotion] = useState<Emotion>("neutral");
   const [avatarMotion, setAvatarMotion] = useState<AvatarMotion>("loading");
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [preferredMode, setPreferredMode] = useState<InferenceMode>("cloud");
   const metrics = useDashboardMetrics(3000);
 
@@ -63,9 +62,7 @@ export default function App() {
           onStart={({ apiToken, groqApiKey: providerKey }) => { setApiAccessToken(apiToken); setGroqApiKey(providerKey); setScreen("conversation"); }}
           onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
           onMarketplace={() => { setMarketplaceReturnScreen("landing"); setScreen("marketplace"); }}
-          onFirstRunSetup={() => setOnboardingOpen(true)}
         />
-        {onboardingOpen && <Onboarding onSkip={() => setOnboardingOpen(false)} onComplete={({ apiToken, groqApiKey: providerKey, preferredMode: setupMode }) => { setApiAccessToken(apiToken); setGroqApiKey(providerKey); setPreferredMode(setupMode); setOnboardingOpen(false); setScreen("conversation"); }} />}
       </>
     );
   }

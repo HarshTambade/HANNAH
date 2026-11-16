@@ -8,7 +8,6 @@ type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
   onMarketplace: () => void;
-  onFirstRunSetup: () => void;
 };
 
 const statCards = [
@@ -44,7 +43,7 @@ const features = [
   },
 ];
 
-export default function LandingPage({ onStart, onIntegrations, onMarketplace, onFirstRunSetup }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onMarketplace }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [apiToken, setApiToken] = useState("");
@@ -117,7 +116,6 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
             <a href="#privacy" className="text-xs text-slate-500 transition hover:text-ink">Your privacy</a>
             <button type="button" onClick={onMarketplace} className="text-xs text-slate-500 transition hover:text-ink">Marketplace</button>
             <button type="button" onClick={onIntegrations} className="text-xs text-slate-500 transition hover:text-ink">Integrations</button>
-            <button type="button" onClick={onFirstRunSetup} className="text-xs text-slate-500 transition hover:text-ink">First-time setup</button>
           </nav>
 
           <button
@@ -152,7 +150,6 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
               ))}
               <button type="button" onClick={() => { setMobileNavigationOpen(false); onMarketplace(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">Marketplace</button>
               <button type="button" onClick={() => { setMobileNavigationOpen(false); onIntegrations(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">Integrations</button>
-              <button type="button" onClick={() => { setMobileNavigationOpen(false); onFirstRunSetup(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">First-time setup</button>
             </div>
           </nav>
         )}

@@ -75,9 +75,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm ci --ignore-scripts
         working-directory: client
-      - run: npx playwright install --with-deps --only-shell chromium
       - run: npm run build
         working-directory: client
+      - run: npx playwright install --with-deps
       - run: npm run test:e2e --prefix client
       - uses: actions/upload-artifact@v4
         if: always()
@@ -123,7 +123,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, windows-2022, ubuntu-24.04]
+        os: [macos-latest, windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -161,7 +161,7 @@ jobs:
         working-directory: client/electron
       - run: npm audit --audit-level=high
         working-directory: client/electron
-      - run: npx cap sync @capawesome/capacitor-electron
+      - run: npx cap sync @capacitor-community/electron
         working-directory: client
       - name: Package Electron app
         working-directory: client/electron
@@ -194,7 +194,7 @@ jobs:
           # Do not let electron-builder attempt an automatic Snap Store upload;
           # snapcraft is not installed on the runner and Snap is not required
           # for the release assets staged by this workflow.
-          npm run pack -- --publish never
+          npm run pack -- --publish never --config.win.target=portable
       - name: Enforce renderer and installer size targets
         working-directory: client/electron
         run: node ../scripts/check-bundle-size.mjs --strict --package-dir dist
@@ -494,15 +494,15 @@ jobs:
 
           copy_required release-input/shanaya-android '*.apk' 'Shanaya-Android.apk'
           copy_required release-input/shanaya-android '*.aab' 'Shanaya-Android.aab'
-          copy_required release-input/shanaya-electron-macos-15 '*.dmg' 'Shanaya-macOS.dmg'
-          copy_required release-input/shanaya-electron-windows-2022 '*.exe' 'Shanaya-Windows.exe' '*/win-unpacked/*'
+          copy_required release-input/shanaya-electron-macos-latest '*.dmg' 'Shanaya-macOS.dmg'
+          copy_required release-input/shanaya-electron-windows-latest '*.exe' 'Shanaya-Windows.exe' '*/win-unpacked/*'
 
           for root in release-input/shanaya-electron-*; do
             find "$root" -type f \( -iname '*.dmg' -o -iname '*.zip' -o -iname '*.exe' -o -iname '*.AppImage' -o -iname '*.deb' -o -iname '*.blockmap' -o -name 'latest*.yml' \) -exec cp -n {} release-assets/ \;
           done
 
-          copy_required release-input/shanaya-electron-ubuntu-24.04 '*.AppImage' 'Shanaya-Linux.AppImage'
-          copy_required release-input/shanaya-electron-ubuntu-24.04 '*.deb' 'Shanaya-Linux.deb'
+          copy_required release-input/shanaya-electron-ubuntu-latest '*.AppImage' 'Shanaya-Linux.AppImage'
+          copy_required release-input/shanaya-electron-ubuntu-latest '*.deb' 'Shanaya-Linux.deb'
 
           for manifest in latest.yml latest-mac.yml latest-linux.yml; do
             if [ ! -f "release-assets/$manifest" ]; then
