@@ -5,7 +5,6 @@ import ChatUI from "./components/ChatUI";
 import IntegrationsPage from "./components/IntegrationsPage";
 import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
-import Onboarding from "./components/Onboarding";
 import PlatformDownloads from "./components/PlatformDownloads";
 import type { Emotion, InferenceMode } from "./types";
 import { setApiAccessToken } from "./services/api";
@@ -19,7 +18,7 @@ const emotionColors: Record<Emotion, string> = {
   thinking: "#c084fc",
 };
 
-type Screen = "landing" | "companion" | "integrations" | "marketplace" | "setup";
+type Screen = "landing" | "companion" | "integrations" | "marketplace";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
@@ -38,21 +37,6 @@ export default function App() {
     return <MarketplacePage onBack={() => setScreen(marketplaceReturnScreen)} />;
   }
 
-  if (screen === "setup") {
-    return (
-      <Onboarding
-        onSkip={() => setScreen("landing")}
-        onComplete={({ apiToken, groqApiKey: onboardingGroqKey, preferredMode }) => {
-          setApiAccessToken(apiToken);
-          setGroqApiKey(onboardingGroqKey);
-          setPreferredMode(preferredMode);
-          setEmotion("neutral");
-          setScreen("companion");
-        }}
-      />
-    );
-  }
-
   if (screen === "landing") {
     return (
       <LandingPage
@@ -64,7 +48,6 @@ export default function App() {
         }}
         onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
         onMarketplace={() => { setMarketplaceReturnScreen("landing"); setScreen("marketplace"); }}
-        onSetup={() => setScreen("setup")}
       />
     );
   }

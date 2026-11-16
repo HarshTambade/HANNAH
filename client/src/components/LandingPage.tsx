@@ -8,7 +8,6 @@ type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
   onMarketplace: () => void;
-  onSetup?: () => void;
 };
 
 const statCards = [
@@ -44,7 +43,7 @@ const features = [
   },
 ];
 
-export default function LandingPage({ onStart, onIntegrations, onMarketplace, onSetup }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onMarketplace }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [apiToken, setApiToken] = useState("");
@@ -117,8 +116,6 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
             <a href="#privacy" className="text-xs text-slate-500 transition hover:text-ink">Your privacy</a>
             <button type="button" onClick={onMarketplace} className="text-xs text-slate-500 transition hover:text-ink">Marketplace</button>
             <button type="button" onClick={onIntegrations} className="text-xs text-slate-500 transition hover:text-ink">Integrations</button>
-            {onSetup && <button type="button" onClick={onSetup} className="text-xs text-slate-500 transition hover:text-ink">First-time setup</button>}
-            <a href="/about/" className="text-xs text-slate-500 transition hover:text-ink">About</a>
           </nav>
 
           <button
@@ -153,8 +150,6 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
               ))}
               <button type="button" onClick={() => { setMobileNavigationOpen(false); onMarketplace(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">Marketplace</button>
               <button type="button" onClick={() => { setMobileNavigationOpen(false); onIntegrations(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">Integrations</button>
-              {onSetup && <button type="button" onClick={() => { setMobileNavigationOpen(false); onSetup(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">First-time setup</button>}
-              <a href="/about/" onClick={() => setMobileNavigationOpen(false)} className="rounded-lg px-3 py-2.5 text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">About</a>
             </div>
           </nav>
         )}
@@ -337,7 +332,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
         <footer className="border-t border-slate-200">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 text-[9px] text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
             <span>© {new Date().getFullYear()} Shanaya · A thoughtful AI companion.</span>
-            <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="/about/" className="transition hover:text-ink">About</a><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
+            <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
           </div>
         </footer>
       </div>
