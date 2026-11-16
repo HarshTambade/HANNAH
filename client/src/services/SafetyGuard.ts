@@ -6,6 +6,10 @@ import { SideEffectLedger } from "./SideEffectLedger";
 
 export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file";
 
+export class HITLDeniedError extends Error {
+  constructor(message = "Action cancelled. Shanaya did not make any changes.") { super(message); this.name = "HITLDeniedError"; }
+}
+
 function describeAction(action: SensitiveAction, args: Record<string, unknown>) {
   if (action === "send_message") {
     return `Open a text message draft to ${String(args.recipient ?? "the requested recipient")} with this message:\n\n${String(args.message ?? "")}`;
@@ -72,7 +76,7 @@ export class SafetyGuard {
 
   static async require(action: SensitiveAction, args: Record<string, unknown>) {
     if (!await SafetyGuard.confirm(action, args)) {
-      throw new Error("Action cancelled. Shanaya did not make any changes.");
+      throw new HITLDeniedError();
     }
   }
 

@@ -2,6 +2,8 @@ import { apiFetch, apiUrl } from "./api";
 import type { ShanayaTool } from "./DeviceTools";
 import type { InferenceMode } from "../types";
 import { resolveInferenceMode, getNetworkStatus } from "./AIService";
+import { ChaosEngine } from "./ChaosEngine";
+import type { PersonalizationContext } from "./DynamicFewShotInjector";
 
 export type AgentMessage = {
   role: "user" | "assistant" | "tool";
@@ -151,18 +153,25 @@ export class LLMRouter {
     return resolveInferenceMode(preferred, browserConnected && network.connected);
   }
 
-  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: ShanayaTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = []): Promise<AgentStep> {
+  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: ShanayaTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext): Promise<AgentStep> {
+    if (mode === "cloud" && ChaosEngine.consume("network-drop")) {
+      ChaosEngine.setDegraded("Offline: cloud request dropped; switching to local AI.");
+      throw new Error("Chaos injection: simulated cloud network drop.");
+    }
     const selectedProvider = mode === "ollama" ? "ollama" : providerId;
     const body = {
       mode,
       provider: selectedProvider,
       ...(mode === "cloud" && model ? { model } : {}),
       ...(marketplaceItemIds.length ? { marketplaceItemIds } : {}),
+      ...(personalization ? { personalization } : {}),
       messages,
       tools: tools.map(({ name, description, inputSchema }) => ({ type: "function", function: { name, description, parameters: inputSchema } })),
     };
     try {
-      return await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && selectedProvider === "groq" ? groqApiKey : undefined, true);
+      const result = await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && selectedProvider === "groq" ? groqApiKey : undefined, true);
+      if (mode === "cloud") ChaosEngine.clearDegraded();
+      return result;
     } catch (primaryError) {
       if (mode !== "cloud" || selectedProvider !== "groq" || groqApiKey || !shouldUsePythonFallback(primaryError)) throw primaryError;
       // If the connection dropped during the cloud request, let AgentRuntime

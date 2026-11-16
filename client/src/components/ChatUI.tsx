@@ -3,7 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { useBrowserLLM } from "use-browser-llm";
 import {
   ArrowUp, Bot, Cpu, Crown, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
-  RotateCcw, Settings2, Smartphone, Speaker, VolumeX, X,
+  RotateCcw, Settings2, Smartphone, Speaker, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
 } from "lucide-react";
 import type { ChatMessage, Emotion, InferenceMode, SpeechLanguage } from "../types";
 import { useConnectivity } from "../services/connectivity";
@@ -34,6 +34,8 @@ import PricingModal from "./PricingModal";
 import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
 import HITLApprovalCard from "./HITLApprovalCard";
+import { PersonalizationEngine } from "../services/PersonalizationEngine";
+import { CognitiveReadinessEngine } from "../services/CognitiveReadinessEngine";
 
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
 const welcomeMessage: ChatMessage = {
@@ -153,6 +155,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [pricingReason, setPricingReason] = useState("");
   const [quota, setQuota] = useState<SubscriptionQuota>(() => SubscriptionService.getQuota());
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editedResponse, setEditedResponse] = useState("");
+  const [styleFeedback, setStyleFeedback] = useState<Record<string, string>>({});
 
   useEffect(() => {
     trackEvent("chat_opened");
@@ -404,6 +409,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     }
 
     const nextMessages = [...messages, { id: createMessageId(), role: "user" as const, content }];
+    CognitiveReadinessEngine.recordInteraction();
     const guardedContent = screenIncomingPrompt(content);
     setMessages(nextMessages);
     setInput("");
@@ -1024,8 +1030,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
                   </div>
                 </div>
                 {!isUser && message.id && message.id !== "shanaya-welcome" && (
-                  <div className="pl-8">
+                  <div className="flex flex-wrap items-center gap-2 pl-8">
                     <ReportButton messageId={message.id} inferenceMode={effectiveMode} />
+                    {editingMessageId === message.id ? <div className="flex w-full max-w-xl gap-2"><textarea value={editedResponse} onChange={(event) => setEditedResponse(event.target.value)} rows={2} className="min-w-0 flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs text-ink outline-none focus:border-violet-400" aria-label="Edit Shanaya response" /><button type="button" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, editedResponse, feedback: "edited" }); setMessages((current) => current.map((item) => item.id === message.id ? { ...item, content: editedResponse } : item)); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); setEditingMessageId(null); }} className="rounded-lg bg-violet-600 px-3 text-white" aria-label="Save edited response"><Save size={13} /></button></div> : <div className="flex items-center gap-1"><button type="button" title="I like this response" aria-label="Like response" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "liked" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"><ThumbsUp size={13} /></button><button type="button" title="Accept without changes" aria-label="Accept response as-is" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "accepted" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-700"><Check size={13} /></button><button type="button" title="Edit this response" aria-label="Edit response" onClick={() => { setEditingMessageId(message.id!); setEditedResponse(message.content); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-violet-50 hover:text-violet-700"><Pencil size={13} /></button><button type="button" title="This response missed the mark" aria-label="Reject response" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "rejected" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Feedback saved; this response will not be used as a positive example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><ThumbsDown size={13} /></button>{styleFeedback[message.id] && <span role="status" className="text-[9px] text-slate-500">{styleFeedback[message.id]}</span>}</div>}
                   </div>
                 )}
               </div>

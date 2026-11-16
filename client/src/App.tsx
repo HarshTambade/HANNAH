@@ -1,17 +1,32 @@
-import { useState } from "react";
-import { House, Bot, MessageSquare, Settings2, ShieldCheck, Activity, ArrowRight, Mic, Paperclip } from "lucide-react";
+import { useEffect, useState } from "react";
+import { House, Bot, MessageSquare, Settings2, ShieldCheck, Activity, ArrowRight, Mic, Paperclip, Workflow, Brain, Code2, ArrowLeft } from "lucide-react";
 import AvatarCard from "./components/AvatarCard";
 import ArchitectureCard from "./components/ArchitectureCard";
+import DigitalTwinPanel from "./components/DigitalTwinPanel";
 import IntegrationsPage from "./components/IntegrationsPage";
+import InterventionLog from "./components/InterventionLog";
 import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
+import PersonalizationHealthWidget from "./components/PersonalizationHealthWidget";
+import PortalUI from "./components/PortalUI";
+import WorkflowBuilder from "./components/WorkflowBuilder";
+import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
+import { ChaosEngine, type DegradedState } from "./services/ChaosEngine";
 
-type Screen = "landing" | "companion" | "integrations" | "marketplace";
+type Screen = "landing" | "companion" | "integrations" | "marketplace" | "automations" | "accountability" | "developer";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
+  const [chaosEnabled, setChaosEnabled] = useState(ChaosEngine.isEnabled());
+  const [degraded, setDegraded] = useState<DegradedState>(ChaosEngine.getDegraded());
   const [integrationReturnScreen, setIntegrationReturnScreen] = useState<"landing" | "companion">("landing");
   const [marketplaceReturnScreen, setMarketplaceReturnScreen] = useState<"landing" | "companion">("landing");
+  const [portalOpen, setPortalOpen] = useState(false);
+
+  useEffect(() => ChaosEngine.subscribe(() => {
+    setChaosEnabled(ChaosEngine.isEnabled());
+    setDegraded(ChaosEngine.getDegraded());
+  }), []);
 
   if (screen === "integrations") {
     return <IntegrationsPage onBack={() => setScreen(integrationReturnScreen)} />;
@@ -20,6 +35,12 @@ export default function App() {
   if (screen === "marketplace") {
     return <MarketplacePage onBack={() => setScreen(marketplaceReturnScreen)} />;
   }
+
+  if (screen === "automations") return <WorkflowBuilder onBack={() => setScreen("companion")} />;
+  if (screen === "accountability") return <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><div className="relative z-10 mx-auto max-w-5xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><AgentAccountabilityDashboard /></div></main>;
+  if (screen === "developer") return (
+    <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><section className="relative z-10 mx-auto max-w-3xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><div className="bento-card"><div className="bento-kicker">Developer settings</div><h1 className="bento-title mt-2">Resilience controls</h1><p className="bento-desc mt-2">Chaos injection is available only in development and test builds. It can simulate failed network requests, tool timeouts, corrupted memory, and denied approvals.</p><label className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/70 p-4"><span><span className="block text-sm font-bold text-ink">Chaos Mode</span><span className="mt-1 block text-xs text-slate-500">Randomly inject one configured failure at a time.</span></span><input type="checkbox" disabled={!ChaosEngine.available()} checked={chaosEnabled} onChange={(event) => ChaosEngine.setEnabled(event.target.checked)} className="h-5 w-5 accent-violet-600" /></label>{!ChaosEngine.available() && <p className="mt-3 text-xs text-slate-500">This production build does not expose chaos controls.</p>}<div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-sky-900"><Code2 size={16} /> Fallback status</div><p className="mt-2 text-xs text-sky-800">{degraded.degraded ? degraded.reason : "No degraded condition is currently reported."}</p>{degraded.degraded && <button className="mt-3 text-xs font-semibold text-sky-800 underline" onClick={() => ChaosEngine.clearDegraded()}>Clear degraded status</button>}</div></div></section></main>
+  );
 
   if (screen === "landing") {
     return (
@@ -52,11 +73,15 @@ export default function App() {
             <button type="button" onClick={() => setScreen("landing")} className="btn-ghost">
               <House size={16} /> <span className="hidden sm:inline">Home</span>
             </button>
-            <button type="button" className="btn-outline">
+            <button type="button" onClick={() => setScreen("developer")} className="btn-outline">
               <Settings2 size={16} /> <span className="hidden sm:inline">Settings</span>
             </button>
           </div>
         </header>
+
+        {degraded.degraded && <div role="status" className="mb-5 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs text-amber-900 shadow-soft"><span className="h-2 w-2 rounded-full bg-amber-500" /><span><strong>Degraded mode</strong> · {degraded.reason || "Using a fallback model."}</span><button onClick={() => ChaosEngine.clearDegraded()} className="ml-auto text-[10px] font-semibold underline">Dismiss</button></div>}
+
+        <div className="mb-5 flex flex-wrap gap-2"><button className="btn-outline" onClick={() => setScreen("automations")}><Workflow size={15} /> Automations</button><button className="btn-outline" onClick={() => setScreen("accountability")}><Brain size={15} /> Accountability & style</button><button className="btn-ghost" onClick={() => setScreen("integrations")}><Activity size={15} /> Integrations</button></div>
 
         <div className="bento-grid">
           <AvatarCard />
@@ -188,6 +213,12 @@ export default function App() {
             </div>
           </div>
 
+          <DigitalTwinPanel />
+
+          <InterventionLog />
+
+          <PersonalizationHealthWidget />
+
           <div className="bento-card span-2-2 flex flex-col h-full border border-slate-200 bg-white shadow-soft-lg">
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 pb-6 border-b border-slate-100">
               <div className="flex items-center gap-3">
@@ -270,6 +301,8 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      <PortalUI open={portalOpen} onClose={() => setPortalOpen(false)} />
     </main>
   );
 }

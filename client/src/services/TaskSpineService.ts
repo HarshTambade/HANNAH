@@ -57,7 +57,7 @@ export const TaskSpineService = {
       createdAt: workflow.createdAt || now,
       updatedAt: now,
     };
-    write([task, ...readTasks().filter((item) => item.id !== task.id)]);
+    writeTasks([task, ...readTasks().filter((item) => item.id !== task.id)]);
     return task;
   },
   list(): Task[] {

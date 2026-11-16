@@ -35,14 +35,14 @@ export const DreamingConsolidator = {
   async start() {
     if (this.running) return;
     this.running = true;
-    // Consolidate during detected idle periods.
-    const idle = await CognitiveReadinessEngine.readiness();
-    if (idle === "fatigued" || idle === "busy") {
+    try {
+      // Consolidate only when the readiness service reports an idle window.
+      const idle = await CognitiveReadinessEngine.readiness();
+      if (idle === "fatigued" || idle === "busy") return;
+      await this.consolidate();
+    } finally {
       this.running = false;
-      return;
     }
-    await this.consolidate();
-    this.running = false;
   },
   async consolidate() {
     const sessions = MemoryService.list("session").slice(-20);

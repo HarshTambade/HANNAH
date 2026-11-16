@@ -30,6 +30,6 @@ export const ChaosEngine = {
   setDegraded(reason: string) { degraded = { degraded: true, reason }; notify(); },
   clearDegraded() { degraded = { degraded: false }; notify(); },
   getDegraded() { return degraded; },
-  subscribe(listener: () => void) { listeners.add(listener); return () => listeners.delete(listener); },
+  subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
   resetForTests() { armed.splice(0); degraded = { degraded: false }; try { window.localStorage.removeItem(ENABLED_KEY); } catch { /* test cleanup */ } notify(); },
 };
