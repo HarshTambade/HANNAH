@@ -37,6 +37,7 @@ The first published release since 1.0.2. The tags `v1.0.3`, `v1.1.0` and `v1.2.0
 - iOS permission prompts and the home-screen name still said "Shanaya".
 - The iOS web-app status bar used white text on HANNAH's light background.
 - Cost estimates now appear only for prices with a verification date (none yet), instead of from unverified list prices.
+- Download buttons on the website led to a GitHub 404 whenever the newest published release didn't have a file with that exact name. They now go to `/download/<platform>` on HANNAH's own site, which starts the download from the newest release that has the package (including older file names) and shows a clear "not available yet" page instead of a 404.
 - The chat layout scrolled sideways on narrow phones.
 - On the Integrations page, the remote MCP configuration was nearly invisible (white text on a white card), and the local MCP example left out the `HANNAH_API_TOKEN` it needs to chat.
 - The WebLLM engine was bundled twice (about 2 MB extra gzipped), which put the app over its size budget and failed the web and desktop builds. It now loads only in its worker.

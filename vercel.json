@@ -28,6 +28,12 @@
       }
     },
     {
+      "source": "/download/(.*)",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
       "source": "/v1/(.*)",
       "destination": {
         "service": "server"

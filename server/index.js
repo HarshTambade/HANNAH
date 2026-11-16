@@ -32,6 +32,7 @@ const { createVoiceRouter } = require("./voice");
 const { createMcpClientRouter } = require("./mcp-client");
 const { createA2ARouter } = require("./a2a");
 const { createWebhookRouter, emitUserEvent } = require("./webhooks");
+const { createDownloadRouter } = require("./downloads");
 const serverVersion = require("./package.json").version;
 const { assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
 const router = require("./router");
@@ -284,6 +285,8 @@ function buildAgentSystemPrompt(packages, personalization, memories = [], commun
 const allowedEmotions = new Set(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 
 app.use(cors({ origin: corsOrigin, credentials: true }));
+// Public download links (/download/android and so on): redirect to the newest release that has the package.
+app.use("/download", createDownloadRouter());
 // Accounts (when DATABASE_URL is set): recognize a session or developer key first.
 app.use("/api", accountAuth());
 app.use("/v1", accountAuth());

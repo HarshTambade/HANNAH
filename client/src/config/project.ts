@@ -1,3 +1,4 @@
+import { apiUrl } from "../services/api";
 import { getAppVersion } from "../services/appInfo";
 
 /** The public source repository. Every GitHub link in the app comes from here. */
@@ -9,10 +10,13 @@ export const APP_VERSION = getAppVersion();
 export const RELEASE_NOTES_URL = `${RELEASES_URL}/tag/v${APP_VERSION}`;
 
 /**
- * A file from the newest published release. Names are fixed by the release
- * workflow (.github/workflows/build.yml, "Stage platform installers").
+ * Download link on HANNAH's own domain, for example /download/android. The
+ * server (server/downloads.js) redirects it to the newest published release
+ * that contains that package, so the download starts directly and older
+ * releases' file names still work. Package ids match the server's list.
  */
-export const latestDownload = (fileName: string) => `${RELEASES_URL}/latest/download/${fileName}`;
+export type DownloadPackage = "android" | "macos-arm64" | "macos-intel" | "windows" | "linux-appimage" | "linux-deb";
+export const downloadUrl = (packageId: DownloadPackage) => apiUrl(`/download/${packageId}`);
 
 export type PlatformDownload = {
   id: "android" | "ios" | "macos" | "windows" | "linux" | "web";
@@ -37,30 +41,30 @@ export const PLATFORM_DOWNLOADS: PlatformDownload[] = [
     files: env.VITE_MACOS_DOWNLOAD_URL?.trim()
       ? [{ label: "Download for Mac", href: env.VITE_MACOS_DOWNLOAD_URL.trim() }]
       : [
-        { label: "Apple silicon (M1 and later)", href: latestDownload("HANNAH-macOS-AppleSilicon.dmg") },
-        { label: "Intel", href: latestDownload("HANNAH-macOS-Intel.dmg") },
+        { label: "Apple silicon (M1 and later)", href: downloadUrl("macos-arm64") },
+        { label: "Intel", href: downloadUrl("macos-intel") },
       ],
     note: "Not yet notarized by Apple. The first time, Control-click HANNAH in Applications and choose Open.",
   },
   {
     id: "windows",
     name: "Windows",
-    files: [{ label: "Installer (64-bit)", href: env.VITE_WINDOWS_DOWNLOAD_URL?.trim() || latestDownload("HANNAH-Windows.exe") }],
+    files: [{ label: "Installer (64-bit)", href: env.VITE_WINDOWS_DOWNLOAD_URL?.trim() || downloadUrl("windows") }],
     note: "Not yet code-signed, so SmartScreen may warn you. Choose More info, then Run anyway. Uninstall from Settings → Apps.",
   },
   {
     id: "linux",
     name: "Linux",
     files: [
-      { label: "AppImage", href: env.VITE_LINUX_DOWNLOAD_URL?.trim() || latestDownload("HANNAH-Linux.AppImage") },
-      { label: ".deb (Debian, Ubuntu)", href: latestDownload("HANNAH-Linux.deb") },
+      { label: "AppImage", href: env.VITE_LINUX_DOWNLOAD_URL?.trim() || downloadUrl("linux-appimage") },
+      { label: ".deb (Debian, Ubuntu)", href: downloadUrl("linux-deb") },
     ],
     note: "x86-64. Make the AppImage executable (chmod +x) and run it, or install the .deb with your package manager.",
   },
   {
     id: "android",
     name: "Android",
-    files: [{ label: "APK", href: env.VITE_ANDROID_DOWNLOAD_URL?.trim() || latestDownload("HANNAH-Android.apk") }],
+    files: [{ label: "APK", href: env.VITE_ANDROID_DOWNLOAD_URL?.trim() || downloadUrl("android") }],
     note: "Not on Google Play yet. Allow installs from your browser to sideload the APK.",
   },
   {

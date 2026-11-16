@@ -116,8 +116,8 @@ test("the landing page shows the app version and working download links", async 
   await expect(page.getByRole("link", { name: "HANNAH home" })).toContainText(`v${appVersion}`);
   await expect(page.getByRole("heading", { name: `HANNAH ${appVersion} for every device.` })).toBeVisible();
   const download = page.locator("#download");
-  await expect(download.getByRole("link", { name: "Installer (64-bit)" })).toHaveAttribute("href", /\/releases\/latest\/download\/HANNAH-Windows\.exe$/);
-  await expect(download.getByRole("link", { name: "Apple silicon (M1 and later)" })).toHaveAttribute("href", /HANNAH-macOS-AppleSilicon\.dmg$/);
+  await expect(download.getByRole("link", { name: "Installer (64-bit)" })).toHaveAttribute("href", /\/download\/windows$/);
+  await expect(download.getByRole("link", { name: "Apple silicon (M1 and later)" })).toHaveAttribute("href", /\/download\/macos-arm64$/);
   for (const href of await page.locator("a[href^='https://github.com/']").evaluateAll((links) => links.map((link) => (link as HTMLAnchorElement).href))) {
     expect(href).toContain("github.com/HarshTambade/Shanaya-Your-AI-companion");
   }
