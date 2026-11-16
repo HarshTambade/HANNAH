@@ -200,7 +200,8 @@ export class LLMRouter {
     const body = {
       mode,
       provider: selectedProvider,
-      ...(mode === "cloud" && model ? { model } : {}),
+      // Ollama gets the model picked on the Models page; without one the server uses its OLLAMA_MODEL.
+      ...(model && (mode === "cloud" || model !== "auto") ? { model } : {}),
       ...(mode === "cloud" && model === "auto" && extra.routeHint ? { routeHint: extra.routeHint } : {}),
       // Auto: HANNAH chooses across your providers within your routing mode (Private stays self-hosted).
       ...(mode === "cloud" && model === "auto" ? { routing: routingRequest() } : {}),

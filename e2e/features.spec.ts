@@ -33,6 +33,28 @@ test("the model advisor recommends models for the user's device", async ({ page 
   await expect(top).toContainText("KV cache");
 });
 
+test("Use in chat opens the chat with the recommended model selected", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.route(/\/api\/(providers|models)/, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/providers") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ defaultProvider: "groq", providers: [{ id: "groq", label: "Groq", local: false, configured: true }] }) });
+    // The live list deliberately omits the advisor's pick: an explicit choice must still stick.
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ provider: "Groq", defaultModel: "llama-3.1-8b-instant", models: ["llama-3.1-8b-instant"] }) });
+  });
+  await page.addInitScript(() => localStorage.setItem("hannah.onboarding.v1", "complete"));
+  await page.goto("/#/models");
+  // Target the hosted card by name: the list re-sorts once the catalog arrives.
+  const pick = page.getByRole("article", { name: "GPT-OSS 120B on Groq" });
+  await expect(pick).toBeVisible();
+  const modelId = "openai/gpt-oss-120b";
+  await pick.getByRole("button", { name: "Use in chat" }).click();
+
+  await expect(page).toHaveURL(/#\/chat/);
+  await expect(page.getByRole("textbox", { name: "Message HANNAH" })).toBeVisible();
+  await page.getByRole("button", { name: "Inference and privacy settings" }).click();
+  await expect(page.getByLabel(/Groq model/)).toHaveValue(modelId);
+});
+
 test("reminders can be added and cancelled from the dashboard", async ({ page }) => {
   await connectAsGuest(page);
   await page.goto("/#/dashboard");

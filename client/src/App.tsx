@@ -198,7 +198,7 @@ export default function App() {
   if (screen === "models") {
     return (
       <AppShell {...shellProps}>
-        <ModelsPage />
+        <ModelsPage onOpenChat={() => navigate("conversation")} />
       </AppShell>
     );
   }

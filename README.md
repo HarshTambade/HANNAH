@@ -399,7 +399,7 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | Mode | Where it runs | Notes |
 | --- | --- | --- |
 | **Groq Cloud** (default) | Your API → the selected provider | Any provider configured on the server appears in the picker. The server discovers models and falls back only through your configured list. |
-| **WebLLM Local** | In the browser via WebGPU | Downloads a model on first use. Prompts stay on the device. |
+| **WebLLM Local** | In the browser via WebGPU | Downloads Llama 3.2 1B (about 900 MB) on first use, showing progress, and keeps it cached for offline use. Needs WebGPU (recent Chrome or Edge, or Safari 26+). If loading fails, the chat says why and offers **Retry** or **Use cloud instead**. Prompts stay on the device. |
 | **Local Ollama** | Your API → your Ollama server | `ollama serve && ollama pull qwen3:8b`. |
 | **On-device AI** | iOS and Android via llama.cpp | Needs `VITE_OFFLINE_MODEL_URL`; prepare the model while online. |
 | **MobileClaw · Anthropic** | iOS and Android native agent | Uses an Anthropic key stored by the native plugin; optional local LanceDB memory. |

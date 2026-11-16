@@ -440,10 +440,22 @@ export function recommend(needs: AdvisorNeeds, hardware: HardwareProfile, catalo
 }
 
 /** Make a hosted pick the model the chat uses (read by ChatUI on load). */
+/**
+ * Make chat use this model the next time it opens: the provider, the model,
+ * and the inference mode that reaches it (Local Ollama for models on your
+ * computer, cloud for hosted ones).
+ */
 export function applyToChat(provider: string, model: string) {
   try {
-    window.localStorage.setItem("hannah.cloudProvider", provider);
-    window.localStorage.setItem(`hannah.cloudModel:${provider}`, model);
+    if (provider === "ollama") {
+      window.localStorage.setItem("hannah.chat.mode", "ollama");
+      window.localStorage.setItem("hannah.ollamaModel", model);
+    } else {
+      window.localStorage.setItem("hannah.chat.mode", "cloud");
+      window.localStorage.setItem("hannah.cloudProvider", provider);
+      window.localStorage.setItem(`hannah.cloudModel:${provider}`, model);
+      window.localStorage.setItem(`hannah.cloudModel.chosen:${provider}`, model);
+    }
     return true;
   } catch {
     return false;

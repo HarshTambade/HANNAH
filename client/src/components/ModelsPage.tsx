@@ -141,7 +141,7 @@ function RecommendationCard({ item, top, onUse, copied, onCopy }: { item: Recomm
   );
 }
 
-export default function ModelsPage() {
+export default function ModelsPage({ onOpenChat }: { onOpenChat?: () => void } = {}) {
   const [hardware, setHardware] = useState<HardwareProfile>(() => loadHardware() ?? defaultHardware());
   const [hints, setHints] = useState<string[]>([]);
   const [detecting, setDetecting] = useState(false);
@@ -198,7 +198,12 @@ export default function ModelsPage() {
 
   const useModel = (item: Recommendation) => {
     const provider = item.action.type === "use" ? item.action.provider : "ollama";
-    if (applyToChat(provider, item.model)) setNotice(`Chat will now use ${item.label} on ${item.providerLabel}.`);
+    if (!applyToChat(provider, item.model)) {
+      setNotice("This browser blocked saving your choice. Pick the model in chat settings instead.");
+      return;
+    }
+    if (onOpenChat) onOpenChat();
+    else setNotice(`Chat will now use ${item.label} on ${item.providerLabel}.`);
   };
   const copy = async (text: string) => {
     try {

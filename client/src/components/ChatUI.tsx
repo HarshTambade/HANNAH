@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import { useBrowserLLM } from "use-browser-llm";
+import { useWebLLM } from "../services/WebLLM";
 import {
   ArrowUp, Bookmark, BookmarkCheck, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
   RotateCcw, Settings2, ShieldAlert, Smartphone, Speaker, Square, Users, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
@@ -134,7 +134,33 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [rememberedIds, setRememberedIds] = useState<Record<string, true>>({});
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<InferenceMode>(initialMode);
+  // The chosen inference mode survives leaving the chat (and "Use in chat" on the Models page sets it).
+  const [mode, setMode] = useState<InferenceMode>(() => {
+    try {
+      const stored = window.localStorage.getItem("hannah.chat.mode") as InferenceMode | null;
+      const native = Capacitor.isNativePlatform();
+      if (stored === "cloud" || stored === "ollama" || stored === "webllm") return stored;
+      if ((stored === "native" || stored === "mobileclaw") && native) return stored;
+      if (stored === "desktop" && hasDesktopBridge()) return stored;
+    } catch {
+      // Fall through to the default.
+    }
+    return initialMode;
+  });
+  const [ollamaModel] = useState(() => {
+    try {
+      return window.localStorage.getItem("hannah.ollamaModel") || "";
+    } catch {
+      return "";
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("hannah.chat.mode", mode);
+    } catch {
+      // The mode still applies on this page.
+    }
+  }, [mode]);
   const [cloudProviders, setCloudProviders] = useState<CloudProviderOption[]>([]);
   const [cloudProviderId, setCloudProviderId] = useState(() => {
     try {
@@ -250,7 +276,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const isNative = platform === "ios" || platform === "android";
   const desktopAvailable = hasDesktopBridge();
   const effectiveMode = resolveInferenceMode(mode, isOnline);
-  const localLLM = useBrowserLLM(effectiveMode === "webllm" || prepareWebFallback ? WEBLLM_MODEL : undefined);
+  const localLLM = useWebLLM(effectiveMode === "webllm" || prepareWebFallback ? WEBLLM_MODEL : undefined);
   const localLLMRef = useRef(localLLM);
   // Keep in-flight API fallback work connected to the hook's latest load state.
   localLLMRef.current = localLLM;
@@ -329,10 +355,18 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
         setApiError("");
         setApiStatus(models.length ? "connected" : "misconfigured");
         let storedModel: string | null = null;
+        let chosenModel: string | null = null;
         try {
           storedModel = window.localStorage.getItem(`hannah.cloudModel:${cloudProviderId}`);
+          // A model picked on the Models page ("Use in chat") is honored even when the
+          // provider's live list doesn't include it; the provider reports if it's unknown.
+          chosenModel = window.localStorage.getItem(`hannah.cloudModel.chosen:${cloudProviderId}`);
         } catch {
           storedModel = null;
+        }
+        if (storedModel && storedModel === chosenModel && !models.includes(storedModel) && storedModel !== "auto") {
+          models.push(storedModel);
+          setCloudModels([...models]);
         }
         setCloudModel(storedModel === "auto" || models.includes(storedModel || "") ? storedModel! : data.defaultModel || models[0] || "");
       } catch (error) {
@@ -458,7 +492,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     const content = (transcript ?? input).trim();
     if (!content || isLoading || isSubmittingTurnRef.current || (voiceTurnPendingRef.current && transcript === undefined)) return false;
     if (effectiveMode === "webllm" && localLLM.status !== "ready") {
-      setError(localLLM.status === "unsupported" ? "WebGPU is unavailable. Reconnect or use the native app for offline AI." : "The browser model is still preparing or could not load.");
+      setError(localLLM.error || (localLLM.status === "loading" ? `The browser model is still loading (${Math.round(localLLM.progress * 100)}%). Your message will work once it's ready.` : "The browser model isn't loaded yet."));
       return false;
     }
     if (effectiveMode === "native" && nativeStatus !== "available") {
@@ -522,7 +556,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
           signal: controller.signal,
           mode: effectiveMode,
           providerId: cloudProviderId,
-          model: cloudModel || undefined,
+          model: effectiveMode === "ollama" ? ollamaModel || undefined : cloudModel || undefined,
           groqApiKey,
           messages: nextMessages,
           generateLocal: async (prompt, routeMode, cause) => {
@@ -865,11 +899,9 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     ? `Preparing browser model · ${Math.round(localLLM.progress * 100)}%`
     : localLLM.status === "ready"
       ? "Browser model ready"
-      : localLLM.status === "unsupported"
-        ? "WebGPU is unavailable in this browser"
-        : localLLM.status === "error"
-          ? "Could not load the browser model"
-          : "Model loads when selected";
+      : localLLM.status === "unsupported" || localLLM.status === "error"
+        ? localLLM.error || "Could not load the browser model"
+        : "Model loads when selected";
   const canSend = effectiveMode === "webllm"
     ? localLLM.status === "ready"
     : effectiveMode === "native"
@@ -1036,7 +1068,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
             )}
             {effectiveMode === "ollama" && (
               <p className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600">
-                Configure <code className="text-violet-700">OLLAMA_BASE_URL</code> and <code className="text-violet-700">OLLAMA_MODEL</code> in <code className="text-violet-700">server/.env</code>.
+                {ollamaModel ? <>Using <code className="text-violet-700">{ollamaModel}</code>, picked on the Models page. </> : null}Configure <code className="text-violet-700">OLLAMA_BASE_URL</code>{ollamaModel ? "" : <> and <code className="text-violet-700">OLLAMA_MODEL</code></>} in <code className="text-violet-700">server/.env</code>.
               </p>
             )}
 
@@ -1217,13 +1249,17 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
             <div className="flex items-center gap-2 pl-8 text-xs text-slate-500">
               <span className="typing-dot h-1.5 w-1.5 rounded-full bg-violet-300" />
               {effectiveMode === "webllm" && localLLM.status === "loading"
-                ? `Loading local model · ${Math.round(localLLM.progress * 100)}%`
+                ? <span>Loading the browser model · {Math.round(localLLM.progress * 100)}%{localLLM.detail ? <span className="block text-[11px] text-slate-400">{localLLM.detail}</span> : null}</span>
                 : isLoading ? agentActivity?.message || "HANNAH is thinking…" : ""}
             </div>
           )}
 
-          {effectiveMode === "webllm" && localLLM.status === "unsupported" && (
-            <p className="pl-9 text-xs text-amber-700">WebGPU is unavailable. Reconnect or use the Capacitor app for native offline AI.</p>
+          {effectiveMode === "webllm" && (localLLM.status === "unsupported" || localLLM.status === "error") && (
+            <div role="alert" className="ml-9 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <span className="min-w-0 flex-1">{localLLM.error}</span>
+              {localLLM.status === "error" && <button type="button" onClick={localLLM.retry} className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100">Retry</button>}
+              <button type="button" onClick={() => setMode("cloud")} className="rounded-lg px-2.5 py-1 font-medium hover:bg-amber-100">Use cloud instead</button>
+            </div>
           )}
           {error && <div role="alert" className="ml-9 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
         </div>
