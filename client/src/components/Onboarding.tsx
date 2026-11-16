@@ -28,7 +28,8 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
 
   const canProceed =
     step === "privacy" ? acceptedPrivacy :
-    step === "credentials" ? apiToken.length >= 32 : true;
+    step === "credentials" ? apiToken.length >= 32 :
+    step === "hitl" ? acceptedHITL : true;
 
   const goNext = () => {
     if (stepIndex < STEPS.length - 1) setStepIndex(stepIndex + 1);
@@ -39,11 +40,11 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-50/80 p-6 backdrop-blur-sm">
       <section className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white shadow-[0_24px_48px_-8px_rgba(0,0,0,0.10)] p-8">
         <header className="flex items-center justify-between mb-6">
-          <h2 className="font-display font-bold text-xl text-ink tracking-tight">Welcome to Shanaya</h2>
+          <h2 className="font-display font-bold text-xl text-ink tracking-tight">A companion that keeps your confidence</h2>
           <button
             type="button"
             onClick={onSkip}
-            aria-label="Skip onboarding"
+            aria-label="Set up later"
             className="rounded-lg border border-slate-100 bg-white p-2 text-slate-500 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200"
           >
             <X size={16} />

@@ -14,6 +14,11 @@ import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashbo
 import { ChaosEngine, type DegradedState } from "./services/ChaosEngine";
 import ChatUI from "./components/ChatUI";
 import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
+import AvatarScene, { type AvatarMotion } from "./components/AvatarScene";
+import { setApiAccessToken } from "./services/api";
+import type { Emotion } from "./types";
+import Onboarding from "./components/Onboarding";
+import type { InferenceMode } from "./types";
 
 type Screen = "landing" | "companion" | "conversation" | "integrations" | "marketplace" | "automations" | "accountability" | "developer";
 
@@ -24,6 +29,11 @@ export default function App() {
   const [integrationReturnScreen, setIntegrationReturnScreen] = useState<"landing" | "companion">("landing");
   const [marketplaceReturnScreen, setMarketplaceReturnScreen] = useState<"landing" | "companion">("landing");
   const [portalOpen, setPortalOpen] = useState(false);
+  const [groqApiKey, setGroqApiKey] = useState("");
+  const [emotion, setEmotion] = useState<Emotion>("neutral");
+  const [avatarMotion, setAvatarMotion] = useState<AvatarMotion>("loading");
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [preferredMode, setPreferredMode] = useState<InferenceMode>("cloud");
   const metrics = useDashboardMetrics(3000);
 
   useEffect(() => ChaosEngine.subscribe(() => {
@@ -40,7 +50,7 @@ export default function App() {
   }
 
   if (screen === "automations") return <WorkflowBuilder onBack={() => setScreen("companion")} />;
-  if (screen === "conversation") return <main className="relative flex h-[100dvh] min-h-0 flex-col bg-mesh-indigo p-3 sm:p-5"><div className="fixed inset-0 bg-mesh-pastel opacity-50" /><div className="relative z-10 mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-3 self-start"><ArrowLeft size={16} /> Dashboard</button><div className="min-h-0 flex-1"><ChatUI onEmotionChange={() => undefined} panel groqApiKey="" initialMode="cloud" /></div></div></main>;
+  if (screen === "conversation") return <main className="relative flex h-[100dvh] min-h-0 flex-col bg-mesh-indigo p-3 sm:p-5"><div className="fixed inset-0 bg-mesh-pastel opacity-50" /><div className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-3 self-start"><ArrowLeft size={16} /> Dashboard</button><div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)]"><section role="region" aria-label="Shanaya avatar" data-emotion={emotion} data-avatar-motion={avatarMotion} className="relative min-h-32 overflow-hidden rounded-[2rem] border border-white/70 bg-white/65 shadow-soft-lg lg:min-h-0"><AvatarScene emotion={emotion} onMotionChange={setAvatarMotion} /></section><div className="min-h-0"><ChatUI onEmotionChange={setEmotion} panel groqApiKey={groqApiKey} initialMode={preferredMode} /></div></div></div></main>;
   if (screen === "accountability") return <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><div className="relative z-10 mx-auto max-w-5xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><AgentAccountabilityDashboard /></div></main>;
   if (screen === "developer") return (
     <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><section className="relative z-10 mx-auto max-w-3xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><div className="bento-card"><div className="bento-kicker">Developer settings</div><h1 className="bento-title mt-2">Resilience controls</h1><p className="bento-desc mt-2">Chaos injection is available only in development and test builds. It can simulate failed network requests, tool timeouts, corrupted memory, and denied approvals.</p><label className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/70 p-4"><span><span className="block text-sm font-bold text-ink">Chaos Mode</span><span className="mt-1 block text-xs text-slate-500">Randomly inject one configured failure at a time.</span></span><input type="checkbox" disabled={!ChaosEngine.available()} checked={chaosEnabled} onChange={(event) => ChaosEngine.setEnabled(event.target.checked)} className="h-5 w-5 accent-violet-600" /></label>{!ChaosEngine.available() && <p className="mt-3 text-xs text-slate-500">This production build does not expose chaos controls.</p>}<div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-sky-900"><Code2 size={16} /> Fallback status</div><p className="mt-2 text-xs text-sky-800">{degraded.degraded ? degraded.reason : "No degraded condition is currently reported."}</p>{degraded.degraded && <button className="mt-3 text-xs font-semibold text-sky-800 underline" onClick={() => ChaosEngine.clearDegraded()}>Clear degraded status</button>}</div></div></section></main>
@@ -48,11 +58,15 @@ export default function App() {
 
   if (screen === "landing") {
     return (
-      <LandingPage
-        onStart={() => setScreen("companion")}
-        onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
-        onMarketplace={() => { setMarketplaceReturnScreen("landing"); setScreen("marketplace"); }}
-      />
+      <>
+        <LandingPage
+          onStart={({ apiToken, groqApiKey: providerKey }) => { setApiAccessToken(apiToken); setGroqApiKey(providerKey); setScreen("conversation"); }}
+          onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
+          onMarketplace={() => { setMarketplaceReturnScreen("landing"); setScreen("marketplace"); }}
+          onFirstRunSetup={() => setOnboardingOpen(true)}
+        />
+        {onboardingOpen && <Onboarding onSkip={() => setOnboardingOpen(false)} onComplete={({ apiToken, groqApiKey: providerKey, preferredMode: setupMode }) => { setApiAccessToken(apiToken); setGroqApiKey(providerKey); setPreferredMode(setupMode); setOnboardingOpen(false); setScreen("conversation"); }} />}
+      </>
     );
   }
 

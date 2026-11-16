@@ -144,8 +144,9 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
       const normalizedPath = requestPath.endsWith("index.html")
         ? requestPath.slice(0, -"index.html".length)
         : requestPath;
-      const pagePath = "/";
-      const page = pages.home;
+      const isAboutPage = normalizedPath === "/about/" || normalizedPath === "/about";
+      const pagePath = isAboutPage ? "/about/" : "/";
+      const page = isAboutPage ? pages.about : pages.home;
       const image = siteOrigin ? new URL("/social-card.svg", siteOrigin).toString() : "/social-card.svg";
       const canonical = indexable ? new URL(pagePath, siteOrigin).toString() : "";
       const tags = [
@@ -192,7 +193,7 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
 
       if (indexable) {
         const today = new Date().toISOString().slice(0, 10);
-        const sitemapUrls = ["/"].map((path) => (
+        const sitemapUrls = ["/", "/about/"].map((path) => (
           `  <url><loc>${new URL(path, siteOrigin).toString()}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>${path === "/" ? "1.0" : "0.7"}</priority></url>`
         )).join("\n");
         this.emitFile({
