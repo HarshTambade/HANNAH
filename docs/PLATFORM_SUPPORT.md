@@ -29,7 +29,7 @@ Status for **HANNAH 1.3.0**, reviewed 2026-11-16. Every claim below says how it 
 | Files | 🟡 T (export and import JSON) | 🟡 D (app sandbox) | 🟡 D (app storage) | 🟡 D (export and import) | 🟡 D | 🟡 D |
 | Reminders and notifications | 🟡 T (only while the tab is open) | ✅ D (system notifications, even when closed) | ✅ D (system notifications, even when closed) | 🟡 D (while the app runs) | 🟡 D (while the app runs; needs the installer's app identity) | 🟡 D (while the app runs; depends on the desktop's notification service) |
 | Cloud models (20 providers, routing) | ✅ T (mocked providers) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
-| Local models | ✅ T (WebLLM downloaded and answered in Chromium with WebGPU) | ✅ D (llama.cpp on-device) | ✅ D (llama.cpp on-device) | 🟡 D (WebLLM with WebGPU; Ollama through the server) | 🟡 D (as macOS) | 🟡 D (as macOS; WebGPU support varies by GPU driver) |
+| Local models | ✅ T (WebLLM downloaded and answered in Chromium with WebGPU; after the worker change, download progress re-verified, reply not yet re-run) | ✅ D (llama.cpp on-device) | ✅ D (llama.cpp on-device) | 🟡 D (WebLLM with WebGPU; Ollama through the server) | 🟡 D (as macOS) | 🟡 D (as macOS; WebGPU support varies by GPU driver) |
 | Agents and Team mode | ✅ T (mocked models) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Desktop computer use | ❌ | ❌ | ❌ | 🟡 D (needs the server's Anthropic key and the desktop bridge) | 🟡 D | 🟡 D |
 | Memory and local storage | ✅ T | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
@@ -40,7 +40,7 @@ Status for **HANNAH 1.3.0**, reviewed 2026-11-16. Every claim below says how it 
 
 ## What was actually run for 1.3.0
 
-- **Browser (Chromium, Playwright):** 25 end-to-end tests at desktop and phone sizes. They cover routing (direct links, refresh, back and forward, old `#/` links, 404), landing-page links and version, chat, Team mode, routing preview, Models and "Use in chat", account sign-in and the Marketplace. WebLLM was separately downloaded (about 13 minutes) and answered a message.
+- **Browser (Chromium, Playwright):** 25 end-to-end tests at desktop and phone sizes. They cover routing (direct links, refresh, back and forward, old `#/` links, 404), landing-page links and version, chat, Team mode, routing preview, Models and "Use in chat", account sign-in and the Marketplace. WebLLM was separately downloaded (about 13 minutes) and answered a message. After the engine moved into its worker, a second run on the production build confirmed progress reporting through the new worker protocol (32% of the download in 15 minutes on a slow connection); the reply step was not re-run on that build.
 - **Unit and API tests:** 148 client and 101 server tests. CI runs them on every push.
 - **Desktop security policy:** the built app was served under the Electron runtime's default policy and under HANNAH's policy. The default left the avatar blank and blocked the fonts; HANNAH's policy rendered both, with no violations.
 - **Desktop main process:** compiled with the generated Electron project (TypeScript, no errors).

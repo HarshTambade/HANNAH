@@ -169,3 +169,17 @@ test("the Integrations page explains bringing your own database", async ({ page 
   await expect(card).toContainText("sqlite:./data/hannah.db");
   await expect(card.getByRole("button", { name: "Test connection" })).toBeDisabled();
 });
+
+test("the Integrations guide covers every integration with readable examples", async ({ page }) => {
+  await page.route(/\/(api|v1)\//, (route) => route.fulfill({ status: 404, contentType: "application/json", body: "{}" }));
+  await page.goto("/integrations");
+  for (const name of ["Authentication", "REST API", "OpenAI-compatible API", "MCP server", "Agent2Agent (A2A)", "Webhooks", "Server environment", "Limits and errors", "Troubleshooting"]) {
+    await expect(page.getByRole("heading", { level: 2, name, exact: true })).toBeVisible();
+  }
+  // The remote MCP example was once white text on a white card.
+  const remote = page.locator("pre", { hasText: "Bearer <MCP_API_TOKEN>" });
+  const colors = await remote.evaluate((element) => ({ text: getComputedStyle(element).color, background: getComputedStyle(element.parentElement!).backgroundColor }));
+  expect(colors.text).not.toBe(colors.background);
+  expect(colors.background).toBe("rgb(2, 6, 23)");
+  await expect(page.locator("pre", { hasText: "HANNAH_API_TOKEN" }).first()).toBeVisible();
+});

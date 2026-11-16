@@ -25,6 +25,7 @@ The first published release since 1.0.2. The tags `v1.0.3`, `v1.1.0` and `v1.2.0
 - **Real page addresses.** Screens live at `/chat`, `/models`, `/agents`, `/memory`, `/settings` and so on, instead of `#/models`. Refresh, direct links, and the browser and Android back buttons work, old `#/…` links redirect, and unknown addresses show a "Page not found" screen.
 - **Platform conventions.** Phones get a bottom tab bar. Android draws edge-to-edge with readable status-bar icons and resizes for the keyboard. The desktop app has a full menu bar (Edit, View, Go with ⌘/Ctrl+1…6, Settings ⌘/Ctrl+, and Check for Updates), a minimum window size, and an About panel. Windows reminders now show as system notifications.
 - **Windows installer.** Windows now ships an installer with a Start-menu entry and an uninstaller, replacing the portable executable. That's also what makes desktop auto-update possible.
+- **Integrations guide.** The Integrations page now documents every way in (REST API, OpenAI-compatible `/v1`, MCP server and client, A2A, webhooks, your own database) with the credential each one needs, copyable examples, config file locations for Claude Desktop, Cursor and VS Code, server settings, rate limits, error codes and troubleshooting.
 - **New landing page** that describes what HANNAH does today, separates the roadmap from shipped features, and lists downloads with install notes.
 - **One version everywhere.** The web app, desktop, Android and iOS builds all identify as 1.3.0, and CI fails if any of them disagree or if a tag doesn't match.
 
@@ -37,6 +38,7 @@ The first published release since 1.0.2. The tags `v1.0.3`, `v1.1.0` and `v1.2.0
 - The iOS web-app status bar used white text on HANNAH's light background.
 - Cost estimates now appear only for prices with a verification date (none yet), instead of from unverified list prices.
 - The chat layout scrolled sideways on narrow phones.
+- On the Integrations page, the remote MCP configuration was nearly invisible (white text on a white card), and the local MCP example left out the `HANNAH_API_TOKEN` it needs to chat.
 - The WebLLM engine was bundled twice (about 2 MB extra gzipped), which put the app over its size budget and failed the web and desktop builds. It now loads only in its worker.
 - The release workflow no longer requires signing secrets that aren't configured. It publishes what it can build and labels each package's signing status.
 
