@@ -51,10 +51,12 @@
     "capacitor-mobile-claw": "^2.5.1",
     "capacitor-mobilecron": "^0.2.24",
     "capacitor-native-agent": "^0.9.16",
+    "framer-motion": "^14.14.0",
     "llama-cpp-capacitor": "^0.1.5",
     "lucide-react": "^0.468.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "recharts": "^3.10.1",
     "three": "^0.187.0",
     "three-stdlib": "^2.36.1",
     "use-browser-llm": "^0.1.2"

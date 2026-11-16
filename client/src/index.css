@@ -183,6 +183,7 @@ textarea {
 }
 
 /* ===== Design system: reference-style light aesthetic ===== */
+@layer components {
 .glass-card {
   background-color: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(12px);
@@ -392,5 +393,172 @@ textarea {
 /* ===== Section header pattern (kicker + title + desc) ===== */
 .section-block {
   @apply mb-8;
+}
+
+/* ===== Phase 23: Bento Dashboard Design System ===== */
+.bento-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto;
+}
+
+@media (min-width: 768px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .bento-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.bento-card {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 2rem;
+  box-shadow: 0 20px 40px -8px rgba(0,0,0,0.08);
+  padding: 2rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.bento-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 48px -8px rgba(0,0,0,0.10);
+}
+
+.bento-card span-2-2 {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.bento-card.span-2-1 {
+  grid-column: span 2;
+  grid-row: span 1;
+}
+
+.bento-card.span-1-2 {
+  grid-column: span 1;
+  grid-row: span 2;
+}
+
+@media (max-width: 1023px) {
+  .bento-card.span-2-2,
+  .bento-card.span-2-1,
+  .bento-card.span-1-2 {
+    grid-column: span 1;
+    grid-row: span 1;
+  }
+}
+
+/* Glassmorphic chat overlay */
+.chat-glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 2rem;
+  box-shadow: 0 24px 48px -8px rgba(0,0,0,0.06);
+}
+
+/* Mesh gradient backgrounds */
+.bg-mesh-indigo {
+  background: radial-gradient(ellipse at 24% 44%, rgba(86, 67, 190, 0.22), transparent 44%),
+              radial-gradient(ellipse at 78% 18%, rgba(20, 184, 166, 0.06), transparent 34%);
+}
+
+.bg-mesh-pastel {
+  background: radial-gradient(ellipse at 30% 30%, rgba(139, 92, 246, 0.15), transparent 50%),
+              radial-gradient(ellipse at 70% 70%, rgba(253, 186, 116, 0.12), transparent 50%);
+}
+
+/* Custom scrollbar for dashboard panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Pastel pill badges */
+.pill-purple {
+  @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold border border-purple-100 bg-purple-50 text-purple-700;
+}
+.pill-peach {
+  @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold border border-orange-100 bg-orange-50 text-orange-700;
+}
+.pill-blue {
+  @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold border border-blue-100 bg-blue-50 text-blue-700;
+}
+.pill-mint {
+  @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold border border-emerald-100 bg-emerald-50 text-emerald-700;
+}
+
+/* Section typography */
+.bento-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.bento-title {
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 28px;
+  color: #0f172a;
+  line-height: 1.2;
+  margin-bottom: 1rem;
+}
+
+.bento-desc {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+/* Active indicator dot */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+  animation: pulse-slow 3s infinite;
+}
+
+/* Stat big number */
+.stat-big {
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 48px;
+  color: #0f172a;
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #64748b;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Dashboard root */
+.dashboard-root {
+  background: #0f172a;
+  color: #0f172a;
+  min-height: 100vh;
+  position: relative;
+}
 }
 
