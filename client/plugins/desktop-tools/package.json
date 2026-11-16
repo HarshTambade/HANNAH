@@ -1,0 +1,16 @@
+{
+  "name": "@hannah/desktop-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HANNAH desktop files and terminal: scoped folders and approved commands, enforced in Electron's main process.",
+  "type": "module",
+  "files": [
+    "electron/dist"
+  ],
+  "capacitor": {
+    "electron": {
+      "src": "electron"
+    }
+  },
+  "license": "MIT"
+}

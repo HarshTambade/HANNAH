@@ -4,6 +4,9 @@ import { apiFetch, apiUrl } from "../services/api";
 import { ChatHistory } from "../services/ChatHistory";
 import { resumeTeamRun, TEAM_RUNS_EVENT, TeamRuns, type TeamRun, type TeamStep, type TeamStepStatus } from "../services/Orchestrator";
 import { readSpecialistSettings, SPECIALISTS, SPECIALISTS_EVENT, updateSpecialist, type SpecialistId } from "../services/SpecialistAgents";
+import { desktopFilesAvailable } from "../services/DesktopFiles";
+
+const onDesktop = desktopFilesAvailable();
 
 const agentIcons: Record<SpecialistId, typeof Brain> = { research: BookOpen, coding: Code2, memory: Brain, tasks: ListChecks };
 const agentTones: Record<SpecialistId, string> = { research: "tone-sky", coding: "tone-lavender", memory: "tone-mint", tasks: "tone-butter" };
@@ -178,7 +181,7 @@ export default function AgentsPage() {
             }>
               <p className="flex items-start gap-2 text-sm text-slate-700"><Icon size={16} className="mt-0.5 shrink-0" /> {agent.description}</p>
               <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Tools it may use</p>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">{agent.tools.map((tool) => <span key={tool} className="rounded-full bg-white/80 px-2 py-0.5 font-mono text-[11px] text-slate-700">{tool}</span>)}</div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">{agent.tools.filter((tool) => onDesktop || !tool.startsWith("desktop_")).map((tool) => <span key={tool} className="rounded-full bg-white/80 px-2 py-0.5 font-mono text-[11px] text-slate-700">{tool}</span>)}{!onDesktop && agent.tools.some((tool) => tool.startsWith("desktop_")) && <span className="px-1 py-0.5 text-[11px] text-slate-600">+ files and terminal in the desktop app</span>}</div>
               <label htmlFor={`model-${agent.id}`} className="mt-3 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Model</label>
               <select id={`model-${agent.id}`} value={model} onChange={(event) => updateSpecialist(agent.id, { model: event.target.value })} className="mt-1.5 w-full rounded-xl border border-white/80 bg-white/90 px-3 py-2 text-sm text-ink">
                 <option value="auto">Auto ({agent.routeHint} tier)</option>

@@ -38,6 +38,10 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,svg,wasm}"],
+        // These paths belong to the HANNAH server, not the app: let navigations
+        // to them reach the network instead of the cached app page. Without this,
+        // /download/android showed the app's "Page not found" screen.
+        navigateFallbackDenylist: [/^\/download\//, /^\/api\//, /^\/v1\//, /^\/mcp(?:\/|$)/, /^\/\.well-known\//],
         runtimeCaching: [{
           urlPattern: /\/models\/.*\.glb$/,
           handler: "CacheFirst",

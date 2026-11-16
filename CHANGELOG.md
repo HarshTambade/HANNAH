@@ -7,6 +7,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 ### New
 
 - **Automations that run.** Saved routines now run daily, on weekdays or every few hours while HANNAH is open in a tab or the desktop app; a run that was due while HANNAH was closed happens once when it reopens. Each step passes its result to the next. Actions (save to memory, create a reminder) pause until you approve or deny them, and every run is kept in a run history with its steps and result. You can run any automation on demand, edit it, and turn its schedule on or off.
+- **Files and terminal on desktop.** Share folders in Settings → Desktop access, and HANNAH and the Coding agent can read them, change files in read-write folders, and run commands such as your tests. The desktop app enforces the limits in its main process, outside the AI model: paths can't leave a shared folder (symlinks included), and every write and every command waits for your yes in a system dialog. Commands run without a shell, with a time limit.
 
 ### Improved
 
@@ -14,6 +15,10 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Desktop apps crashed on launch in 1.3.0** (macOS, Windows and Linux). The main process imported the auto-updater in a way that is undefined at runtime. Fixed, and CI now starts each packaged desktop app and fails the build if it doesn't load.
+- Settings (and the sign-in check on the landing page) could crash when the server answered the account check with something other than HANNAH's JSON, for example a web page.
+- The website said the downloadable desktop app can use your screen, mouse and keyboard (computer use). That still needs a desktop app you build yourself, so it's now listed on the roadmap instead.
+- Download buttons showed the app's "Page not found" screen for visitors who had opened the site before: the offline service worker answered `/download/…` with the cached app page instead of letting the request reach the server. Server paths (`/download`, `/api`, `/v1`, `/mcp`, `/.well-known`) now always go to the network.
 - Download buttons on the website led to a GitHub 404 whenever the newest published release didn't have a file with that exact name. They now go to `/download/<platform>` on HANNAH's own site, which starts the download from the newest release that has the package (including older file names) and shows a clear "not available yet" page instead of a 404.
 
 ## 1.3.0 — 2026-11-16

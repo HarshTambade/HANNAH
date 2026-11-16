@@ -3,6 +3,8 @@ import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Server, Trash2, Wallet 
 import { apiFetch, apiUrl, getAccountHint, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
 import AccountPanel from "./AccountPanel";
 import VoiceSettingsPanel from "./VoiceSettingsPanel";
+import DesktopAccessPanel from "./DesktopAccessPanel";
+import { desktopFilesAvailable } from "../services/DesktopFiles";
 import { DAILY_BUDGET_KEY } from "../services/LLMRouter";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
@@ -200,6 +202,11 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
         <VoiceSettingsPanel />
       </Section>
 
+      {desktopFilesAvailable() && (
+        <Section title="Desktop access" description="Folders on this computer HANNAH may work in, and the commands she may run there. The desktop app enforces these rules itself, outside the AI model.">
+          <DesktopAccessPanel />
+        </Section>
+      )}
       <Section title="Spending" description="An estimate from list prices for the tokens HANNAH used today. Free tiers and unpriced models count as $0. The server enforces the limit for this key or token.">
         <dl className="space-y-3 text-sm">
           <div className="flex items-center justify-between gap-3">

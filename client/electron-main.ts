@@ -1,9 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell, type MenuItemConstructorOptions } from "electron";
-import electronUpdater from "electron-updater";
+// A named import: electron-updater is compiled with __esModule and has no
+// default export, so a default import is undefined at runtime and crashed the
+// app on launch in 1.3.0.
+import { autoUpdater } from "electron-updater";
+import { writeFileSync } from "node:fs";
 import { createCapacitorElectronApp } from "@capawesome/capacitor-electron";
 import config from "./capacitor.electron.config";
-
-const { autoUpdater } = electronUpdater;
 const REPOSITORY = "https://github.com/HarshTambade/Shanaya-Your-AI-companion";
 const isMac = process.platform === "darwin";
 
@@ -152,5 +154,38 @@ ipcMain.handle("hannah:check-for-updates", async () => {
     return { available: false };
   }
 });
+
+// CI launch check: start, load the app page, print a marker and quit.
+// Any crash on the way (like a bad import) fails the build instead of shipping.
+if (process.env.HANNAH_SMOKE_TEST === "1") {
+  // Also written to a file: Windows GUI apps don't always reach the console.
+  const report = (line: string) => {
+    console.log(line);
+    if (process.env.HANNAH_SMOKE_FILE) {
+      try {
+        writeFileSync(process.env.HANNAH_SMOKE_FILE, `${line}\n`);
+      } catch {
+        // The console line is still there.
+      }
+    }
+  };
+  const timer = setTimeout(() => {
+    report("HANNAH_SMOKE_FAIL: the app page did not load within 60 seconds.");
+    app.exit(1);
+  }, 60_000);
+  app.on("browser-window-created", (_event, window) => {
+    window.webContents.once("did-finish-load", () => {
+      void window.webContents.executeJavaScript("document.title").then((title) => {
+        clearTimeout(timer);
+        report(`HANNAH_SMOKE_OK ${app.getVersion()} "${title}"`);
+        app.exit(0);
+      });
+    });
+    window.webContents.once("did-fail-load", (_e, code, description) => {
+      report(`HANNAH_SMOKE_FAIL: ${code} ${description}`);
+      app.exit(1);
+    });
+  });
+}
 
 createCapacitorElectronApp(config);

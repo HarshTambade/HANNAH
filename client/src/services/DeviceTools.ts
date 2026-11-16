@@ -8,6 +8,7 @@ import { HITLDeniedError, SafetyGuard, type SensitiveAction } from "./SafetyGuar
 import { ReminderService, resolveDueAt } from "./ReminderService";
 import { MemoryService } from "./MemoryService";
 import { notifyMemoryChanged } from "./MemoryStore";
+import { getDesktopFileTools } from "./DesktopFiles";
 
 export type ToolSchema = {
   type: "object";
@@ -329,7 +330,8 @@ export function setExternalTools(tools: HANNAHTool[]) {
 }
 
 export function getDeviceTools() {
-  return externalTools.length ? [...deviceTools, ...externalTools] : deviceTools;
+  const desktop = getDesktopFileTools();
+  return desktop.length || externalTools.length ? [...deviceTools, ...desktop, ...externalTools] : deviceTools;
 }
 
 /**

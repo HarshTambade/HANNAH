@@ -21,7 +21,7 @@
     "models:draco": "node scripts/compress-avatar.mjs",
     "cap:run:ios": "npm run build && cap sync ios && npm run cap:patch:ios && cap run ios",
     "cap:run:android": "npm run build && cap sync android && npm run cap:patch:android && cap run android",
-    "test": "vitest run",
+    "test": "vitest run && node --test plugins/desktop-tools/core.test.mjs",
     "test:chaos": "vitest run src/__tests__/Phase25Chaos.test.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test --config playwright.config.ts"
@@ -44,6 +44,7 @@
     "@capgo/capacitor-permissions": "^8.2.8",
     "@capgo/capacitor-speech-synthesis": "^8.0.27",
     "@elizaos/capacitor-talkmode": "^2.0.5",
+    "@hannah/desktop-tools": "file:plugins/desktop-tools",
     "@mlc-ai/web-llm": "^0.2.88",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@pinecall/ionic": "^0.2.1",

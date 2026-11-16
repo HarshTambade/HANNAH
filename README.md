@@ -584,6 +584,22 @@ The MCP server exposes no shell, file, messaging or computer-control tools. See 
 
 ---
 
+## Desktop files and terminal
+
+In the desktop app, **Settings → Desktop access** lets you share folders with HANNAH. The Research and Coding agents (and HANNAH herself) then get five tools: `desktop_folders`, `desktop_list_files`, `desktop_read_file`, `desktop_write_file` and `desktop_run_command`.
+
+The rules live in the `HannahDesktop` plugin ([`client/plugins/desktop-tools`](./client/plugins/desktop-tools)), which runs in Electron's main process, outside the web page and the AI model:
+
+- **Folders you pick.** Folders are added only through the system folder dialog, as read-only or read-write. The whole drive, your home folder, system folders and folders holding keys (`.ssh`, `.aws` and so on) are refused.
+- **Paths stay inside.** Every path is resolved, symlinks included, and must stay inside its shared folder. Reads are limited to 256 KB of text.
+- **Writes ask first.** Writing needs a read-write folder and your yes in a native dialog that shows the path and the start of the content.
+- **Commands ask first.** Each command shows the exact command line and folder in a native dialog: **Run once**, **Always allow this exact command here**, or **Cancel**. Commands run one program without a shell (no pipes, redirects, `&&` or variables), with a minimal environment, a 60-second limit and 100 KB of output. `sudo`, shells, disk tools and system-service tools are never run.
+- **Your record.** Recent reads, writes and commands are listed in Settings, and removing a folder revokes its access and its always-allowed commands.
+
+On Windows, `.cmd` and `.bat` programs (such as `npm`) can't run without a shell; run `node`, `git` or `python` directly instead.
+
+---
+
 ## Desktop computer use
 
 The `/api/desktop/computer` route uses Anthropic's computer toolset on the server, and an Electron bridge performs the returned actions. Setup:
@@ -861,7 +877,7 @@ Not covered automatically: physical-device permissions, speech, calls, app resum
 
 ## Project status
 
-**Shipped in the app:** everything described above under [What you can do](#what-you-can-do), the safety chain, all six inference modes, device tools, Marketplace, MCP, voice, Pinecall integration, desktop computer use (with the bridge set up), and the native and desktop builds.
+**Shipped in the app:** everything described above under [What you can do](#what-you-can-do), the safety chain, all six inference modes, device tools, Marketplace, MCP, voice, Pinecall integration, desktop files and terminal, desktop computer use (only in a desktop app you build with the bridge set up), and the native and desktop builds.
 
 **Experimental modules (in the repo, not wired into the app).** [`client/src/services`](./client/src/services) also contains research modules with unit tests that no screen uses yet. Among them:
 

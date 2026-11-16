@@ -4,7 +4,7 @@ import { Account, databaseLabel, type AccountStatus } from "../services/Account"
 import { SignInForm } from "./AccountPanel";
 import {
   ArrowRight, AudioLines, Bot, Boxes, Brain, Cable, Check, ChevronDown, Cpu, Download, Eye, EyeOff, HardDrive, KeyRound, LockKeyhole, Menu,
-  MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, Waypoints, Workflow, X,
+  MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, TerminalSquare, Waypoints, Workflow, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
 import AppTour from "./AppTour";
@@ -80,7 +80,7 @@ const capabilities = [
 const roadmap = [
   ["“Hey HANNAH” wake word", "Hands-free start on desktop and Android, detected on the device."],
   ["Calendar and email", "Connect Google and Microsoft accounts with their own sign-in."],
-  ["Files and terminal on desktop", "Scoped folders and approved commands, enforced outside the model."],
+  ["Computer use in the desktop app", "Seeing the screen and using the mouse and keyboard, with approval for each action. Today it needs a desktop app you build yourself (see the README)."],
   ["Tasks across devices", "Start a task on your laptop and approve it from your phone."],
   ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],
 ] as const;
@@ -100,7 +100,7 @@ const faqs = [
   },
   {
     q: "Can HANNAH do things on my computer?",
-    a: "The desktop app can operate your computer through Anthropic computer use when the server is configured for it, and every action waits for your approval. File and terminal tools are still on the roadmap.",
+    a: "Yes, in the desktop app. Share a folder in Settings → Desktop access and HANNAH can read files there, change files in folders you mark read-write, and run commands such as your tests. Every write and every command waits for your yes in a system dialog, and the app enforces those limits itself, outside the AI model. Seeing your screen and using the mouse (computer use) still needs a desktop app you build yourself; it's on the roadmap for the downloadable app.",
   },
   {
     q: "Where does my data go?",
@@ -340,15 +340,14 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
                   <p className="mt-2 text-[14px] leading-6 text-slate-600">{description}</p>
                 </article>
               ))}
-            <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-6 sm:col-span-2">
+            <article className="rounded-2xl border border-violet-200/80 bg-violet-50/60 p-6 shadow-soft sm:col-span-2">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-[15px] font-semibold text-ink">Computer use on desktop</h3>
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Preview</span>
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-violet-700 ring-1 ring-violet-200"><TerminalSquare size={18} strokeWidth={1.8} aria-hidden="true" /></span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-violet-800 ring-1 ring-violet-200">Desktop app</span>
               </div>
-              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-700">
-                The desktop app can see your screen and use your mouse and keyboard through Anthropic computer use, with your approval for every action. It needs the server operator to enable it with an Anthropic key.
-              </p>
-            </div>
+              <h3 className="mt-5 text-[15px] font-semibold text-ink">Files and terminal on desktop</h3>
+              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-700">Share a project folder and HANNAH can read it, edit files in folders you mark read-write, and run commands such as your tests. You approve every write and every command in a system dialog, and the app enforces the folder limits itself, outside the AI model.</p>
+            </article>
             </div>
           </div>
         </section>

@@ -31,7 +31,8 @@ Status for **HANNAH 1.3.0**, reviewed 2026-11-16. Every claim below says how it 
 | Cloud models (20 providers, routing) | ✅ T (mocked providers) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Local models | ✅ T (WebLLM downloaded and answered in Chromium with WebGPU; after the worker change, download progress re-verified, reply not yet re-run) | ✅ D (llama.cpp on-device) | ✅ D (llama.cpp on-device) | 🟡 D (WebLLM with WebGPU; Ollama through the server) | 🟡 D (as macOS) | 🟡 D (as macOS; WebGPU support varies by GPU driver) |
 | Agents and Team mode | ✅ T (mocked models) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
-| Desktop computer use | ❌ | ❌ | ❌ | 🟡 D (needs the server's Anthropic key and the desktop bridge) | 🟡 D | 🟡 D |
+| Desktop files and terminal | ❌ | ❌ | ❌ | ✅ T (HannahDesktop plugin; see below) | ✅ B | ✅ B |
+| Desktop computer use | ❌ | ❌ | ❌ | 🟡 D (only in a self-built desktop app with the bridge, plus the server's Anthropic key) | 🟡 D | 🟡 D |
 | Memory and local storage | ✅ T | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Background work | 🚫 browser: only while open | 🚫 iOS: no background agents; notifications only | 🟡 D (notifications; no foreground service yet) | 🟡 while running | 🟡 while running | 🟡 while running |
 | Permission prompts | ✅ T (browser) | ✅ D (microphone, speech, local network strings) | ✅ D (microphone, notifications) | ✅ D (microphone, local network) | ✅ D | ✅ D |

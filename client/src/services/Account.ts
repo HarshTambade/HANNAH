@@ -49,7 +49,16 @@ function remember(result: SignedIn) {
 const json = (value: unknown) => JSON.stringify(value);
 
 export const Account = {
-  status: () => request<AccountStatus>("/api/account/status"),
+  async status() {
+    const status = await request<Partial<AccountStatus>>("/api/account/status");
+    // A host without the HANNAH server (for example a static build) can answer
+    // with a web page instead; treat anything without the expected shape as
+    // "no accounts here" rather than letting Settings or the landing page crash.
+    if (!status || typeof status.accounts?.enabled !== "boolean" || typeof status.database !== "object" || status.database === null) {
+      throw new AccountError("This server didn't answer like a HANNAH server.", 0, "unexpected-response");
+    }
+    return status as AccountStatus;
+  },
   async register(email: string, password: string, displayName = "") {
     return remember(await request<SignedIn>("/api/account/register", { method: "POST", body: json({ email, password, displayName }) }));
   },

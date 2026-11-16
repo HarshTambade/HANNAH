@@ -122,3 +122,24 @@ test("the landing page shows the app version and working download links", async 
     expect(href).toContain("github.com/HarshTambade/Shanaya-Your-AI-companion");
   }
 });
+
+test.describe("with the offline service worker", () => {
+  test.use({ serviceWorkers: "allow" });
+
+  test("download links reach the server even when the offline service worker controls the page", async ({ page, context }) => {
+    let reachedServer = false;
+    await context.route("**/download/**", (route) => {
+      reachedServer = true;
+      return route.fulfill({ status: 200, headers: { "content-type": "application/vnd.android.package-archive", "content-disposition": "attachment; filename=HANNAH-Android.apk" }, body: "APK" });
+    });
+    await page.goto("/");
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await page.reload();
+    expect(await page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+    const download = page.waitForEvent("download");
+    await page.locator("#download").getByRole("link", { name: "APK" }).click();
+    expect((await download).suggestedFilename()).toBe("HANNAH-Android.apk");
+    expect(reachedServer).toBe(true);
+    await expect(page.getByText("Page not found")).toHaveCount(0);
+  });
+});

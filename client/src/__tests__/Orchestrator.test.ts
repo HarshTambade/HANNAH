@@ -63,7 +63,9 @@ describe("Orchestrator", () => {
     expect(agentCalls[2].startedAt).toBeGreaterThanOrEqual(agentCalls[0].startedAt + 10);
     expect(agentCalls[2].content).toContain("done: Weather in Pune");
     expect(agentCalls[2].tools).toContain("create_reminder");
-    expect(agentCalls[0].tools).toEqual(["list_app_files", "read_app_file"]);
+    // Research may list and read (app files, and shared folders in the desktop app) but never write.
+    expect(agentCalls[0].tools).toEqual(expect.arrayContaining(["list_app_files", "read_app_file"]));
+    expect(agentCalls[0].tools.some((tool: string) => /write|run_command|delete/.test(tool))).toBe(false);
     expect(calls.map((call) => call.phase)).toEqual(["plan", "verify"]);
     const [run] = TeamRuns.list();
     expect(run.status).toBe("succeeded");
