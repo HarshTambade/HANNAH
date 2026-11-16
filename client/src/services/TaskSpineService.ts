@@ -1,4 +1,5 @@
 import { apiFetch, apiUrl } from "./api";
+import type { WorkflowSchema } from "./WorkflowSchema";
 
 export type TaskStatus = "pending" | "running" | "paused" | "completed" | "cancelled" | "failed";
 
@@ -13,6 +14,8 @@ export type Task = {
   pendingAction?: unknown;
   createdAt: string;
   updatedAt: string;
+  kind?: "task" | "workflow";
+  workflow?: WorkflowSchema;
 };
 
 const STORAGE_KEY = "shanaya.tasks.v1";
@@ -39,6 +42,22 @@ export const TaskSpineService = {
     const now = new Date().toISOString();
     const task: Task = { id: crypto.randomUUID(), title, prompt, status: "pending", progress: 0, createdAt: now, updatedAt: now };
     writeTasks([task, ...readTasks()]);
+    return task;
+  },
+  createWorkflow(workflow: WorkflowSchema): Task {
+    const now = new Date().toISOString();
+    const task: Task = {
+      id: workflow.id,
+      title: workflow.name,
+      prompt: `Workflow schema v${workflow.version}`,
+      status: "pending",
+      progress: 0,
+      kind: "workflow",
+      workflow: { ...workflow, updatedAt: now },
+      createdAt: workflow.createdAt || now,
+      updatedAt: now,
+    };
+    write([task, ...readTasks().filter((item) => item.id !== task.id)]);
     return task;
   },
   list(): Task[] {

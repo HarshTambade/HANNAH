@@ -248,7 +248,7 @@ textarea {
   gap: 0.5rem;
   border-radius: 9999px;
   padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 700;
   border: 1px solid;
 }
@@ -267,14 +267,14 @@ textarea {
   line-height: 1.1;
 }
 .metric-sub {
-  font-size: 11px;
+  font-size: 13px;
   color: #64748b;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   margin-top: 0.5px;
 }
 .section-kicker {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -284,15 +284,15 @@ textarea {
 .section-title {
   font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
   font-weight: 800;
-  font-size: 28px;
+  font-size: 32px;
   color: #0f172a;
   line-height: 1.2;
   margin-bottom: 12px;
 }
 .section-desc {
-  font-size: 13px;
+  font-size: 15px;
   color: #64748b;
-  line-height: 1.6;
+  line-height: 1.7;
   margin-bottom: 16px;
 }
 
@@ -304,7 +304,7 @@ textarea {
 
 /* ===== Light button variants ===== */
 .btn-primary {
-  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[11px] font-bold transition;
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[12px] font-bold transition;
   background: linear-gradient(to bottom right, #0ea5e9, #8b5cf6);
   color: #ffffff;
   box-shadow: 0 10px 40px -10px rgba(14, 165, 233, 0.25);
@@ -317,14 +317,14 @@ textarea {
   cursor: not-allowed;
 }
 .btn-outline {
-  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[11px] font-bold transition border border-slate-200 bg-white text-ink;
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[12px] font-bold transition border border-slate-200 bg-white text-ink;
 }
 .btn-outline:hover {
   border-color: #0ea5e9;
   color: #0ea5e9;
 }
 .btn-ghost {
-  @apply inline-flex items-center justify-center rounded-xl px-3 py-2 text-[10px] text-slate-500 transition bg-white/50 border border-transparent;
+  @apply inline-flex items-center justify-center rounded-xl px-3 py-2 text-[11px] text-slate-600 transition bg-white/50 border border-transparent;
 }
 .btn-ghost:hover {
   background-color: rgba(255, 255, 255, 0.8);
@@ -333,19 +333,19 @@ textarea {
 
 /* ===== Light input variants ===== */
 .input-light {
-  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[11px] text-ink outline-none placeholder:text-slate-400;
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[12px] text-ink outline-none placeholder:text-slate-400;
 }
 .input-light:focus {
   border-color: #0ea5e9;
   ring: 1px solid #0ea5e9;
 }
 .input-dark-fallback {
-  @apply w-full rounded-lg border border-white/10 bg-[#111521] px-3 py-2.5 text-[11px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-violet-300/40;
+  @apply w-full rounded-lg border border-white/10 bg-[#111521] px-3 py-2.5 text-[12px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-violet-300/40;
 }
 
 /* ===== Light badge / pill variants ===== */
 .badge {
-  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[9px] font-bold border;
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold border;
 }
 .badge-brand {
   @apply border-brand-100 bg-brand-50 text-brand-600;
