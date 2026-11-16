@@ -4,9 +4,10 @@ import { Account, databaseLabel, type AccountStatus } from "../services/Account"
 import { SignInForm } from "./AccountPanel";
 import {
   ArrowRight, AudioLines, Bot, Boxes, Brain, Cable, Check, ChevronDown, Cpu, Download, Eye, EyeOff, HardDrive, KeyRound, LockKeyhole, Menu,
-  MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, Waypoints, X,
+  MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, Waypoints, Workflow, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
+import AppTour from "./AppTour";
 import { APP_VERSION, PLATFORM_DOWNLOADS, RELEASE_NOTES_URL, RELEASES_URL, REPOSITORY_URL } from "../config/project";
 
 type LandingPageProps = {
@@ -59,6 +60,11 @@ const capabilities = [
     description: "A real-time 3D avatar that smiles, listens, thinks and talks, reacting to the mood of each reply.",
   },
   {
+    icon: Workflow,
+    title: "Automations that run",
+    description: "Build a routine from steps, run it daily, on weekdays or every few hours while HANNAH is open, and approve each action before it happens.",
+  },
+  {
     icon: Cable,
     title: "Build on it",
     description: "An OpenAI-compatible API, MCP server and client, agent-to-agent (A2A) messaging, signed webhooks and a JavaScript SDK.",
@@ -74,7 +80,6 @@ const capabilities = [
 const roadmap = [
   ["“Hey HANNAH” wake word", "Hands-free start on desktop and Android, detected on the device."],
   ["Calendar and email", "Connect Google and Microsoft accounts with their own sign-in."],
-  ["Automations that run", "Saved workflows run on a schedule, with your approval built in."],
   ["Files and terminal on desktop", "Scoped folders and approved commands, enforced outside the model."],
   ["Tasks across devices", "Start a task on your laptop and approve it from your phone."],
   ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],
@@ -335,8 +340,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
                   <p className="mt-2 text-[14px] leading-6 text-slate-600">{description}</p>
                 </article>
               ))}
-            </div>
-            <div className="mt-3 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-6">
+            <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 p-6 sm:col-span-2">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-[15px] font-semibold text-ink">Computer use on desktop</h3>
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Preview</span>
@@ -344,6 +348,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-700">
                 The desktop app can see your screen and use your mouse and keyboard through Anthropic computer use, with your approval for every action. It needs the server operator to enable it with an Anthropic key.
               </p>
+            </div>
             </div>
           </div>
         </section>
@@ -353,18 +358,9 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
           <div className="max-w-2xl">
             <p className="section-kicker">The app</p>
             <h2 className="section-title">Designed to stay out of your way.</h2>
-            <p className="section-desc">Screens from HANNAH {APP_VERSION}.</p>
+            <p className="section-desc">Take a look around. Pick a screen to see what it does.</p>
           </div>
-          <div className="mt-10 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-            <figure className="deck-frame">
-              <img src="/screens/chat.webp" width={1280} height={800} loading="lazy" decoding="async" alt="HANNAH's chat screen: the 3D avatar beside the conversation, with the route preview above the message box." className="w-full rounded-[1.1rem] border border-slate-200" />
-              <figcaption className="px-2 pb-1 pt-3 text-[13px] text-slate-600">Chat, with the model HANNAH picked shown before you send.</figcaption>
-            </figure>
-            <figure className="deck-frame">
-              <img src="/screens/models.webp" width={1280} height={800} loading="lazy" decoding="async" alt="HANNAH's Models screen: your device, what you need, and how to optimize the recommendations." className="w-full rounded-[1.1rem] border border-slate-200" />
-              <figcaption className="px-2 pb-1 pt-3 text-[13px] text-slate-600">Models: recommendations for your task, budget and hardware.</figcaption>
-            </figure>
-          </div>
+          <AppTour version={APP_VERSION} />
         </section>
 
         {/* Privacy and control */}

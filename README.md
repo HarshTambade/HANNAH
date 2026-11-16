@@ -85,7 +85,7 @@ Every screen has its own address, so refresh, bookmarks and the back button work
 | **Agents** | `/agents` | The agent team: Research, Coding, Memory and Tasks specialists with their tools and model choice (Auto or a specific model), the always-on verification agent, and **Team activity**: every team run's plan, which steps ran in parallel, each step's status and result, verification and the final answer. Interrupted or stopped runs can be resumed. |
 | **Models** | `/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
 | **Memory & trust** | `/memory` | The accountability page: an **Agent runs** log (every request with each tool step and how it ended, which survives reloads), Guardian strictness and its decision log (allowed and blocked, with reasons), saved memories you can edit or delete, personalization examples, the active persona, and installed plugins. |
-| **Automations** | `/automations` | Visual workflow designer (React Flow) with trigger, agent-task, tool-action and output nodes. Designs are saved on this device. See [Automations](#automations) for current limits. |
+| **Automations** | `/automations` | Routines built from trigger, agent-task, action and output steps that run on a schedule while HANNAH is open, with approval before every action and a run history. See [Automations](#automations). |
 | **Marketplace** | `/marketplace` | First-party agents and skills that change how HANNAH replies, plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
 | **Integrations** | `/integrations` | REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
 | **Settings** | `/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Voice**: speaking and listening engines, voice choice and interrupt-by-talking. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. |
@@ -541,9 +541,12 @@ The server checks the instructions again and labels them as untrusted guidance. 
 
 ## Automations
 
-**Automations** is a visual designer for workflows: a trigger (such as "every day at 8:00"), agent tasks, tool actions and an output (such as "speak the summary"). You can view the workflow as JSON ([`WorkflowSchema.ts`](./client/src/services/WorkflowSchema.ts)), save it on the device and delete it.
+**Automations** are routines built from connected steps: a trigger (manual, daily at a time, weekdays, or every few hours), agent tasks, actions and an output. The workflow is stored as JSON ([`WorkflowSchema.ts`](./client/src/services/WorkflowSchema.ts)) on the device.
 
-> **Current limit:** saved workflows are designs. No scheduler runs them yet. When execution is added, each tool step will go through the same Guardian and approval chain.
+- **Running.** [`AutomationService.ts`](./client/src/services/AutomationService.ts) checks every 30 seconds while HANNAH is open in a tab or the desktop app and starts what's due. A run missed while HANNAH was closed happens once when it reopens, not once per missed slot. **Run now** starts one on demand.
+- **Steps.** An agent task sends its instruction to `/api/chat` with the previous step's result as context. An action (save to memory, create a reminder) pauses the run until you press **Approve** or **Deny**. An output shows a notification, speaks the result, or only records it.
+- **History.** The latest 50 runs are kept on the device with each step's status and result.
+- **Limits.** Nothing runs while every HANNAH window is closed; on Android and iOS the app has to be open. Agent tasks use your connected AI and count toward its usage.
 
 ---
 
@@ -873,7 +876,7 @@ Treat these as design work in progress, not features. Account sync (see [Account
 
 **Known gaps:**
 
-- Saved automations don't run yet.
+- Automations run only while HANNAH is open (a missed run happens once when it reopens).
 - On the web, reminders alert only while HANNAH is open. The Android and iOS apps use system notifications.
 - **Stop** takes effect before the next step; a model request already in flight finishes first.
 - Without a database, spending budgets live in server memory and reset on restart.

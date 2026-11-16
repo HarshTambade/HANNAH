@@ -12,6 +12,7 @@ import AppShell, { type AppSection } from "./components/AppShell";
 import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
 import { REMINDER_FIRED_EVENT, startReminderScheduler, type Reminder } from "./services/ReminderService";
+import { startAutomationRunner } from "./services/AutomationService";
 import { startNativeReminders } from "./services/NativeReminders";
 import { clearApiSession, getAccountHint, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
 import { Account } from "./services/Account";
@@ -71,6 +72,7 @@ export default function App() {
 
   // Reminders fire while the app is open, on any screen.
   useEffect(() => startReminderScheduler(), []);
+  useEffect(() => startAutomationRunner(), []);
   useEffect(() => startNativeReminders(), []);
   // Signed-in users can have reminders reach their own webhooks.
   useEffect(() => {

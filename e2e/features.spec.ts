@@ -183,3 +183,44 @@ test("the Integrations guide covers every integration with readable examples", a
   expect(colors.background).toBe("rgb(2, 6, 23)");
   await expect(page.locator("pre", { hasText: "HANNAH_API_TOKEN" }).first()).toBeVisible();
 });
+
+test("an automation runs, waits for approval before acting, and records the result", async ({ page }) => {
+  await connectAsGuest(page);
+  const prompts: string[] = [];
+  await page.route("**/api/chat", async (route) => {
+    prompts.push(JSON.parse(route.request().postData() || "{}").messages?.[0]?.content ?? "");
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ reply: "1. Ship the release\n2. Reply to Maya\n3. Walk", emotion: "happy" }) });
+  });
+  const workflow = {
+    version: 1, id: "wf-e2e", name: "Plan and remember", createdAt: "2026-11-16T00:00:00Z", updatedAt: "2026-11-16T00:00:00Z",
+    nodes: [
+      { id: "t", kind: "trigger", label: "Weekdays at 08:00", config: { schedule: { type: "daily", time: "08:00", days: [1, 2, 3, 4, 5] } }, position: { x: 0, y: 0 } },
+      { id: "a", kind: "agent-task", label: "Plan my day", config: { task: "Plan my day in three bullets" }, position: { x: 300, y: 0 } },
+      { id: "m", kind: "tool-action", label: "Save the result to memory", config: { action: "save-memory" }, position: { x: 600, y: 0 } },
+      { id: "o", kind: "output", label: "Only keep it in run history", config: { channel: "log" }, position: { x: 900, y: 0 } },
+    ],
+    edges: [{ id: "1", source: "t", target: "a" }, { id: "2", source: "a", target: "m" }, { id: "3", source: "m", target: "o" }],
+  };
+  await page.addInitScript((value) => {
+    if (!localStorage.getItem("hannah.tasks.v1")) localStorage.setItem("hannah.tasks.v1", JSON.stringify([{ id: value.id, title: value.name, prompt: "Workflow schema v1", status: "pending", progress: 0, kind: "workflow", workflow: value, createdAt: value.createdAt, updatedAt: value.updatedAt }]));
+  }, workflow);
+  await page.goto("/automations");
+  await expect(page.getByText("Weekdays at 08:00").first()).toBeVisible();
+  await page.getByRole("button", { name: "Run Plan and remember now" }).click();
+
+  const approval = page.getByRole("region", { name: "Waiting for your approval" });
+  await expect(approval).toContainText("Plan and remember wants to: Save the result to memory");
+  await expect(approval).toContainText("Ship the release");
+  expect(prompts).toEqual(["Plan my day in three bullets"]);
+  expect(await page.evaluate(() => localStorage.getItem("hannah.memory.v1") ?? "")).not.toContain("Ship the release");
+
+  await approval.getByRole("button", { name: "Approve" }).click();
+  await expect(approval).toBeHidden();
+  const history = page.getByRole("list", { name: "Automation runs" });
+  await expect(history.getByText("Done", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("hannah.memory.v1") ?? "")).toContain("Ship the release");
+
+  // Turning the schedule on shows when it runs next.
+  await page.getByRole("checkbox", { name: "Run on schedule" }).check();
+  await expect(page.getByText(/Weekdays at 08:00 · next /)).toBeVisible();
+});

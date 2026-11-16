@@ -2,6 +2,20 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
+## 1.4.0 — Unreleased
+
+### New
+
+- **Automations that run.** Saved routines now run daily, on weekdays or every few hours while HANNAH is open in a tab or the desktop app; a run that was due while HANNAH was closed happens once when it reopens. Each step passes its result to the next. Actions (save to memory, create a reminder) pause until you approve or deny them, and every run is kept in a run history with its steps and result. You can run any automation on demand, edit it, and turn its schedule on or off.
+
+### Improved
+
+- **App tour on the website.** The screenshots section is now a tour of five real screens (Chat, Models, Automations, Agents, Integrations) in a browser frame with the screen's address and what it does.
+
+### Fixed
+
+- Download buttons on the website led to a GitHub 404 whenever the newest published release didn't have a file with that exact name. They now go to `/download/<platform>` on HANNAH's own site, which starts the download from the newest release that has the package (including older file names) and shows a clear "not available yet" page instead of a 404.
+
 ## 1.3.0 — 2026-11-16
 
 The first published release since 1.0.2. The tags `v1.0.3`, `v1.1.0` and `v1.2.0` were created but never published: their release step stopped because signing credentials weren't configured. This release includes all of that work.
@@ -37,7 +51,6 @@ The first published release since 1.0.2. The tags `v1.0.3`, `v1.1.0` and `v1.2.0
 - iOS permission prompts and the home-screen name still said "Shanaya".
 - The iOS web-app status bar used white text on HANNAH's light background.
 - Cost estimates now appear only for prices with a verification date (none yet), instead of from unverified list prices.
-- Download buttons on the website led to a GitHub 404 whenever the newest published release didn't have a file with that exact name. They now go to `/download/<platform>` on HANNAH's own site, which starts the download from the newest release that has the package (including older file names) and shows a clear "not available yet" page instead of a 404.
 - The chat layout scrolled sideways on narrow phones.
 - On the Integrations page, the remote MCP configuration was nearly invisible (white text on a white card), and the local MCP example left out the `HANNAH_API_TOKEN` it needs to chat.
 - The WebLLM engine was bundled twice (about 2 MB extra gzipped), which put the app over its size budget and failed the web and desktop builds. It now loads only in its worker.
