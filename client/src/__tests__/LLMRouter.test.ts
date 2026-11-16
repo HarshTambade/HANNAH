@@ -71,6 +71,8 @@ describe("LLM routing failover", () => {
     });
     vi.stubGlobal("fetch", appFetch);
     vi.stubGlobal("navigator", { onLine: true });
+    // The loopback Python fallback is only attempted when the app itself runs locally.
+    vi.stubGlobal("window", { location: { hostname: "localhost", href: "http://localhost:5173/" } });
 
     const generateLocal = vi.fn(async (_prompt: string, mode: InferenceMode) => {
       expect(mode).toBe("webllm");

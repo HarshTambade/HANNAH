@@ -1,4 +1,4 @@
-import { apiFetch, apiUrl } from "./api";
+import { apiFetch, apiUrl, isLocalDevelopmentHost } from "./api";
 import type { HANNAHTool } from "./DeviceTools";
 import type { InferenceMode } from "../types";
 import { resolveInferenceMode, getNetworkStatus } from "./AIService";
@@ -13,9 +13,24 @@ export type AgentMessage = {
 };
 
 export type AgentToolCall = { id: string; name: string; arguments: Record<string, unknown> };
-export type AgentStep = { content: string; toolCalls: AgentToolCall[] };
+export type AgentStepMeta = { provider?: string; model?: string; inputTokens?: number; outputTokens?: number };
+export type AgentStep = { content: string; toolCalls: AgentToolCall[]; meta?: AgentStepMeta };
 
-class AgentApiError extends Error {
+function configuredPythonFallback() {
+  const configured = import.meta.env.VITE_PYTHON_FALLBACK_URL?.trim().replace(/\/+$/, "");
+  if (!configured) return isLocalDevelopmentHost() ? "http://127.0.0.1:8000" : "";
+  // A loopback fallback only makes sense when the app itself runs locally;
+  // from a hosted site it would just add a confusing second error.
+  try {
+    const host = new URL(configured).hostname;
+    if (["localhost", "127.0.0.1", "::1", "[::1]"].includes(host) && !isLocalDevelopmentHost()) return "";
+  } catch {
+    return "";
+  }
+  return configured;
+}
+
+export class AgentApiError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message);
     this.name = "AgentApiError";
@@ -31,8 +46,16 @@ function normalizeStep(data: any): AgentStep {
     id: typeof call?.id === "string" ? call.id : undefined,
     function: { name: call?.name, arguments: call?.arguments },
   }));
+  const usage = data.usage && typeof data.usage === "object" ? data.usage : {};
+  const meta: AgentStepMeta = {
+    ...(typeof data.provider === "string" ? { provider: data.provider } : {}),
+    ...(typeof data.model === "string" ? { model: data.model } : {}),
+    ...(Number.isFinite(usage.inputTokens) ? { inputTokens: usage.inputTokens } : {}),
+    ...(Number.isFinite(usage.outputTokens) ? { outputTokens: usage.outputTokens } : {}),
+  };
   return {
     content: promptCalls.length ? "" : textContent,
+    meta,
     toolCalls: calls.map((call: any) => {
       const fn = call?.function ?? {};
       let args: Record<string, unknown> = {};
@@ -74,7 +97,9 @@ async function requestAgentStep(url: string, body: Record<string, unknown>, time
     throw new AgentApiError(
       timedOut
         ? "The AI request timed out while waiting for the configured provider. Check the API server and provider connection."
-        : `Could not reach the AI API at ${endpointLabel}. Start the server with npm run dev from the project root.`,
+        : isLocalDevelopmentHost()
+          ? `Could not reach the AI API at ${endpointLabel}. Start the server with npm run dev from the project root.`
+          : "Could not reach the HANNAH server. Check your internet connection and try again.",
       timedOut ? 408 : undefined,
     );
   }
@@ -153,7 +178,7 @@ export class LLMRouter {
     return resolveInferenceMode(preferred, browserConnected && network.connected);
   }
 
-  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext): Promise<AgentStep> {
+  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = []): Promise<AgentStep> {
     if (mode === "cloud" && ChaosEngine.consume("network-drop")) {
       ChaosEngine.setDegraded("Offline: cloud request dropped; switching to local AI.");
       throw new Error("Chaos injection: simulated cloud network drop.");
@@ -165,6 +190,7 @@ export class LLMRouter {
       ...(mode === "cloud" && model ? { model } : {}),
       ...(marketplaceItemIds.length ? { marketplaceItemIds } : {}),
       ...(personalization ? { personalization } : {}),
+      ...(memories.length ? { memories } : {}),
       messages,
       tools: tools.map(({ name, description, inputSchema }) => ({ type: "function", function: { name, description, parameters: inputSchema } })),
     };
@@ -173,13 +199,13 @@ export class LLMRouter {
       if (mode === "cloud") ChaosEngine.clearDegraded();
       return result;
     } catch (primaryError) {
-      if (mode !== "cloud" || selectedProvider !== "groq" || groqApiKey || !shouldUsePythonFallback(primaryError)) throw primaryError;
+      const fallbackBase = configuredPythonFallback();
+      if (!fallbackBase || mode !== "cloud" || selectedProvider !== "groq" || groqApiKey || !shouldUsePythonFallback(primaryError)) throw primaryError;
       // If the connection dropped during the cloud request, let AgentRuntime
       // switch straight to WebLLM/llama.cpp instead of waiting on an unreachable
       // Python endpoint. A reachable local Python service still gets its cold-load budget.
       const network = await getNetworkStatus().catch(() => ({ connected: typeof navigator === "undefined" || navigator.onLine }));
       if (!network.connected) throw primaryError;
-      const fallbackBase = import.meta.env.VITE_PYTHON_FALLBACK_URL?.trim().replace(/\/+$/, "") || "http://127.0.0.1:8000";
       try {
         // The Python route may cold-load a local llama.cpp model, so give it a longer budget.
         const fallbackStep = await requestAgentStep(`${fallbackBase}/api/agent/step`, body, 45_000);

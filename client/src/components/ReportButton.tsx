@@ -40,7 +40,7 @@ export default function ReportButton({ messageId, inferenceMode, className = "" 
 
   if (status === "reported") {
     return (
-      <span className={`inline-flex items-center gap-1 text-[9px] font-medium text-emerald-600 ${className}`}>
+      <span className={`inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 ${className}`}>
         <Check size={10} /> Reported
       </span>
     );
@@ -67,7 +67,7 @@ export default function ReportButton({ messageId, inferenceMode, className = "" 
         aria-label="Report AI content"
         aria-expanded={open}
         title="Report AI content"
-        className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[9px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-ink"
+        className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 hover:text-ink"
       >
         <Flag size={10} /> Report
       </button>
@@ -80,10 +80,10 @@ export default function ReportButton({ messageId, inferenceMode, className = "" 
         >
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="flex items-center gap-1.5 text-[10px] font-bold text-ink">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-ink">
                 <ShieldAlert size={12} className="text-amber-200" /> Report this reply
               </p>
-              <p className="mt-1 text-[9px] leading-4 text-slate-500">
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">
                 Only the message ID and reason are sent. The reply text is not attached.
               </p>
             </div>
@@ -104,18 +104,18 @@ export default function ReportButton({ messageId, inferenceMode, className = "" 
                 type="button"
                 disabled={status === "sending"}
                 onClick={() => void submit(reason.id)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-left text-[9px] text-slate-600 transition hover:border-brand-300 hover:bg-slate-50 disabled:opacity-50"
+                className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-left text-[11px] text-slate-600 transition hover:border-brand-300 hover:bg-slate-50 disabled:opacity-50"
               >
                 <span>
                   <span className="block font-medium text-ink">{reason.label}</span>
-                  <span className="mt-0.5 block text-[8px] leading-3 text-slate-500">{reason.detail}</span>
+                  <span className="mt-0.5 block text-[10px] leading-3 text-slate-500">{reason.detail}</span>
                 </span>
                 {status === "sending" && <Loader2 size={10} className="shrink-0 animate-spin text-violet-300" />}
               </button>
             ))}
           </div>
 
-          {error && <p role="alert" className="mt-2 text-[9px] leading-4 text-rose-700">{error}</p>}
+          {error && <p role="alert" className="mt-2 text-[11px] leading-4 text-rose-700">{error}</p>}
         </div>
       )}
     </div>

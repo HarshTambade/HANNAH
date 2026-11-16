@@ -4,7 +4,7 @@ import {
   useEdgesState, useNodesState, useReactFlow, type Connection, type Edge, type Node, type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowLeft, Bot, Clock3, GitBranch, Save, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { Bot, Clock3, GitBranch, Save, ShieldCheck, Sparkles, Trash2, Wrench } from "lucide-react";
 import { TaskSpineService } from "../services/TaskSpineService";
 import type { WorkflowNodeKind, WorkflowSchema } from "../services/WorkflowSchema";
 
@@ -48,7 +48,7 @@ function VisualNode({ data, selected }: NodeProps<FlowNode>) {
 
 const nodeTypes = { trigger: VisualNode, "agent-task": VisualNode, "tool-action": VisualNode, output: VisualNode };
 
-function BuilderCanvas({ onBack }: { onBack: () => void }) {
+function BuilderCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [name, setName] = useState("Morning brief");
@@ -57,6 +57,8 @@ function BuilderCanvas({ onBack }: { onBack: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
   const [notice, setNotice] = useState("");
+  const [saved, setSaved] = useState(() => TaskSpineService.list().filter((task) => task.kind === "workflow"));
+  const refreshSaved = () => setSaved(TaskSpineService.list().filter((task) => task.kind === "workflow"));
   const reactFlow = useReactFlow();
   const selected = nodes.find((node) => node.id === selectedId);
   const onConnect = useCallback((connection: Connection) => setEdges((current) => addEdge({ ...connection, animated: true }, current)), [setEdges]);
@@ -86,13 +88,14 @@ function BuilderCanvas({ onBack }: { onBack: () => void }) {
     if (!nodes.some((node) => node.data.kind === "trigger") || !nodes.some((node) => node.data.kind === "output")) { setNotice("Add at least one trigger and one output."); return; }
     if (!edges.length) { setNotice("Connect the workflow nodes before saving."); return; }
     TaskSpineService.createWorkflow(schema);
-    setNotice("Saved to Task Spine as a pending workflow. A background runner is not configured in this build.");
+    refreshSaved();
+    setNotice("Workflow saved on this device. Scheduled runs need the background runner, which this web build does not include yet.");
   }
 
   return (
-    <main className="relative z-10 mx-auto flex min-h-[100dvh] max-w-[1500px] flex-col px-4 py-5 sm:px-7 lg:px-10">
+    <main className="relative z-10 mx-auto flex max-w-6xl flex-col px-4 pb-12 pt-6 sm:px-6 sm:pt-8">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3"><button className="btn-ghost" onClick={onBack} aria-label="Back to dashboard"><ArrowLeft size={16} /></button><div><p className="bento-kicker">Visual workflow</p><h1 className="font-display text-2xl font-bold text-ink">Automations</h1></div></div>
+        <div><h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Automations</h1><p className="mt-1 text-sm text-slate-500">Sketch a routine as connected steps. Tool actions still ask for your approval.</p></div>
         <div className="flex items-center gap-2"><button className="btn-outline" onClick={() => setShowJson((value) => !value)}><GitBranch size={15} /> {showJson ? "Hide JSON" : "View JSON"}</button><button className="btn-primary" onClick={save}><Save size={15} /> Save workflow</button></div>
       </header>
       <div className="mb-3 flex flex-wrap items-center gap-3"><label className="text-xs font-semibold text-slate-500">Workflow name <input value={name} onChange={(event) => setName(event.target.value)} className="ml-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-ink outline-none focus:border-violet-300" /></label><p className="text-[11px] text-slate-500">Connect nodes left to right. Actions that affect your device still require approval.</p></div>
@@ -104,11 +107,29 @@ function BuilderCanvas({ onBack }: { onBack: () => void }) {
       </div>
       {selected && <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-violet-100 bg-white/70 p-3 text-xs"><label className="font-semibold text-slate-600">Selected node <input value={selected.data.label} onChange={(event) => setNodes((current) => current.map((node) => node.id === selected.id ? { ...node, data: { ...node.data, label: event.target.value, config: { ...node.data.config, label: event.target.value } } } : node))} className="ml-2 rounded-lg border border-slate-200 px-2 py-1.5 font-normal outline-none focus:border-violet-300" /></label><button className="text-rose-600" onClick={() => { setNodes((current) => current.filter((node) => node.id !== selected.id)); setEdges((current) => current.filter((edge) => edge.source !== selected.id && edge.target !== selected.id)); setSelectedId(null); }}>Delete node</button></div>}
       {notice && <p role="status" className="mt-3 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-xs text-violet-900">{notice}</p>}
-      {showJson && <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-950 p-4 text-[10px] text-cyan-100">{JSON.stringify(schema, null, 2)}</pre>}
+      {showJson && <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-950 p-4 text-xs text-cyan-100">{JSON.stringify(schema, null, 2)}</pre>}
+      <section className="bento-card mt-4">
+        <h2 className="font-display text-lg font-bold text-ink">Saved workflows</h2>
+        {saved.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">Nothing saved yet. Build a flow above and press “Save workflow”.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-slate-100">
+            {saved.map((task) => (
+              <li key={task.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-ink">{task.title}</p>
+                  <p className="text-xs text-slate-500">{task.workflow?.nodes.length ?? 0} steps · saved {new Date(task.updatedAt).toLocaleDateString()}</p>
+                </div>
+                <button type="button" onClick={() => { TaskSpineService.remove(task.id); refreshSaved(); }} className="btn-ghost text-rose-600" aria-label={`Delete ${task.title}`}><Trash2 size={14} /> Delete</button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }
 
-export default function WorkflowBuilder({ onBack }: { onBack: () => void }) {
-  return <div className="min-h-[100dvh] bg-mesh-indigo"><div className="fixed inset-0 bg-mesh-pastel opacity-50" /><ReactFlowProvider><BuilderCanvas onBack={onBack} /></ReactFlowProvider></div>;
+export default function WorkflowBuilder() {
+  return <ReactFlowProvider><BuilderCanvas /></ReactFlowProvider>;
 }

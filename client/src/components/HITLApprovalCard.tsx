@@ -1,82 +1,59 @@
 import { useState, useEffect } from "react";
-import { ShieldAlert } from "lucide-react";
+import { ShieldCheck, X } from "lucide-react";
 import { SideEffectLedger, type SideEffectEntry } from "../services/SideEffectLedger";
 
 type HITLApprovalCardProps = {
   onDismiss?: () => void;
 };
 
+function describe(action: string) {
+  return action.replace(/^(safety_guard|desktop):/, "").replaceAll("_", " ");
+}
+
+/**
+ * Every sensitive tool already asks for confirmation before it runs. This card
+ * is the receipt: it lists actions the user approved in the last few seconds
+ * so nothing happens out of sight. It never claims to be able to undo them.
+ */
 export default function HITLApprovalCard({ onDismiss }: HITLApprovalCardProps = {}) {
-  const [pending, setPending] = useState<SideEffectEntry[]>([]);
+  const [recent, setRecent] = useState<SideEffectEntry[]>([]);
 
   useEffect(() => {
-    const refresh = () => setPending(SideEffectLedger.pendingUndoable());
+    const refresh = () => setRecent(SideEffectLedger.pendingUndoable());
     refresh();
     const timer = window.setInterval(refresh, 1000);
     return () => window.clearInterval(timer);
   }, []);
 
-  if (pending.length === 0) return null;
+  if (recent.length === 0) return null;
+
+  const dismiss = () => {
+    recent.forEach((entry) => SideEffectLedger.markExecuted(entry.id));
+    setRecent([]);
+    onDismiss?.();
+  };
 
   return (
-    <div
-      className="mx-6 mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 shadow-soft-lg animate-slideInFade"
-      role="alert"
-      aria-live="polite"
-      aria-labelledby="hitl-title"
-    >
+    <div className="mx-1 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 sm:mx-9" role="status" aria-live="polite">
       <div className="flex items-start gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full border border-amber-200 bg-amber-100 text-amber-600 shrink-0">
-          <ShieldAlert size={14} />
-        </div>
-        <div className="flex-1">
-          <h3 id="hitl-title" className="text-xs font-bold uppercase tracking-[0.15em] text-amber-700 mb-1">
-            HANNAH requests approval
-          </h3>
-          <div className="space-y-2">
-            {pending.map((entry) => (
-              <div key={entry.id} className="text-[11px] leading-5 text-amber-600">
-                <div className="flex items-baseline gap-1 text-amber-700 font-medium">
-                  <span>{entry.action}</span>
-                  <span className="text-normal font-normal text-amber-500">·</span>
-                  <span className="font-mono text-xs">{entry.target}</span>
-                </div>
-                <div className="text-[9px] text-amber-500">
-                  Undoable until{" "}
-                  <span className="font-medium">
-                    {new Date(entry.undoableUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                </div>
-              </div>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-600">
+          <ShieldCheck size={15} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-emerald-800">You approved {recent.length === 1 ? "this action" : `${recent.length} actions`}</p>
+          <ul className="mt-1 space-y-0.5">
+            {recent.map((entry) => (
+              <li key={entry.id} className="truncate text-xs text-emerald-700">
+                <span className="font-medium capitalize">{describe(entry.action)}</span>
+                {entry.target && entry.target !== entry.action && <span className="text-emerald-600"> · {entry.target}</span>}
+                <span className="text-emerald-500"> · {new Date(entry.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+              </li>
             ))}
-          </div>
-          <div className="mt-3 flex items-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                pending.forEach((entry) => SideEffectLedger.undo(entry.id));
-                setPending([]);
-                onDismiss?.();
-              }}
-              className="px-4 py-1.5 rounded-lg border border-amber-200 bg-white text-amber-700 font-medium text-xs hover:bg-amber-50 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-              aria-label="Reject all pending actions"
-            >
-              Reject All
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                pending.forEach((entry) => SideEffectLedger.markExecuted(entry.id));
-                setPending([]);
-                onDismiss?.();
-              }}
-              className="px-4 py-1.5 rounded-lg bg-amber-600 text-white font-medium text-xs hover:bg-amber-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-              aria-label="Approve all pending actions"
-            >
-              Approve All
-            </button>
-          </div>
+          </ul>
         </div>
+        <button type="button" onClick={dismiss} aria-label="Dismiss approved actions" className="rounded-lg p-1.5 text-emerald-600 transition hover:bg-emerald-100">
+          <X size={14} />
+        </button>
       </div>
     </div>
   );

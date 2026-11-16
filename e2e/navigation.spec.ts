@@ -36,10 +36,19 @@ test("landing navigation sections and marketplace actions work", async ({ page }
   await expect(page.getByRole("heading", { name: "Bring HANNAH into your workflow." })).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: /An AI companion/ })).toBeVisible();
+});
 
-  await navigation.getByRole("button", { name: "First-time setup" }).click();
-  await expect(page.getByRole("heading", { name: /A companion that keeps your confidence/ })).toBeVisible();
-  await page.getByRole("button", { name: "Set up later" }).click();
+test("app screens require a connection and the browser back button works", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/#/dashboard");
+  // Without a saved token the app asks the visitor to connect first.
+  await expect(page.getByRole("dialog", { name: /Connect with HANNAH/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Marketplace" }).click();
+  await expect(page).toHaveURL(/#\/marketplace$/);
+  await page.goBack();
   await expect(page.getByRole("heading", { name: /An AI companion/ })).toBeVisible();
 });
 

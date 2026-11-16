@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ConfigAuditLog } from "../services/ConfigAuditLog";
 import { PersonaKernel } from "../services/PersonaKernel";
 import { GuardianAgent } from "../services/GuardianAgent";
+import { PluginLoader } from "../services/PluginLoader";
+import type { InstalledPlugin } from "../services/PluginManifest";
 import MemoryPanel from "./MemoryPanel";
 import { PersonalizationEngine } from "../services/PersonalizationEngine";
 import { DynamicFewShotInjector } from "../services/DynamicFewShotInjector";
@@ -63,19 +65,19 @@ export default function AgentAccountabilityDashboard() {
       <section className="bento-card glass-card-strong">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div><h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Personalization & local training</h3><p className="mt-2 max-w-2xl text-xs leading-relaxed text-slate-600">Liked, accepted, and edited responses are kept on this device. HANNAH uses a few high-rated examples to adapt tone and formatting.</p></div>
-          <span className="rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-[10px] font-semibold text-violet-700">{exampleCount} style examples</span>
+          <span className="rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{exampleCount} style examples</span>
         </div>
-        {styleContext && <p className="mt-3 rounded-xl border border-slate-100 bg-white/60 p-3 text-[11px] text-slate-600">{styleContext.summary}</p>}
+        {styleContext && <p className="mt-3 rounded-xl border border-slate-100 bg-white/60 p-3 text-[13px] text-slate-600">{styleContext.summary}</p>}
         <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={training} onClick={() => void preparePersonalization()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-xs font-bold text-white shadow-soft transition hover:brightness-105 disabled:opacity-50">{training ? "Preparing locally…" : "Train My HANNAH"}</button><button type="button" onClick={() => { PersonalizationEngine.clear(); setExampleCount(0); setTrainingStatus("Local style examples cleared."); }} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600">Clear style data</button></div>
-        {training && <div className="mt-4"><div className="mb-1 flex justify-between text-[10px] text-slate-500"><span>Idle preparation progress</span><span>{trainingProgress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-400 transition-all" style={{ width: `${trainingProgress}%` }} /></div></div>}
-        {trainingStatus && <p role="status" className="mt-3 text-[10px] leading-relaxed text-slate-500">{trainingStatus}</p>}
-        <p className="mt-3 text-[9px] leading-relaxed text-slate-400">The browser prepares approved examples only. GGUF files are inference artifacts; the included Python scaffold trains a compatible source checkpoint and exports a LoRA adapter.</p>
+        {training && <div className="mt-4"><div className="mb-1 flex justify-between text-xs text-slate-500"><span>Idle preparation progress</span><span>{trainingProgress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-400 transition-all" style={{ width: `${trainingProgress}%` }} /></div></div>}
+        {trainingStatus && <p role="status" className="mt-3 text-xs leading-relaxed text-slate-500">{trainingStatus}</p>}
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-400">The browser prepares approved examples only. GGUF files are inference artifacts; the included Python scaffold trains a compatible source checkpoint and exports a LoRA adapter.</p>
       </section>
 
       <section className="bento-card glass-card-strong">
         <div className="mb-3">
           <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">What the agent represents</h3>
-          <div className="rounded-xl border border-slate-100 bg-white/50 p-3 mt-2 text-[10px] leading-relaxed text-slate-600">
+          <div className="rounded-xl border border-slate-100 bg-white/50 p-3 mt-2 text-xs leading-relaxed text-slate-600">
             {PersonaKernel.getPromptBlock()}
           </div>
         </div>
@@ -92,7 +94,7 @@ export default function AgentAccountabilityDashboard() {
               GuardianAgent.setStrictness(value);
               ConfigAuditLog.record("guardian", { strictness: value });
             }}
-            className="mt-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-600 outline-none focus:border-brand-400/60"
+            className="mt-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none focus:border-brand-400/60"
           >
             <option value="permissive">Permissive</option>
             <option value="balanced">Balanced</option>
@@ -104,9 +106,49 @@ export default function AgentAccountabilityDashboard() {
       <section className="bento-card glass-card-strong">
         <div className="mb-3">
           <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Configuration audit log</h3>
-          <div className="mt-2 text-[10px] text-slate-600">
+          <div className="mt-2 text-xs text-slate-600">
             {ConfigAuditLog.list().length} changes recorded
           </div>
+        </div>
+      </section>
+
+      <section className="bento-card glass-card-strong">
+        <div className="mb-3">
+          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Manage plugins</h3>
+          <div className="mt-2 text-xs text-slate-600">
+            {PluginLoader.list().length} plugins installed
+          </div>
+        </div>
+        <div className="space-y-2 mt-3">
+          {PluginLoader.list().map((plugin: InstalledPlugin) => (
+            <div key={plugin.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2">
+              <div>
+                <span className="text-[11px] font-bold text-ink">{plugin.name}</span>
+                <span className="text-[9px] text-slate-500 ml-2">v{plugin.version}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { PluginLoader.toggle(plugin.id, !plugin.enabled); }}
+                  className={`rounded-lg px-2 py-1 text-[9px] font-bold transition ${
+                    plugin.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {plugin.enabled ? "Enabled" : "Disabled"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { PluginLoader.uninstall(plugin.id); }}
+                  className="rounded-lg px-2 py-1 text-[9px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition"
+                >
+                  Uninstall
+                </button>
+              </div>
+            </div>
+          ))}
+          {PluginLoader.list().length === 0 && (
+            <p className="text-[10px] text-slate-500">No plugins installed. Visit the Marketplace to discover plugins.</p>
+          )}
         </div>
       </section>
     </div>

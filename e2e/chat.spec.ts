@@ -70,4 +70,25 @@ test("sends a chat message and renders the returned emotion in the WebGL avatar"
   await expect(avatarRegion).toHaveAttribute("data-avatar-motion", /^(animation|procedural)$/);
   expect(protectedRequestTokens.length).toBeGreaterThan(0);
   expect(protectedRequestTokens.every((token) => token === `Bearer ${apiToken}`)).toBe(true);
+
+  // The dashboard reflects the real turn that just happened.
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("button", { name: "Dashboard" }).click();
+  await expect(page.getByRole("heading", { name: "Where you left off" })).toBeVisible();
+  await expect(page.getByText("I had a long day. Can we talk?")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Usage" }).getByText("1", { exact: true }).first()).toBeVisible();
+
+  // History survives a reload because the token is kept for this tab.
+  await page.reload();
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("button", { name: "Chat" }).click();
+  await expect(page.getByText("I'm glad you reached out.")).toBeVisible();
+});
+
+test("a rejected access token is reported before entering the app", async ({ page }) => {
+  await page.route("**/api/**", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "A valid HANNAH API bearer token is required." }) }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Talk to HANNAH" }).first().click();
+  await page.getByLabel("HANNAH API access token").fill(apiToken);
+  await page.getByRole("button", { name: "Continue to HANNAH" }).click();
+  await expect(page.getByRole("alert")).toContainText("access token was not accepted");
+  await expect(page.getByRole("textbox", { name: "Message HANNAH" })).toHaveCount(0);
 });

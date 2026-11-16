@@ -2,8 +2,11 @@ const { createHash, timingSafeEqual } = require("node:crypto");
 
 const MIN_TOKEN_LENGTH = 32;
 const MAX_TOKEN_LENGTH = 512;
-const configuredToken = typeof process.env.HANNAH_API_TOKEN === "string"
-  ? process.env.HANNAH_API_TOKEN.trim()
+// SHANAYA_API_TOKEN is the pre-rename variable name; keep accepting it so
+// existing deployments do not fail closed after the HANNAH rename.
+const rawConfiguredToken = process.env.HANNAH_API_TOKEN || process.env.SHANAYA_API_TOKEN;
+const configuredToken = typeof rawConfiguredToken === "string"
+  ? rawConfiguredToken.trim()
   : "";
 const configuredTokenIsValid = configuredToken.length >= MIN_TOKEN_LENGTH
   && configuredToken.length <= MAX_TOKEN_LENGTH
@@ -14,7 +17,7 @@ const configuredTokenDigest = configuredTokenIsValid
 
 function assertProductionApiToken() {
   if (process.env.NODE_ENV === "production" && !configuredTokenIsValid) {
-    throw new Error("Set HANNAH_API_TOKEN to a random value of at least 32 characters before starting HANNAH in production.");
+    throw new Error("Set HANNAH_API_TOKEN (or the legacy SHANAYA_API_TOKEN) to a random value of at least 32 characters before starting HANNAH in production.");
   }
 }
 

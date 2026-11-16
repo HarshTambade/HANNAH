@@ -1,13 +1,18 @@
+import colors from "tailwindcss/colors";
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["DM Sans", "ui-sans-serif", "system-ui", "sans-serif"],
         display: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
+        // Every component uses brand-* utilities; without this palette none of
+        // them (primary buttons, focus rings, links) were generated.
+        brand: colors.sky,
         ink: "#0f172a",
         slate: {
           50: "#f8fafc",

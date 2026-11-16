@@ -5,31 +5,31 @@ type FirstSessionCoachProps = {
   onSuggestion?: (suggestion: string) => void;
 };
 
+// Each suggestion is written as the user would actually say it, because
+// choosing one places it in the message box ready to send.
 const SUGGESTIONS = [
-  "Tell her something you did today.",
-  "Ask her a question you’ve been thinking about.",
-  "Share a small win or a frustrating moment.",
+  "I want to talk through something that's been on my mind.",
+  "Can you help me plan the rest of my week?",
+  "Tell me something interesting I probably don't know.",
 ];
 
 export default function FirstSessionCoach({ messageCount, onSuggestion }: FirstSessionCoachProps) {
-  if (messageCount >= 3) return null;
+  if (messageCount > 0) return null;
 
   return (
-    <div className="mx-4 mb-3 rounded-xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-[11px] leading-6 text-cyan-700 sm:mx-8 shadow-soft">
-      <p className="flex items-center gap-2 font-bold text-cyan-600">
-        <MessageCircleHeart size={14} /> HANNAH is curious about you.
+    <div className="mx-1 mb-1 rounded-2xl border border-brand-100 bg-brand-50/70 px-4 py-3 sm:mx-9">
+      <p className="flex items-center gap-2 text-sm font-semibold text-brand-700">
+        <MessageCircleHeart size={16} /> Not sure where to start?
       </p>
-      <p className="mt-1 text-[10px] text-cyan-600">
-        Try telling her something you did today, or ask her a question.
-      </p>
+      <p className="mt-1 text-xs leading-relaxed text-slate-600">Pick one to fill in the message box, or just say hello.</p>
       {onSuggestion && (
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           {SUGGESTIONS.map((suggestion) => (
             <button
               key={suggestion}
               type="button"
               onClick={() => onSuggestion(suggestion)}
-              className="rounded-full border border-cyan-200 bg-white px-3 py-1 text-[9px] font-medium text-cyan-600 transition hover:bg-cyan-100/80"
+              className="rounded-full border border-brand-200 bg-white px-3 py-1.5 text-left text-xs font-medium text-brand-700 transition hover:border-brand-300 hover:bg-brand-50"
             >
               {suggestion}
             </button>

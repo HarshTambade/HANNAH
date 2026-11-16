@@ -2,9 +2,15 @@ import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } fr
 import { Capacitor } from "@capacitor/core";
 import { useBrowserLLM } from "use-browser-llm";
 import {
-  ArrowUp, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
+  ArrowUp, Bookmark, BookmarkCheck, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
   RotateCcw, Settings2, Smartphone, Speaker, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
 } from "lucide-react";
+import { ChatHistory } from "../services/ChatHistory";
+import { UsageStats } from "../services/UsageStats";
+import { MemoryService } from "../services/MemoryService";
+import { notifyMemoryChanged } from "../services/MemoryStore";
+import { AgentApiError } from "../services/LLMRouter";
+import MessageContent from "./MessageContent";
 import type { ChatMessage, Emotion, InferenceMode, SpeechLanguage } from "../types";
 import { useConnectivity } from "../services/connectivity";
 import {
@@ -14,7 +20,7 @@ import {
   resolveInferenceMode,
   type OfflineModelStatus,
 } from "../services/AIService";
-import { apiFetch, apiHeaders, apiUrl } from "../services/api";
+import { apiFetch, apiHeaders, apiUrl, isLocalDevelopmentHost } from "../services/api";
 import { SpeechService } from "../services/SpeechService";
 import { VoiceService } from "../services/VoiceService";
 import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
@@ -104,13 +110,21 @@ type ChatUIProps = {
   panel?: boolean;
   groqApiKey: string;
   initialMode?: InferenceMode;
+  /** Called when the server rejects the saved access token. */
+  onSessionExpired?: () => void;
 };
 
-type ApiStatus = "checking" | "connected" | "offline" | "misconfigured";
+type ApiStatus = "checking" | "connected" | "offline" | "misconfigured" | "unauthorized";
+
+function initialMessages(): ChatMessage[] {
+  const saved = ChatHistory.load();
+  return saved.length ? saved : [welcomeMessage];
+}
 type CloudProviderOption = { id: string; label: string; local: boolean; configured: boolean; defaultModel?: string };
 
-export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, initialMode = "cloud" }: ChatUIProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
+export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, initialMode = "cloud", onSessionExpired }: ChatUIProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [rememberedIds, setRememberedIds] = useState<Record<string, true>>({});
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<InferenceMode>(initialMode);
   const [cloudProviders, setCloudProviders] = useState<CloudProviderOption[]>([]);
@@ -165,6 +179,12 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     };
   }, []);
   useEffect(() => ChaosEngine.subscribe(() => setDegradedState(ChaosEngine.getDegraded())), []);
+  useEffect(() => {
+    // Keep only the real conversation; transient tool/status lines are not history.
+    const durable = messages.filter((message) => message.role !== "system");
+    if (durable.length <= 1 && durable[0]?.id === welcomeMessage.id) ChatHistory.clear();
+    else ChatHistory.save(durable);
+  }, [messages]);
   const [nativeStatus, setNativeStatus] = useState<OfflineModelStatus>("checking");
   const [isPreparingNative, setIsPreparingNative] = useState(false);
   const [nativeAgentStatus, setNativeAgentStatus] = useState({ available: false, initialized: false, hasApiKey: false });
@@ -209,6 +229,10 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     const loadProviders = async () => {
       try {
         const response = await apiFetch(apiUrl("/api/providers"), { signal: AbortSignal.timeout(5_000) });
+        if (response.status === 401) {
+          if (active) setApiStatus("unauthorized");
+          return;
+        }
         if (!response.ok) throw new Error(`API returned HTTP ${response.status}.`);
         const data = await response.json();
         if (!active || !Array.isArray(data.providers)) return;
@@ -255,6 +279,10 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     const loadModels = async () => {
       try {
         const response = await fetch(apiUrl(`/api/models?provider=${encodeURIComponent(cloudProviderId)}`), { headers, signal: AbortSignal.timeout(8_000) });
+        if (response.status === 401) {
+          if (active) setApiStatus("unauthorized");
+          return;
+        }
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "Provider model discovery failed.");
         if (!active || !Array.isArray(data.models)) return;
@@ -403,9 +431,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     if (inputRef.current) inputRef.current.style.height = "auto";
 
     let spokenReply: Promise<void> | null = null;
+    const turnStartedAt = performance.now();
     try {
-      let result: { reply: string; emotion: Emotion };
-      let countedOutsideRuntime = false;
+      let result: { reply: string; emotion: Emotion; meta?: { provider?: string; model?: string; inputTokens?: number; outputTokens?: number } };
       const publishActivity = (message: string, acting = false) => {
         setAgentActivity({ phase: acting ? "acting" : "thinking", message });
         if (!acting && message && !message.toLowerCase().includes("thinking") && !message.toLowerCase().includes("examining") && !message.toLowerCase().includes("screenshot")) {
@@ -416,11 +444,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       if (effectiveMode === "desktop") {
         const reply = await runDesktopAgentTurn(guardedContent, publishActivity);
         result = parseAIResponse(reply);
-        countedOutsideRuntime = true;
       } else if (effectiveMode === "mobileclaw" && isNative && isOnline && nativeAgentStatus.hasApiKey) {
         const response = await runMobileAgentTurn(content, publishActivity);
         result = parseAIResponse(response);
-        countedOutsideRuntime = true;
       } else {
         result = await runAgentTurn({
           mode: effectiveMode,
@@ -428,8 +454,17 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           model: cloudModel || undefined,
           groqApiKey,
           messages: nextMessages,
-          generateLocal: async (prompt, routeMode) => {
+          generateLocal: async (prompt, routeMode, cause) => {
             if (routeMode === "webllm") {
+              // A cloud hiccup while online must not silently start a ~1 GB
+              // model download. Fall back only when the browser model is
+              // already loaded, the user chose it, or the device is offline.
+              const browserOnline = typeof navigator === "undefined" || navigator.onLine;
+              if (effectiveMode === "cloud" && browserOnline && localLLMRef.current.status !== "ready" && !ChaosEngine.isEnabled()) {
+                ChaosEngine.clearDegraded();
+                const reason = cause instanceof Error && cause.message ? cause.message : "HANNAH’s cloud AI is busy or unavailable right now.";
+                throw new Error(`${reason} Try again in a moment, or choose WebLLM Local in chat settings to run AI in this browser.`);
+              }
               setPrepareWebFallback(true);
               const messages = [{ role: "system" as const, content: agentRules }, { role: "user" as const, content: prompt }];
               const deadline = Date.now() + 180_000;
@@ -453,9 +488,16 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         });
       }
 
-      if (countedOutsideRuntime) {
-      } else {
-      }
+      UsageStats.record({
+        latencyMs: Math.round(performance.now() - turnStartedAt),
+        ok: true,
+        mode: effectiveMode,
+        provider: result.meta?.provider || (effectiveMode === "cloud" ? cloudProvider : modeDetails[effectiveMode].label),
+        model: result.meta?.model || (effectiveMode === "cloud" ? cloudModel || undefined : undefined),
+        inputTokens: result.meta?.inputTokens,
+        outputTokens: result.meta?.outputTokens,
+        voice: transcript !== undefined,
+      });
       const userTurns = messages.filter((message) => message.role === "user").length + 1;
       if (userTurns === 1) trackEvent("first_message_sent");
       if (userTurns === 3) trackEvent("third_message_sent");
@@ -471,7 +513,13 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           .finally(() => setIsSpeaking(false));
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
+      UsageStats.record({ latencyMs: Math.round(performance.now() - turnStartedAt), ok: false, mode: effectiveMode, voice: transcript !== undefined });
+      if (requestError instanceof AgentApiError && requestError.status === 401) {
+        setApiStatus("unauthorized");
+        setError("Your access token is no longer accepted. Reconnect with a valid token to keep chatting.");
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
+      }
     } finally {
       setIsLoading(false);
       setAgentActivity(null);
@@ -708,6 +756,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const resetConversation = () => {
     if (isLoading) return;
     setMessages([welcomeMessage]);
+    setRememberedIds({});
+    ChatHistory.clear();
     setError("");
     setInput("");
     setVoiceStatus("");
@@ -756,9 +806,11 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           </div>
           <div className="min-w-0">
             <h1 className="truncate font-['Manrope'] text-sm font-bold text-ink">HANNAH</h1>
-            <p className="truncate text-[10px] text-slate-500">
+            <p className="truncate text-xs text-slate-500">
               {!isOnline
                 ? `Offline · ${selectedMode.label}`
+                : effectiveMode === "cloud" && apiStatus === "unauthorized"
+                  ? "Access token not accepted"
                 : effectiveMode === "cloud" && apiStatus === "offline"
                   ? "API server unavailable"
                   : effectiveMode === "cloud" && apiStatus === "misconfigured"
@@ -788,7 +840,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50"
           >
             {isSettingsOpen ? <X size={15} /> : <Settings2 size={15} />}
-            {panel && <span className="hidden text-[10px] font-medium sm:inline">{isSettingsOpen ? "Close" : "Settings"}</span>}
+            {panel && <span className="hidden text-xs font-medium sm:inline">{isSettingsOpen ? "Close" : "Settings"}</span>}
           </button>
           <button
             type="button"
@@ -872,7 +924,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
                     ? <option value="">Waiting for server model settings…</option>
                     : cloudModels.map((model) => <option key={model} value={model}>{modelLabel(model)}</option>)}
                 </select>
-                <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">Groq is the default. Other providers appear after their server-side credentials are configured. Model names load from the selected provider when its API supports model discovery.</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-500">Groq is the default. Other providers appear after their server-side credentials are configured. Model names load from the selected provider when its API supports model discovery.</p>
               </div>
             )}
 
@@ -910,12 +962,12 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
                 </div>
                 {nativeAgentStatus.hasApiKey ? (
                   <>
-                    <p className="text-[11px] leading-relaxed text-slate-600">MobileClaw is ready. Its Anthropic key is stored by the native plugin on this device. Select MobileClaw · Anthropic above to use it; Groq remains the default cloud model.</p>
-                    <button type="button" onClick={() => void removeMobileAgentKey()} disabled={isRemovingMobileApiKey} className="mt-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[10px] text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">{isRemovingMobileApiKey ? "Removing…" : "Remove saved Anthropic key"}</button>
+                    <p className="text-[13px] leading-relaxed text-slate-600">MobileClaw is ready. Its Anthropic key is stored by the native plugin on this device. Select MobileClaw · Anthropic above to use it; Groq remains the default cloud model.</p>
+                    <button type="button" onClick={() => void removeMobileAgentKey()} disabled={isRemovingMobileApiKey} className="mt-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">{isRemovingMobileApiKey ? "Removing…" : "Remove saved Anthropic key"}</button>
                   </>
                 ) : (
                   <>
-                    <p className="mb-2 text-[11px] leading-relaxed text-slate-500">Add an Anthropic API key to use the native Rust agent and its on-device LanceDB memory. The key is stored by the native agent plugin.</p>
+                    <p className="mb-2 text-[13px] leading-relaxed text-slate-500">Add an Anthropic API key to use the native Rust agent and its on-device LanceDB memory. The key is stored by the native agent plugin.</p>
                     <div className="flex gap-2">
                       <input type="password" value={mobileApiKey} onChange={(event) => setMobileApiKey(event.target.value)} placeholder="Anthropic API key" aria-label="Anthropic API key" autoComplete="off" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-ink outline-none placeholder:text-slate-400 focus:border-violet-300" />
                       <button type="button" onClick={() => void saveMobileAgentKey()} disabled={!mobileApiKey.trim() || isSavingMobileApiKey} className="rounded-lg bg-brand-100 px-3 text-xs font-medium text-brand-600 disabled:opacity-40">{isSavingMobileApiKey ? "Saving…" : "Connect"}</button>
@@ -937,7 +989,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-700">
                 <LockKeyhole size={13} className="text-emerald-600" /> Privacy and voice
               </div>
-              <p className="text-[11px] leading-relaxed text-slate-600">
+              <p className="text-[13px] leading-relaxed text-slate-600">
                 {!isOnline
                   ? "Offline messages use WebLLM in browsers and a downloaded llama.cpp model in the iOS or Android app. Those prompts stay on this device. Speech input uses the platform recognizer, whose offline support varies."
                   : `WebLLM and llama.cpp process prompts locally. Ollama sends prompts to its configured endpoint. ${cloudProvider} Cloud sends prompts and tool requests to its configured provider. MobileClaw sends prompts directly to Anthropic only when selected. If Mithi TTS is configured, reply text is sent to that service; otherwise installed system voices are used. Voice calls use Pinecall over the internet.`}
@@ -947,22 +999,33 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         )}
       </header>
 
-      {degradedState.degraded && <div role="status" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-900"><strong>Degraded mode</strong> · {degradedState.reason || "Using a fallback model."}<button type="button" onClick={() => ChaosEngine.clearDegraded()} className="ml-2 underline">Dismiss</button></div>}
+      {degradedState.degraded && <div role="status" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"><strong>Degraded mode</strong> · {degradedState.reason || "Using a fallback model."}<button type="button" onClick={() => ChaosEngine.clearDegraded()} className="ml-2 underline">Dismiss</button></div>}
 
       {!isOnline && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] font-medium text-amber-800">
+        <div className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-800">
           <LockKeyhole size={12} /> Offline mode · AI requests stay on this device
         </div>
       )}
 
+      {effectiveMode === "cloud" && apiStatus === "unauthorized" && (
+        <div role="alert" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2.5 text-xs leading-relaxed text-rose-700">
+          <span className="flex-1">The server did not accept your access token. Reconnect with a valid token to continue.</span>
+          {onSessionExpired && <button type="button" onClick={onSessionExpired} className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 font-semibold text-rose-700 transition hover:bg-rose-100">Reconnect</button>}
+        </div>
+      )}
       {effectiveMode === "cloud" && apiStatus === "offline" && (
-        <div role="alert" className="shrink-0 border-b border-rose-200 bg-rose-50 px-4 py-2 text-[10px] leading-relaxed text-rose-700">
-          HANNAH’s API server is not reachable. From the project root, run <code className="text-rose-800">npm run dev</code> to start the API and client together. The app will retry automatically.
+        <div role="alert" className="shrink-0 border-b border-rose-200 bg-rose-50 px-4 py-2.5 text-xs leading-relaxed text-rose-700">
+          {isLocalDevelopmentHost()
+            ? <>HANNAH’s API server is not reachable. From the project root, run <code className="text-rose-800">npm run dev</code> to start the API and client together. Retrying automatically.</>
+            : "Can’t reach the HANNAH server right now. Retrying automatically."}
         </div>
       )}
       {effectiveMode === "cloud" && apiStatus === "misconfigured" && (
-        <div role="alert" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] leading-relaxed text-amber-800">
-          Cloud model discovery failed{apiError ? `: ${apiError}` : "."} Add <code className="text-amber-900">GROQ_API_KEY</code> to <code className="text-amber-900">server/.env</code>, or enter a valid Groq key on the landing page. The model selector appears once a provider returns models.
+        <div role="alert" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs leading-relaxed text-amber-800">
+          {apiError || "No AI model is available yet."}{" "}
+          {isLocalDevelopmentHost()
+            ? <>Add <code className="text-amber-900">GROQ_API_KEY</code> to <code className="text-amber-900">server/.env</code>, or enter your own Groq key when connecting.</>
+            : "Reconnect and add your own Groq API key, or ask the server operator to configure one."}
         </div>
       )}
 
@@ -970,26 +1033,77 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         <div className="mx-auto flex max-w-[720px] flex-col gap-3">
           <FirstSessionCoach
             messageCount={messages.filter((message) => message.role === "user").length}
-            onSuggestion={(suggestion) => setInput(suggestion)}
+            onSuggestion={(suggestion) => { setInput(suggestion); inputRef.current?.focus(); }}
           />
           <TaskPanel />
           <HITLApprovalCard />
           {messages.map((message, index) => {
             const isUser = message.role === "user";
-            const isSystem = message.role === "system";
-            if (isSystem) return <div key={`${index}-system`} role="status" className="mx-8 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-[10px] leading-relaxed text-emerald-700">{message.content}</div>;
+            const key = message.id || `${index}-${message.role}`;
+            if (message.role === "system") {
+              return <div key={key} role="status" className="mx-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-700 sm:mx-8">{message.content}</div>;
+            }
+            const precedingPrompt = () => messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || "";
+            const rate = (feedback: "liked" | "accepted" | "rejected") => {
+              PersonalizationEngine.record({ id: message.id!, prompt: precedingPrompt(), response: message.content, feedback });
+              setStyleFeedback((current) => ({ ...current, [message.id!]: feedback === "rejected" ? "Noted — this reply won’t be used as a style example" : "Saved as a style example" }));
+            };
+            const remembered = Boolean(message.id && rememberedIds[message.id]);
             return (
-              <div key={`${index}-${message.role}`} className="flex flex-col gap-1">
+              <div key={key} className="group flex flex-col gap-1">
                 <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-                  {!isUser && <div className="mb-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-600"><Bot size={11} /></div>}
-                  <div className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-[12px] leading-relaxed ${isUser ? "rounded-br-md bg-brand-50 border border-brand-100 text-ink" : "rounded-bl-md border border-slate-100 bg-slate-50 text-ink"}`}>
-                    {message.content}
+                  {!isUser && <div className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-600"><Bot size={13} /></div>}
+                  <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed text-ink ${isUser ? "whitespace-pre-wrap break-words rounded-br-md border border-brand-100 bg-brand-50" : "rounded-bl-md border border-slate-100 bg-slate-50"}`}>
+                    {isUser ? message.content : <MessageContent text={message.content} />}
                   </div>
                 </div>
-                {!isUser && message.id && message.id !== "hannah-welcome" && (
-                  <div className="flex flex-wrap items-center gap-2 pl-8">
-                    <ReportButton messageId={message.id} inferenceMode={effectiveMode} />
-                    {editingMessageId === message.id ? <div className="flex w-full max-w-xl gap-2"><textarea value={editedResponse} onChange={(event) => setEditedResponse(event.target.value)} rows={2} className="min-w-0 flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs text-ink outline-none focus:border-violet-400" aria-label="Edit HANNAH response" /><button type="button" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, editedResponse, feedback: "edited" }); setMessages((current) => current.map((item) => item.id === message.id ? { ...item, content: editedResponse } : item)); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); setEditingMessageId(null); }} className="rounded-lg bg-violet-600 px-3 text-white" aria-label="Save edited response"><Save size={13} /></button></div> : <div className="flex items-center gap-1"><button type="button" title="I like this response" aria-label="Like response" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "liked" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"><ThumbsUp size={13} /></button><button type="button" title="Accept without changes" aria-label="Accept response as-is" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "accepted" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-700"><Check size={13} /></button><button type="button" title="Edit this response" aria-label="Edit response" onClick={() => { setEditingMessageId(message.id!); setEditedResponse(message.content); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-violet-50 hover:text-violet-700"><Pencil size={13} /></button><button type="button" title="This response missed the mark" aria-label="Reject response" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "rejected" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Feedback saved; this response will not be used as a positive example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><ThumbsDown size={13} /></button>{styleFeedback[message.id] && <span role="status" className="text-[9px] text-slate-500">{styleFeedback[message.id]}</span>}</div>}
+                {isUser && message.id && (
+                  <div className="flex justify-end pr-1">
+                    <button
+                      type="button"
+                      disabled={remembered}
+                      onClick={() => {
+                        MemoryService.add("long_term", message.content.slice(0, 300));
+                        notifyMemoryChanged();
+                        setRememberedIds((current) => ({ ...current, [message.id!]: true }));
+                      }}
+                      title={remembered ? "Saved to memory" : "Ask HANNAH to remember this"}
+                      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] transition ${remembered ? "text-emerald-600" : "text-slate-400 opacity-100 hover:bg-slate-100 hover:text-slate-700 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"}`}
+                    >
+                      {remembered ? <BookmarkCheck size={12} /> : <Bookmark size={12} />} {remembered ? "Remembered" : "Remember this"}
+                    </button>
+                  </div>
+                )}
+                {!isUser && message.id && message.id !== welcomeMessage.id && (
+                  <div className="flex flex-wrap items-center gap-1 pl-9">
+                    {editingMessageId === message.id ? (
+                      <div className="flex w-full max-w-xl gap-2">
+                        <textarea value={editedResponse} onChange={(event) => setEditedResponse(event.target.value)} rows={3} className="min-w-0 flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-violet-400" aria-label="Edit HANNAH response" />
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              PersonalizationEngine.record({ id: message.id!, prompt: precedingPrompt(), response: message.content, editedResponse, feedback: "edited" });
+                              setMessages((current) => current.map((item) => item.id === message.id ? { ...item, content: editedResponse } : item));
+                              setStyleFeedback((current) => ({ ...current, [message.id!]: "Your edit was saved as a style example" }));
+                              setEditingMessageId(null);
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white"
+                            aria-label="Save edited response"
+                          ><Save size={14} /></button>
+                          <button type="button" onClick={() => setEditingMessageId(null)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500" aria-label="Cancel editing"><X size={14} /></button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button type="button" title="I like this reply" aria-label="Like response" onClick={() => rate("liked")} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-700"><ThumbsUp size={14} /></button>
+                        <button type="button" title="Good as-is" aria-label="Accept response as-is" onClick={() => rate("accepted")} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-sky-50 hover:text-sky-700"><Check size={14} /></button>
+                        <button type="button" title="Edit to show how you’d prefer it" aria-label="Edit response" onClick={() => { setEditingMessageId(message.id!); setEditedResponse(message.content); }} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-violet-50 hover:text-violet-700"><Pencil size={14} /></button>
+                        <button type="button" title="This reply missed the mark" aria-label="Reject response" onClick={() => rate("rejected")} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-700"><ThumbsDown size={14} /></button>
+                        <ReportButton messageId={message.id} inferenceMode={effectiveMode} />
+                        {styleFeedback[message.id] && <span role="status" className="ml-1 text-[13px] text-slate-500">{styleFeedback[message.id]}</span>}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -1006,9 +1120,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           )}
 
           {effectiveMode === "webllm" && localLLM.status === "unsupported" && (
-            <p className="pl-8 text-xs text-amber-200/80">WebGPU is unavailable. Reconnect or use the Capacitor app for native offline AI.</p>
+            <p className="pl-9 text-xs text-amber-700">WebGPU is unavailable. Reconnect or use the Capacitor app for native offline AI.</p>
           )}
-          {error && <div role="alert" className="ml-8 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
+          {error && <div role="alert" className="ml-9 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</div>}
         </div>
       </div>
 
@@ -1016,10 +1130,10 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         <div className="absolute inset-0 z-50 flex flex-col overflow-hidden bg-white px-4 pb-4 pt-5 sm:px-6 sm:pb-5 shadow-soft-lg">
           <div className="flex shrink-0 items-center justify-between">
             <div>
-              <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-violet-700">HANNAH · virtual call</p>
-              <p className="mt-1 text-[10px] text-slate-500">In-app conversation · no phone network</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-violet-700">HANNAH · virtual call</p>
+              <p className="mt-1 text-xs text-slate-500">In-app conversation · no phone network</p>
             </div>
-            <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[9px] font-medium text-emerald-700">CONNECTED</span>
+            <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">CONNECTED</span>
           </div>
 
           <div className="flex shrink-0 flex-col items-center pb-5 pt-6 text-center sm:pt-8">
@@ -1033,17 +1147,17 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           </div>
 
           <div ref={callLogRef} className="chat-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-100 bg-white p-3 shadow-soft">
-            {messages.filter((message) => message.role === "user" || message.role === "assistant").slice(1).slice(-6).map((message, index) => (
+            {messages.filter((message) => (message.role === "user" || message.role === "assistant") && message.id !== welcomeMessage.id).slice(-6).map((message, index) => (
               <div key={`${index}-${message.role}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                <p className={`max-w-[88%] rounded-2xl px-3 py-2 text-[11px] leading-relaxed ${message.role === "user" ? "rounded-br-md bg-brand-600 text-white" : "rounded-bl-md border border-slate-100 bg-slate-50 text-ink"}`}>
+                <p className={`max-w-[88%] rounded-2xl px-3 py-2 text-[13px] leading-relaxed ${message.role === "user" ? "rounded-br-md bg-brand-600 text-white" : "rounded-bl-md border border-slate-100 bg-slate-50 text-ink"}`}>
                   {message.content}
                 </p>
               </div>
             ))}
-            {messages.filter((message) => message.role === "user" || message.role === "assistant").length <= 1 && (
-              <p className="py-4 text-center text-[11px] text-slate-500">{isCallMicEnabled ? "Your microphone is live. Say hello when you’re ready." : "Unmute the microphone to start talking."} HANNAH will answer out loud.</p>
+            {!messages.some((message) => (message.role === "user" || message.role === "assistant") && message.id !== welcomeMessage.id) && (
+              <p className="py-4 text-center text-[13px] text-slate-500">{isCallMicEnabled ? "Your microphone is live. Say hello when you’re ready." : "Unmute the microphone to start talking."} HANNAH will answer out loud.</p>
             )}
-            {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] text-rose-700">{error}</p>}
+            {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
           </div>
 
           <div className="flex shrink-0 items-center justify-center gap-4 pt-5">
@@ -1072,7 +1186,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               <PhoneOff size={21} />
             </button>
           </div>
-          <p className="mt-3 shrink-0 text-center text-[9px] text-slate-500">{isListening ? "Listening · speak naturally, then pause" : isLoading ? "HANNAH is replying…" : isSpeaking ? "HANNAH is speaking…" : isCallMicEnabled ? "Speak naturally · the microphone stays on between turns" : "Tap the microphone to unmute"}</p>
+          <p className="mt-3 shrink-0 text-center text-[11px] text-slate-500">{isListening ? "Listening · speak naturally, then pause" : isLoading ? "HANNAH is replying…" : isSpeaking ? "HANNAH is speaking…" : isCallMicEnabled ? "Speak naturally · the microphone stays on between turns" : "Tap the microphone to unmute"}</p>
         </div>
       )}
 
@@ -1083,7 +1197,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               value={speechLanguage}
               onChange={(event) => setSpeechLanguage(event.target.value as SpeechLanguage)}
               aria-label="Voice language"
-              className="max-w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] text-slate-600 outline-none"
+              className="max-w-32 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 outline-none"
             >
               <option value="en-US">English</option>
               <option value="hi-IN">हिन्दी</option>
@@ -1096,19 +1210,19 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
                 setVoiceStatus(voiceEnabled ? "Voice replies off" : "Voice replies on · offline device voice preferred");
               }}
               aria-label={voiceEnabled ? "Turn voice replies off" : "Turn voice replies on"}
-              className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] transition ${voiceEnabled ? "border-brand-100 bg-brand-50 text-brand-600" : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition ${voiceEnabled ? "border-brand-100 bg-brand-50 text-brand-600" : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               {voiceEnabled ? <Speaker size={12} /> : <VolumeX size={12} />}
               <span>Voice</span>
             </button>
-            {!isOnline && <span className="hidden truncate text-[10px] text-slate-500 sm:inline">On-device mode</span>}
+            {!isOnline && <span className="hidden truncate text-xs text-slate-500 sm:inline">On-device mode</span>}
           </div>
           <button
             type="button"
             onClick={() => void toggleVoiceInput()}
             aria-label={isListening ? "Stop voice input" : "Start voice input"}
             title={isListening ? "Stop listening" : "Speak to HANNAH"}
-            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-medium transition ${isListening ? "border-rose-200 bg-rose-50 text-rose-700" : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"}`}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${isListening ? "border-rose-200 bg-rose-50 text-rose-700" : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"}`}
           >
             <Mic size={12} /> {isListening ? "Listening" : "Speak"}
           </button>
@@ -1117,12 +1231,12 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             onClick={() => void startVirtualCall()}
             disabled={isLoading}
             title="Start an in-app virtual voice call"
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-medium text-emerald-600 transition hover:bg-emerald-100/80 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-600 transition hover:bg-emerald-100/80 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Phone size={12} /> Call
           </button>
         </div>
-        {voiceStatus && <p aria-live="polite" className="mx-auto mb-1 max-w-[720px] px-1 text-[10px] text-slate-500">{voiceStatus}</p>}
+        {voiceStatus && <p aria-live="polite" className="mx-auto mb-1 max-w-[720px] px-1 text-xs text-slate-500">{voiceStatus}</p>}
         <form onSubmit={(event) => void submitMessage(event)} className="mx-auto flex max-w-[720px] items-end gap-2 rounded-xl border border-slate-200 bg-white p-1.5 transition focus-within:border-brand-400/60 shadow-soft">
           <textarea
             ref={inputRef}
@@ -1130,25 +1244,25 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             onChange={(event) => {
               setInput(event.target.value.slice(0, 4000));
               event.target.style.height = "auto";
-              event.target.style.height = `${Math.min(event.target.scrollHeight, 96)}px`;
+              event.target.style.height = `${Math.min(event.target.scrollHeight, 128)}px`;
             }}
             onKeyDown={handleKeyDown}
             placeholder={!isOnline ? "Message HANNAH offline…" : "Message HANNAH…"}
             aria-label="Message HANNAH"
             rows={1}
             maxLength={4000}
-            className="max-h-24 min-h-10 flex-1 resize-none bg-transparent px-3 py-2.5 text-[12px] leading-relaxed text-ink outline-none placeholder:text-slate-400"
+            className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-3 py-2.5 text-base leading-relaxed sm:text-sm text-ink outline-none placeholder:text-slate-400"
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading || !canSend}
             aria-label="Send message"
-            className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-white shadow-lg shadow-brand-950/30 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-35"
+            className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-white shadow-lg shadow-brand-950/30 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-35"
           >
             <ArrowUp size={17} strokeWidth={2.2} />
           </button>
         </form>
-        <p className="mt-1.5 text-center text-[9px] text-slate-500">
+        <p className="mt-1.5 truncate text-center text-[13px] text-slate-500">
           {effectiveMode === "cloud"
             ? `${cloudProvider} · ${modelLabel(cloudModel || cloudModels[0] || "")}`
             : effectiveMode === "ollama"

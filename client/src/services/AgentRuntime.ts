@@ -1,6 +1,7 @@
 import type { ChatMessage, Emotion, InferenceMode } from "../types";
 import { executeHANNAHTool, getDeviceTools, type HANNAHTool } from "./DeviceTools";
-import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentToolCall } from "./LLMRouter";
+import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentStepMeta, type AgentToolCall } from "./LLMRouter";
+import { memoriesForPrompt } from "./MemoryStore";
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
 import { RouterAgent, selectToolsForProfile, defaultAgentProfiles } from "./AgentRouter";
@@ -37,7 +38,7 @@ const hardMaxIterations = 20;
 
 export type AgentPhase = "thinking" | "acting" | "tool-result";
 export type AgentActivity = { phase: AgentPhase; message: string };
-export type AgentReply = { reply: string; emotion: Emotion };
+export type AgentReply = { reply: string; emotion: Emotion; meta?: AgentStepMeta };
 
 const agentRules = [
   "You are HANNAH, a warm, attentive, candid companion and capable personal assistant. Sound natural and emotionally perceptive, while staying honest that you are an AI and never inventing real-world personal experiences.",
@@ -143,7 +144,8 @@ export async function runAgentTurn(options: {
   messages: ChatMessage[];
   maxIterations?: number;
   toolDenyList?: string[];
-  generateLocal: (prompt: string, mode: InferenceMode) => Promise<string>;
+  /** `cause` is the cloud error when this call is a fallback after a failed cloud step. */
+  generateLocal: (prompt: string, mode: InferenceMode, cause?: unknown) => Promise<string>;
   onActivity?: (activity: AgentActivity) => void;
 }): Promise<AgentReply> {
   const policy = getAgentRuntimePolicy();
@@ -167,10 +169,10 @@ export async function runAgentTurn(options: {
   const conversation: AgentMessage[] = options.messages
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")
     .map(({ role, content }) => ({ role, content: role === "user" ? screenIncomingPrompt(content) : content }));
+  const memories = memoriesForPrompt();
   let preferredMode = options.mode;
-  const completeTurn = (reply: AgentReply) => {
-    return reply;
-  };
+  const meta: AgentStepMeta = {};
+  const completeTurn = (reply: AgentReply): AgentReply => (Object.keys(meta).length ? { ...reply, meta } : reply);
 
   for (let turn = 0; turn < maxIterations; turn += 1) {
     let mode = await LLMRouter.resolveMode(preferredMode, typeof navigator === "undefined" || navigator.onLine);
@@ -190,8 +192,12 @@ export async function runAgentTurn(options: {
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization);
+        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memories);
         content = step.content;
+        if (step.meta?.provider) meta.provider = step.meta.provider;
+        if (step.meta?.model) meta.model = step.meta.model;
+        if (step.meta?.inputTokens) meta.inputTokens = (meta.inputTokens ?? 0) + step.meta.inputTokens;
+        if (step.meta?.outputTokens) meta.outputTokens = (meta.outputTokens ?? 0) + step.meta.outputTokens;
         if (step.toolCalls.length > 8) throw new Error("The model requested too many tools at once.");
         toolCalls = step.toolCalls;
       } catch (error) {
@@ -200,7 +206,7 @@ export async function runAgentTurn(options: {
         mode = await LLMRouter.resolveMode("cloud", false);
         preferredMode = mode;
         options.onActivity?.({ phase: "thinking", message: "Cloud AI is unavailable · switching to on-device AI…" });
-        const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions, personalizationBlock), mode);
+        const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions, personalizationBlock), mode, error);
         const step = parseLocalStep(localText);
         if (step.reply) return completeTurn(step.reply);
         content = localText;

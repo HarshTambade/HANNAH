@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { verifyApiAccess } from "../services/api";
 import {
   ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole, Menu, MessageCircle, PackageOpen, ShieldCheck, Sparkles, X,
 } from "lucide-react";
@@ -8,12 +9,18 @@ type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
   onMarketplace: () => void;
+  /** A verified token is already saved for this tab. */
+  hasSession?: boolean;
+  onResume?: () => void;
+  /** Open the connect dialog on arrival (for example after a rejected token). */
+  openConnect?: boolean;
+  onConnectHandled?: () => void;
 };
 
 const statCards = [
-  { value: "3", label: "Voice languages", icon: "globe" },
-  { value: "6", label: "Inference options", icon: "cpu" },
-  { value: "Local", label: "Inference available", icon: "local" },
+  { value: "3", label: "Voice languages: English, Hindi and Marathi", icon: "globe" },
+  { value: "6", label: "Ways to run the AI, from cloud to fully on-device", icon: "cpu" },
+  { value: "Yours", label: "Chat history stays in your browser, not on our server", icon: "local" },
 ];
 
 const features = [
@@ -43,7 +50,7 @@ const features = [
   },
 ];
 
-export default function LandingPage({ onStart, onIntegrations, onMarketplace }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onMarketplace, hasSession = false, onResume, openConnect = false, onConnectHandled }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [apiToken, setApiToken] = useState("");
@@ -51,9 +58,25 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
   const [showApiToken, setShowApiToken] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [keyError, setKeyError] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
-  const beginConversation = (event: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    if (!openConnect) return;
+    setKeyError("");
+    setKeyDialogOpen(true);
+    onConnectHandled?.();
+  }, [openConnect, onConnectHandled]);
+
+  useEffect(() => {
+    if (!keyDialogOpen) return undefined;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !verifying) setKeyDialogOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [keyDialogOpen, verifying]);
+
+  const beginConversation = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (verifying) return;
     const token = apiToken.trim();
     const key = groqApiKey.trim();
     const localDevelopment = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
@@ -79,10 +102,22 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
         return;
       }
     }
+    setVerifying(true);
+    setKeyError("");
+    const access = await verifyApiAccess(token);
+    setVerifying(false);
+    if (!access.ok) {
+      setKeyError(access.message);
+      return;
+    }
     onStart({ apiToken: token, groqApiKey: key });
   };
 
   const openKeyDialog = () => {
+    if (hasSession && onResume) {
+      onResume();
+      return;
+    }
     setKeyError("");
     setKeyDialogOpen(true);
   };
@@ -105,7 +140,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
             </span>
             <span>
               <span className="block font-display text-[12px] font-extrabold tracking-[0.2em] text-ink">HANNAH</span>
-              <span className="mt-0.5 block text-[8px] font-medium uppercase tracking-[0.2em] text-slate-500">AI companion</span>
+              <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">AI companion</span>
             </span>
           </a>
 
@@ -132,7 +167,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
           <button
             type="button"
             onClick={openKeyDialog}
-            className="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-[11px] font-bold text-ink transition hover:border-brand-300 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/50"
+            className="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-bold text-ink transition hover:border-brand-300 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/50"
           >
             Talk to HANNAH <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
           </button>
@@ -158,7 +193,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
       <div className="relative z-10">
         <section id="home" className="mx-auto grid max-w-7xl items-center gap-8 px-5 pb-16 pt-10 sm:px-8 sm:pt-16 lg:grid-cols-[0.95fr_1.05fr] lg:gap-6 lg:px-12 lg:pb-24 lg:pt-8">
           <div className="relative z-10 max-w-[42rem] py-4 lg:py-0">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-brand-600">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-brand-600">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
@@ -168,7 +203,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
 
             <h1 className="font-display text-[clamp(2.6rem,6vw,5.6rem)] font-extrabold leading-[1.02] tracking-[-0.06em] text-ink">
               An AI companion
-              <span className="mt-1 block text-[clamp(2.6rem,6vw,5.6rem)] font-extrabold leading-[1.02] tracking-[-0.06em] text-transparent bg-gradient-to-r from-brand-600 via-amber-500 to-emerald-500">
+              <span className="mt-1 block text-[clamp(2.6rem,6vw,5.6rem)] font-extrabold leading-[1.02] tracking-[-0.06em] bg-gradient-to-r from-brand-600 via-violet-600 to-amber-500 bg-clip-text pb-2 text-transparent">
                 that truly understands.
               </span>
             </h1>
@@ -185,24 +220,24 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                 Talk to HANNAH
                 <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20"><ArrowRight size={14} /></span>
               </button>
-              <a href="#experience" className="inline-flex min-h-[3.5rem] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-bold text-ink transition hover:border-brand-300 hover:text-brand-600">
+              <a href="#experience" className="inline-flex min-h-[3.5rem] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-ink transition hover:border-brand-300 hover:text-brand-600">
                 Discover the experience <ArrowRight size={13} />
               </a>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
-              <button type="button" onClick={onIntegrations} className="inline-flex items-center gap-2 text-left text-[10px] font-bold text-slate-500 transition hover:text-brand-600">
+              <button type="button" onClick={onIntegrations} className="inline-flex items-center gap-2 text-left text-xs font-bold text-slate-500 transition hover:text-brand-600">
                 <Cable size={13} /> Connect HANNAH to another app with the API or MCP
               </button>
-              <button type="button" onClick={onMarketplace} className="inline-flex items-center gap-2 text-left text-[10px] font-bold text-slate-500 transition hover:text-violet-600">
+              <button type="button" onClick={onMarketplace} className="inline-flex items-center gap-2 text-left text-xs font-bold text-slate-500 transition hover:text-violet-600">
                 <PackageOpen size={13} /> Browse agents and skills
               </button>
             </div>
 
-            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-slate-200 pt-6 text-[10px] text-slate-400">
+            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-slate-200 pt-6 text-xs text-slate-400">
               <span className="inline-flex items-center gap-2"><ShieldCheck size={13} className="text-emerald-400" /> Zero-trust governance</span>
               <span className="inline-flex items-center gap-2"><Globe2 size={13} className="text-brand-400" /> English · हिन्दी · मराठी</span>
-              <span className="inline-flex items-center gap-2"><LockKeyhole size={13} className="text-violet-400" /> E2E-encrypted sync</span>
+              <span className="inline-flex items-center gap-2"><LockKeyhole size={13} className="text-violet-400" /> History stays on your device</span>
             </div>
           </div>
 
@@ -216,10 +251,10 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                 <AvatarScene emotion="neutral" />
               </div>
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-4 py-4 sm:px-5">
-                <span className="rounded-full border border-white/60 bg-white/85 px-3 py-1.5 font-mono text-[8px] tracking-[0.18em] text-brand-700 backdrop-blur">HANNAH · LIVE</span>
-                <span className="flex items-center gap-1.5 rounded-full border border-white/60 bg-white/85 px-2.5 py-1.5 text-[8px] text-slate-600 backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" /> Ready</span>
+                <span className="rounded-full border border-white/60 bg-white/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.18em] text-brand-700 backdrop-blur">HANNAH · LIVE</span>
+                <span className="flex items-center gap-1.5 rounded-full border border-white/60 bg-white/85 px-2.5 py-1.5 text-[10px] text-slate-600 backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" /> Ready</span>
               </div>
-              <div className="pointer-events-none absolute inset-x-4 bottom-4 flex items-center justify-between gap-2 rounded-xl border border-white/50 bg-white/85 px-3 py-2 text-[9px] text-slate-600 backdrop-blur sm:inset-x-5 sm:bottom-5">
+              <div className="pointer-events-none absolute inset-x-4 bottom-4 flex items-center justify-between gap-2 rounded-xl border border-white/50 bg-white/85 px-3 py-2 text-[11px] text-slate-600 backdrop-blur sm:inset-x-5 sm:bottom-5">
                 <span>3 voice languages</span><span className="h-1 w-1 rounded-full bg-slate-400" /><span>Cloud and local AI</span>
               </div>
             </div>
@@ -235,7 +270,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
               <p className="section-desc">A familiar place to think out loud, ask anything, or simply have someone thoughtful to talk to.</p>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-3">
             {statCards.map(({ value, label, icon: IconName }) => {
               const Icon = IconName === "cpu" ? ShieldCheck : IconName === "globe" ? Globe2 : Heart;
               return (
@@ -258,7 +293,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
               <p className="section-kicker">How it works</p>
               <h2 className="section-title">Your space. Your conversation.</h2>
               <p className="section-desc">You decide when to begin and whether to type or use your voice.</p>
-              <button type="button" onClick={openKeyDialog} className="group mt-6 inline-flex items-center gap-2 text-[11px] font-bold text-brand-600 transition hover:text-brand-700">
+              <button type="button" onClick={openKeyDialog} className="group mt-6 inline-flex items-center gap-2 text-[13px] font-bold text-brand-600 transition hover:text-brand-700">
                 Talk to HANNAH <ArrowRight size={14} className="transition group-hover:translate-x-1" />
               </button>
             </div>
@@ -273,15 +308,15 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                 const resolved = colorMap[color] ?? colorMap.brand;
                 return (
                   <article key={title} className={`relative rounded-2xl border ${resolved.border} bg-white p-6 shadow-soft transition hover:-translate-y-1 hover:border-brand-200`}>
-                    <span className="absolute right-4 top-4 font-mono text-[9px] text-slate-200">0{index + 1}</span>
+                    <span className="absolute right-4 top-4 font-mono text-[11px] text-slate-200">0{index + 1}</span>
                     <div className={`mb-5 flex h-10 w-10 items-center justify-center rounded-xl ${resolved.bg} ${resolved.icon}`}>
                       <Icon size={17} strokeWidth={1.7} />
                     </div>
                     <div className="flex items-center gap-1.5 mt-2">
                       <span className={`h-1.5 w-1.5 rounded-full ${resolved.dot}`} />
-                      <span className="text-[10px] font-semibold text-ink">{title}</span>
+                      <span className="text-xs font-semibold text-ink">{title}</span>
                     </div>
-                    <p className="mt-2.5 text-[11px] leading-6 text-slate-600">{description}</p>
+                    <p className="mt-2.5 text-[13px] leading-6 text-slate-600">{description}</p>
                   </article>
                 );
               })}
@@ -304,7 +339,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
               ].map((mode) => (
                 <article key={mode.title} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
                   <h3 className="font-display text-sm font-bold text-ink">{mode.title}</h3>
-                  <p className="mt-2 text-[11px] leading-6 text-slate-600">{mode.detail}</p>
+                  <p className="mt-2 text-[13px] leading-6 text-slate-600">{mode.detail}</p>
                 </article>
               ))}
             </div>
@@ -319,18 +354,18 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                 <LockKeyhole size={17} />
               </div>
               <h2 className="mt-5 font-display text-2xl font-bold tracking-[-0.04em] text-ink sm:text-3xl">Your key stays yours.</h2>
-              <p className="mt-3 text-[11px] leading-6 text-slate-600 sm:text-xs">
-                Your Groq key stays in memory for this visit. HANNAH sends it to the configured API server in a request header for cloud turns; it is not saved in browser storage.
+              <p className="mt-3 text-[13px] leading-6 text-slate-600 sm:text-xs">
+                If you add your own Groq key, it is kept only for this browser tab and cleared when you close it. HANNAH sends it to its API server in a request header for cloud replies; it is never written to the server's disk.
               </p>
             </div>
-            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="inline-flex min-h-[3rem] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white px-4 text-[10px] font-bold text-slate-600 transition hover:border-brand-300 hover:text-ink">
+            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="inline-flex min-h-[3rem] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white px-4 text-xs font-bold text-slate-600 transition hover:border-brand-300 hover:text-ink">
               Get a Groq API key <ArrowRight size={13} />
             </a>
           </div>
         </section>
 
         <footer className="border-t border-slate-200">
-          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 text-[9px] text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 text-[11px] text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
             <span>© {new Date().getFullYear()} HANNAH · A thoughtful AI companion.</span>
             <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
           </div>
@@ -344,12 +379,13 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
             <div className="relative p-6 sm:p-8">
               <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-ink"><X size={15} /></button>
               <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600"><Sparkles size={17} /></span>
-              <p className="mt-7 text-[9px] font-bold uppercase tracking-[0.2em] text-brand-700">Your first step</p>
+              <p className="mt-7 text-[11px] font-bold uppercase tracking-[0.2em] text-brand-700">Your first step</p>
               <h2 id="connect-title" className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-ink">Connect with HANNAH.</h2>
-              <p className="mt-4 text-[11px] leading-6 text-slate-600">Enter the access token from your HANNAH server operator. They set it as <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">HANNAH_API_TOKEN</code> in <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">server/.env</code> (generate with <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">openssl rand -hex 32</code>). It stays in this page's memory for the session.</p>
+              <p className="mt-4 text-[13px] leading-6 text-slate-600">Enter the access token you received from whoever runs this HANNAH server. It is kept for this browser tab only.</p>
+              <details className="mt-2 text-xs text-slate-500"><summary className="cursor-pointer select-none font-medium text-slate-600">I run this server</summary><p className="mt-1.5 leading-5">Set <code className="rounded bg-slate-100 px-1 font-mono text-brand-700">HANNAH_API_TOKEN</code> on the server (generate one with <code className="rounded bg-slate-100 px-1 font-mono text-brand-700">openssl rand -hex 32</code>), redeploy, then paste the same value here.</p></details>
 
               <form className="mt-7" onSubmit={beginConversation}>
-                <label htmlFor="hannah-api-token" className="mb-2 block text-[10px] font-bold text-slate-700">HANNAH API access token</label>
+                <label htmlFor="hannah-api-token" className="mb-2 block text-xs font-bold text-slate-700">HANNAH API access token</label>
                 <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 pr-3 transition focus-within:border-brand-400/60">
                   <input
                     id="hannah-api-token"
@@ -362,13 +398,13 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                     spellCheck={false}
                     maxLength={512}
                     required
-                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-ink outline-none placeholder:text-slate-400"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-base text-ink outline-none placeholder:text-slate-400 sm:text-sm"
                   />
                   <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide HANNAH access token" : "Show HANNAH access token"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
                     {showApiToken ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
-                <label htmlFor="groq-key" className="mb-2 block mt-6 text-[10px] font-bold text-slate-700">Optional Groq API key</label>
+                <label htmlFor="groq-key" className="mb-2 block mt-6 text-xs font-bold text-slate-700">Optional Groq API key</label>
                 <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 pr-3 transition focus-within:border-brand-400/60">
                   <input
                     id="groq-key"
@@ -380,18 +416,18 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                     autoCapitalize="none"
                     spellCheck={false}
                     maxLength={512}
-                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-ink outline-none placeholder:text-slate-400"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-base text-ink outline-none placeholder:text-slate-400 sm:text-sm"
                   />
                   <button type="button" onClick={() => setShowApiKey((visible) => !visible)} aria-label={showApiKey ? "Hide API key" : "Show API key"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
                     {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
-                {keyError && <p role="alert" className="mt-2 text-[10px] text-rose-400">{keyError}</p>}
-                <p className="mt-4 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-600" /> The access token and optional Groq key stay in this page's memory.</p>
-                <button type="submit" className="group mt-7 flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-[11px] font-bold text-white transition hover:brightness-105">
-                  Continue to HANNAH <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
+                {keyError && <p role="alert" className="mt-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">{keyError}</p>}
+                <p className="mt-4 flex items-start gap-2 text-[13px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-600" /> Both values are kept only for this browser tab and cleared when you close it.</p>
+                <button type="submit" disabled={verifying} className="group mt-7 flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-[13px] font-bold text-white transition hover:brightness-105 disabled:cursor-wait disabled:opacity-70">
+                  {verifying ? "Checking your token…" : "Continue to HANNAH"} {!verifying && <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />}
                 </button>
-                <p className="mt-5 text-center text-[9px] text-slate-500">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-brand-700 underline decoration-brand-200/30 underline-offset-2 hover:text-brand-800">Create one at Groq</a></p>
+                <p className="mt-5 text-center text-[11px] text-slate-500">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-brand-700 underline decoration-brand-200/30 underline-offset-2 hover:text-brand-800">Create one at Groq</a></p>
               </form>
             </div>
           </section>

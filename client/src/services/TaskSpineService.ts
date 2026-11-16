@@ -79,6 +79,9 @@ export const TaskSpineService = {
   resume(id: string) {
     this.update(id, { status: "pending" });
   },
+  remove(id: string) {
+    writeTasks(readTasks().filter((task) => task.id !== id));
+  },
   cancel(id: string) {
     this.update(id, { status: "cancelled" });
   },

@@ -100,9 +100,9 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-brand-100 bg-brand-50 text-brand-600">
             <MessageSquarePlus size={18} />
           </span>
-          <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-brand-600">Help HANNAH grow</p>
+          <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.2em] text-brand-600">Help HANNAH grow</p>
           <h2 id="feedback-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-ink">Send a note.</h2>
-          <p className="mt-2 text-[11px] leading-6 text-slate-500">
+          <p className="mt-2 text-[13px] leading-6 text-slate-500">
             Report a rough edge, ask for a feature, or tell us how the conversation felt.
           </p>
 
@@ -112,13 +112,13 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
                 <CheckCircle2 size={22} />
               </span>
               <h3 className="mt-4 font-['Manrope'] text-base font-semibold text-ink">Your note is on its way.</h3>
-              <p className="mt-2 text-[11px] leading-6 text-slate-500">
+              <p className="mt-2 text-[13px] leading-6 text-slate-500">
                 Thank you. Feedback is reviewed by the HANNAH team and is never attached to your conversation.
               </p>
               <button
                 type="button"
                 onClick={onClose}
-                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-5 text-[11px] font-bold text-white transition hover:brightness-105 shadow-soft"
+                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-5 text-[13px] font-bold text-white transition hover:brightness-105 shadow-soft"
               >
                 Close <Send size={13} />
               </button>
@@ -126,7 +126,7 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
           ) : (
             <form className="mt-5" onSubmit={handleSubmit}>
               <fieldset>
-                <legend className="mb-2 block text-[10px] font-bold text-slate-500">What kind of note is this?</legend>
+                <legend className="mb-2 block text-xs font-bold text-slate-500">What kind of note is this?</legend>
                 <div className="grid grid-cols-2 gap-2">
                   {categories.map(({ id, label, icon: Icon }) => (
                     <button
@@ -134,7 +134,7 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
                       type="button"
                       onClick={() => setCategory(id)}
                       aria-pressed={category === id}
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-[10px] font-medium transition ${category === id ? "border-brand-200 bg-brand-50 text-brand-600" : "border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-600"}`}
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition ${category === id ? "border-brand-200 bg-brand-50 text-brand-600" : "border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-600"}`}
                     >
                       <Icon size={14} /> {label}
                     </button>
@@ -142,7 +142,7 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
                 </div>
               </fieldset>
 
-              <label htmlFor="feedback-message" className="mb-2 mt-4 block text-[10px] font-bold text-slate-500">Your message</label>
+              <label htmlFor="feedback-message" className="mb-2 mt-4 block text-xs font-bold text-slate-500">Your message</label>
               <textarea
                 ref={textareaRef}
                 id="feedback-message"
@@ -158,24 +158,24 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
                 placeholder="What happened, or what would make HANNAH better?"
                 className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-400/60"
               />
-              <div className="mt-1.5 flex items-center justify-between text-[9px] text-slate-500">
+              <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
                 <span>Please don’t include passwords, API keys, or private chat text.</span>
                 <span className="font-mono">{message.length}/4000</span>
               </div>
 
               <div className="mt-4 rounded-xl border border-slate-100 bg-white p-3 shadow-soft">
-                <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Attached automatically</p>
-                <p className="mt-1.5 text-[10px] leading-5 text-slate-500">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Attached automatically</p>
+                <p className="mt-1.5 text-xs leading-5 text-slate-500">
                   App v{version} · {platform} · {mode} inference{inferenceMode !== "cloud" ? ` (${inferenceMode})` : ""}
                 </p>
-                <p className="mt-1 flex items-start gap-1.5 text-[9px] leading-5 text-slate-500">
+                <p className="mt-1 flex items-start gap-1.5 text-[11px] leading-5 text-slate-500">
                   <ShieldCheck size={12} className="mt-0.5 shrink-0 text-emerald-600" />
                   No IP address, account, device identifier, or chat history is attached.
                 </p>
               </div>
 
               {error && (
-                <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-[10px] leading-5 text-rose-700">
+                <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-xs leading-5 text-rose-700">
                   <AlertTriangle size={13} className="mt-0.5 shrink-0" /> {error}
                 </div>
               )}
@@ -185,14 +185,14 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
                   type="button"
                   onClick={close}
                   disabled={status === "sending"}
-                  className="inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-ink disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-ink disabled:opacity-40"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!message.trim() || status === "sending"}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-5 text-[11px] font-bold text-white transition hover:brightness-105 shadow-soft disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-5 text-[13px] font-bold text-white transition hover:brightness-105 shadow-soft disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {status === "sending" ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   {status === "sending" ? "Sending…" : "Send feedback"}

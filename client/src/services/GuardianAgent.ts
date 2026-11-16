@@ -15,11 +15,27 @@ const SUSPICIOUS_PATTERNS = [
   /disable.*guardian/i,
 ];
 
+const STRICTNESS_KEY = "hannah.guardian.strictness.v1";
+
+function savedStrictness(): Strictness {
+  try {
+    const value = window.localStorage.getItem(STRICTNESS_KEY);
+    return value === "permissive" || value === "strict" ? value : "balanced";
+  } catch {
+    return "balanced";
+  }
+}
+
 export const GuardianAgent = {
-  strictness: "balanced" as Strictness,
+  strictness: savedStrictness(),
   history: [] as string[],
   setStrictness(level: Strictness) {
     this.strictness = level;
+    try {
+      window.localStorage.setItem(STRICTNESS_KEY, level);
+    } catch {
+      // The choice still applies for this session.
+    }
   },
   evaluate(action: { tool: string; args: unknown; intent?: string }): GuardianDecision {
     const payload = JSON.stringify({ ...action, args: action.args }).toLowerCase();

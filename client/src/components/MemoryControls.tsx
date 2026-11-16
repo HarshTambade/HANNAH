@@ -103,9 +103,9 @@ export default function MemoryControls() {
     <section className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 shadow-soft" aria-label="On-device memory controls">
       <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
         <Brain size={14} className="text-emerald-300" /> On-device memory
-        <span className="ml-auto text-[10px] text-slate-500">{count === null ? "…" : `${count} saved`}</span>
+        <span className="ml-auto text-xs text-slate-500">{count === null ? "…" : `${count} saved`}</span>
       </div>
-      <p className="text-[11px] leading-relaxed text-slate-600">
+      <p className="text-[13px] leading-relaxed text-slate-600">
         {enabled
           ? "When enabled, conversation memories are stored in this app’s private device storage and may be recalled in later chats. If you select MobileClaw · Anthropic, relevant recalled entries are sent to Anthropic with that request."
           : "Memory is off by default. Enabling it allows automatic saving and recall of personal facts on this device. You can turn it off or delete saved entries at any time."}
@@ -141,23 +141,23 @@ export default function MemoryControls() {
               {items.map((item) => (
                 <article key={item.key} className="rounded-lg border border-slate-100 bg-white p-2.5 shadow-soft">
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-[10px] uppercase tracking-wide text-emerald-600">{item.category}</span>
+                    <span className="text-xs uppercase tracking-wide text-emerald-600">{item.category}</span>
                     <button type="button" onClick={() => void removeMemory(item)} disabled={busy} aria-label="Delete this saved memory" className="rounded p-1 text-slate-500 hover:text-rose-600 disabled:opacity-40">
                       <Trash2 size={12} />
                     </button>
                   </div>
-                  <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-600">{item.text}</p>
+                  <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-slate-600">{item.text}</p>
                 </article>
               ))}
             </div>
           )}
-          <button type="button" onClick={() => void removeAllMemories()} disabled={busy} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11px] text-rose-600 transition hover:bg-rose-50 disabled:opacity-40">
+          <button type="button" onClick={() => void removeAllMemories()} disabled={busy} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] text-rose-600 transition hover:bg-rose-50 disabled:opacity-40">
             <Trash2 size={12} /> Delete all saved memories
           </button>
         </>
       )}
-      {count === 0 && <p className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500"><Eye size={12} /> No saved memories are currently stored.</p>}
-      {status && <p role="status" className="mt-2 text-[10px] leading-relaxed text-slate-500">{status}</p>}
+      {count === 0 && <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500"><Eye size={12} /> No saved memories are currently stored.</p>}
+      {status && <p role="status" className="mt-2 text-xs leading-relaxed text-slate-500">{status}</p>}
     </section>
   );
 }

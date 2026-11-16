@@ -1,308 +1,180 @@
-import { useEffect, useState } from "react";
-import { House, Bot, MessageSquare, Settings2, ShieldCheck, Activity, ArrowRight, Workflow, Brain, Code2, ArrowLeft } from "lucide-react";
-import AvatarCard from "./components/AvatarCard";
-import ArchitectureCard from "./components/ArchitectureCard";
-import DigitalTwinPanel from "./components/DigitalTwinPanel";
+import { useCallback, useEffect, useState } from "react";
 import IntegrationsPage from "./components/IntegrationsPage";
-import InterventionLog from "./components/InterventionLog";
 import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
-import PersonalizationHealthWidget from "./components/PersonalizationHealthWidget";
-import PortalUI from "./components/PortalUI";
 import WorkflowBuilder from "./components/WorkflowBuilder";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
-import { ChaosEngine, type DegradedState } from "./services/ChaosEngine";
 import ChatUI from "./components/ChatUI";
-import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
 import AvatarScene, { type AvatarMotion } from "./components/AvatarScene";
-import { setApiAccessToken } from "./services/api";
-import type { Emotion } from "./types";
+import AppShell, { type AppSection } from "./components/AppShell";
+import Dashboard from "./components/Dashboard";
+import SettingsPage from "./components/SettingsPage";
+import { clearApiSession, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
+import type { Emotion, InferenceMode } from "./types";
 
-import type { InferenceMode } from "./types";
+type Screen = "landing" | "integrations" | "marketplace" | AppSection;
 
-type Screen = "landing" | "companion" | "conversation" | "integrations" | "marketplace" | "automations" | "accountability" | "developer";
+const routes: Record<Screen, string> = {
+  landing: "",
+  conversation: "#/chat",
+  companion: "#/dashboard",
+  accountability: "#/memory",
+  automations: "#/automations",
+  settings: "#/settings",
+  integrations: "#/integrations",
+  marketplace: "#/marketplace",
+};
+
+const appSections = new Set<Screen>(["conversation", "companion", "accountability", "automations", "settings"]);
+
+// Only "#/..." hashes are routes; "#experience" etc. are landing-page anchors.
+function screenFromHash(): Screen {
+  const hash = window.location.hash;
+  if (!hash.startsWith("#/")) return "landing";
+  const match = (Object.entries(routes) as Array<[Screen, string]>).find(([, value]) => value === hash);
+  return match?.[0] ?? "landing";
+}
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("landing");
-  const [chaosEnabled, setChaosEnabled] = useState(ChaosEngine.isEnabled());
-  const [degraded, setDegraded] = useState<DegradedState>(ChaosEngine.getDegraded());
-  const [integrationReturnScreen, setIntegrationReturnScreen] = useState<"landing" | "companion">("landing");
-  const [marketplaceReturnScreen, setMarketplaceReturnScreen] = useState<"landing" | "companion">("landing");
-  const [portalOpen, setPortalOpen] = useState(false);
-  const [groqApiKey, setGroqApiKey] = useState("");
+  const [screen, setScreen] = useState<Screen>(() => {
+    const initial = screenFromHash();
+    return appSections.has(initial) && !hasApiSession() ? "landing" : initial;
+  });
+  const [connectRequested, setConnectRequested] = useState(() => appSections.has(screenFromHash()) && !hasApiSession());
+  const [groqApiKey, setGroqApiKey] = useState(getSessionGroqKey);
   const [emotion, setEmotion] = useState<Emotion>("neutral");
   const [avatarMotion, setAvatarMotion] = useState<AvatarMotion>("loading");
+  const [returnScreen, setReturnScreen] = useState<Screen>("landing");
   const preferredMode: InferenceMode = "cloud";
-  const metrics = useDashboardMetrics(3000);
 
-  useEffect(() => ChaosEngine.subscribe(() => {
-    setChaosEnabled(ChaosEngine.isEnabled());
-    setDegraded(ChaosEngine.getDegraded());
-  }), []);
+  const navigate = useCallback((next: Screen) => {
+    if (appSections.has(next) && !hasApiSession()) {
+      setConnectRequested(true);
+      next = "landing";
+    }
+    setScreen(next);
+    const target = routes[next];
+    if (window.location.hash !== target) {
+      const url = `${window.location.pathname}${window.location.search}${target}`;
+      window.history.pushState(null, "", url);
+    }
+  }, []);
 
-  if (screen === "integrations") {
-    return <IntegrationsPage onBack={() => setScreen(integrationReturnScreen)} />;
-  }
+  useEffect(() => {
+    const onPop = () => {
+      const next = screenFromHash();
+      if (appSections.has(next) && !hasApiSession()) {
+        setConnectRequested(true);
+        setScreen("landing");
+      } else {
+        setScreen(next);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("hashchange", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("hashchange", onPop);
+    };
+  }, []);
 
-  if (screen === "marketplace") {
-    return <MarketplacePage onBack={() => setScreen(marketplaceReturnScreen)} />;
-  }
+  const disconnect = useCallback(() => {
+    clearApiSession();
+    setGroqApiKey("");
+    navigate("landing");
+  }, [navigate]);
 
-  if (screen === "automations") return <WorkflowBuilder onBack={() => setScreen("companion")} />;
-  if (screen === "conversation") return <main className="relative flex h-[100dvh] min-h-0 flex-col bg-mesh-indigo p-3 sm:p-5"><div className="fixed inset-0 bg-mesh-pastel opacity-50" /><div className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-3 self-start"><ArrowLeft size={16} /> Dashboard</button><div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)]"><section role="region" aria-label="HANNAH avatar" data-emotion={emotion} data-avatar-motion={avatarMotion} className="relative min-h-32 overflow-hidden rounded-[2rem] border border-white/70 bg-white/65 shadow-soft-lg lg:min-h-0"><AvatarScene emotion={emotion} onMotionChange={setAvatarMotion} /></section><div className="min-h-0"><ChatUI onEmotionChange={setEmotion} panel groqApiKey={groqApiKey} initialMode={preferredMode} /></div></div></div></main>;
-  if (screen === "accountability") return <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><div className="relative z-10 mx-auto max-w-5xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><AgentAccountabilityDashboard /></div></main>;
-  if (screen === "developer") return (
-    <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><section className="relative z-10 mx-auto max-w-3xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><div className="bento-card"><div className="bento-kicker">Developer settings</div><h1 className="bento-title mt-2">Resilience controls</h1><p className="bento-desc mt-2">Chaos injection is available only in development and test builds. It can simulate failed network requests, tool timeouts, corrupted memory, and denied approvals.</p><label className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/70 p-4"><span><span className="block text-sm font-bold text-ink">Chaos Mode</span><span className="mt-1 block text-xs text-slate-500">Randomly inject one configured failure at a time.</span></span><input type="checkbox" disabled={!ChaosEngine.available()} checked={chaosEnabled} onChange={(event) => ChaosEngine.setEnabled(event.target.checked)} className="h-5 w-5 accent-violet-600" /></label>{!ChaosEngine.available() && <p className="mt-3 text-xs text-slate-500">This production build does not expose chaos controls.</p>}<div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-sky-900"><Code2 size={16} /> Fallback status</div><p className="mt-2 text-xs text-sky-800">{degraded.degraded ? degraded.reason : "No degraded condition is currently reported."}</p>{degraded.degraded && <button className="mt-3 text-xs font-semibold text-sky-800 underline" onClick={() => ChaosEngine.clearDegraded()}>Clear degraded status</button>}</div></div></section></main>
-  );
+  const reconnect = useCallback(() => {
+    clearApiSession();
+    setConnectRequested(true);
+    navigate("landing");
+  }, [navigate]);
+
+  const openSecondary = (target: "integrations" | "marketplace") => {
+    setReturnScreen(screen);
+    navigate(target);
+  };
+
+  if (screen === "integrations") return <IntegrationsPage onBack={() => navigate(returnScreen === "integrations" ? "landing" : returnScreen)} />;
+  if (screen === "marketplace") return <MarketplacePage onBack={() => navigate(returnScreen === "marketplace" ? "landing" : returnScreen)} />;
 
   if (screen === "landing") {
     return (
-      <>
-        <LandingPage
-          onStart={({ apiToken, groqApiKey: providerKey }) => { setApiAccessToken(apiToken); setGroqApiKey(providerKey); setScreen("conversation"); }}
-          onIntegrations={() => { setIntegrationReturnScreen("landing"); setScreen("integrations"); }}
-          onMarketplace={() => { setMarketplaceReturnScreen("landing"); setScreen("marketplace"); }}
-        />
-      </>
+      <LandingPage
+        hasSession={hasApiSession()}
+        openConnect={connectRequested}
+        onConnectHandled={() => setConnectRequested(false)}
+        onStart={({ apiToken, groqApiKey: providerKey }) => {
+          setApiAccessToken(apiToken);
+          setSessionGroqKey(providerKey);
+          setGroqApiKey(providerKey);
+          navigate("conversation");
+        }}
+        onResume={() => navigate("conversation")}
+        onIntegrations={() => openSecondary("integrations")}
+        onMarketplace={() => openSecondary("marketplace")}
+      />
+    );
+  }
+
+  const shellProps = { active: screen as AppSection, onNavigate: navigate, onHome: () => navigate("landing") };
+
+  if (screen === "conversation") {
+    return (
+      <AppShell {...shellProps} fill>
+        <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col p-2 sm:p-4">
+          <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2 sm:gap-3 lg:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)] lg:grid-rows-1">
+            <section
+              role="region"
+              aria-label="HANNAH avatar"
+              data-emotion={emotion}
+              data-avatar-motion={avatarMotion}
+              className="relative h-36 overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/65 shadow-soft sm:h-48 lg:h-auto lg:min-h-0"
+            >
+              <AvatarScene emotion={emotion} onMotionChange={setAvatarMotion} />
+            </section>
+            <div className="min-h-0">
+              <ChatUI onEmotionChange={setEmotion} panel groqApiKey={groqApiKey} initialMode={preferredMode} onSessionExpired={reconnect} />
+            </div>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (screen === "accountability") {
+    return (
+      <AppShell {...shellProps}>
+        <div className="mx-auto max-w-4xl px-4 pb-12 pt-6 sm:px-6 sm:pt-8"><AgentAccountabilityDashboard /></div>
+      </AppShell>
+    );
+  }
+
+  if (screen === "automations") {
+    return (
+      <AppShell {...shellProps}>
+        <WorkflowBuilder />
+      </AppShell>
+    );
+  }
+
+  if (screen === "settings") {
+    return (
+      <AppShell {...shellProps}>
+        <SettingsPage onDisconnect={disconnect} onGroqKeyChange={setGroqApiKey} />
+      </AppShell>
     );
   }
 
   return (
-    <main className="dashboard-root">
-      <div className="fixed inset-0 z-0 bg-mesh-indigo" />
-      <div className="fixed inset-0 z-0 bg-mesh-pastel opacity-60" />
-      <div className="fixed inset-0 z-0 soft-grid opacity-40" />
-
-      <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-8 h-screen overflow-y-auto">
-        <header className="sticky top-0 z-30 -mx-6 mb-6 flex flex-col justify-between gap-4 border-b border-white/70 bg-white/75 px-6 py-3 backdrop-blur-xl sm:rounded-b-2xl lg:flex-row lg:items-center">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-[1.5rem] border border-brand-100 bg-brand-50 text-brand-600 shadow-soft">
-              <Bot size={20} />
-            </div>
-            <div>
-              <p className="font-display font-bold text-xl text-ink tracking-tight">HANNAH</p>
-              <p className="text-xs text-slate-500 uppercase tracking-wider">AI Companion Dashboard</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setScreen("landing")} className="btn-ghost">
-              <House size={16} /> <span className="hidden sm:inline">Home</span>
-            </button>
-            <button type="button" onClick={() => setScreen("developer")} className="btn-outline">
-              <Settings2 size={16} /> <span className="hidden sm:inline">Settings</span>
-            </button>
-          </div>
-        </header>
-
-        {degraded.degraded && <div role="status" className="mb-5 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs text-amber-900 shadow-soft"><span className="h-2 w-2 rounded-full bg-amber-500" /><span><strong>Degraded mode</strong> · {degraded.reason || "Using a fallback model."}</span><button onClick={() => ChaosEngine.clearDegraded()} className="ml-auto text-[10px] font-semibold underline">Dismiss</button></div>}
-
-        <div className="mb-5 flex flex-wrap gap-2"><button className="btn-primary" onClick={() => setScreen("conversation")}><MessageSquare size={15} /> Open chat</button><button className="btn-outline" onClick={() => setScreen("automations")}><Workflow size={15} /> Automations</button><button className="btn-outline" onClick={() => setScreen("accountability")}><Brain size={15} /> Accountability & style</button><button className="btn-ghost" onClick={() => setScreen("integrations")}><Activity size={15} /> Integrations</button></div>
-
-        <div className="bento-grid">
-          <AvatarCard />
-
-          <div className="bento-card span-1-2 flex flex-col h-full">
-            <div className="mb-4">
-              <div className="bento-kicker">Focus Area Distribution</div>
-              <div className="bento-title">Task Breakdown</div>
-              <div className="bento-desc">HANNAH's task classification across all sessions.</div>
-            </div>
-            <div className="flex-1 flex items-center justify-center">
-              <div className="w-full max-w-[300px]">
-                <div className="flex items-center justify-center relative h-64">
-                  <svg className="w-full h-full" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="40" stroke="#e2e8f0" strokeWidth="8" fill="none" />
-                    <circle cx="50" cy="50" r="40" stroke="#8B5CF6" strokeWidth="8" fill="none" strokeDasharray="251" strokeDashoffset={251 - (metrics.memory.utilizationPct / 100) * 251} className="transition-all duration-1000" />
-                    <text x="50" y="54" fontFamily="Manrope" fontSize="20" fontWeight="800" fill="#0f172a" textAnchor="middle">{metrics.memory.utilizationPct}%</text>
-                  </svg>
-                </div>
-                <div className="mt-4 flex justify-between text-[11px]">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500" />Session {metrics.memory.episodic}</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Long-term {metrics.memory.longTerm}</span>
-                </div>
-                <div className="mt-2 flex justify-between text-[11px]">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" />Persona {metrics.memory.persona}</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Total {metrics.memory.total}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bento-card span-1-1 flex flex-col h-full">
-            <div className="mb-4">
-              <div className="bento-kicker">Resolved Tasks</div>
-              <div className="stat-big">{metrics.tasks.total}</div>
-              <div className="stat-label mt-1">{metrics.tasks.completed} completed · {metrics.tasks.pending} pending</div>
-            </div>
-            <div className="mt-6 flex-1 flex items-end justify-center relative h-40">
-              <svg className="w-full h-full" viewBox="0 0 120 120" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="sparkGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#8B5CF6" /><stop offset="100%" stopColor="#FDBA74" />
-                  </linearGradient>
-                </defs>
-                <path d="M10,90 Q30,50 50,80 T90,60" stroke="url(#sparkGrad2)" strokeWidth="3" fill="none" strokeLinecap="round" />
-                {[10, 30, 50, 70, 90].map((x) => (
-                  <circle key={x} cx={x} cy={x === 10 ? 90 : x === 30 ? 50 : x === 50 ? 80 : x === 70 ? 60 : 60} r="2.5" fill="#8B5CF6" />
-                ))}
-              </svg>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
-                <div className="text-[10px] font-bold uppercase text-slate-500">Success</div>
-                <div className="font-display font-bold text-lg text-ink">{metrics.tasks.successRate}%</div>
-              </div>
-              <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
-                <div className="text-[10px] font-bold uppercase text-slate-500">Avg Latency</div>
-                <div className="font-display font-bold text-lg text-ink">140ms</div>
-              </div>
-              <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
-                <div className="text-[10px] font-bold uppercase text-slate-500">Failed</div>
-                <div className="font-display font-bold text-lg text-ink">{metrics.tasks.failed}</div>
-              </div>
-            </div>
-          </div>
-
-          <ArchitectureCard />
-
-          <div className="bento-card span-1-1 flex flex-col h-full">
-            <div className="mb-4">
-              <div className="bento-kicker">Memory Consolidation</div>
-              <div className="stat-big">{metrics.memory.utilizationPct}%</div>
-              <div className="stat-label mt-1">{metrics.memory.longTerm} long-term · {metrics.memory.persona} persona</div>
-            </div>
-            <div className="mt-6 flex flex-col items-center justify-center relative h-48 w-48 mx-auto">
-              <svg className="w-full h-full" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="42" stroke="#e2e8f0" strokeWidth="8" fill="none" />
-                <circle cx="50" cy="50" r="42" stroke="url(#memGrad3)" strokeWidth="8" fill="none" strokeDasharray="264" strokeDashoffset={84} />
-                <defs>
-                  <linearGradient id="memGrad3" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#10B981" /><stop offset="100%" stopColor="#3B82F6" />
-                  </linearGradient>
-                </defs>
-                <text x="50" y="55" fontFamily="Manrope" fontSize="20" fontWeight="800" fill="#0f172a" textAnchor="middle">68%</text>
-              </svg>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-white/50 bg-white/40 px-3 py-2 backdrop-blur-sm">
-                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" /><span className="text-[10px] text-slate-600 font-medium">Episodic</span></div>
-                <div className="mt-1 text-[11px] font-bold text-ink">1,204 items</div>
-              </div>
-              <div className="rounded-xl border border-white/50 bg-white/40 px-3 py-2 backdrop-blur-sm">
-                <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-purple-500" /><span className="text-[10px] text-slate-600 font-medium">Persona</span></div>
-                <div className="mt-1 text-[11px] font-bold text-ink">87 anchors</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bento-card span-1-1 flex flex-col h-full">
-            <div className="mb-4">
-              <div className="bento-kicker">Token Efficiency</div>
-              <div className="stat-big">${metrics.tokens.savedEstimate.toFixed(2)}</div>
-              <div className="stat-label mt-1">Cloud cost saved this week</div>
-            </div>
-            <div className="mt-4 flex-1 relative h-32">
-              <svg className="w-full h-full" viewBox="0 0 140 100">
-                <defs>
-                  <linearGradient id="barGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#8B5CF6" /><stop offset="100%" stopColor="#10B981" />
-                  </linearGradient>
-                </defs>
-                {[65, 72, 68, 75, 70, 82, 88].map((val, i) => (
-                  <rect key={i} x={i * 19} y={100 - val} width="14" height={val} fill="url(#barGrad2)" rx="2" />
-                ))}
-              </svg>
-              <div className="absolute bottom-0 left-0 w-full flex justify-between text-[10px] text-slate-500 font-medium">
-                Mon Tue Wed Thu Fri Sat Sun
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
-                <div className="text-[10px] font-bold uppercase text-slate-500">Local</div>
-                <div className="font-display font-bold text-lg text-ink">{metrics.tokens.utilizationPct}%</div>
-              </div>
-              <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
-                <div className="text-[10px] font-bold uppercase text-slate-500">Cloud</div>
-                <div className="font-display font-bold text-lg text-ink">{100 - metrics.tokens.utilizationPct}%</div>
-              </div>
-            </div>
-          </div>
-
-          <DigitalTwinPanel />
-
-          <InterventionLog />
-
-          <PersonalizationHealthWidget />
-
-          <div className="bento-card span-2-2 flex flex-col h-full border border-slate-200 bg-white shadow-soft-lg">
-            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 pb-6 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-purple-100 bg-purple-50 text-purple-600 shadow-soft">
-                  <MessageSquare size={18} />
-                </div>
-                <div>
-                  <div className="font-display font-bold text-lg text-ink">Conversation</div>
-                  <div className="flex items-center gap-1 text-[11px]">
-                    <span className="relative flex h-2 w-2"><span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping" /><span className="relative inset-0 rounded-full bg-emerald-500" /></span>
-                    <span className="font-medium text-slate-600">HANNAH is online</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setScreen("integrations")} aria-label="Open integrations" className="btn-ghost"><Activity size={16} /></button>
-                <button type="button" onClick={() => setScreen("accountability")} aria-label="Open accountability dashboard" className="btn-ghost"><ShieldCheck size={16} /></button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
-              <div className="max-w-[600px] mx-auto space-y-4">
-                <div className="flex flex-col gap-1">
-                  <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-soft max-w-[80%]">
-                    <p className="text-[13px] leading-relaxed text-ink">Hey, I'm HANNAH. It's lovely to meet you. What's on your mind today?</p>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Just now</span>
-                </div>
-                <div className="flex justify-end">
-                  <div className="rounded-2xl border border-purple-100 bg-purple-50 px-4 py-3 shadow-soft max-w-[80%]">
-                    <p className="text-[13px] leading-relaxed text-purple-900">Can you help me analyze this data?</p>
-                  </div>
-                  <span className="text-[10px] text-slate-400">2 min ago</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-soft max-w-[80%]">
-                    <p className="text-[13px] leading-relaxed text-ink">I'd be happy to help! Please share the data or paste what you'd like me to analyze.</p>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Just now</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mx-6 mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 shadow-soft flex items-start gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-amber-200 bg-amber-100 text-amber-600">
-                <ShieldCheck size={14} />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-baseline gap-1 text-[11px] font-bold text-amber-700">
-                  <span>HANNAH requests approval</span>
-                  <span className="text-normal font-medium">·</span>
-                  <span>run_shell</span>
-                </div>
-                <div className="mt-1 text-[11px] text-amber-600">Command: <span className="font-mono text-xs">ls -la /workspace</span></div>
-                <div className="mt-3"><button type="button" onClick={() => setScreen("conversation")} className="rounded-xl border border-amber-200 bg-white px-4 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-50">Review approvals in live chat</button></div>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-200 px-6 py-4 bg-white/50 backdrop-blur-sm">
-              <button type="button" onClick={() => setScreen("conversation")} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105">Open live conversation <ArrowRight size={17} /></button>
-              <p className="mt-2 text-center text-[10px] text-slate-500">
-                Groq Cloud · Local inference available · Messages stay on this device
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <PortalUI open={portalOpen} onClose={() => setPortalOpen(false)} />
-    </main>
+    <AppShell {...shellProps}>
+      <Dashboard
+        onOpenChat={() => navigate("conversation")}
+        onOpenMemory={() => navigate("accountability")}
+        onOpenAutomations={() => navigate("automations")}
+        onOpenMarketplace={() => openSecondary("marketplace")}
+        onOpenIntegrations={() => openSecondary("integrations")}
+      />
+    </AppShell>
   );
 }

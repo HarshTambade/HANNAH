@@ -304,7 +304,7 @@ textarea {
 
 /* ===== Light button variants ===== */
 .btn-primary {
-  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[12px] font-bold transition;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold transition;
   background: linear-gradient(to bottom right, #0ea5e9, #8b5cf6);
   color: #ffffff;
   box-shadow: 0 10px 40px -10px rgba(14, 165, 233, 0.25);
@@ -317,14 +317,14 @@ textarea {
   cursor: not-allowed;
 }
 .btn-outline {
-  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-[12px] font-bold transition border border-slate-200 bg-white text-ink;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold transition border border-slate-200 bg-white text-ink;
 }
 .btn-outline:hover {
   border-color: #0ea5e9;
   color: #0ea5e9;
 }
 .btn-ghost {
-  @apply inline-flex items-center justify-center rounded-xl px-3 py-2 text-[11px] text-slate-600 transition bg-white/50 border border-transparent;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[13px] font-medium text-slate-600 transition bg-white/50 border border-transparent;
 }
 .btn-ghost:hover {
   background-color: rgba(255, 255, 255, 0.8);
@@ -333,11 +333,11 @@ textarea {
 
 /* ===== Light input variants ===== */
 .input-light {
-  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[12px] text-ink outline-none placeholder:text-slate-400;
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base text-ink outline-none placeholder:text-slate-400 sm:text-sm;
 }
 .input-light:focus {
   border-color: #0ea5e9;
-  ring: 1px solid #0ea5e9;
+  box-shadow: 0 0 0 1px #0ea5e9;
 }
 .input-dark-fallback {
   @apply w-full rounded-lg border border-white/10 bg-[#111521] px-3 py-2.5 text-[12px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-violet-300/40;
@@ -418,18 +418,19 @@ textarea {
 .bento-card {
   background: #ffffff;
   border: 1px solid #f1f5f9;
-  border-radius: 2rem;
-  box-shadow: 0 20px 40px -8px rgba(0,0,0,0.08);
-  padding: 2rem;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border-radius: 1.5rem;
+  box-shadow: 0 12px 32px -12px rgba(15,23,42,0.10);
+  padding: 1.25rem;
+  min-width: 0;
 }
 
-.bento-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 24px 48px -8px rgba(0,0,0,0.10);
+@media (min-width: 640px) {
+  .bento-card {
+    padding: 1.75rem;
+  }
 }
 
-.bento-card span-2-2 {
+.bento-card.span-2-2 {
   grid-column: span 2;
   grid-row: span 2;
 }
@@ -504,7 +505,7 @@ textarea {
 
 /* Section typography */
 .bento-kicker {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -522,7 +523,7 @@ textarea {
 }
 
 .bento-desc {
-  font-size: 13px;
+  font-size: 14px;
   color: #64748b;
   line-height: 1.6;
 }
@@ -547,7 +548,7 @@ textarea {
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #64748b;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -555,7 +556,7 @@ textarea {
 
 /* Dashboard root */
 .dashboard-root {
-  background: #0f172a;
+  background: #f8fafc;
   color: #0f172a;
   min-height: 100vh;
   position: relative;
