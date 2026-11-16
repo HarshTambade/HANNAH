@@ -13,7 +13,7 @@ const tag = process.argv[2];
 if (!/^v\d+\.\d+\.\d+/.test(tag ?? "")) throw new Error("Usage: release-notes.mjs vMAJOR.MINOR.PATCH [SIGNING_STATUS]");
 const version = tag.slice(1);
 
-const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8");
+const changelog = readFileSync(resolve(root, "docs/CHANGELOG.md"), "utf8");
 const start = changelog.search(new RegExp(`^## \\[?${version.replaceAll(".", "\\.")}\\]?.*$`, "m"));
 if (start < 0) throw new Error(`CHANGELOG.md has no section for ${version}.`);
 const rest = changelog.slice(start);

@@ -30,7 +30,7 @@ for (const path of ["package-lock.json", "client/package-lock.json", "server/pac
 }
 if (!/^\d+\.\d+\.\d+$/.test(version)) problems.push(`Version "${version}" is not MAJOR.MINOR.PATCH.`);
 
-const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8");
+const changelog = readFileSync(resolve(root, "docs/CHANGELOG.md"), "utf8");
 if (!new RegExp(`^## \\[?${version.replaceAll(".", "\\.")}\\]?`, "m").test(changelog)) problems.push(`CHANGELOG.md has no "## ${version}" section.`);
 
 const tagIndex = process.argv.indexOf("--tag");

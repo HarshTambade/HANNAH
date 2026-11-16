@@ -69,7 +69,7 @@ Installers for **HANNAH 1.3.0** are attached to the [latest release](https://git
 | iOS | Not distributed yet | iOS apps need an Apple Developer signing identity. Build from source with Xcode ([Mobile, desktop and PWA builds](#mobile-desktop-and-pwa-builds)) or use the web app in Safari. |
 | Web / PWA | Deploy it yourself; see [Deployment](#deployment). | Installable from a supported browser. |
 
-What changed in each version is in [CHANGELOG.md](./CHANGELOG.md). [Platform support](./docs/PLATFORM_SUPPORT.md) lists what works on each operating system and what was verified. Builds on `main` upload temporary [Actions artifacts](https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml) without creating a release.
+What changed in each version is in [CHANGELOG.md](./docs/CHANGELOG.md). [Platform support](./docs/PLATFORM_SUPPORT.md) lists what works on each operating system and what was verified. Builds on `main` upload temporary [Actions artifacts](https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml) without creating a release.
 
 ---
 
@@ -254,7 +254,7 @@ The browser uses same-origin `/api` URLs, so `VITE_API_BASE_URL` stays empty on 
 
 **Cloud providers** handle prompts under their own retention and training policies. For maximum privacy, use WebLLM, on-device llama.cpp or a local Ollama server.
 
-See [`docs/PRIVACY_POLICY.md`](./docs/PRIVACY_POLICY.md) and [`RESPONSIBLE_AI.md`](./RESPONSIBLE_AI.md).
+See [`docs/PRIVACY_POLICY.md`](./docs/PRIVACY_POLICY.md) and [`RESPONSIBLE_AI.md`](./docs/RESPONSIBLE_AI.md).
 
 ---
 
@@ -682,7 +682,7 @@ With *reduce motion* turned on in the operating system, she keeps her expression
 
 [`.github/workflows/nightly.yml`](./.github/workflows/nightly.yml) repeats the audits and tests nightly and fails if code adds an approval bypass, such as a `skipConfirmation` flag or a `*_BYPASS` switch.
 
-To release: `git tag vX.Y.Z && git push origin vX.Y.Z`, or run the workflow manually with **publish release** enabled. Signed iOS builds need the repository variable `IOS_SIGNING_ENABLED=true` and the secrets `IOS_CERTIFICATE_BASE64`, `IOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID` and `APPSTORE_API_PRIVATE_KEY`. The pre-release steps are in [`RELEASE_CHECKLIST.md`](./RELEASE_CHECKLIST.md).
+To release: `git tag vX.Y.Z && git push origin vX.Y.Z`, or run the workflow manually with **publish release** enabled. Signed iOS builds need the repository variable `IOS_SIGNING_ENABLED=true` and the secrets `IOS_CERTIFICATE_BASE64`, `IOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID` and `APPSTORE_API_PRIVATE_KEY`. The pre-release steps are in [`RELEASE_CHECKLIST.md`](./docs/RELEASE_CHECKLIST.md).
 
 ---
 
@@ -871,7 +871,7 @@ The suites cover:
 
 If e2e tests time out on a slow machine, run them with `--workers=1`, because the avatar load is heavy under software WebGL.
 
-Not covered automatically: physical-device permissions, speech, calls, app resume, offline model downloads and live provider calls. The latest manual audit is in [`AUDIT.md`](./AUDIT.md), and chaos testing is described in [`CHAOS_TESTING.md`](./CHAOS_TESTING.md).
+Not covered automatically: physical-device permissions, speech, calls, app resume, offline model downloads and live provider calls. The latest manual audit is in [`AUDIT.md`](./docs/AUDIT.md), and chaos testing is described in [`CHAOS_TESTING.md`](./docs/CHAOS_TESTING.md).
 
 ---
 
@@ -941,7 +941,7 @@ The current plan, with each brief area marked done, partial or missing, is in [`
 5. Run `npm run build`, `npm test --prefix client`, `npm test --prefix server`, `npm run test:e2e --prefix client` and `git diff --check`.
 6. Open a pull request describing what changed, why, how you tested it, and any platform limits or new variables.
 
-Don't commit secrets, `.env` files, downloaded models, build output or generated native web assets. Good starting points are in [`docs/GOOD_FIRST_ISSUE.md`](./docs/GOOD_FIRST_ISSUE.md), and project governance is in [`GOVERNANCE.md`](./GOVERNANCE.md).
+Don't commit secrets, `.env` files, downloaded models, build output or generated native web assets. Good starting points are in [`docs/GOOD_FIRST_ISSUE.md`](./docs/GOOD_FIRST_ISSUE.md), and project governance is in [`GOVERNANCE.md`](./docs/GOVERNANCE.md).
 
 To report a security issue, use GitHub's private vulnerability reporting or contact the maintainer through the repository profile. Don't open a public issue with exploit details.
 
@@ -953,13 +953,13 @@ To report a security issue, use GitHub's private vulnerability reporting or cont
 | --- | --- |
 | Architecture, decisions and roadmap | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
 | API and MCP integration | [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md) |
-| Platform audit | [`AUDIT.md`](./AUDIT.md) |
-| Safety governance and maturity | [`docs/SAFETY_GOVERNANCE.md`](./docs/SAFETY_GOVERNANCE.md), [`docs/SAFETY_MATURITY.md`](./docs/SAFETY_MATURITY.md), [`RESPONSIBLE_AI.md`](./RESPONSIBLE_AI.md) |
+| Platform audit | [`AUDIT.md`](./docs/AUDIT.md) |
+| Safety governance and maturity | [`docs/SAFETY_GOVERNANCE.md`](./docs/SAFETY_GOVERNANCE.md), [`docs/SAFETY_MATURITY.md`](./docs/SAFETY_MATURITY.md), [`RESPONSIBLE_AI.md`](./docs/RESPONSIBLE_AI.md) |
 | Regulatory notes | [`docs/REGULATORY_COMPLIANCE.md`](./docs/REGULATORY_COMPLIANCE.md), [`docs/COMPLIANCE_STATUS.md`](./docs/COMPLIANCE_STATUS.md) |
 | Sync design (experimental) | [`docs/SYNC_PRIVACY.md`](./docs/SYNC_PRIVACY.md) |
 | Capability matrix | [`docs/CAPABILITY_MATRIX.md`](./docs/CAPABILITY_MATRIX.md) |
 | Observability and operations | [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md), [`docs/OPERATIONS_RUNBOOK.md`](./docs/OPERATIONS_RUNBOOK.md) |
-| Releases and stores | [`RELEASE_CHECKLIST.md`](./RELEASE_CHECKLIST.md), [`docs/STORE_SUBMISSION_CHECKLIST.md`](./docs/STORE_SUBMISSION_CHECKLIST.md), [`docs/DATA_SAFETY_FORM.md`](./docs/DATA_SAFETY_FORM.md) |
+| Releases and stores | [`RELEASE_CHECKLIST.md`](./docs/RELEASE_CHECKLIST.md), [`docs/STORE_SUBMISSION_CHECKLIST.md`](./docs/STORE_SUBMISSION_CHECKLIST.md), [`docs/DATA_SAFETY_FORM.md`](./docs/DATA_SAFETY_FORM.md) |
 | Legal | [`docs/PRIVACY_POLICY.md`](./docs/PRIVACY_POLICY.md), [`docs/TERMS_OF_SERVICE.md`](./docs/TERMS_OF_SERVICE.md) |
 
 ---
