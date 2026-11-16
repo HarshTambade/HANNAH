@@ -108,7 +108,7 @@ export const AgentOrchestrator = {
     };
   },
 
-  async adversarialReview(response: string, context: string): Promise<AdversarialReview> {
+  async adversarialReview(response: string, _context: string): Promise<AdversarialReview> {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
