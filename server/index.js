@@ -22,6 +22,7 @@ const {
   createFeedbackHandler,
 } = require("./feedback");
 const { createContentReportHandler } = require("./content-reports");
+const { createSyncHandler, createSyncFetchHandler } = require("./cloud-sync");
 const { tokenUsageMiddleware } = require("./cost-tracking");
 const {
   defaultModelFor,
@@ -229,6 +230,8 @@ app.post("/api/events", (req, res) => {
 });
 
 app.post("/api/feedback", createFeedbackHandler());
+app.post("/api/sync/memory", createSyncHandler());
+app.get("/api/sync/memory", createSyncFetchHandler());
 app.post("/api/report-content", createContentReportHandler());
 
 app.get("/api/providers", (_req, res) => {

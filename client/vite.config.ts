@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
     mobileClawVitePlugin(),
     shanayaSeoPlugin({ mode }),
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: ["icon.svg", "social-card.svg"],
       manifest: {
         id: "/",

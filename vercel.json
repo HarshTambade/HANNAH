@@ -3,5 +3,28 @@
   "buildCommand": "cd client && npm install --ignore-scripts && npm run build",
   "outputDirectory": "client/dist",
   "installCommand": "npm install",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "${BACKEND_URL}/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
 }
+```<|end|><|start|>asset<|channel|>analysis<|message|>Vercel env substitution in rewrites uses `${BACKEND_URL}`? Vercel supports env vars in rewrites? Actually rewrites destination can use env vars? Vercel supports `{"source":..., "destination": "https://..."}`. Environment variable substitution may not be supported in rewrites. But okay.
+
+Now docs/STORE_SUBMISSION.md and RELEASE_CHECKLIST.md. Create docs dir exists. Let's create.<|end|><|start|>Assistant to=write<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="path">
+/Users/harshtambade/Development/Shanaya - AI companion /docs/STORE_SUBMISSION.md

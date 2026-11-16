@@ -6,9 +6,13 @@ import App from "./App";
 import AgeGateGuard from "./components/AgeGateGuard";
 import "./index.css";
 import { initClientTelemetry } from "./services/telemetry";
+import { initAnalytics } from "./services/analytics";
+import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
+import DesktopUpdateToast from "./components/DesktopUpdateToast";
 
 // A DSN-less build is a no-op; the error boundary still protects the app.
 initClientTelemetry();
+initAnalytics();
 
 function CrashFallback() {
   return (
@@ -40,6 +44,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <Sentry.ErrorBoundary fallback={<CrashFallback />} showDialog={false}>
       <AgeGateGuard>
         <App />
+        <PwaUpdatePrompt />
+        <DesktopUpdateToast />
       </AgeGateGuard>
     </Sentry.ErrorBoundary>
   </React.StrictMode>,

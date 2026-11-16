@@ -1,5 +1,28 @@
 /// <reference types="vite/client" />
 
+declare module "virtual:pwa-register/react" {
+  export function useRegisterSW(options?: any): {
+    needRefresh: [boolean, (value: boolean) => void];
+    offlineReady: [boolean, (value: boolean) => void];
+    updateServiceWorker: (reloadPage?: boolean) => Promise<void>;
+  };
+}
+
+declare module "posthog-js" {
+  const client: {
+    init: (key: string, options: any) => void;
+    capture: (event: string, properties?: any) => void;
+  };
+  export default client;
+}
+
+declare module "@capawesome/capacitor-live-update" {
+  export const LiveUpdate: {
+    sync: () => Promise<{ nextBundleId?: string }>;
+    reload: () => Promise<void>;
+  };
+}
+
 declare const __SHANAYA_APP_VERSION__: string;
 
 interface ImportMetaEnv {

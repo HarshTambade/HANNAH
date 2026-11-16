@@ -32,7 +32,7 @@ export default function App() {
   const [groqApiKey, setGroqApiKey] = useState("");
   const [emotion, setEmotion] = useState<Emotion>("neutral");
   const [avatarMotion, setAvatarMotion] = useState<AvatarMotion>("loading");
-  const [preferredMode, setPreferredMode] = useState<InferenceMode>("cloud");
+  const preferredMode: InferenceMode = "cloud";
   const metrics = useDashboardMetrics(3000);
 
   useEffect(() => ChaosEngine.subscribe(() => {
