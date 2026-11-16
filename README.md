@@ -1,1476 +1,789 @@
 # HANNAH — Your AI Companion
 
 <p align="center">
-  <strong>A private, multilingual, emotion-aware AI companion with a living 3D avatar.</strong>
+  <strong>A private, emotion-aware AI companion with a living 3D avatar. No paid tiers. Bring your own key. Every action reviewed.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/actions/workflows/build.yml"><img src="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/actions/workflows/build.yml/badge.svg" alt="Build"></a>
-  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/issues"><img src="https://img.shields.io/github/issues/HarshTambade/HANNAH---Your-AI-companion-" alt="Issues"></a>
-  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-source--available-orange" alt="Source-available license"></a>
+  <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml"><img src="https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
+  <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest"><img src="https://img.shields.io/github/v/release/HarshTambade/Shanaya-Your-AI-companion" alt="Latest release"></a>
+  <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/issues"><img src="https://img.shields.io/github/issues/HarshTambade/Shanaya-Your-AI-companion" alt="Open issues"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-source--available-orange" alt="Source-available license"></a>
 </p>
 
-HANNAH is a source-available AI companion built for natural conversation across web, mobile, and desktop environments. It combines a responsive React interface, a real-time 3D avatar, emotion-aware responses, multilingual voice interaction, cloud and local inference, offline-capable native AI, governed autonomy, layered long-term memory, end-to-end encrypted cross-device sync, embodied hardware continuity, and agent-to-agent ecosystem interoperability.
+HANNAH (formerly **Shanaya**) is a source-available AI companion for the web, Android, iOS, macOS, Windows and Linux. You talk to her in a chat beside a real-time 3D avatar that reacts to the emotion of each reply. She can remember what you ask her to remember, use a small set of device tools, and run on a cloud model, a local server, or entirely on your device.
 
-> **Project status:** Active development. [Release v1.0.3](https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/tag/v1.0.3) provides Android, macOS, Windows, and Linux packages. An installable iOS IPA still requires Apple signing. The [platform audit](./AUDIT.md) records tested paths, productionized services, and remaining release validation.
+Three rules shape the product:
 
-## Downloads
+1. **No monetization.** There are no subscriptions, premium tiers, paywalls or ads in the app.
+2. **Bring your own key (BYOK).** You connect with an access token and, optionally, your own Groq key. Keys are kept for the browser tab session only.
+3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
-<p>
-  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest/download/HANNAH-Android.apk"><img alt="Android APK downloads" src="https://img.shields.io/badge/Android-APK-3DDC84?logo=android&logoColor=white"></a>
-  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases"><img alt="iOS TestFlight and App Store information" src="https://img.shields.io/badge/iOS-TestFlight%20%2F%20App%20Store-111111?logo=apple&logoColor=white"></a>
-  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest/download/HANNAH-macOS.dmg"><img alt="macOS DMG downloads" src="https://img.shields.io/badge/macOS-DMG-555555?logo=apple&logoColor=white"></a>
-  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest/download/HANNAH-Windows.exe"><img alt="Windows installer downloads" src="https://img.shields.io/badge/Windows-EXE-0078D4?logo=windows&logoColor=white"></a>
-  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest/download/HANNAH-Linux.AppImage"><img alt="Linux AppImage downloads" src="https://img.shields.io/badge/Linux-AppImage-FCC624?logo=linux&logoColor=black"></a>
-</p>
+> **Status:** active development. The latest published release is [v1.0.2](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/tag/v1.0.2) (still branded Shanaya). `main` contains the HANNAH v2 redesign, which has not been released yet. See [Project status](#project-status) for what is finished and what is experimental.
 
-The current [GitHub Release](https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest) includes an Android APK, macOS DMG, Windows EXE, and Linux AppImage. Linux DEB output is optional and appears when the runner produces it. A normal build on `main` uploads temporary [Actions artifacts](https://github.com/HarshTambade/HANNAH---Your-AI-companion-/actions/workflows/build.yml); a `v*` tag or a manual workflow run with release publishing enabled creates a versioned release.
-
-**iOS note:** The latest release has no installable IPA because Apple signing is not configured. The release includes an installation note, and the workflow run stores the unsigned Xcode archive as an Actions artifact. Device installation requires a signed IPA distributed through TestFlight or the App Store.
-
-The in-app **Downloads** menu points to these latest release assets by default. Set `VITE_ANDROID_DOWNLOAD_URL`, `VITE_IOS_DOWNLOAD_URL`, `VITE_MACOS_DOWNLOAD_URL`, `VITE_WINDOWS_DOWNLOAD_URL`, or `VITE_LINUX_DOWNLOAD_URL` to override a link with a store listing or another host.
+---
 
 ## Contents
 
-- [Highlights](#highlights)
 - [Downloads](#downloads)
+- [What you can do](#what-you-can-do)
+- [The safety model: Guardian, then you](#the-safety-model-guardian-then-you)
 - [Architecture](#architecture)
-- [Governed autonomy and trust](#governed-autonomy-and-trust)
-- [Layered memory and dreaming](#layered-memory-and-dreaming)
-- [Cross-device continuity](#cross-device-continuity)
-- [Embodied and ambient presence](#embodied-and-ambient-presence)
-- [Agent marketplace and ecosystem](#agent-marketplace-and-ecosystem)
-- [How a message works](#how-a-message-works)
-- [Runtime capability matrix](#runtime-capability-matrix)
-- [Data lifecycle](#data-lifecycle)
-- [Technology](#technology)
-- [Requirements](#requirements)
+- [Privacy and data](#privacy-and-data)
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
 - [Inference modes](#inference-modes)
-- [Agent runtime and device tools](#agent-runtime-and-device-tools)
-- [Agent and skill marketplace](#agent-and-skill-marketplace)
+- [Agent runtime and tools](#agent-runtime-and-tools)
+- [Marketplace: agents and skills](#marketplace-agents-and-skills)
+- [Automations](#automations)
 - [MCP integration](#mcp-integration)
 - [Desktop computer use](#desktop-computer-use)
 - [Voice and calls](#voice-and-calls)
-- [Mobile and PWA builds](#mobile-and-pwa-builds)
-- [API reference](#api-reference)
-- [API integration guide](./docs/API-INTEGRATION.md)
-- [Project structure](#project-structure)
-- [Development](#development)
-- [Testing and quality](#testing-and-quality)
-- [Platform audit report](./AUDIT.md)
+- [Mobile, desktop and PWA builds](#mobile-desktop-and-pwa-builds)
 - [Deployment](#deployment)
-- [Observability and launch operations](./docs/OBSERVABILITY.md)
-- [Operations runbook](./docs/OPERATIONS_RUNBOOK.md)
-- [Security and privacy](#security-and-privacy)
-- [Privacy policy](./docs/PRIVACY_POLICY.md)
-- [Terms of service](./docs/TERMS_OF_SERVICE.md)
-- [Google Play Data safety mapping](./docs/DATA_SAFETY_FORM.md)
-- [Store submission checklist](./docs/STORE_SUBMISSION_CHECKLIST.md)
-- [Launch kit](./docs/LAUNCH_KIT.md)
-- [Press release](./docs/PRESS_RELEASE.md)
+- [API reference](#api-reference)
+- [Project structure](#project-structure)
+- [Development commands](#development-commands)
+- [Testing](#testing)
+- [Project status](#project-status)
 - [Troubleshooting and FAQ](#troubleshooting-and-faq)
 - [Contributing](#contributing)
-- [Roadmap](#roadmap)
+- [Further documentation](#further-documentation)
 - [License](#license)
 
-## Highlights
+---
 
-- **A living interface:** a Three.js avatar reacts to the emotion returned by the selected model.
-- **Provider choice:** use Groq by default, select another configured provider or OpenAI-compatible gateway, connect Ollama, or run WebLLM/llama.cpp locally.
-- **Offline-first behavior:** disconnected web and desktop sessions use WebLLM; native mobile sessions use the downloaded llama.cpp model.
-- **Multilingual voice:** speech recognition and speech playback support English (`en-US`), Hindi (`hi-IN`), and Marathi (`mr-IN`), subject to platform availability.
-- **One codebase, multiple surfaces:** run as a Vite web app/PWA, a Capacitor iOS or Android app, or a Capacitor Electron desktop app.
-- **Secret-safe key handling:** server credentials stay on the server and never enter `VITE_*`; a visitor's Groq key stays in page memory and is sent only in a request header to the app API.
-- **Visible integrations:** the app includes an API and MCP guide with endpoint summaries, a copyable REST example, and a local MCP client configuration.
-- **Governed autonomy:** zero-trust policy enforcement, GuardianAgent review with strictness levels, cognitive risk scoring, kill switch, and a user-facing Agent Accountability Dashboard.
-- **Agent and skill marketplace:** guardian-gated publishing, review, and retirement of specialist agents and persona packs; listings are prompt guidance only — no executable packages, added tools, or device permissions.
-- **Layered memory:** session memory, consolidated long-term memory, persona invariants, dreaming consolidation with quality gate, and encrypted export/import.
-- **Cross-device continuity:** end-to-end encrypted CRDT sync, agent-native cloud home (provision/migrate across regions), self-hostable opaque relay, and SyncStatus indicator.
-- **Embodied and ambient presence:** hardware bridge with mutual-TLS WebSocket pairing, companion cast multi-agent sessions, spatial context panel, and HybridIntelligenceRouter split between edge and cloud.
-- **Accessible responsive UI:** mobile safe areas, keyboard-friendly controls, status messages, and responsive layouts are built into the client.
-- **Compliance and trust:** regulatory mapping (FTC, EU AI Act, Singapore IMDA), safety dashboards, exportable compliance reports, age-verification hooks, and ITU-T forward-compatible identity mapping.
+## Downloads
 
-## Product principles
+Installers from the latest release (v1.0.2, published under the previous name):
 
-HANNAH is designed around a few principles that should guide new features:
+| Platform | Download | Notes |
+| --- | --- | --- |
+| Android | [Shanaya-Android.apk](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/download/v1.0.2/Shanaya-Android.apk) | Release-signed only when Android signing secrets are configured; otherwise a debug APK. |
+| macOS | [Shanaya-macOS.dmg](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/download/v1.0.2/Shanaya-macOS.dmg) | Unsigned unless Apple signing secrets are configured. Right-click → Open on first launch. |
+| Windows | [Shanaya-Windows.exe](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/download/v1.0.2/Shanaya-Windows.exe) | Portable build; SmartScreen may warn when unsigned. |
+| Linux | [Shanaya-Linux.AppImage](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/download/v1.0.2/Shanaya-Linux.AppImage) | `chmod +x` and run. |
+| iOS | [Installation note](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/download/v1.0.2/iOS-Installation.txt) | No installable IPA: Apple signing is not configured. |
+| Web / PWA | Deploy it yourself; see [Deployment](#deployment). | Installable from a supported browser. |
 
-1. **User choice:** users should be able to choose hosted, local, browser, or native inference where their platform supports it.
-2. **Graceful degradation:** unavailable providers, missing hardware, denied permissions, and offline sessions should produce a useful explanation rather than a silent failure.
-3. **Secret separation:** public client configuration belongs in `VITE_*`; server keys and token-issuer credentials stay server-side. A visitor may opt to provide a Groq key for the current page session; the client does not persist it, and the API forwards it only to Groq's official HTTPS endpoint.
-4. **Small, inspectable boundaries:** provider adapters, speech integrations, and native services should remain isolated from the presentation layer.
-5. **Explicit limitations:** model quality, speech availability, data handling, and third-party terms should be documented instead of implied.
-6. **Respectful companion behavior:** HANNAH is software, not a medical, legal, financial, or emergency service. Product copy and integrations should not encourage unsafe reliance.
+From the next release onward, the workflow publishes assets named `HANNAH-Android.apk`, `HANNAH-macOS.dmg`, `HANNAH-Windows.exe`, `HANNAH-Linux.AppImage` and `HANNAH-Linux.deb`. Builds on `main` upload temporary [Actions artifacts](https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml) without creating a release.
+
+---
+
+## What you can do
+
+The app uses hash routes. Every screen except the landing page, Marketplace and Integrations needs a connection first.
+
+| Screen | Route | What it does |
+| --- | --- | --- |
+| **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog, where you enter the server's access token and, optionally, your own Groq key. |
+| **Chat** | `#/chat` | Conversation beside the 3D avatar. Choose a model and inference mode, speak or type, rate replies, and approve or decline actions on the in-chat approval cards. |
+| **Dashboard** | `#/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. Empty states show `—` or `0`, never sample numbers. |
+| **Memory & trust** | `#/memory` | The accountability page: Guardian strictness and its decision log (allowed and blocked, with reasons), saved memories you can edit or delete, personalization examples, the active persona, and installed plugins. |
+| **Automations** | `#/automations` | Visual workflow designer (React Flow) with trigger, agent-task, tool-action and output nodes. Designs are saved on this device. See [Automations](#automations) for current limits. |
+| **Marketplace** | `#/marketplace` | First-party agents and skills that change how HANNAH replies. Install, activate, enable or remove them at any time. |
+| **Integrations** | `#/integrations` | REST and MCP guide with copyable examples, tool limits, server environment and host setup. |
+| **Settings** | `#/settings` | Connection (token, Groq key, disconnect). Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. |
+
+The design follows a bento and glassmorphism style: rounded `2rem` cards, pastel tones (sky, lavender, butter, mint), large light-weight stat numbers and a floating header. Layouts are responsive down to phone width.
+
+---
+
+## The safety model: Guardian, then you
+
+Every action passes through the same chain, whether a model asked for it, it was a desktop action, or it changes memory:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant M as Model (tool call)
+    participant R as AgentRuntime
+    participant G as GuardianAgent
+    participant U as You (approval card)
+    participant T as Tool
+    M->>R: tool name + arguments
+    R->>R: guardrails: known tool? not denied? within iteration cap?
+    R->>G: screen(tool, args, your latest request)
+    alt Guardian blocks
+        G-->>R: GuardianBlockedError (reason logged)
+        R-->>M: turn ends: "Guardian stopped … Nothing was changed."
+    else Guardian allows
+        G-->>R: allowed (risk score logged)
+        opt tool changes something or reads private data
+            R->>U: approval card (what, where, preview)
+            U-->>R: Approve / Decline
+        end
+        R->>T: execute
+        T-->>M: result
+    end
+```
+
+### GuardianAgent
+
+[`GuardianAgent.ts`](./client/src/services/GuardianAgent.ts) scores each proposed action, checks it against known attack patterns (for example `rm -rf` or "ignore previous instructions"), and looks for multi-step attempts across your last 10 actions. Its decisions are stored on the device (latest 100) and shown on **Memory & trust**.
+
+| Strictness | Blocks |
+| --- | --- |
+| Permissive | Known attack patterns only. Approval is still required for every change. |
+| Balanced (default) | Also blocks multi-step attempts to get around safety rules. |
+| Strict | Also blocks high-risk actions, such as deleting or overwriting files, before they reach you. |
+
+### Human-in-the-loop approval
+
+[`SafetyGuard.ts`](./client/src/services/SafetyGuard.ts) and [`ApprovalCenter.ts`](./client/src/services/ApprovalCenter.ts) handle confirmation:
+
+- With the chat open, an amber **approval card** appears in the conversation. It names the action, shows the target and a preview (a file write shows the path, byte size and first 700 characters), and offers **Approve** and **Decline**.
+- With no chat open, HANNAH falls back to the native dialog on mobile or the browser's confirm dialog. If the chat closes while a request is pending, the request is declined.
+- Declining ends the task with "Action cancelled. HANNAH did not make any changes."
+- Approved actions are recorded in the local side-effect ledger.
+
+### Other guardrails
+
+- **Agent guardrails** ([`AgentGuardrails.ts`](./client/src/services/AgentGuardrails.ts)) flag prompt-injection phrases, deny shell and terminal tools, apply optional output deny-lists, and redact common credential, email, phone, ID and payment-card patterns from generated and tool text.
+- **Iteration caps:** 8 tool rounds by default (`VITE_AGENT_MAX_ITERATIONS`), never more than 20.
+- **Circuit breaker:** a tool that fails 3 times in a row is disabled for the session.
+- **Routing profiles** limit which tools a task type can see (see [Agent runtime and tools](#agent-runtime-and-tools)).
+- **Server limits:** bearer-token authentication on every `/api` route except health, plus per-token rate limits.
+
+These checks are defense in depth. They are not a guarantee against every prompt injection, so test your own release build before relying on them.
+
+---
 
 ## Architecture
 
-<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px">
-  <div style="flex:1;min-width:200px;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);border:1px solid #bae6fd;border-radius:16px;padding:20px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.06)">
-    <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0369a1;margin-bottom:10px">Plug-in &nbsp;·&nbsp; HANNAH AI</div>
-    <h2 style="font-size:27px;line-height:1.25;margin:0 0 10px 0;color:#0f172a;font-weight:700">A private, governed AI companion</h2>
-    <p style="font-size:13px;line-height:1.6;color:#334155;margin:0">HANNAH runs across web, mobile, and desktop with zero-trust governance, layered memory, E2E-encrypted sync, and embodied hardware continuity.</p>
-  </div>
-</div>
-
-### Capability overview
-
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:24px">
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#0ea5e9;margin-bottom:8px">Zero-Trust Governance</div>
-  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">GuardianAgent · Kill Switch</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Semantic intent assessment, multi-turn attack detection, policy allow-lists, and final veto authority over every action.</div>
-</div>
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#22c55e;margin-bottom:8px">Layered Memory</div>
-  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">Session · Long-Term · Persona</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Usage-weighted retention, dreaming consolidation, and persona invariants that never decay.</div>
-</div>
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#a855f7;margin-bottom:8px">Cross-Device Sync</div>
-  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">CRDT · E2E Encrypted</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Opaque encrypted payloads forwarded by a self-hostable relay that cannot inspect content.</div>
-</div>
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#f59e0b;margin-bottom:8px">Embodied Presence</div>
-  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">mTLS WebSocket Bridge</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Audio, vision, actuation, and expression streaming to companion hardware.</div>
-</div>
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#10b981;margin-bottom:8px">Agent Ecosystem</div>
-  <div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:6px">AAIF · PAP · Typed-Rails</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Portable agent definitions, Personal Agent Protocol, and formal typed-rail collective governance.</div>
-</div>
-
-</div>
-
-### Runtime layers
-
-HANNAH's request path flows through five clean layers, each with a single responsibility:
-
-<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:16px;margin-bottom:20px">
-  <div style="flex:0 0 auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px">
-    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Ingress</div>
-    <div style="font-size:12px;font-weight:600;color:#0f172a">Web · Mobile · Desktop · Hardware</div>
-  </div>
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Routing</div>
-    <div style="font-size:12px;font-weight:600;color:#0f172a">LLMRouter · on-device / cloud</div>
-  </div>
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:160px;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Governance</div>
-    <div style="font-size:12px;font-weight:600;color:#0f172a">Guardian · Policy · Kill Switch</div>
-  </div>
-  <div style="flex:0 0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px;box-shadow:0 2px 8px -2px rgba(0,0,0,0.04)">
-    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Memory</div>
-    <div style="font-size:12px;font-weight:600;color:#0f172a">Router · Graph + Vector</div>
-  </div>
-  <div style="flex:0 0 auto;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px">
-    <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Response</div>
-    <div style="font-size:12px;font-weight:600;color:#0f172a">Avatar · Voice · UI</div>
-  </div>
-</div>
-
-### Hosting & deployment
-
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:16px">
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px">Client</div>
-  <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">React · Vite · PWA</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Web app, Capacitor iOS/Android, Capacitor Electron.</div>
-</div>
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px">API</div>
-  <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">Express · Node.js</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Health, models, chat, agent, tasks, side-effects, undo endpoints.</div>
-</div>
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px">MCP</div>
-  <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">Streamable HTTP · stdio</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Bearer-token protected tool exposure to MCP hosts.</div>
-</div>
-
-<div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.04)">
-  <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;margin-bottom:8px">Relay</div>
-  <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">Self-hostable sync relay</div>
-  <div style="font-size:12px;color:#64748b;line-height:1.5">Stores only opaque encrypted CRDT payloads; never inspects content.</div>
-</div>
-
-</div>
-
-### System architecture diagram
-
 ```mermaid
-flowchart TB
-    %% User Interfaces
-    UI[("User Interfaces<br/>Web · PWA · iOS · Android ·<br/>macOS · Windows · Linux<br/>Companion Hardware")]:::ui
-
-    subgraph Client["Client Runtime · client/src"]
-        direction TB
-        UIR["React UI · ChatUI ·<br/>Dashboards · Panels"]:::client
-        RT["AgentRuntime<br/>bounded tool turns"]:::client
-        Router["LLMRouter<br/>on-device / cloud routing"]:::client
-        Guard["GuardianAgent<br/>zero-trust review"]:::client
-        Policy["PolicyEnforcementLayer<br/>rate limits · allow-list"]:::client
-        Kill["Kill Switch<br/>halt + resume"]:::client
-        CogRisk["CognitiveRiskEngine<br/>CRF 2.0 scoring"]:::client
-        Memory["MemoryService<br/>session · long_term · persona"]:::client
-        MemoryRouter["MemoryRouter<br/>graph + vector + hybrid"]:::client
-        Avatar["AvatarScene ·<br/>Three.js emotion"]:::client
-        Voice["SpeechService /<br/>OnDeviceVoicePipeline"]:::client
+flowchart LR
+    subgraph Client["Client · React 19 + Vite (web, Capacitor, Electron)"]
+        UI["Screens<br/>Chat · Dashboard · Memory & trust<br/>Automations · Marketplace · Settings"]
+        RT["AgentRuntime<br/>bounded tool loop"]
+        LR["LLMRouter<br/>mode selection"]
+        SG["SafetyGuard<br/>Guardian → approval"]
+        DT["DeviceTools"]
+        ST["Local stores<br/>chat · usage · memory · Guardian log"]
+        AV["AvatarScene<br/>Three.js"]
+        LOC["WebLLM · llama.cpp<br/>(on device)"]
     end
 
-    subgraph TaskSpine["Task Spine · asynchronous background work"]
-        direction TB
-        Spine["TaskSpineService<br/>create · list · pause · resume · cancel · approve"]:::spine
-        Runner["background_agent_runner.py<br/>polls spine · worker thread"]:::spine
-        Executor["side_effect_executor.py<br/>delayed execution after undo window"]:::spine
+    subgraph Server["API · Express 5 (server/)"]
+        AUTH["Bearer token + rate limits"]
+        AG["/api/agent · /api/chat"]
+        PR["Provider catalog<br/>Groq default + others"]
+        MCP["/mcp (optional)"]
     end
 
-    subgraph Ledger["Side-effect ledger · undo window"]
-        LedgerSvc["SideEffectLedger<br/>record · list · undo · execute"]:::ledger
-        UndoAPI["/api/undo · /api/side-effects<br/>reversible within delay window"]:::ledger
-    end
+    EXT["Model providers<br/>Groq · OpenAI · Anthropic · Gemini · …"]
+    OLL["Ollama / local runtimes"]
+    PY["Optional Python fallback<br/>(backend/, localhost)"]
 
-    subgraph API["API Gateway · server/"]
-        direction TB
-        APISrv["Express · Node.js<br/>/api/health · /api/chat · /api/agent"]:::api
-        Tasks["/api/tasks · /api/side-effects · /api/undo"]:::api
-        Auth["Bearer-token auth ·<br/>rate limiting"]:::api
-    end
-
-    subgraph MCP["MCP Integration"]
-        MCPHTTP["Streamable HTTP MCP<br/>bearer-token protected"]:::mcp
-        MCPStdIO["Local stdio process"]:::mcp
-        MCPTools["HANNAH MCP tools"]:::mcp
-    end
-
-    subgraph PAP["Personal Agent Protocol"]
-        PAPAdapter["PAPAdapter<br/>discover /.well-known/pap.json · OAuth"]:::pap
-        PAPExec["Scoped action execution<br/>pending user confirmation"]:::pap
-    end
-
-    subgraph Python["Optional local Python service · backend/"]
-        FastAPI["FastAPI model-step fallback<br/>localhost only"]:::python
-        PyProvider["Python-configured model provider"]:::python
-        Sandbox["Docker code sandbox<br/>network disabled"]:::python
-        PyAudit["Redacted, hash-chained<br/>audit log"]:::python
-    end
-
-    subgraph Sync["Cross-device continuity · E2E encrypted"]
-        SyncSvc["SyncService<br/>CRDT ops · opaque encrypted payloads"]:::sync
-        Relay["Self-hostable relay<br/>stores only ciphertext"]:::sync
-        CloudHome["AgentNativeHomeService<br/>provision · migrate · connection registry"]:::sync
-    end
-
-    subgraph Cast["Companion cast · multi-agent"]
-        CastOrch["CastOrchestrator<br/>route · solo / cast mode"]:::cast
-        CastUI["Cast toggle · labeled sub-agent<br/>messages"]:::cast
-    end
-
-    subgraph Collective["Governed collective intelligence"]
-        Collective["GovernedCollectiveIntelligence<br/>members · quarantine · attestation"]:::collective
-        Poisoning["CollectivePoisoningDetector<br/>anomalous contribution quarantine"]:::collective
-        TypedRails["TypedRails<br/>tiered autonomy 1–3 ·<br/>rail enforcement audit"]:::collective
-    end
-
-    subgraph Governance["Relational governance & compliance"]
-        Relational["RelationalGovernanceService<br/>dependency signals · transparency report"]:::gov
-        Compliance["ComplianceEvidenceGenerator<br/>continuous audit-ready evidence"]:::gov
-        RegDashboard["RegulatoryDashboard<br/>real-time compliance status"]:::gov
-    end
-
-    subgraph Ecosystem["Ecosystem interoperability"]
-        Interop["AgentInteropService<br/>AIPF · NLIP · HANNAHInteropProfile"]:::eco
-        ITU["IdentityInteropLayer<br/>ITU-T X.aiidm identity"]:::eco
-        AAIF["AAIF portable agent definitions<br/>version-controlled registry"]:::eco
-    end
-
-    subgraph Infra["Infrastructure & external"]
-        Cloud["Groq · Ollama · Anthropic ·<br/>OpenAI · local models"]:::infra
-        HW["HardwareBridgeService<br/>mTLS WebSocket ·<br/>audio · vision · actuators"]:::infra
-        Sentry["Sentry observability"]:::infra
-    end
-
-    %% Connections
-    UI --> Client
-    Client --> RT
-    RT --> Router
-    Router --> Guard
-    Guard --> Policy
-    Policy --> Kill
-    CogRisk --> Guard
-    RT --> Memory
-    Memory --> MemoryRouter
-    Memory --> Dream
-    NeuroSym -.->|gate| RT
-
-    RT -.->|retryable failure| FastAPI
-    APISrv --> Cloud
-    MCPHTTP --> MCPTools
-    MCPTools --> APISrv
-    PAPAdapter --> PAPExec
-    SyncSvc -.->|E2E encrypted| Relay
-    SyncSvc --> CloudHome
-    CastOrch --> CastUI
-    Collective --> Poisoning
-    TypedRails --> Collective
-    Interop -.-> ITU
-    AAIF -.-> ITU
-    MCP["MCP integration"] -.->|expose core capabilities| Interop
-
-    classDef ui fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#0f172a
-    classDef client fill:#fff,stroke:#bae6fd,stroke-width:2px,color:#0f172a
-    classDef spine fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#0f172a
-    classDef ledger fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#0f172a
-    classDef api fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#0f172a
-    classDef mcp fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,color:#0f172a
-    classDef pap fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#0f172a
-    classDef python fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#0f172a
-    classDef sync fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#0f172a
-    classDef cast fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2px,color:#0f172a
-    classDef collective fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,color:#0f172a
-    classDef gov fill:#f1f5f9,stroke:#64748b,stroke-width:2px,color:#0f172a
-    classDef eco fill:#f0f9ff,stroke:#0ea5e9,stroke-width:2px,color:#0f172a
-    classDef infra fill:#f8fafc,stroke:#cbd5e1,stroke-width:2px,color:#0f172a
+    UI --> RT --> LR
+    RT --> SG --> DT
+    UI <--> ST
+    RT -- emotion --> AV
+    LR -- local modes --> LOC
+    LR -- cloud / ollama --> AUTH --> AG --> PR
+    PR --> EXT
+    PR --> OLL
+    LR -. retryable failure .-> PY
+    MCP --> AG
 ```
 
-The main Android/iOS apps are Capacitor projects under [`client/android`](./client/android) and [`client/ios`](./client/ios). The released desktop packages wrap the same client in Capacitor Electron. [`apps/desktop`](./apps/desktop) is a separate Python-enabled Electron shell; it starts the local FastAPI service by default. The example bridge in `client/electron-agent` is an optional integration and is not the default desktop package path.
+### Request flow
 
-### Governed autonomy and trust
+1. You send a message from **Chat**.
+2. `AgentRouter` classifies the request (chat, code, system, research and so on) and picks a profile with its allowed tools and iteration limit.
+3. `LLMRouter` resolves the inference mode. Local modes generate on the device; cloud and Ollama modes call `POST /api/agent` with your token, plus your Groq key in the `X-Groq-API-Key` header if you gave one.
+4. The server validates and bounds the request, adds your saved memories to the system prompt, calls the selected provider, and returns the reply, emotion, model, provider, latency and token usage.
+5. A tool call goes through the [safety chain](#the-safety-model-guardian-then-you), then the result is sent back for the next step.
+6. The final reply is rendered as Markdown, spoken if voice is on, and its emotion (`happy`, `sad`, `angry`, `neutral`, `surprised` or `thinking`) drives the avatar. Turn metrics are saved for the Dashboard.
 
-HANNAH enforces zero-trust runtime governance so no action is taken by the agent without an explicit policy decision:
+### Main modules
 
-- **GuardianAgent** evaluates every proposed tool call and proactive action before execution. It assesses semantic intent (not just syntax), detects multi-turn attack patterns, and applies a configurable strictness level (permissive / balanced / strict). The Guardian has final veto authority and logs every decision with its full risk vector to the audit trail.
-- **PolicyEnforcementLayer** is configured at the platform level (not modifiable by the agent) and enforces rate limits, tool allow-lists, and data access boundaries for every action.
-- **Kill Switch** immediately halts all agent activity (tool calls, proactive messages, background tasks) and surfaces a clear UI state with a Resume button. Kill events are logged to the audit trail.
-- **CognitiveRiskEngine** scores every proposed action against CRF 2.0 dimensions (epistemic uncertainty, readiness deficit, behavioral vulnerability, consequence severity, intent uncertainty, memory uncertainty, environmental risk, action irreversibility). When the score exceeds the threshold, the agent suppresses the action entirely — not queued, not confirmation-prompted — and logs the suppression reason.
-- **CognitiveReadinessEngine** estimates the user's cognitive state (busy, focused, fatigued, open to interruption) and modulates the risk threshold: low readiness raises the bar for proactive intervention.
-- **CredentialBroker** holds provider API keys and never exposes them to AgentRuntime. All provider calls go through the Broker, which injects credentials at the network boundary and redacts them from responses.
-- **EgressPolicy** denies all outbound network calls by default; explicit allow-list entries are required for each destination and request shape.
-- **PermissionState** enforces monotonic attenuation: once revoked during a session, a permission cannot be re-granted without new explicit user approval.
-- **SideEffectLedger** records every irreversible action with action type, target, timestamp, delay window (default 30s), and status (pending / executed / undone). SafetyGuard writes to the ledger instead of executing immediately; the executor polls and executes only after the delay window expires without an undo request. An `/api/undo` endpoint and in-chat Undo button appear for reversible actions within their delay window.
+| Area | Files | Responsibility |
+| --- | --- | --- |
+| Composition and routing | [`App.tsx`](./client/src/App.tsx), [`AppShell.tsx`](./client/src/components/AppShell.tsx) | Hash routes, the connection gate and the floating header. |
+| Chat | [`ChatUI.tsx`](./client/src/components/ChatUI.tsx), [`MessageContent.tsx`](./client/src/components/MessageContent.tsx) | Modes, voice, approval cards, ratings, Markdown replies. |
+| Agent | [`AgentRuntime.ts`](./client/src/services/AgentRuntime.ts), [`AgentRouter.ts`](./client/src/services/AgentRouter.ts), [`LLMRouter.ts`](./client/src/services/LLMRouter.ts) | Tool loop, task profiles, mode routing. |
+| Safety | [`GuardianAgent.ts`](./client/src/services/GuardianAgent.ts), [`SafetyGuard.ts`](./client/src/services/SafetyGuard.ts), [`ApprovalCenter.ts`](./client/src/services/ApprovalCenter.ts), [`AgentGuardrails.ts`](./client/src/services/AgentGuardrails.ts), [`CircuitBreaker.ts`](./client/src/services/CircuitBreaker.ts) | Review, approval, guardrails. |
+| Tools | [`DeviceTools.ts`](./client/src/services/DeviceTools.ts), [`DesktopBridge.ts`](./client/src/services/DesktopBridge.ts) | Device and desktop actions. |
+| Local data | [`ChatHistory.ts`](./client/src/services/ChatHistory.ts), [`UsageStats.ts`](./client/src/services/UsageStats.ts), [`MemoryStore.ts`](./client/src/services/MemoryStore.ts), [`PersonalizationEngine.ts`](./client/src/services/PersonalizationEngine.ts) | On-device stores behind the Dashboard and Memory & trust. |
+| Persona and marketplace | [`PersonaKernel.ts`](./client/src/services/PersonaKernel.ts), [`MarketplaceService.ts`](./client/src/services/MarketplaceService.ts), [`PluginLoader.ts`](./client/src/services/PluginLoader.ts) | Persona prompt, agent and skill catalog, plugin state. |
+| Native | [`AIService.ts`](./client/src/services/AIService.ts), [`MobileAgent.ts`](./client/src/services/MobileAgent.ts) | llama.cpp GGUF models and the optional MobileClaw agent. |
+| Avatar and voice | [`AvatarScene.tsx`](./client/src/components/AvatarScene.tsx), [`SpeechService.ts`](./client/src/services/SpeechService.ts), [`VoiceService.ts`](./client/src/services/VoiceService.ts) | GLB avatar, emotion poses, speech in and out. |
+| API | [`server/index.js`](./server/index.js), [`server/api-security.js`](./server/api-security.js) | Routes, auth, rate limits, provider calls. |
+| Providers | [`server/providers/catalog.js`](./server/providers/catalog.js), [`server/providers/runtime.js`](./server/providers/runtime.js) | Provider presets, model discovery, request adapters. |
+| MCP | [`server/mcp-core.mjs`](./server/mcp-core.mjs), [`mcp-http.mjs`](./server/mcp-http.mjs), [`mcp-stdio.mjs`](./server/mcp-stdio.mjs) | Exposes HANNAH to MCP hosts. |
 
-See [`SAFETY_GOVERNANCE.md`](./SAFETY_GOVERNANCE.md), [`SAFETY_MATURITY.md`](./SAFETY_MATURITY.md), and [`REGULATORY_COMPLIANCE.md`](./REGULATORY_COMPLIANCE.md) for the governance model, maturity mapping, and regulatory compliance details.
+### Vercel topology
 
-### Layered memory and dreaming
-
-HANNAH maintains three memory layers with distinct retention semantics:
-
-- **Session memory** — the active conversation context for the current turn.
-- **Consolidated long-term memory** — summarized and indexed past interactions, processed asynchronously by the **MemoryConsolidator** via the Task Spine (never in the request path). Extracts durable facts, detects superseded facts, and updates the memory index.
-- **Persona invariants** — core character traits, user preferences, and relationship anchors that must not decay. Persona invariants have no time-based decay; episodic facts use usage-weighted retention rather than wall-clock recency.
-
-**MemoryEvolutionEngine** runs asynchronously via the Task Spine to abstract patterns across episodic memories into "insights," detect evolving preferences, and synthesize a "user model" document that can be injected into the system prompt.
-
-**DreamingConsolidator** runs during detected idle periods (via CognitiveReadinessEngine), reviews recent sessions, identifies and corrects errors, extracts durable rules and strategies, and updates the knowledge base. A **MemoryQualityGate** prevents knowledge bloat by prioritizing strategies, plans, and tested rules over transient observations, capping memory files per domain, and requiring a usefulness prediction before committing new memories.
-
-**MemoryConflictPanel** (in the Accountability Dashboard) shows detected contradictions and superseded facts and lets the user explicitly resolve them ("This fact is current" / "This fact is outdated").
-
-Users can view, edit, and delete stored memories through **MemoryPanel.tsx**, and explicitly reset persona anchors. **MemoryExportService** exports the full memory profile (raw events, atomic facts, cross-domain patterns, persona anchors) as a portable encrypted archive; **MemoryImportService** restores or migrates it to another device or account.
-
-### Cross-device continuity
-
-**SyncService** uses CRDTs (Yjs-style) for the memory store, task spine state, and side-effect ledger. All synced payloads are end-to-end encrypted before leaving the device; the relay stores only opaque encrypted payloads and forwards CRDT operations — it cannot validate, log, or inspect content.
-
-A self-hostable relay ([`server/sync-relay.js`](./server/sync-relay.js)) provides the minimal sync adapter. **SyncStatus.tsx** shows last sync time, pending operations, and whether the current device is in end-to-end encrypted sync with others.
-
-See [`SYNC_PRIVACY.md`](./SYNC_PRIVACY.md) for the threat model and self-hosting instructions.
-
-**AgentNativeHomeService** provisions a durable, always-on execution environment (self-hosted container or VM) per user that persists across sessions and holds persistent app connections (OAuth tokens, MCP endpoints) as a unified entry point. **AppConnectionRegistry** stores agent-adapted interfaces (CLI/API/MCP/GUI) per connected service; the agent prefers agent-adapted interfaces over GUI automation and logs latency/success-rate differences. **CloudHomeStatus.tsx** shows uptime, active app connections, and last sync time; a "Migrate Home" option transfers the home to a new region or provider without losing state.
-
-### Embodied and ambient presence
-
-**HardwareBridgeService** pairs HANNAH with external hardware companions (e.g., Raspberry Pi 5-based devices) over a local network using a minimal secure protocol (WebSocket with mutual TLS) for audio streaming (microphone/speaker), vision frames (camera), and basic actuator commands.
-
-**HybridIntelligenceRouter** on the bridge splits time-sensitive tasks (voice activity detection, gesture recognition, local navigation) to the edge device, while conversational reasoning and memory operations go to the cloud or local LLM when offline. It logs the split ratio and latency per task type.
-
-**HardwareSettings.tsx** lets the user pair/unpair devices, view device health (battery, connectivity), and configure which modalities are streamed (audio, video, sensor).
-
-**AmbientPresenceService** treats spatial context (user location, gaze direction, nearby people, active devices) as a first-class input. **PresenceManifestationManager** allows HANNAH to manifest across multiple device surfaces (earbuds, smart display, XR headset, mobile, desktop) while maintaining a single continuous identity, memory, and conversation state, with seamless device handoff. **SpatialContextPanel** shows what spatial data is being processed, lets the user toggle each sensor/modality, and reviews a log of spatial context events.
-
-### Agent marketplace and ecosystem
-
-**SpecialistMarketplace** supports guardian-gated publishing, review, and retirement of specialist agents and persona packs. Listings are prompt guidance only — they do not download executable code, add tools, or request device permissions. Each proposed listing passes through the GuardianAgent for safety review and requires explicit user approval before publication.
-
-**AgentInteropService** exposes HANNAH's core capabilities via the existing MCP server using a HANNAHInteropProfile schema (capabilities, permissions, costs). **RemoteAgentRegistry** discovers and delegates tasks to external specialized agents with transparency (UI shows "Delegating to [Agent Name]" and requires user approval).
-
-**ToolSynthesisService** / **SpecialistSynthesisService** proposes new specialist agents when the MemoryEvolutionEngine detects a recurring task category no existing specialist handles well. New specialist creation passes through GuardianAgent and requires explicit user approval. The **SpecialistAgentRegistry** tracks lineage, performance, and cost, with a "Retire" option.
-
-**KYBERNETES** governance module provides a one-way brake preventing specialist proliferation beyond a configurable cap (default 10 active specialists), hysteresis to avoid rapid create/retire cycles, and a "Big Red Button" that pauses all specialist creation and rolls back to a stable snapshot.
-
-**PAPAdapter** implements the Personal Agent Protocol (PAP) v1.0: discovers PAP files at a business's domain (`/.well-known/pap.json`), authenticates via OAuth, requests scoped permissions based on user intent, and executes allowed actions returning results for user confirmation before finalizing. **PAPSettings.tsx** lets the user view and revoke PAP permissions per business and see a log of PAP interactions.
-
-**IdentityInteropLayer** aligns the ATEPProfileGenerator with the ITU-T canonical agentic AI identity data model (X.aiidm), representing HANNAH's intent, capabilities, autonomy spectrum, delegation chain, and governance bindings. See [`ITU_T_IDENTITY_MAPPING.md`](./ITU_T_IDENTITY_MAPPING.md) for the field mapping and forward-compatibility plan.
-
-### Neuro-symbolic reasoning
-
-**NeuroSymbolicReasoner** combines neural fact extraction with a symbolic reasoning engine to verify consistency of proposed actions, memory updates, and persona-consistent responses before execution. It enforces graph-constrained action spaces: proposed actions that violate the PersonaKernel, user-established preferences, or safety constraints are rejected at the symbolic layer with a verifiable explanation logged to the audit trail. A symbolic memory consolidation pass runs during DreamingConsolidator to reconcile neural-extracted facts against the symbolic knowledge base.
-
-### Collective intelligence
-
-**GovernedCollectiveIntelligence** federates with external agent collectives via a CollectiveMemoryProtocol for sharing knowledge across agents, with cryptographic attestation of provenance and a zero-trust admission policy for new members. **CollectivePoisoningDetector** monitors for anomalous knowledge contributions using the CognitiveRiskEngine and GuardianAgent; suspicious contributions are quarantined and require human review before propagation. **CollectiveDashboard** shows active collectives, member agents, shared knowledge statistics, and quarantine events.
-
-### Relational governance
-
-**RelationalGovernanceService** monitors for dependency signals (excessive usage, emotional reliance) and deception risks (over-anthropomorphization) while preserving user autonomy. It defines configurable thresholds and escalation paths (suggest a break, surface resources, adjust proactive behavior). A **RelationalTransparencyReport** documents what the platform can and cannot see, what the agent retains, and what rights the user has (export, delete, migrate); it updates on every major configuration change.
-
-
-### Message and tool flow
-
-1. ChatUI passes the request to `AgentRuntime`, which runs a bounded sequence of model and tool steps.
-2. `LLMRouter` chooses a provider. WebLLM runs in a supported browser/Electron renderer; native offline AI uses llama.cpp and a downloaded GGUF model; cloud and Ollama requests go through Express.
-3. Express validates and bounds requests, then calls the configured provider. On retryable Express failures, the client can request one model step from the optional loopback Python service. Local/native providers return their result directly.
-4. Any device action passes through `SafetyGuard` and `DeviceTools`; actions that require confirmation wait for the user's approval. Replies and emotion metadata return to ChatUI and AvatarScene.
-5. The optional native MobileClaw agent is a distinct path on iOS/Android. It uses its configured Anthropic credential and can store agent memory in app-private LanceDB storage.
-
-The diagram shows optional capabilities alongside the default request path. Native MobileClaw, remote MCP, Mithi TTS, Pinecall calls, desktop control and the Python fallback each require their respective configuration and permissions.
-
-### Vercel service topology
-
-The root [`vercel.json`](./vercel.json) defines two services in one Vercel project:
+The root [`vercel.json`](./vercel.json) defines two services in one project:
 
 ```text
-Incoming request
-├── /api/*  ──> server service (Express)
-├── /mcp    ──> server service (MCP Streamable HTTP, when enabled)
-└── /*      ──> client service (Vite static output)
+/api/*  → server (Express)
+/mcp    → server (when MCP_ENABLED=true)
+/*      → client (Vite static build)
 ```
 
-The `client` service is public at `/`. The server handles `/api/*`; its `/mcp` route is available only when MCP is enabled and requires the configured bearer token. No service binding is required: the browser uses relative `/api/*` URLs, while the API calls external providers directly. If a future service calls another internal Vercel service, add a service binding to the calling service and read the injected environment variable at function runtime.
+The browser uses same-origin `/api` URLs, so `VITE_API_BASE_URL` stays empty on Vercel.
 
-### Responsibilities by layer
+---
 
-Every /api route except /api/health requires Authorization: Bearer HANNAH_API_TOKEN. The public client asks trusted users for this token per session; it does not embed the token in its static bundle.
+## Privacy and data
 
-| Layer | Location | Responsibility |
+| Data | Where it lives | How long |
 | --- | --- | --- |
-| Presentation | [`client/src/App.tsx`](./client/src/App.tsx) | Composes the avatar surface, branding, and chat experience. |
-| Chat orchestration | [`client/src/components/ChatUI.tsx`](./client/src/components/ChatUI.tsx) | Selects inference mode, shows tool activity/results, manages voice controls, errors, and model readiness. |
-| Agent runtime and routing | [`client/src/services/AgentRuntime.ts`](./client/src/services/AgentRuntime.ts) and [`client/src/services/LLMRouter.ts`](./client/src/services/LLMRouter.ts) | Runs up to eight tool turns and selects cloud, Ollama, Python fallback, WebLLM, or native offline inference. |
-| Agent and skill marketplace | [`client/src/components/MarketplacePage.tsx`](./client/src/components/MarketplacePage.tsx), [`client/src/services/MarketplaceService.ts`](./client/src/services/MarketplaceService.ts), and [`shared/marketplace-catalog.json`](./shared/marketplace-catalog.json) | Installs and activates first-party prompt guidance locally; it does not add executable packages or tools. |
-| Safety and device tools | [`client/src/services/DeviceTools.ts`](./client/src/services/DeviceTools.ts) and [`client/src/services/SafetyGuard.ts`](./client/src/services/SafetyGuard.ts) | Provides confirmed device actions and the user approval boundary. |
-| Native agent | [`client/src/services/MobileAgent.ts`](./client/src/services/MobileAgent.ts) | Initializes optional MobileClaw, local LanceDB memory, and MobileCron on iOS/Android. |
-| Avatar rendering | [`client/src/components/AvatarScene.tsx`](./client/src/components/AvatarScene.tsx) | Loads the GLB model, applies emotion morphs/poses, and renders the Three.js scene. |
-| AI services | [`client/src/services/AIService.ts`](./client/src/services/AIService.ts) | Handles native GGUF download, llama.cpp initialization, offline generation, and network-aware routing. |
-| Speech services | [`client/src/services/SpeechService.ts`](./client/src/services/SpeechService.ts) and [`client/src/services/VoiceService.ts`](./client/src/services/VoiceService.ts) | Provides speech synthesis and speech recognition integrations. |
-| API boundary | [`server/index.js`](./server/index.js) | Provides health/model, chat/agent, TTS, Pinecall token, and optional desktop computer endpoints; calls configured providers. |
-| Provider catalog and adapters | [`server/providers/catalog.js`](./server/providers/catalog.js) and [`server/providers/runtime.js`](./server/providers/runtime.js) | Defines supported providers, model presets, environment overrides, endpoint normalization, model discovery, and provider-specific request handling. |
-| MCP integration | [`server/mcp-core.mjs`](./server/mcp-core.mjs), [`server/mcp-http.mjs`](./server/mcp-http.mjs), and [`server/mcp-stdio.mjs`](./server/mcp-stdio.mjs) | Exposes HANNAH tools to local stdio clients or token-protected Streamable HTTP clients. |
-| Optional Python service | [`backend/main.py`](./backend/main.py) | Provides a localhost model-step fallback and an approval-gated standalone tool flow with audit logging and a Docker sandbox. |
-| Alternate desktop shell | [`apps/desktop`](./apps/desktop) | Runs the separate Python-enabled Electron shell; it is distinct from the Capacitor Electron release packages. |
-| Packaging | [`client/capacitor.config.ts`](./client/capacitor.config.ts) and [`client/vite.config.ts`](./client/vite.config.ts) | Defines native app identity, PWA behavior, caching, and development proxying. |
-| Task Spine | [`client/src/services/TaskSpineService.ts`](./client/src/services/TaskSpineService.ts), [`backend/task_spine.py`](./backend/task_spine.py), [`scripts/background_agent_runner.py`](./scripts/background_agent_runner.py) | Asynchronous background tasks: create, list, pause, resume, cancel, approve pending irreversible actions; worker-thread runner never blocks chat. |
-| Side-effect ledger | [`client/src/services/SideEffectLedger.ts`](./client/src/services/SideEffectLedger.ts), [`backend/side_effect_ledger.py`](./backend/side_effect_ledger.py), [`scripts/side_effect_executor.py`](./scripts/side_effect_executor.py) | Records irreversible actions with delay window and undo; executor polls and executes after the window expires. |
-| Perception bus | [`client/src/services/PerceptionBus.ts`](./client/src/services/PerceptionBus.ts) | Unified event schema with five consent-gated sources (window, directory, repository, inbox, presence); subscribe/unsubscribe + health endpoint. |
-| Agent router | [`client/src/services/AgentRouter.ts`](./client/src/services/AgentRouter.ts) | RouterAgent classifies requests into task types and delegates to FreelanceAgent / ResearchAgent with profile-scoped tools. |
-| Agent profiles | [`agent_profiles.yaml`](./agent_profiles.yaml) | Configurable model tier, allowed tools, max iterations, timeout per task type. |
-| Guardian agent | [`client/src/services/GuardianAgent.ts`](./client/src/services/GuardianAgent.ts) | Zero-trust supervisor: strictness levels, multi-turn attack detection, semantic intent assessment, risk vector, veto authority. |
-| Policy enforcement | [`client/src/services/PolicyEnforcementLayer.ts`](./client/src/services/PolicyEnforcementLayer.ts) | Platform-level allow-list, rate limits, and data access boundaries enforced before every action. |
-| Kill switch | [`client/src/services/KillSwitch.ts`](./client/src/services/KillSwitch.ts) | Immediate halt of all agent activity with clear UI state and resume button; logged to audit trail. |
-| Cognitive risk | [`client/src/services/CognitiveRiskEngine.ts`](./client/src/services/CognitiveRiskEngine.ts), [`client/src/services/CognitiveReadinessEngine.ts`](./client/src/services/CognitiveReadinessEngine.ts) | CRF 2.0 risk scoring per action; readiness-based threshold modulation; deterministic silence when risk exceeds threshold. |
-| Memory service | [`client/src/services/MemoryService.ts`](./client/src/services/MemoryService.ts) | Three layers: session, consolidated long-term, persona invariants; usage-weighted retention; no time-based decay for persona. |
-| Memory evolution | [`client/src/services/MemoryEvolutionEngine.ts`](./client/src/services/MemoryEvolutionEngine.ts) | Asynchronously abstracts episodic memories into insights and a user model via Task Spine. |
-| Dreaming | [`client/src/services/DreamingConsolidator.ts`](./client/src/services/DreamingConsolidator.ts), [`client/src/services/CognitiveReadinessEngine.ts`](./client/src/services/CognitiveReadinessEngine.ts) | Idle-period consolidation, error correction, durable rule extraction, quality gate against knowledge bloat. |
-| Emotional state | [`client/src/services/EmotionalStateModel.ts`](./client/src/services/EmotionalStateModel.ts), [`client/src/services/ProactiveEmotionalPolicy.ts`](./client/src/services/ProactiveEmotionalPolicy.ts) | Emotional trajectory tracking and bounded proactive support offers. |
-| Credential broker | [`client/src/services/CredentialBroker.ts`](./client/src/services/CredentialBroker.ts) | Holds provider API keys; never exposes them to AgentRuntime; injects at network boundary, redacts from responses. |
-| Egress policy | [`client/src/services/EgressPolicy.ts`](./client/src/services/EgressPolicy.ts) | Deny-by-default outbound network allow-list with request-shape validation. |
-| Permission state | [`client/src/services/PermissionState.ts`](./client/src/services/PermissionState.ts) | Monotonic attenuation: revoked permissions cannot be re-granted in-session without new explicit approval. |
-| Sync service | [`client/src/services/SyncService.ts`](./client/src/services/SyncService.ts), [`server/sync-relay.js`](./server/sync-relay.js) | CRDT sync of memory, task spine, and side-effect ledger; E2E encrypted before leaving device; opaque relay. |
-| Cloud home | [`client/src/services/AgentNativeHomeService.ts`](./client/src/services/AgentNativeHomeService.ts), [`client/src/services/AppConnectionRegistry.ts`](./client/src/services/AppConnectionRegistry.ts) | Durable always-on execution environment; unified app connection registry (CLI/API/MCP/GUI); region migration. |
-| Hardware bridge | [`client/src/services/HardwareBridgeService.ts`](./client/src/services/HardwareBridgeService.ts) | Mutual-TLS WebSocket pairing with companion hardware; audio, vision, actuator, expression, gesture, interruption commands. |
-| Companion cast | [`client/src/services/CastOrchestrator.ts`](./client/src/services/CastOrchestrator.ts) | Routes messages to solo HANNAH or cast of Research/Coding/Casual companions; spontaneous contribution. |
-| Marketplace | [`client/src/services/SpecialistMarketplace.ts`](./client/src/services/SpecialistMarketplace.ts) | Guardian-gated publish/review/retire of specialist agents and persona packs; revenue-sharing scaffold. |
-| PAP adapter | [`client/src/services/PAPAdapter.ts`](./client/src/services/PAPAdapter.ts) | Discovers `/.well-known/pap.json`, OAuth scoped authentication, allowed-action execution pending user confirmation. |
-| ITU-T identity | [`client/src/services/IdentityInteropLayer.ts`](./client/src/services/IdentityInteropLayer.ts) | Forward-compatible ITU-T X.aiidm agentic identity mapping. |
-| Neuro-symbolic | [`client/src/services/NeuroSymbolicReasoner.ts`](./client/src/services/NeuroSymbolicReasoner.ts) | Symbolic constraint verification of actions, memory updates, and persona-consistent responses before execution. |
-| Collective intelligence | [`client/src/services/GovernedCollectiveIntelligence.ts`](./client/src/services/GovernedCollectiveIntelligence.ts) | Federated multi-agent collaboration with zero-trust admission and poisoning detection. |
-| Relational governance | [`client/src/services/RelationalGovernanceService.ts`](./client/src/services/RelationalGovernanceService.ts) | Dependency signal monitoring, deception-risk detection, triadic relationship transparency report. |
-| Oversight | [`client/src/services/OversightMetricsService.ts`](./client/src/services/OversightMetricsService.ts), [`client/src/services/RehearsalMode.ts`](./client/src/services/RehearsalMode.ts) | Agentic Oversight Index (AOI = U − λP) tracking; rehearsal mode for sandboxed workflow validation. |
-| Agent insurance | [`client/src/services/AgentInsuranceLedger.ts`](./client/src/services/AgentInsuranceLedger.ts) | Auditable execution trace for fund-moving, code-changing, or account-modifying actions with collateral and claim status. |
-| Token budget | [`client/src/services/TokenBudgetService.ts`](./client/src/services/TokenBudgetService.ts) | Per-component and per-task token budgets with hard cap and "task budget exhausted" state. |
-| Tracing | [`client/src/services/Tracing.ts`](./client/src/services/Tracing.ts) | OpenTelemetry-compatible batch tracing: model calls, tool invocations, memory retrieval, sub-agent delegation. |
-| Circuit breaker | [`client/src/services/CircuitBreaker.ts`](./client/src/services/CircuitBreaker.ts) | Disables tools after 3 consecutive failures for the session. |
-| Loop detection | [`client/src/services/LoopDetection.ts`](./client/src/services/LoopDetection.ts) | Blocks identical consecutive tool calls beyond threshold of 3; logs intervention to audit. |
-| Latency budgets | [`client/src/services/latency_budgets.ts`](./client/src/services/latency_budgets.ts) | Budgets for inline suggestion, full generation, summary, tool call; warns when exceeded. |
-| Observability | [`client/src/services/Observability.ts`](./client/src/services/Observability.ts) | Routing ratio, consolidation latency/success, persona retention, sync conflict metrics. |
+| Access token and your Groq key | `sessionStorage` in this tab (`hannah.session.apiToken`, `hannah.session.groqKey`) | Until you close the tab or press **Disconnect**. Never in `localStorage` or a build variable. |
+| Groq key in transit | `X-Groq-API-Key` header → your API → Groq over HTTPS only | Not logged or stored by the server. |
+| Server provider keys | Server environment only | Never in `VITE_*` variables or the client bundle. |
+| Chat history | `localStorage` (`hannah.chat.history.v1`) | Until you clear it in Settings. |
+| Usage metrics | `localStorage` (`hannah.usage.turns.v1`): latency, success, provider, model and token counts. **No message text.** | Last 1,000 turns, or until cleared. |
+| Memories | `localStorage` (`hannah.memory.v1`), sent with your requests so HANNAH can use them | Until you edit or delete them on Memory & trust. |
+| Guardian log and strictness | `localStorage` (`hannah.guardian.*`) | Last 100 decisions. |
+| Reply ratings | `localStorage` (`hannah.personalization.v1`) | Until you clear style data. |
+| Conversation content on the server | Passed to the provider for the request and not stored. The server has no conversation database. | Request lifetime. |
 
-### Runtime data and trust boundaries
+**Telemetry.** The client sends a small allow-list of metadata events (for example `chat_opened` and `tool_confirmation_approved`) to your own server's `/api/events`, which writes them to its log. No message text, prompts or keys are included. **Sentry** and **PostHog** stay off unless you set their keys, and Sentry events are scrubbed of keys, tokens, chat text and file paths.
 
-| Data or credential | Where it goes | Persistence / boundary |
-| --- | --- | --- |
-| Visitor-provided Groq key | Client sends it in `X-Groq-API-Key` to the Express API, which forwards it to Groq over HTTPS. | Held in client memory for the page session; not stored by HANNAH. |
-| Server provider keys | Express process to its configured provider. | Server environment only; never put in `VITE_*` variables. |
-| Native MobileClaw Anthropic credential | Native plugin to Anthropic when the optional native agent is used. | Managed by the native plugin; separate from the Express cloud route. |
-| Chat and agent messages | Chosen local runtime or Express/provider route. | No conversation database is configured by the server; local history behavior depends on the client/runtime. |
-| Local model and agent memory | WebLLM browser storage, or app-private native GGUF/LanceDB storage. | Stored by the relevant browser or operating system sandbox. |
-| API access | Express endpoints require a bearer token except for health; chat, agent, and desktop routes are rate limited per token. | The browser asks for a trusted token each session. CORS is not authentication. Rate limits are in-memory per server process; multi-instance deployments need a shared limiter. |
+**Cloud providers** handle prompts under their own retention and training policies. For maximum privacy, use WebLLM, on-device llama.cpp or a local Ollama server.
 
-## How a message works
+See [`docs/PRIVACY_POLICY.md`](./docs/PRIVACY_POLICY.md) and [`RESPONSIBLE_AI.md`](./RESPONSIBLE_AI.md).
 
-1. The user submits a message from the chat surface.
-2. The client checks connectivity and resolves the effective inference mode.
-3. Local modes generate in the browser or on the device.
-4. Cloud and Ollama modes send a validated request to `POST /api/agent`. Groq is the default; the user can select another provider configured on the server. When a visitor provides a Groq key, the client sends it in the `X-Groq-API-Key` request header; it is not included in the message body.
-5. The selected model is instructed to return:
-
-   ```json
-   {
-     "reply": "A concise companion response.",
-     "emotion": "happy"
-   }
-   ```
-
-6. The client normalizes the response, appends the reply, speaks it when enabled, and sends the emotion to the avatar.
-7. The avatar updates its lighting, pose, and emotion indicator.
-
-`POST /api/chat` accepts only `user` and `assistant` messages. `POST /api/agent` also accepts assistant tool calls and tool results; both endpoints bound conversation size.
-
-## Runtime capability matrix
-
-Capabilities vary by runtime and by the device/browser configuration:
-
-| Capability | Web/PWA | iOS | Android | Electron |
-| --- | :---: | :---: | :---: | :---: |
-| React UI and 3D avatar | Yes | Yes | Yes | Yes |
-| Cloud inference | Yes | Yes | Yes | Yes |
-| Ollama through API server | Yes | Yes | Yes | Yes |
-| WebLLM/WebGPU | Browser-dependent | Browser/WebView-dependent | Browser/WebView-dependent | Hardware-dependent |
-| Native llama.cpp GGUF | No | Yes | Yes | No |
-| MobileClaw native agent and LanceDB memory | No | Yes | Yes | No |
-| Confirmed device tools | Limited | Yes | Yes | With Electron shell bridge |
-| Desktop computer use | No | No | No | With Electron shell bridge |
-| Speech synthesis | Browser/OS-dependent | OS-dependent | OS-dependent | OS-dependent |
-| Speech recognition | Browser-dependent | TalkMode/platform-dependent | TalkMode/platform-dependent | Browser/platform-dependent |
-| Pinecall voice calls | Supported with issuer | Supported with permissions | Supported with permissions | Depends on integration |
-| PWA installation | Yes | Via browser | Via browser | No |
-
-“Supported” means the application has an integration path; it does not guarantee that every device, browser, operating system version, model, or provider will support the feature.
-
-## Data lifecycle
-
-### Conversation messages
-
-- The client keeps the active conversation in React state for the current page/session.
-- This repository does not add a database or server-side conversation history.
-- Cloud mode sends the selected messages to Groq through the API server. The browser's optional BYOK is sent as `X-Groq-API-Key` per request, held only in memory, and forwarded only to `api.groq.com` over HTTPS; it is not persisted or included in application logs.
-- MobileClaw mode sends online messages directly to Anthropic using the key stored by the native plugin.
-- Native agent memory is off by default. On iOS and Android, users can opt in, inspect matching saved entries, delete individual entries, or clear all entries in **Settings → Privacy and voice**. Relevant recalled memories are sent with an Anthropic request when MobileClaw is selected.
-- Ollama mode sends the selected messages to the configured Ollama instance through the API server.
-- WebLLM and native llama.cpp modes generate locally, subject to browser/device runtime behavior.
-- The optional Mithi service receives reply text when configured and online; offline speech falls back to an installed device voice.
-- Desktop computer mode sends task text and screenshots to Anthropic after the user confirms the session.
-- Users should avoid entering secrets, financial information, health information, or other sensitive personal data unless they understand the selected provider's handling terms.
-
-### Models and assets
-
-- The avatar model is served as a static client asset and may be cached by the PWA runtime.
-- WebLLM models may be downloaded into browser-managed storage.
-- Native GGUF models are downloaded into the private application data directory on iOS/Android.
-- Model downloads should use HTTPS and a trusted host.
-- Model files are separate from this project's source license and may have their own usage, attribution, and redistribution restrictions.
-
-### Voice and microphone data
-
-- Voice recognition is handled by the selected browser, operating system, or TalkMode integration.
-- Speech synthesis uses installed platform voices.
-- Microphone permission is required for voice input and calls.
-- The project does not define a central audio archive or transcription database; third-party platform services may have their own processing and retention policies.
-
-### Third-party services
-
-Provider behavior is outside this repository's control. Before production use, review the current privacy policy, retention settings, acceptable-use policy, regional availability, and model terms for every cloud, voice, token, hosting, and model provider enabled in the deployment.
-
-## Technology
-
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Lucide
-- **3D:** Three.js, React Three Fiber, Drei, GLB assets
-- **Local browser AI:** WebLLM through `use-browser-llm` and WebGPU
-- **Native AI:** `llama-cpp-capacitor` with GGUF models on iOS and Android
-- **Backend:** Node.js 20+, Express 5, CORS, dotenv
-- **Local server AI:** Ollama
-- **Mobile:** Capacitor 8, iOS, Android
-- **Desktop:** Capacitor Electron
-- **PWA:** `vite-plugin-pwa`
-- **Voice:** Capacitor TalkMode, Capacitor speech synthesis, Pinecall
-
-## Requirements
-
-### Core development
-
-- Node.js 20 or newer
-- npm
-- Git
-- A modern browser
-
-### Optional runtimes
-
-- A WebGPU-capable browser for WebLLM
-- Ollama for local server inference
-- Xcode and CocoaPods for iOS development
-- Android Studio and an Android SDK for Android development
-- A platform-compatible Electron toolchain for desktop packaging
+---
 
 ## Quick start
 
-The API requires a random 32–512 character HANNAH_API_TOKEN for every /api route except /api/health. Generate it with openssl rand -hex 32, keep it in the server environment, and share it out of band only with trusted users. The landing page asks users for this token each session; it is held in page memory, never in browser storage or a Vite build variable. Use HTTPS for remote clients.
+### Requirements
 
-### Primary client and server
+- Node.js 20 or newer (CI uses Node 24) and npm
+- Git and a modern browser (WebGPU for WebLLM)
+- Optional: Ollama, Python 3.12 (fallback service), Android Studio, Xcode with CocoaPods
 
-The root app uses the React/Vite client in `client/` and the Express API in `server/`. Visitors can enter without a personal key when the server has a provider configured, or add a temporary Groq key for the current page session. That key is sent in a request header only for Groq requests and is not persisted by the client.
-
-### 1. Install dependencies
+### 1. Install
 
 ```bash
+git clone https://github.com/HarshTambade/Shanaya-Your-AI-companion.git
+cd Shanaya-Your-AI-companion
 npm install
-npm install --prefix client
+npm install --prefix client --ignore-scripts
 npm install --prefix server
 ```
+
+The client installs with `--ignore-scripts` because a transitive package ships a broken lifecycle script that the app doesn't need.
 
 ### 2. Configure the server
 
 ```bash
 cp server/.env.example server/.env
+openssl rand -hex 32   # paste the output into HANNAH_API_TOKEN
 ```
 
-Groq is the default cloud provider. Add a server-side Groq API key to `server/.env`, or let browser visitors provide a temporary Groq key on the landing page:
+Minimal `server/.env`:
 
 ```dotenv
 PORT=3001
 HOST=127.0.0.1
-CLIENT_ORIGIN=http://localhost:5173,capacitor://localhost,http://localhost,https://localhost
-HANNAH_API_TOKEN=replace_with_a_random_value_of_at_least_32_characters
-GROQ_API_KEY=your_server_side_groq_api_key
+CLIENT_ORIGIN=http://localhost:5173
+HANNAH_API_TOKEN=<32–512 random characters>
+# Optional: a server-side key. Without it, visitors bring their own Groq key.
+GROQ_API_KEY=
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
-CLOUD_REQUEST_TIMEOUT_MS=60000
 ```
 
-The server defaults to Groq. The app discovers available models for the selected provider and tries only the selected model plus explicitly configured fallbacks. Add a provider key such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY` to `server/.env` to make it selectable; OpenRouter, Together, Cerebras, DeepSeek, Mistral, xAI, Fireworks, NVIDIA NIM, SambaNova, Perplexity, Hyperbolic, local runtimes, and custom OpenAI-compatible gateways are also supported. A generic gateway can be configured with `CUSTOM_BASE_URL` and `CUSTOM_MODEL(S)`; set `CUSTOM_API_KEY` when that gateway requires authentication. Legacy `CLOUD_API_URL` and `CLOUD_API_KEY` variables remain supported. The Python agent fallback uses the same Groq-first order and accepts the provider-specific `*_MODEL(S)` settings. A visitor-provided Groq key is held only in page memory, sent in `X-Groq-API-Key`, and forwarded only to Groq's official HTTPS endpoint. Never put a server-side key in `client/.env` or a `VITE_*` variable.
+The legacy name `SHANAYA_API_TOKEN` is still accepted.
 
-The API binds to `127.0.0.1` by default. For a phone on your trusted development LAN, set `HOST=0.0.0.0` and use the computer's LAN address in `client/.env`; avoid exposing that development server to public networks.
-
-### 3. Configure the client
+### 3. Configure the client (optional)
 
 ```bash
 cp client/.env.example client/.env
 ```
 
-The Vite development proxy makes the default browser setup work without an API URL. For a separately hosted API, use:
+The Vite dev server proxies `/api` to `localhost:3001`, so no settings are required for local development.
 
-```dotenv
-VITE_API_BASE_URL=http://localhost:3001
-VITE_PINECALL_AGENT_ID=hannah
-```
-
-### 4. Start development
-
-Run both applications from the repository root:
+### 4. Run
 
 ```bash
-npm run dev
-```
-
-Or run them independently:
-
-```bash
-npm run dev:client
-npm run dev:server
-```
-
-The client normally runs at `http://localhost:5173`; the API listens at `http://localhost:3001`.
-
-Check the API:
-
-```bash
+npm run dev             # server on :3001 and client on :5173
 curl http://localhost:3001/api/health
 ```
 
-```json
-{"status":"ok"}
-```
+Open `http://localhost:5173`, choose **Talk to HANNAH**, and enter the token from step 2. If the server has no `GROQ_API_KEY`, also paste your own [Groq key](https://console.groq.com/keys).
 
-### Optional Python model-step fallback
+### Optional: Python model-step fallback
 
-The FastAPI service in `backend/` is optional. If enabled, the client first calls Express as usual and contacts Python only when the Express agent request fails due to a network error, missing endpoint, rate limit, timeout, or server error. Python returns one model step; the client remains responsible for tool validation, device actions, and user confirmations. In Python's own `/api/agent` flow, every registered backend tool—including file reads and status checks—waits for an explicit user approval before execution.
+If Express fails with a network error, timeout, rate limit or 5xx, the client can ask the FastAPI service in [`backend/`](./backend) for one model step. The client still owns tool validation and approvals.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r backend/requirements.txt
-cp .env.example .env
+cp .env.example .env            # set the fallback provider key
+npm run dev:with-python-fallback
 ```
 
-Set the Python fallback's provider key in the root `.env`, then start all three services with `npm run dev:with-python-fallback`. You can also run `npm run dev:python-fallback` separately. Set `VITE_PYTHON_FALLBACK_URL` in `client/.env` if the Python service is not at `http://127.0.0.1:8000`. This Python router has its own provider configuration and does not replace the Express server's primary Groq configuration. Install `backend/requirements.txt` in the selected Python environment and install the Playwright browser with `python -m playwright install chromium`; Docker must be available to run code. The `apps/desktop` shell starts the Python process by default and can be opted out with `HANNAH_ENABLE_PYTHON_FALLBACK=false`. Its child uses fixed arguments, a restricted environment, no shell, and no renderer process API.
+The Python service binds to localhost only, requires approval for every tool (including reads) over a session-bound WebSocket, runs code in a network-disabled Docker container, and writes a redacted, hash-chained audit log to `logs/hannah_audit.jsonl`.
 
-In the Python agent, every registered tool—including read-only tools—requires explicit approval over its session-bound WebSocket. Proposals, decisions, expirations, and result fingerprints go to `logs/hannah_audit.jsonl` (or `HANNAH_AUDIT_LOG`); user payloads and credentials are redacted. The JSONL records form a hash chain that detects edits and truncation. Python tools are workspace-scoped, shell commands are allow-listed, web submissions require approval, and code runs in a network-disabled Docker container. The Python service binds only to localhost because it has no remote-user authentication.
-
-Kernel sensing is a separate, optional Linux eBPF monitor. It is disabled unless explicitly enabled with `sudo npm run dev:ebpf`; the loader forwards process/syscall metadata to the loopback API and never records file paths. This is not a cross-platform kernel control layer. On every platform, HANNAH uses the operating system APIs and permissions available to the app; it does not grant itself unrestricted system access.
+---
 
 ## Configuration
 
-### Client environment: `client/.env`
+### Client: `client/.env`
 
-| Variable | Required | Description |
+| Variable | Purpose |
+| --- | --- |
+| `VITE_API_BASE_URL` | API origin when it differs from the page origin (for example on a phone). Leave empty for the Vite proxy or Vercel. |
+| `VITE_SITE_URL` | Public HTTPS origin for canonical URLs, social cards, `robots.txt` and `sitemap.xml`. |
+| `VITE_PYTHON_FALLBACK_URL` | Optional FastAPI fallback (default `http://127.0.0.1:8000`). |
+| `VITE_AGENT_MAX_ITERATIONS` | Tool rounds per request (default 8, maximum 20). |
+| `VITE_AGENT_TOOL_DENY_LIST` | Extra tool names to deny, added to the built-in shell and terminal deny list. |
+| `VITE_AGENT_OUTPUT_DENY_SUBSTRINGS` | Comma-separated phrases blocked in assistant output. |
+| `VITE_OFFLINE_MODEL_URL` | HTTPS URL of a GGUF model for on-device AI on iOS and Android. |
+| `VITE_AVATAR_MODEL_URL` | Avatar asset. When blank, the app loads the uncompressed 7.4 MB `uruha_rushia_-_hololive_vtuber.glb`; set `/models/avatar.draco.glb` (2.6 MB, what CI's web build uses) after `npm run models:draco`. |
+| `VITE_HANNAH_ANTHROPIC_MODEL` | Model for the optional native MobileClaw agent. |
+| `VITE_PINECALL_AGENT_ID` | Public Pinecall agent slug for voice calls. |
+| `VITE_AGE_GATE_18_PLUS` | `true` shows an 18+ consent gate. |
+| `VITE_SENTRY_DSN`, `VITE_SENTRY_*` | Optional browser error tracking; off when blank. |
+| `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST` | Optional product analytics; off when blank. |
+| `VITE_*_DOWNLOAD_URL` | Installer links for a Downloads menu (the component exists but is not shown in the app yet). |
+
+Never put a secret in a `VITE_*` variable: Vite embeds those values in the public bundle.
+
+### Server: `server/.env`
+
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `VITE_API_BASE_URL` | Only for a separate API origin | Base URL for API requests, including `/api/agent`, `/api/chat`, `/api/tts`, and `/api/pinecall/token`. Leave empty when using the Vite proxy or same-origin Vercel rewrites. |
-| `VITE_PYTHON_FALLBACK_URL` | No | Optional FastAPI standby URL for agent model steps; Express remains primary. |
-| `VITE_PINECALL_AGENT_ID` | Only for Pinecall | Public Pinecall agent slug. |
-| `VITE_OFFLINE_MODEL_URL` | Only for native offline AI | HTTPS URL of a downloadable GGUF model. |
-| `VITE_AVATAR_MODEL_URL` | No | Optional avatar asset path. The default is the compressed `/models/avatar.draco.glb`. |
-| `VITE_HANNAH_ANTHROPIC_MODEL` | No | Model ID for the optional native MobileClaw agent. |
-| `VITE_ANDROID_DOWNLOAD_URL` | No | Optional Android installer or store URL; blank uses the latest GitHub release APK. |
-| `VITE_IOS_DOWNLOAD_URL` | No | Optional App Store/TestFlight URL; blank opens GitHub Releases because the current release has no signed IPA. |
-| `VITE_MACOS_DOWNLOAD_URL` | No | Optional macOS installer URL; blank uses the latest GitHub release DMG. |
-| `VITE_WINDOWS_DOWNLOAD_URL` | No | Optional Windows installer URL; blank uses the latest GitHub release EXE. |
-| `VITE_LINUX_DOWNLOAD_URL` | No | Optional Linux package URL; blank uses the latest GitHub release AppImage. |
+| `HANNAH_API_TOKEN` | — | **Required.** Bearer token for every `/api` route except `/api/health`. |
+| `HANNAH_RATE_LIMIT_WINDOW_MS` | `60000` | Rate-limit window. |
+| `HANNAH_RATE_LIMIT_{CHAT,AGENT,DESKTOP,FEEDBACK,CONTENT_REPORT}_MAX` | `30`, `60`, `20`, `10`, `10` | Requests per token per window. |
+| `PORT`, `HOST` | `3001`, `127.0.0.1` | Bind address. Use `0.0.0.0` only on a trusted LAN. |
+| `CLIENT_ORIGIN` | Local origins | Comma-separated CORS allow-list. CORS is not authentication. |
+| `HANNAH_DEFAULT_PROVIDER` | `groq` | Default provider in the model picker. |
+| `GROQ_API_KEY`, `GROQ_MODEL`, `GROQ_MODEL_FALLBACKS` | —, `openai/gpt-oss-120b`, `openai/gpt-oss-20b,llama-3.1-8b-instant` | Groq configuration. |
+| `<PROVIDER>_API_KEY`, `_BASE_URL`, `_MODEL`, `_MODELS` | — | Enables a provider: OpenAI, Anthropic, Gemini, OpenRouter, Together, Cerebras, DeepSeek, Mistral, xAI, Fireworks, NVIDIA, SambaNova, Perplexity or Hyperbolic. |
+| `CUSTOM_BASE_URL`, `CUSTOM_API_KEY`, `CUSTOM_MODEL(S)` | — | Any OpenAI-compatible gateway (legacy `CLOUD_API_URL` and `CLOUD_API_KEY` also work). |
+| `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `http://localhost:11434`, `qwen3:8b` | Ollama. |
+| `LMSTUDIO_*`, `LLAMACPP_*`, `VLLM_*` | — | Other local OpenAI-compatible runtimes. |
+| `CLOUD_REQUEST_TIMEOUT_MS` | `60000` | Per-model timeout (3–120 s). |
+| `MCP_ENABLED`, `MCP_API_TOKEN`, `HANNAH_API_URL` | `false`, —, `http://127.0.0.1:3001` | Remote MCP endpoint. |
+| `ANTHROPIC_DESKTOP_MODEL` | `claude-sonnet-5-5` | Model for desktop computer use (needs `ANTHROPIC_API_KEY`). |
+| `MITHI_TTS_URL` | — | Optional Mithi text-to-speech service. |
+| `PINECALL_TOKEN_URL` | — | Trusted issuer of short-lived Pinecall credentials. |
+| `SENTRY_*`, `LLM_TRACE_LOG`, `LANGFUSE_*` | — | Optional error tracking and metadata-only LLM traces. |
+| `FEEDBACK_DISCORD_WEBHOOK_URL`, `MONGODB_*` | — | Destinations for in-app feedback (`/api/feedback` returns 503 without one). |
+| `CONTENT_REPORT_LOG` | `logs/content_reports.jsonl` | Metadata-only AI content reports. |
 
-### Server environment: `server/.env`
+[`server/.env.example`](./server/.env.example) lists every variable with comments. Real `.env` files are git-ignored.
 
-| Variable | Required | Default | Description |
-| --- | --- | --- | --- |
-| HANNAH_API_TOKEN | Yes in production | — | Random bearer token required by all /api routes except /api/health. Keep it server-side; do not place it in a Vite build variable. |
-| HANNAH_RATE_LIMIT_WINDOW_MS | No | 60000 | Fixed-window duration shared by the per-token API limits. |
-| HANNAH_RATE_LIMIT_CHAT_MAX | No | 30 | Chat requests allowed per token per window. |
-| HANNAH_RATE_LIMIT_AGENT_MAX | No | 60 | Agent requests allowed per token per window. |
-| HANNAH_RATE_LIMIT_DESKTOP_MAX | No | 20 | Computer-use requests allowed per token per window. |
-| `PORT` | No | `3001` | Express API port. |
-| `HOST` | No | `127.0.0.1` | API bind address; `0.0.0.0` enables LAN access. |
-| `CLIENT_ORIGIN` | No | Local origins | Comma-separated CORS allowlist. |
-| `MCP_ENABLED` | No | `false` | Set to `true` to mount the remote `/mcp` Streamable HTTP endpoint. |
-| `MCP_API_TOKEN` | Required when remote MCP is enabled | — | Random bearer token of at least 32 characters. Never place it in client code. |
-| `HANNAH_API_URL` | No | `http://127.0.0.1:3001` | HANNAH API origin used by the MCP stdio server and tools. |
-| `GROQ_API_KEY` | For server-side cloud clients | — | Server-side Groq key. Browser visitors can provide a session-only key in the landing page. |
-| `HANNAH_DEFAULT_PROVIDER` | No | `groq` | Provider ID used by default. Other configured providers appear in the model provider picker. |
-| `<PROVIDER>_API_KEY` | For hosted providers | — | Server-side provider credentials, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`. |
-| `<PROVIDER>_MODEL(S)` | No | Catalog defaults | Preferred model and optional comma-separated fallbacks for a provider. |
-| `GROQ_API_URL` | No | Groq API base | Optional Groq-compatible endpoint override. |
-| `GROQ_MODEL` | No | `openai/gpt-oss-120b` | Primary cloud model. |
-| `GROQ_MODEL_FALLBACKS` | No | `openai/gpt-oss-20b,llama-3.1-8b-instant` | Comma-separated fallback models, also shown in the app's model selector. |
-| `CLOUD_REQUEST_TIMEOUT_MS` | No | `60000` | Per-model cloud request timeout, bounded to 3–120 seconds. |
-| `CUSTOM_BASE_URL` | For a custom gateway | — | OpenAI-compatible API base URL; remote endpoints must use HTTPS. |
-| `CUSTOM_API_KEY` | For a custom gateway | — | Server-side gateway key; never expose it in a `VITE_*` variable. |
-| `CUSTOM_MODEL(S)` | No | Gateway model IDs | Preferred and fallback model IDs for the custom gateway. |
-| `CLOUD_API_URL` / `CLOUD_API_KEY` | Legacy | — | Aliases for the custom gateway configuration. |
-| `OLLAMA_BASE_URL` | For Ollama | `http://localhost:11434` | Ollama server URL. |
-| `OLLAMA_MODEL` | For Ollama | `qwen3:8b` | Ollama model name. |
-| `PINECALL_TOKEN_URL` | For calls | — | Trusted server endpoint returning short-lived Pinecall credentials. |
-| `ANTHROPIC_API_KEY` | For desktop control | — | Server-only key used by the computer-toolset route. |
-| `ANTHROPIC_DESKTOP_MODEL` | For desktop control | `claude-sonnet-5-5` | Anthropic model ID with computer-toolset support; falls back to `ANTHROPIC_MODEL`. |
-| `MITHI_TTS_URL` | Optional | — | Base URL of the Mithi service; the API appends `/synthesize`. |
-
-All environment templates are committed as examples. Actual secrets are ignored by [`.gitignore`](./.gitignore).
+---
 
 ## Inference modes
 
-### Cloud AI
+| Mode | Where it runs | Notes |
+| --- | --- | --- |
+| **Groq Cloud** (default) | Your API → the selected provider | Any provider configured on the server appears in the picker. The server discovers models and falls back only through your configured list. |
+| **WebLLM Local** | In the browser via WebGPU | Downloads a model on first use. Prompts stay on the device. |
+| **Local Ollama** | Your API → your Ollama server | `ollama serve && ollama pull qwen3:8b`. |
+| **On-device AI** | iOS and Android via llama.cpp | Needs `VITE_OFFLINE_MODEL_URL`; prepare the model while online. |
+| **MobileClaw · Anthropic** | iOS and Android native agent | Uses an Anthropic key stored by the native plugin; optional local LanceDB memory. |
+| **Desktop Agent** | Electron with the desktop bridge | Computer use with approval for every action. |
 
-Cloud mode defaults to Groq through the Express API. The server discovers models for the selected provider and falls back only through its configured model list. Visitors may enter a Groq key on the landing page; the client keeps it in memory and sends it only with Groq requests. Other server-side provider keys stay on the server. The provider picker lists server-configured hosted providers; add a provider's API key in `server/.env` to enable it.
+When offline, HANNAH chooses llama.cpp on mobile and WebLLM on web and desktop.
 
-### WebLLM Local
+---
 
-WebLLM runs in the browser using WebGPU. The first run may download a model and require additional memory. Browser support, model availability, and download persistence depend on the browser.
+## Agent runtime and tools
 
-### Local Ollama
+### Device tools
 
-Install Ollama, start it, and pull the configured model:
+| Tool | Needs your approval | Notes |
+| --- | :---: | --- |
+| `list_app_files` | — | HANNAH's private app storage only. |
+| `read_app_file` | ✅ | In cloud mode, contents go to the selected provider. |
+| `write_app_file` | ✅ | Card shows path, size and preview. |
+| `delete_app_file` | ✅ | Blocked outright in Strict mode. |
+| `open_app` | — | Opens an app or URL scheme. |
+| `get_device_status`, `get_battery_status` | — | Read-only status. |
+| `toggle_setting` | ✅ | For example the flashlight. iOS and Android don't allow apps to toggle Wi-Fi or Bluetooth. |
+| `send_message` | ✅ | Opens an SMS draft; you press Send. |
+| `make_call` | ✅ | Opens the dialer; you press Call. |
 
-```bash
-ollama serve
-ollama pull qwen3:8b
-```
+The Guardian reviews **every** tool, including the ones that need no approval. Memory writes and deletions and saved-credential removal also need approval. Shell execution, arbitrary file-system access and notification reading are not available.
 
-Set `OLLAMA_BASE_URL` or `OLLAMA_MODEL` when using a different host or model. The client communicates with Ollama through the API server.
+### Task profiles
 
-### Native offline AI
+[`AgentRouter.ts`](./client/src/services/AgentRouter.ts) (overridable with [`agent_profiles.yaml`](./agent_profiles.yaml)):
 
-On iOS and Android, configure `VITE_OFFLINE_MODEL_URL` with a hosted GGUF model and select the offline model preparation action while online. The model is downloaded into the app's private data directory and loaded through llama.cpp. The model's license, redistribution rights, and download availability are the responsibility of the distributor.
+| Profile | Tools | Max rounds |
+| --- | --- | :---: |
+| `chat` | none | 4 |
+| `code` | list, read, write files | 12 |
+| `system` | device status, battery, open app, toggle setting, all file tools | 6 |
+| `research` | list and read files | 10 |
+| `maintenance` | none | 4 |
+| `default` | all | 8 |
 
-When disconnected, the client chooses native llama.cpp on iOS/Android and WebLLM on web/Electron. A native model must be prepared before going offline.
+Local models (WebLLM and llama.cpp) receive tools through a JSON request format in the prompt, so the model has to follow that format.
 
-## Agent runtime and device tools
+---
 
-Cloud and Ollama modes use an eight-round bounded tool loop so HANNAH can complete longer multi-step tasks. WebLLM and llama.cpp use a JSON tool-request format in the prompt, so the selected local model must follow that format. Tool results appear in the chat as system messages. The router checks network state immediately before each model step.
+## Marketplace: agents and skills
 
-On iOS and Android, MobileClaw initializes `capacitor-native-agent`, `capacitor-lancedb`, and `capacitor-mobilecron`. Its vector store uses a local hash embedding fallback and stays in the app sandbox. Add an Anthropic API key in Settings to route online turns through MobileClaw; the native plugin stores the key and sends requests directly to Anthropic. Native turns use MobileClaw's skill runner with an explicit tool allowlist, so its general file, code, and Git tools are not exposed to HANNAH's chat. The registered device tools and memory deletion tool retain their own confirmation checks. Without a key, online requests use the server's configured OpenAI-compatible endpoint. Offline turns use the downloaded GGUF model and can call local memory tools.
+The catalog is bundled in [`shared/marketplace-catalog.json`](./shared/marketplace-catalog.json) and is first-party and offline.
 
-The registered device tools include app-private file listing, UTF-8 file reads, confirmed file writes/deletes, `open_app`, `get_device_status`, `get_battery_status`, `toggle_setting`, `send_message`, and `make_call`. File tools are confined to HANNAH's private app storage; cloud-mode reads send file contents to the selected model provider. HANNAH asks before file changes, SMS drafts, calls, flashlight changes, and computer input. SMS and calls open the system composer/dialer; the user taps Send or Call. iOS and Android block third-party Wi-Fi and Bluetooth toggles, so HANNAH explains how to change those in system controls. Notification reading, access to arbitrary device files, and shell execution are not enabled. Device access is limited to APIs and permissions provided by each operating system; the app cannot grant itself unrestricted control.
+- **Agents** are specialists, such as a study coach. Install one, then activate it; only one agent is active at a time.
+- **Skills**, such as concise replies, can be combined. Enable the ones you want.
 
-## Agent and skill marketplace
+Entries add **prompt guidance only**. They don't add tools, request permissions, download code, or get around the Guardian. Choices are stored on this device. Third-party publishing, remote discovery and package signing are not implemented.
 
-Open **Marketplace** from the landing page or conversation header. Install an agent, then activate it to make it the single active specialist; install skills and enable the ones you want. Installed and enabled choices are stored in this device's local storage and can be removed at any time.
+---
 
-The catalog is bundled in `shared/marketplace-catalog.json`. Its entries contribute prompt guidance to the web, Ollama, Python fallback, local-model, MobileClaw, and desktop companion paths. They do not add tools, bypass SafetyGuard, request permissions, or execute downloaded code. The catalog is first-party and offline; remote discovery, third-party publishing, package signing, and remote updates are not implemented.
+## Automations
+
+**Automations** is a visual designer for workflows: a trigger (such as "every day at 8:00"), agent tasks, tool actions and an output (such as "speak the summary"). You can view the workflow as JSON ([`WorkflowSchema.ts`](./client/src/services/WorkflowSchema.ts)), save it on the device and delete it.
+
+> **Current limit:** saved workflows are designs. No scheduler runs them yet. When execution is added, each tool step will go through the same Guardian and approval chain.
+
+---
 
 ## MCP integration
 
-HANNAH includes a Model Context Protocol server so an MCP-capable host can call her chat service as a tool. It uses the same Express API, Groq-first model routing, and server-side credentials as the app. Install server dependencies with `npm install --prefix server`.
+HANNAH includes a Model Context Protocol server, so MCP hosts (IDEs, desktop assistants) can talk to her.
 
-The server exposes these tools:
-
-| MCP tool | Purpose |
+| Tool | Purpose |
 | --- | --- |
-| `hannah_chat` | Send HANNAH a prompt, optional recent user/assistant history, and optional `cloud` or `ollama` mode. Returns `{ "reply": "…", "emotion": "…" }`. |
-| `hannah_status` | Check API/provider readiness without revealing credentials. |
-| `hannah_models` | List configured model IDs and the default model. |
+| `hannah_chat` | Send a prompt with optional history and mode; returns `{ reply, emotion }`. |
+| `hannah_status` | Check API and provider readiness without revealing credentials. |
+| `hannah_models` | List configured models. |
 
-### Local desktop and IDE clients (stdio)
-
-Start HANNAH's API with `npm run dev:server`, then add this server entry to the MCP host's configuration. Replace the path with the absolute path to this checkout:
+**Local (stdio):** run `npm run dev:server`, then add this to your MCP host:
 
 ```json
 {
   "mcpServers": {
     "hannah": {
       "command": "node",
-      "args": ["/absolute/path/to/HANNAH/server/mcp-stdio.mjs"],
-      "env": {
-        "HANNAH_API_URL": "http://127.0.0.1:3001"
-      }
+      "args": ["/absolute/path/to/repo/server/mcp-stdio.mjs"],
+      "env": { "HANNAH_API_URL": "http://127.0.0.1:3001" }
     }
   }
 }
 ```
 
-The stdio process speaks MCP on standard input/output and calls the running HANNAH API. It exposes chat/status/model tools only; it does not inherit the host app's account credentials or gain access to that app's data.
+**Remote (Streamable HTTP):** set `MCP_ENABLED=true`, a unique `MCP_API_TOKEN` (`openssl rand -hex 32`) and a reachable `HANNAH_API_URL`. Then connect to `https://your-domain/mcp` with `Authorization: Bearer <token>`. Hosts that need OAuth discovery require an OAuth gateway in front.
 
-### Remote or web clients (Streamable HTTP)
+The MCP server exposes no shell, file, messaging or computer-control tools. See [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
 
-For a deployed server, set `MCP_ENABLED=true` and set `MCP_API_TOKEN` to a unique secret generated with `openssl rand -hex 32`. Set `HANNAH_API_URL` to the reachable API origin; the `127.0.0.1` default is for local development. Deploy behind HTTPS, and configure the host app to connect to `https://your-domain.example/mcp` with `Authorization: Bearer <your-token>`. Remote hosts must support a custom bearer header; hosts that require OAuth discovery need an OAuth gateway in front of HANNAH. Web-based hosts also need their origin listed in `CLIENT_ORIGIN`. Keep the token in the MCP host's server-side secret configuration; never embed it in browser JavaScript or a `VITE_*` variable. The endpoint rejects requests without a valid token and stays disabled by default.
-
-Any software can use HANNAH through this interface when it has an MCP client or can implement the MCP Streamable HTTP/stdio protocol. MCP does not automatically connect HANNAH to every app: the other app must expose an MCP server or provide its own integration, and its permissions remain controlled by that app. The current HANNAH MCP server does not expose shell, file, account, messaging, or computer-control tools. Use `CLIENT_ORIGIN` to explicitly allow browser origins; keep remote access on HTTPS.
+---
 
 ## Desktop computer use
 
-The Anthropic computer-toolset endpoint runs on the server. After `cap add @capawesome/capacitor-electron`, copy [`client/electron-agent-preload.example.cjs`](./client/electron-agent-preload.example.cjs) and [`client/electron-agent-main.example.cjs`](./client/electron-agent-main.example.cjs) into `client/electron/`, then merge [`client/electron-agent-config.example.ts`](./client/electron-agent-config.example.ts) into the generated `capacitor.electron.config.ts`. Install the optional driver dependencies with `cd client/electron && npm install screenshot-desktop sharp @nut-tree/nut-js esbuild`, then bundle the preload source: `npx esbuild electron-agent-preload.example.cjs --bundle --platform=node --format=cjs --external:electron --outfile=electron-agent-preload.cjs`. The main process shows a native confirmation and issues a one-use token for every screenshot and computer action; the renderer cannot call the OS driver without that token. The combined preload keeps the Capacitor bridge and exposes only the limited screenshot/action methods. The renderer never receives the Anthropic key. HANNAH asks before each keyboard or mouse action, and the UI explains that screenshots and task text go to the configured Anthropic endpoint.
+The `/api/desktop/computer` route uses Anthropic's computer toolset on the server, and an Electron bridge performs the returned actions. Setup:
 
-Desktop browser work uses the visible browser through that same computer bridge. A Tauri shell can expose the same `window.hannahDesktop` screenshot/action interface; this repository includes the Electron adapter example, not a Tauri Rust driver.
+1. Run `npm run cap:add:electron --prefix client`.
+2. Copy [`electron-agent-preload.example.cjs`](./client/electron-agent-preload.example.cjs) and [`electron-agent-main.example.cjs`](./client/electron-agent-main.example.cjs) into `client/electron/`.
+3. Merge [`electron-agent-config.example.ts`](./client/electron-agent-config.example.ts) into the generated config.
+4. In `client/electron`, install `screenshot-desktop sharp @nut-tree/nut-js esbuild` and bundle the preload with esbuild.
+
+Each screenshot and action is reviewed by the Guardian, then confirmed in a native dialog that issues a one-use token. The renderer never sees the Anthropic key. Screenshots and task text go to Anthropic.
+
+---
 
 ## Voice and calls
 
-### Speech input and output
-
-Supported language tags are:
-
-- English: `en-US`
-- Hindi: `hi-IN`
-- Marathi: `mr-IN`
-
-Spoken replies are enabled by default and the preference is stored on the device; users can turn voice replies off. The microphone stays off until the user presses **Speak**. Speech recognition availability is platform-dependent. If `MITHI_TTS_URL` is configured, reply text is sent to that service and synthesized with Mithi v1 Flash's Charvi voice in English, Hindi, or Marathi. Otherwise HANNAH uses an installed system voice. Mithi runs in a separate Python service, not inside the Capacitor speech plugin; system speech remains the offline fallback.
-
-Download the [Oomni/Mithi v1 Flash model](https://huggingface.co/Oomni/mithi-v1-flash) and install its dependencies, including the English spaCy model. Then install this API wrapper and run:
+- **Languages:** English (`en-US`), Hindi (`hi-IN`) and Marathi (`mr-IN`), subject to platform support.
+- **Input:** the microphone stays off until you press **Speak**. Recognition comes from the browser or OS.
+- **Output:** spoken replies are on by default and can be turned off (stored on the device). If `MITHI_TTS_URL` is set, reply text goes to a [Mithi v1 Flash](https://huggingface.co/Oomni/mithi-v1-flash) service ([`server/mithi_tts_service.py`](./server/mithi_tts_service.py)); otherwise an installed system voice is used.
+- **Calls (Pinecall):** need `VITE_PINECALL_AGENT_ID`, a server-side `PINECALL_TOKEN_URL` that returns `{ token, server, expires_in }`, network access and microphone permission. The Pinecall API key never goes to the client.
 
 ```bash
-pip install -U huggingface_hub
 hf download Oomni/mithi-v1-flash --local-dir ./mithi-v1-flash
-pip install -r ./mithi-v1-flash/requirements.txt
+pip install -r ./mithi-v1-flash/requirements.txt -r server/mithi-service-requirements.txt
 python -m spacy download en_core_web_sm
-pip install -r server/mithi-service-requirements.txt
-MITHI_MODEL_PATH=./mithi-v1-flash uvicorn server.mithi_tts_service:app --host 0.0.0.0 --port 8010
+MITHI_MODEL_PATH=./mithi-v1-flash uvicorn server.mithi_tts_service:app --port 8010
 ```
 
-Set `MITHI_TTS_URL` to the service's base URL in `server/.env`. For a phone, the service must be reachable from that phone through the API server; the phone's `localhost` is the phone itself.
+---
 
-### Pinecall voice calls
-
-Pinecall calls require:
-
-1. `VITE_PINECALL_AGENT_ID` in the client environment.
-2. `PINECALL_TOKEN_URL` in the server environment.
-3. A reachable token issuer that returns short-lived credentials.
-4. Internet connectivity and microphone permission.
-
-Expected token issuer response:
-
-```json
-{
-  "token": "short-lived-token",
-  "server": "pinecall-server.example",
-  "expires_in": 3600
-}
-```
-
-Never put a Pinecall API key in the client. The client requests credentials from `GET /api/pinecall/token`.
-
-## Mobile and PWA builds
-
-### Capacitor
-
-The native application is configured as:
+## Mobile, desktop and PWA builds
 
 | Setting | Value |
 | --- | --- |
-| App name | `HANNAH` |
-| App ID | `com.hannah.companion` |
+| App name / ID | `HANNAH` / `com.hannah.companion` |
 | Web directory | `client/dist` |
-
-The Android and iOS project sources are checked in under `client/android/` and `client/ios/`. Sync the app bundle and native plugins after changing client dependencies:
-
-```bash
-npm run cap:sync --prefix client
-npm run cap:add:electron --prefix client
-```
-
-To add flashlight access, add this permission to `client/android/app/src/main/AndroidManifest.xml` before `<application>`:
-
-```xml
-<uses-permission android:name="android.permission.FLASHLIGHT" />
-```
-
-Build and run:
+| Native projects | `client/android`, `client/ios` (checked in) |
+| Desktop | Capacitor Electron (`@capawesome/capacitor-electron`), generated in CI |
 
 ```bash
-npm run cap:run:ios --prefix client
+npm run cap:sync --prefix client          # build + sync + native patches
 npm run cap:run:android --prefix client
+npm run cap:run:ios --prefix client
 npm run cap:run:electron --prefix client
 ```
 
-The Android workflow installs SDK 36, syncs the checked-in Gradle project, and runs `npm run cap:patch:android --prefix client`. This repeatable patch supplies the Kotlin Gradle plugin classpath required by third-party native modules that apply `kotlin-android` without declaring it themselves, aligns the `@pinecall/ionic` Java and Kotlin JVM targets to Java 17, and adds the microphone permission to the app manifest.
+On a physical phone, `localhost` is the phone itself. Set `VITE_API_BASE_URL` to an HTTPS API or your computer's LAN address, and add that origin to `CLIENT_ORIGIN`.
 
-The iOS workflow runs `npm run cap:patch:ios --prefix client` and syncs the checked-in Xcode project. It adds the system zlib linker flag required by the prebuilt native-agent FFI library, the privacy manifest, and microphone/speech usage descriptions required by native voice input.
+The patch scripts ([`patch-capacitor-gradle.mjs`](./client/scripts/patch-capacitor-gradle.mjs), [`patch-capacitor-ios.mjs`](./client/scripts/patch-capacitor-ios.mjs)) fix third-party native modules:
 
-For a physical phone, `localhost` means the phone itself. Use a reachable HTTPS API URL or the development computer's LAN IP in `VITE_API_BASE_URL`.
+- Android: a Kotlin Gradle plugin classpath, Java 17 targets and the microphone permission.
+- iOS: a zlib linker flag, the privacy manifest and usage descriptions.
 
-### Build artifacts and installation
+**PWA:** auto-updating service worker. The app shell is precached and the avatar is cached on first use. Run `npm run build:analyzer --prefix client` for a bundle report, and `npm run bundle:size --prefix client -- --strict` to enforce the size budget.
 
-The GitHub Actions workflow builds the web, mobile, and Electron targets on pull requests, pushes to `main`, version tags, and manual runs. Successful `v*` tag builds publish a GitHub Release with stable platform package names. A manual run can also publish one by enabling the release input and providing a `vMAJOR.MINOR.PATCH` tag. A normal `main` build uploads temporary Actions artifacts and does not create a release. The latest release contains the following downloadable packages:
+**Avatar:** `npm run models:draco` writes the Draco-compressed `client/public/models/avatar.draco.glb` (7.4 MB → 2.6 MB). Point `VITE_AVATAR_MODEL_URL` at it for faster loads. The avatar is scaled to the viewport, plays an idle animation when the model has one, and ignores emotion morphs it doesn't define.
 
-| Platform | Release asset | Format and installation notes |
-| --- | --- | --- |
-| Android | `HANNAH-Android.apk` | Latest release. CI uses release signing only when Android signing secrets are configured; otherwise it creates a debug APK. |
-| iOS | No IPA; `iOS-Installation.txt` | Apple signing is not configured. The unsigned Xcode archive is a workflow artifact, not a device-installable app. A signed IPA requires Apple credentials and distribution through TestFlight or the App Store. |
-| macOS | `HANNAH-macOS.dmg` | Latest release. Electron installer; signing and notarization depend on Apple credentials. |
-| Windows | `HANNAH-Windows.exe` | Latest release. Electron installer; Authenticode signing depends on configured credentials. |
-| Linux | `HANNAH-Linux.AppImage` | Latest release. A DEB package may also be produced by the Linux runner, but is not included in the current release. |
-| Web/PWA | Actions artifact `hannah-web-pwa` | Static `dist` bundle from a workflow run. Deploy to HTTPS static hosting or preview with `npm run preview --prefix client`. |
+### CI and releases
 
-Create and push a version tag to build and publish installers:
+[`.github/workflows/build.yml`](./.github/workflows/build.yml) runs on pull requests, pushes to `main`, `v*` tags and manual dispatch:
 
-```bash
-git tag v1.0.3
-git push origin v1.0.3
-```
+| Job | What it checks or builds |
+| --- | --- |
+| Security and test gates | `npm audit` (high and critical), Vitest, server tests, backend Pytest. |
+| Browser end-to-end | Production build plus Playwright against a mocked API. |
+| Web and PWA | Draco avatar, build, bundle-size budget; uploads `hannah-web-pwa`. |
+| Electron (macOS, Windows, Ubuntu) | Generates the Electron project, audits it, packages it, and checks installer size. Unsigned unless signing secrets exist. |
+| Android | SDK 36 and NDK 29; debug APK, or a signed APK and AAB for releases. |
+| Red-team suite | Runs [`scripts/run_redteam.py`](./scripts/run_redteam.py) against a live server when `HANNAH_API_TOKEN` and `GROQ_API_KEY` secrets exist. |
+| Publish release installers | On a `v*` tag or a manual release dispatch. |
 
-Alternatively, open **Actions → Build HANNAH → Run workflow**, select the branch to build, enable **Publish the completed platform packages as a GitHub Release**, and enter a new version tag such as `v1.0.3`. The release job creates that tag at the selected workflow commit and attaches the generated packages.
+[`.github/workflows/nightly.yml`](./.github/workflows/nightly.yml) repeats the audits and tests nightly and fails if code adds an approval bypass, such as a `skipConfirmation` flag or a `*_BYPASS` switch.
 
-For development builds or the unsigned iOS archive, use the [Actions build page](https://github.com/HarshTambade/HANNAH---Your-AI-companion-/actions/workflows/build.yml) and download artifacts from a successful run.
+To release: `git tag vX.Y.Z && git push origin vX.Y.Z`, or run the workflow manually with **publish release** enabled. Signed iOS builds need the repository variable `IOS_SIGNING_ENABLED=true` and the secrets `IOS_CERTIFICATE_BASE64`, `IOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID` and `APPSTORE_API_PRIVATE_KEY`. The pre-release steps are in [`RELEASE_CHECKLIST.md`](./RELEASE_CHECKLIST.md).
 
-The in-app Downloads menu links to the latest Android and desktop installers on GitHub Releases by default. iOS opens the release notes because an installable IPA requires Apple signing and TestFlight or App Store distribution. Set platform URL variables in `client/.env` to point to store listings or another installer host. Vite embeds these links at build time, so rebuild the client after changing them.
-
-To export a signed iOS IPA, configure the repository variable `IOS_SIGNING_ENABLED=true` and GitHub Actions secrets `IOS_CERTIFICATE_BASE64`, `IOS_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_API_KEY_ID`, and `APPSTORE_API_PRIVATE_KEY`. For a device-installable iOS app, distribute the signed build through TestFlight or the App Store.
-
-### CI build safeguards
-
-The GitHub Actions workflow in [`.github/workflows/build.yml`](./.github/workflows/build.yml) uses Node 24 and builds the client on every pull request, push to `main`, version tag, and manual dispatch.
-
-- **Web/PWA:** installs with lifecycle scripts disabled, generates the Draco avatar, and uploads `hannah-web-pwa`.
-- **Electron:** generates the Capacitor Electron project on Electron 45.3.2, audits the generated dependency tree before packaging, vendors runtime plugins and the `electron-updater` dependency tree, and disables automatic Snap Store publishing. Tagged builds sign Windows and macOS releases, notarize macOS, and publish updater manifests with the installers.
-- **Android:** installs SDK 36, NDK 29, and CMake 3.22.1; syncs the checked-in Gradle project, applies native compatibility patches, and creates signed APK and AAB packages for releases. Ordinary CI builds create a debug APK.
-- **iOS:** patches and syncs the checked-in Xcode project, includes privacy and speech permission metadata, archives it, and exports an IPA for releases after signing is configured.
-- **Releases:** a `v*` tag or a manual release dispatch requires Windows, macOS, Android, iOS, and GPG signing credentials. Missing credentials fail the release gates. The workflow signs Linux artifacts, starts Electron updates at 10%, and attaches packages to a GitHub Release. Other build jobs remain read-only.
-
-Native compatibility patches update third-party dependency files under `client/node_modules`; the iOS patch also keeps the app privacy manifest and microphone descriptions in the checked-in Xcode project. Dependency changes are reapplied after clean installs.
-
-### PWA
-
-The Vite configuration registers a PWA with auto-updates and caches the application shell. The avatar GLB is cached with a cache-first runtime strategy. Build the production web bundle with:
-
-```bash
-npm run build
-```
-
-Preview it with:
-
-```bash
-npm run preview --prefix client
-```
-
-Analyze and enforce the gzip-compressed JavaScript/CSS budget with:
-
-```bash
-cd client
-npm run build:analyzer
-npm run bundle:size -- --strict
-```
-
-The analyzer writes `client/bundle-report.html`. The size check includes each renderer JS/CSS asset and reports the static web distribution separately; pass `--package-dir <packaged-app-directory>` to check each distributable installer against the 150 MiB target. CI runs this check after packaging all three Electron platforms.
-
-### Avatar optimization
-
-The Draco pipeline compresses the source avatar and copies local decoder assets. The primary client loads the compressed model by default. The Python-edition frontend serves the shared `client/public` assets and loads the supplied `uruha_rushia_-_hololive_vtuber.glb` directly:
-
-```bash
-npm run models:draco --prefix client
-```
-
-The supplied model is `client/public/models/uruha_rushia_-_hololive_vtuber.glb`. The avatar centers and scales its bounds for the available viewport, plays an idle animation when present, and safely ignores emotion morphs that the model does not define. The production client can use `avatar.draco.glb` for a smaller download.
+---
 
 ## Deployment
 
-### Search engine optimization
+### Vercel (recommended)
 
-The production client includes a crawlable `/about/` page and build-time SEO metadata for the home page:
+1. Import the repository into Vercel; the root [`vercel.json`](./vercel.json) defines the `client` and `server` services.
+2. In the server service, set `HANNAH_API_TOKEN` and optionally `GROQ_API_KEY` or other provider keys. Leave `VITE_API_BASE_URL` empty.
+3. Set `VITE_SITE_URL` to your production origin for SEO metadata.
+4. Deploy, then check with `curl https://your-domain/api/health`.
 
-- Canonical URLs, `hreflang`, robots directives, descriptive titles, and search descriptions.
-- Open Graph and Twitter large-image cards using [`social-card.svg`](./client/public/social-card.svg).
-- Schema.org JSON-LD for the website, publisher, software application, and homepage FAQ.
-- Production-only `robots.txt` and `sitemap.xml` covering `/` and `/about/`.
+Use `vercel dev` to test both services locally.
 
-Set `VITE_SITE_URL` to the final public HTTPS origin before deploying. On Vercel, the build can also use the production project domain automatically; an explicit custom-domain value is preferred for stable canonical URLs. SEO cannot guarantee a first-place ranking: useful content, performance, accessibility, legitimate backlinks, and regular updates also affect search visibility.
+### Self-hosting
 
-The client and API are separate deployable units:
+- **API:** Node 20+, `npm install --prefix server`, set `NODE_ENV=production` and your environment, then run `npm start --prefix server` behind HTTPS.
+- **Client:** run `npm run build`, publish `client/dist` to any static host with SPA fallback, and set `VITE_API_BASE_URL` at build time if the API is on another origin.
+- **Docker:** a [`Dockerfile`](./Dockerfile) and [`docker-compose.yml`](./docker-compose.yml) are included.
 
-```text
-Static hosting / app package
-    └── client/dist
+### Production checklist
 
-Node.js service
-    └── server/index.js
-```
+- [ ] HTTPS everywhere: client, API, model downloads, token issuers.
+- [ ] A strong `HANNAH_API_TOKEN`, shared out of band with trusted users only.
+- [ ] `CLIENT_ORIGIN` set to exact production origins.
+- [ ] Keys in the host's secret manager; nothing secret in `VITE_*` or committed files.
+- [ ] Provider quotas, timeouts and billing alerts configured.
+- [ ] Rate limits backed by a shared store if you run more than one instance (the built-in limiter is per process).
+- [ ] Avatar, model and font licenses checked for your distribution.
 
-### Vercel deployment
+See [`docs/OPERATIONS_RUNBOOK.md`](./docs/OPERATIONS_RUNBOOK.md) and [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md).
 
-This repository is configured as a Vercel multi-service project:
-
-| Service | Root | Framework | Install | Build/output | Traffic |
-| --- | --- | --- | --- | --- | --- |
-| `client` | `client` | Vite | `npm install --ignore-scripts` | `npm run build` → `dist` | Public at `/` |
-| `server` | `server` | Express | `npm install` | Vercel Express detection | Public through `/api/*` and `/mcp` |
-
-The client uses `npm install --ignore-scripts` because a transitive Eliza package currently publishes a lifecycle script that references a missing `scripts/ensure-platform-deps.mjs` file. The application does not depend on that lifecycle action. Keep this workaround in sync with CI until the upstream package is corrected or replaced.
-
-To deploy:
-
-1. Import the repository into Vercel.
-2. Use the root directory containing [`vercel.json`](./vercel.json).
-3. Configure client variables such as `VITE_PINECALL_AGENT_ID` and `VITE_API_BASE_URL` only when an external API origin is required. With the configured rewrites, leave `VITE_API_BASE_URL` empty so the browser uses the same-domain `/api` route.
-4. Configure server secrets such as `CLOUD_API_URL`, `CLOUD_API_KEY`, `OLLAMA_BASE_URL`, `PINECALL_TOKEN_URL`, and optional TTS variables in the server service environment. A server-side `GROQ_API_KEY` is optional for web visitors, who supply their own key in the landing page; retain it only for server-side clients such as MCP.
-5. To enable remote MCP, also set `MCP_ENABLED=true`, `MCP_API_TOKEN` to a generated secret, `HANNAH_API_URL` to the public API origin, and add the MCP host web origin to `CLIENT_ORIGIN`.
-6. Deploy and verify:
-
-   ```bash
-   curl https://your-domain.example/api/health
-   ```
-
-`vercel dev` runs both services locally and is the preferred way to test service rewrites before deployment. Vercel service bindings are runtime-only; do not expect their injected URLs to exist during the client build.
-
-### Deploying the API
-
-1. Provision a Node.js 20+ runtime.
-2. Install server dependencies:
-
-   ```bash
-   npm install --prefix server
-   ```
-
-3. Set production values in the service environment:
-
-   ```dotenv
-   NODE_ENV=production
-   PORT=3001
-   CLIENT_ORIGIN=https://app.example.com
-   # Optional for server-side clients such as MCP; web visitors bring their own key.
-   GROQ_API_KEY=replace_me
-   GROQ_MODEL=openai/gpt-oss-120b
-   GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
-   CLOUD_REQUEST_TIMEOUT_MS=60000
-   ```
-
-4. Start the server:
-
-   ```bash
-   npm start --prefix server
-   ```
-
-5. Expose it through HTTPS and set `VITE_API_BASE_URL` to the public API origin when building the client.
-
-M1.5 added bearer authentication and configurable per-token limits to the Express API. The API still has no user accounts or persistent storage; the shared access token must be distributed only to trusted users. Rate limits are per process and should be backed by a shared store or upstream limiter when the server runs on multiple instances.
-
-### Deploying the web client
-
-Build the static bundle:
-
-```bash
-npm run build
-```
-
-Publish `client/dist` to a static host. Configure SPA fallback routing to serve `index.html` for application routes, serve the API from a trusted HTTPS origin, and set `VITE_API_BASE_URL` at build time when the API is not behind the same origin.
-
-### Production deployment checklist
-
-- [ ] Use HTTPS for the client, API, model downloads, and token issuer.
-- [ ] Set `CLIENT_ORIGIN` to exact production origins.
-- [ ] Store API keys in the host's secret manager.
-- [ ] Configure provider timeouts, quotas, and billing alerts.
-- [ ] Verify HANNAH_API_TOKEN is configured and monitor or centrally enforce limits across all production instances.
-- [ ] Add structured logs without recording message content by default.
-- [ ] Confirm CORS, CSP, microphone permissions, and platform privacy declarations.
-- [ ] Confirm the avatar, model, font, and dependency licenses allow the intended distribution.
-- [ ] Verify offline behavior on representative devices.
-- [ ] Test rollback of both the client bundle and API independently.
-- [ ] Confirm Vercel service routing sends `/api/*` to Express and all other paths to the Vite output.
+---
 
 ## API reference
 
-For complete request/response examples, environment variables, error handling, frontend integration, MCP, TTS, Pinecall, and security guidance, read the [API integration guide](./docs/API-INTEGRATION.md).
+Every route except `/api/health` requires `Authorization: Bearer <HANNAH_API_TOKEN>`. Full examples are in [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
 
-### `GET /api/health`
+| Method and route | Purpose |
+| --- | --- |
+| `GET /api/health` | `{ status, provider, ready }`. Public. |
+| `GET /api/health/agent` | Probes the optional Python fallback. |
+| `GET /api/providers` | Providers configured on the server. |
+| `GET /api/models?provider=` | Models available for a provider. |
+| `POST /api/agent` | One agent step: messages plus JSON-schema tools in; reply, tool calls, emotion, model, provider, latency and usage out. |
+| `POST /api/chat` | Plain chat (user and assistant messages only); returns `{ reply, emotion }`. |
+| `POST /api/tts` | Text plus `en`, `hi` or `mr` → WAV through Mithi. |
+| `GET /api/pinecall/token` | Short-lived call credentials from your issuer (503 if not configured). |
+| `POST /api/desktop/computer` | Anthropic computer-use step for the Electron bridge. |
+| `POST /api/feedback` | In-app feedback to Discord or MongoDB (503 if neither is set). |
+| `POST /api/report-content` | Metadata-only report of an AI reply (message id and reason). |
+| `POST /api/events` | Allow-listed metadata events, written to the server log. |
+| `POST /api/undo` | Logs an undo request for a recorded side effect. |
+| `GET`/`POST /api/sync/memory` | Versioned blob store for memory sync. **In-memory only**: data is lost on restart and not shared across serverless instances. |
+| `GET /api/presence` | A short status line for the UI. |
+| `POST /mcp` | MCP Streamable HTTP (when enabled; uses `MCP_API_TOKEN`). |
 
-Returns:
+Example:
 
-```json
-{"status":"ok"}
+```bash
+curl -s http://localhost:3001/api/chat \
+  -H "Authorization: Bearer $HANNAH_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"cloud","messages":[{"role":"user","content":"Hello, HANNAH!"}]}'
+# {"reply":"Hello! It's lovely to hear from you.","emotion":"happy"}
 ```
 
-### `POST /mcp` (optional)
-
-When `MCP_ENABLED=true`, the Express server exposes an MCP Streamable HTTP endpoint at `/mcp`. Each request must include `Authorization: Bearer <MCP_API_TOKEN>`. The endpoint advertises `hannah_chat`, `hannah_status`, and `hannah_models`. It is disabled by default; local stdio clients can instead launch `server/mcp-stdio.mjs`.
-
-### `POST /api/chat`
-
-Request:
-
-```json
-{
-  "mode": "cloud",
-  "messages": [
-    { "role": "user", "content": "Hello, HANNAH!" }
-  ]
-}
-```
-
-`mode` is `cloud` or `ollama` for server inference. WebLLM and native inference run in the client.
-
-Successful response:
-
-```json
-{
-  "reply": "Hello! It is wonderful to hear from you.",
-  "emotion": "happy"
-}
-```
-
-The server returns explicit `4xx` or `5xx` errors for invalid input, unavailable providers, invalid model output, or token issuer failures.
-
-### `POST /api/agent`
-
-Accepts `mode`, chat messages, and JSON-schema tools. Returns one assistant message with text and/or tool calls. The client validates the tool name, executes it behind confirmation where required, then submits the tool result for the next agent step.
-
-### `POST /api/desktop/computer`
-
-Uses the server-side Anthropic SDK and `computer_toolset_20260801`; the Electron bridge performs the returned actions. Requires `ANTHROPIC_API_KEY` on the server.
-
-### `POST /api/tts`
-
-Proxies validated text and one of `en`, `hi`, or `mr` to the configured Mithi service and returns WAV audio. When Mithi is not configured, the client falls back to an installed system voice.
-
-### `GET /api/pinecall/token`
-
-Fetches credentials from the configured trusted Pinecall token issuer. It returns `503` when the issuer is not configured and `502` when the issuer returns an invalid response or cannot be reached.
+---
 
 ## Project structure
 
 ```text
 .
-├── .github/workflows/build.yml       # CI build and release workflow
-├── .env.example                      # Root development configuration
-├── package.json                      # Root scripts and workspace declarations
-├── client/
-│   ├── public/
-│   │   ├── draco/                    # Draco decoder assets
-│   │   ├── models/avatar.glb         # 3D avatar
-│   │   └── icon.svg                  # PWA/app icon
+├── client/                     # React + Vite app (web, PWA, Capacitor, Electron)
 │   ├── src/
-│   │   ├── components/               # Chat, avatar, landing, integrations, downloads
-│   │   ├── services/                 # Routing, agent, tools, native, speech, calls, API
-│   │   ├── App.tsx                   # Application composition and route state
-│   │   ├── index.css                 # Global styles and responsive layout
-│   │   ├── main.tsx                  # React/Vite entry point
-│   │   └── types.ts                  # Shared client types
-│   ├── android/                      # Android Studio project and Gradle wrapper
-│   ├── ios/                          # Xcode project and Swift app lifecycle
-│   ├── config/PrivacyInfo.xcprivacy  # iOS privacy manifest source
-│   ├── scripts/                      # Avatar compression and native build patches
-│   ├── .env.example                  # Client configuration template
-│   ├── capacitor.config.ts           # Native app configuration
-│   ├── package.json                  # Client scripts/dependencies
-│   └── vite.config.ts                # Vite/PWA/proxy configuration
-├── apps/
-│   ├── frontend/                     # Alternate standalone React/R3F client
-│   ├── mobile/                       # Capacitor mobile configuration
-│   └── desktop/                      # Electron shell and restricted preload
-├── backend/
-│   ├── main.py                       # FastAPI model-step fallback and agent flow
-│   ├── run.py                        # Local backend entry point
-│   ├── llm_router.py                 # Python provider routing
-│   ├── audit_logger.py               # Redacted hash-chained JSONL audit log
-│   └── tools/                        # Allow-listed tools and Docker code sandbox
-├── ebpf/
-│   ├── main.bpf.c                    # Metadata-only syscall sensor
-│   └── loader.py                     # Opt-in BCC loader
-├── docs/
-│   ├── API-INTEGRATION.md             # API and MCP integration guide
-│   └── QA-AUDIT-*.md                  # Release QA findings and platform limits
-├── server/
-│   ├── .env.example                  # Server configuration template
-│   ├── index.js                     # Express API, agent router, desktop and TTS proxies
-│   ├── providers/
-│   │   ├── catalog.js                # Provider definitions, model presets, and overrides
-│   │   └── runtime.js                # Provider URL resolution and request runtime
-│   ├── mcp-core.mjs                 # Shared MCP tools and HANNAH API bridge
-│   ├── mcp-http.mjs                 # Authenticated Streamable HTTP transport
-│   ├── mcp-stdio.mjs                # Local MCP stdio transport
-│   ├── mithi_tts_service.py         # Optional Charvi TTS service wrapper
-│   └── package.json                  # Server scripts/dependencies
-├── vercel.json                       # Vercel client/server routing
-├── LICENSE                           # Source-available project license
-└── README.md
+│   │   ├── components/         # Screens and UI (ChatUI, Dashboard, AppShell, …)
+│   │   ├── services/           # Agent, safety, routing, stores, native, voice
+│   │   ├── __tests__/          # Vitest unit tests
+│   │   ├── App.tsx             # Routes and connection gate
+│   │   └── index.css           # Design tokens (deck cards, tones, glass tiles)
+│   ├── public/models/          # Avatar GLB files
+│   ├── android/ · ios/         # Checked-in native projects
+│   ├── scripts/                # Avatar compression, native patches, size checks
+│   └── playwright.config.ts
+├── server/                     # Express API, providers, MCP, sync, feedback
+│   ├── providers/              # Provider catalog and runtime adapters
+│   └── *.test.js               # node:test suites
+├── shared/                     # Marketplace catalog shared by client and server
+├── backend/                    # Optional FastAPI fallback, tools, audit log, tests
+├── apps/                       # Alternate frontend and Python-enabled Electron shell
+├── e2e/                        # Playwright end-to-end tests
+├── scripts/                    # Red-team, evaluation and background runner scripts
+├── redteam/                    # Red-team prompts
+├── ebpf/                       # Opt-in Linux metadata sensor (sudo npm run dev:ebpf)
+├── docs/                       # Integration, privacy, operations and store docs
+├── agent_profiles.yaml         # Task profile overrides
+├── vercel.json                 # Vercel services and rewrites
+└── .github/workflows/          # build.yml and nightly.yml
 ```
 
-## Development
+---
 
-### Available commands
+## Development commands
 
-#### Root
+| Where | Command | Does |
+| --- | --- | --- |
+| root | `npm run dev` | Server and client together. |
+| root | `npm run dev:client` / `dev:server` | One of them. |
+| root | `npm run dev:with-python-fallback` | Server, client and Python fallback. |
+| root | `npm run build` | Install client dependencies and build. |
+| root | `npm run mcp:stdio` | Run the MCP stdio server. |
+| client | `npm run build` | `tsc -b && vite build` (strict, with no unused locals or parameters). |
+| client | `npm test` / `test:watch` / `test:chaos` | Vitest. |
+| client | `npm run test:e2e` | Playwright. |
+| client | `npm run preview` | Serve the production build. |
+| client | `npm run models:draco` | Compress the avatar. |
+| server | `npm test` | `node --test`. |
+| server | `npm start` | Run the API. |
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Run client and server concurrently. |
-| `npm run dev:client` | Run only the Vite client. |
-| `npm run dev:server` | Run only the Express server. |
-| `npm run build` | Build and type-check the client. |
-| `npm run build:agent-frontend` | Build the React frontend in `apps/frontend`. |
-| `npm run dev:ebpf` | Opt in to the Linux eBPF metadata monitor. |
+**Adding a provider:** add a preset to [`catalog.js`](./server/providers/catalog.js), reuse or add an adapter in [`runtime.js`](./server/providers/runtime.js), document its variables in `server/.env.example`, and keep its key server-side.
 
-#### Client
+**Adding a voice language:** extend `SpeechLanguage` in [`types.ts`](./client/src/types.ts), update the speech services and the language picker, then test on web and one native platform.
 
-Run client commands with `npm run <command> --prefix client`.
+---
 
-| Command | Purpose |
-| --- | --- |
-| `dev` | Start Vite. |
-| `build` | Run `tsc -b` and create the production bundle. |
-| `preview` | Preview the production bundle. |
-| `cap:sync` | Build and synchronize Capacitor. |
-| `cap:patch:android` | Add the Kotlin Gradle plugin classpath to affected third-party Android modules. |
-| `cap:patch:ios` | Add the system zlib linker requirement to the native-agent iOS package metadata. |
-| `cap:add:ios` | Add the iOS platform. |
-| `cap:add:android` | Add the Android platform. |
-| `cap:add:electron` | Add the Electron platform. |
-| `cap:sync:electron` | Build and synchronize Electron. |
-| `cap:run:electron` | Build, sync, and run Electron. |
-| `models:draco` | Compress the avatar asset. |
-| `cap:run:ios` | Build, sync, and run iOS. |
-| `cap:run:android` | Build, sync, and run Android. |
-
-#### Server
-
-Run server commands with `npm run <command> --prefix server`.
-
-| Command | Purpose |
-| --- | --- |
-| `dev` | Run Node with watch mode. |
-| `start` | Run the API server. |
-
-### Adding a new inference provider
-
-1. Add the provider preset and model discovery behavior to [`server/providers/catalog.js`](./server/providers/catalog.js).
-2. Add or reuse a wire protocol adapter in [`server/providers/runtime.js`](./server/providers/runtime.js).
-3. Add server-side environment variable examples and keep credentials out of client bundles.
-4. Normalize responses to the existing agent message shape and report provider errors clearly.
-5. Document setup and limitations here.
-
-### Adding a new voice language
-
-1. Add the locale to [`client/src/types.ts`](./client/src/types.ts).
-2. Add voice selection/preference handling to the speech service.
-3. Add the language to the UI selector.
-4. Test on web and at least one native platform.
-5. Document whether offline recognition and synthesis are supported.
-
-## Testing and quality
-
-The security and quality workflow audits the client, root desktop workspace, generated Capacitor Electron package, and server, then runs Vitest and backend Pytest. On 2026-11-15, the client audit reported no high or critical findings. A Workbox-only glob override removes the four moderate `glob`/`minimatch` findings; four low findings remain because [`deepmerge@4.3.1` has no patched version listed in its advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4). npm currently suggests downgrading `vite-plugin-pwa` to 0.2.1 to clear those low findings, which is not compatible with this toolchain. The separate root desktop workspace is now on Electron 45.3.2, removing its high Electron and `extract-zip` advisories; its audit still reports six moderate `minimatch` findings through `electron-builder@26.18.0`. npm proposes a major downgrade to electron-builder 25.1.0, so retain the current builder until a compatible patched toolchain is available and verified. Recheck all workspace audits before each release.
-
-Run the same checks locally:
+## Testing
 
 ```bash
-npm audit --prefix client --audit-level=high
-npm audit --audit-level=high
-npm audit --prefix server --audit-level=high
-npm test --prefix client
+npm test --prefix client                 # Vitest: safety chain, router, guardrails, stores
+npm test --prefix server                 # API auth, rate limits, observability, reports
 python3 -m pip install -r backend/requirements-test.txt
-python3 -m pytest -q backend/tests
-npm run test:e2e --prefix client
+python3 -m pytest -q backend/tests       # Python fallback, approvals, audit chain
+npm run test:e2e --prefix client         # Playwright with a mocked API (no provider key)
 npm run build --prefix client
 ```
 
-The client security tests cover prompt-injection flags, common PII/credential redaction, toxic-output patterns, denied tools, iteration caps, HITL confirmation, and the agent tool-result loop. Backend tests reject unexpected request fields, verify that tool execution waits for its WebSocket approval token, and validate the audit log hash chain. The Playwright test uses a mocked API so it needs no provider key; it checks WebGL, sends a message, and verifies that the avatar receives the returned emotion while its model motion is active.
+The suites cover:
 
-The older [QA audit report](./docs/QA-AUDIT-2026-11-11.md) records its 2026-11-11 baseline and limitations. Its dependency counts and unimplemented test findings predate this hardening work. No physical-device or live provider verification is implied by the automated checks.
+- **Safety chain:** Guardian blocks before any prompt, decline and approve paths, Strict mode blocking deletes, and failing closed.
+- **Agent loop:** the tool-result loop, iteration caps and prompt-injection flags.
+- **Server:** token checks and rate limits.
+- **End to end:** sending a message, avatar emotion, the approval card (declining changes nothing), a rejected token, navigation, Marketplace actions and mobile navigation.
 
-Before opening a pull request:
+If e2e tests time out on a slow machine, run them with `--workers=1`, because the avatar load is heavy under software WebGL.
 
-```bash
-npm run build
-npm test --prefix client
-python3 -m pytest -q backend/tests
-npm run test:e2e --prefix client
-git diff --check
-```
+Not covered automatically: physical-device permissions, speech, calls, app resume, offline model downloads and live provider calls. The latest manual audit is in [`AUDIT.md`](./AUDIT.md), and chaos testing is described in [`CHAOS_TESTING.md`](./CHAOS_TESTING.md).
 
-Manually verify:
+---
 
-- The API health endpoint responds.
-- Cloud and Ollama requests show useful errors when unavailable.
-- WebLLM reports unsupported WebGPU clearly.
-- Offline mode selects the expected runtime.
-- Avatar emotion changes after an assistant response.
-- Speech permissions and voice failures are surfaced to the user.
-- No secret appears in the client bundle or committed files.
+## Project status
 
-The automated build and API smoke results above are not a substitute for a device install. In particular, the current iOS release has no signed IPA, and the audit did not exercise permissions, speech, calls, app resume, or offline model downloads on physical devices.
+**Shipped in the app:** everything described above under [What you can do](#what-you-can-do), the safety chain, all six inference modes, device tools, Marketplace, MCP, voice, Pinecall integration, desktop computer use (with the bridge set up), and the native and desktop builds.
 
-### Remaining test layers
+**Experimental modules (in the repo, not wired into the app).** [`client/src/services`](./client/src/services) also contains research modules with unit tests that no screen uses yet. Among them:
 
-- **Unit tests:** more response parsing, emotion normalization, inference-mode resolution, and environment validation cases.
-- **Component tests:** chat submission states, provider selection, errors, model preparation, and voice controls.
-- **Integration tests:** provider HTTP adapters, malformed upstream responses, and Pinecall issuer failures.
-- **End-to-end tests:** full provider-backed flows, offline fallback, mobile WebGL performance, and accessibility basics.
-- **Native smoke tests:** model download interruption/retry, microphone permissions, speech recognition, and app resume behavior.
+- Cross-device CRDT sync: `SyncService`, `CRDTSyncProvider`, `SyncStatus`.
+- Hardware bridge and ambient presence: `HardwareBridgeService`, `AmbientPresenceService`, `PresenceManifestationManager`.
+- Policy and control: `PolicyEnforcementLayer`, `KillSwitch`, `EgressPolicy`, `CredentialBroker`, `PermissionState`.
+- Advanced memory: `MemoryRouter`, `MemoryEvolutionEngine`, `MemoryExportService`.
+- Multi-agent work: `CastOrchestrator`, `GovernedCollectiveIntelligence`, `TypedRails`, `KYBERNETES`.
+- Interoperability: `PAPAdapter`, `AgentInteropService`, `IdentityInteropLayer`, `AAIF*`.
 
-## Error behavior and observability
+Treat these as design work in progress, not features. In particular, **end-to-end encrypted sync is not active**, and the server's sync endpoint keeps data in memory only.
 
-The application should show an actionable error when:
+**Known gaps:**
 
-- The API is unreachable or returns invalid data.
-- A provider key, endpoint, model, or Ollama server is unavailable.
-- WebGPU is unsupported or a local model is still loading.
-- A native model is not downloaded or cannot be initialized.
-- Speech or microphone permissions are denied.
-- A Pinecall token issuer is missing, unreachable, or returns malformed credentials.
+- Saved automations don't run yet.
+- The Marketplace has no third-party listings.
+- iOS needs Apple signing for an installable build.
+- With `VITE_AVATAR_MODEL_URL` unset, the 7.4 MB avatar can stall slow devices on first load.
 
-For production operations, monitor availability and latency separately for the client, API, cloud provider, Ollama host, token issuer, and model download host. Log request IDs, status codes, provider names, durations, and error categories without logging message content by default.
+The long-term plan is in [`docs/ROADMAP.md`](./docs/ROADMAP.md), and open debt is in [`docs/TECHNICAL_DEBT.md`](./docs/TECHNICAL_DEBT.md).
 
-Phase 7 adds optional Sentry error tracking, metadata-only LLM traces, Langfuse export, `scripts/audit_monitor.py`, authenticated `GET /api/health/agent` probes, in-app feedback, and first-run onboarding. See [`docs/OBSERVABILITY.md`](docs/OBSERVABILITY.md) for configuration, the trace schema, privacy scrubbers, and the launch checklist.
-
-## Security and privacy
-
-- Keep `server/.env` and all API keys out of version control.
-- Native on-device memory is disabled until a user opts in. Settings exposes saved-memory search and deletion, and turning memory off stops automatic capture and recall without silently deleting entries.
-- File reads, file writes/deletes, phone actions, flashlight changes, memory writes/deletes, and saved-key removal require a SafetyGuard confirmation before execution.
-- Agent guardrails flag common prompt-injection phrases, deny shell/terminal tools, cap agent turns at 8 by default (20 maximum), limit response size, apply configurable output deny-substrings, and redact common credential, email, phone, government-ID, and payment-card patterns from generated/tool text.
-- The local text safety patterns are defense in depth, not a general-purpose toxicity classifier or a guarantee against prompt injection. Review cloud-provider controls and test the actual release build before production use.
-- Treat cloud conversations according to the provider's retention and training policy.
-- Local WebLLM, Ollama, and native GGUF modes can keep inference on the user's device or local network.
-- Restrict `CLIENT_ORIGIN` to trusted production origins.
-- Use HTTPS for deployed clients, APIs, model downloads, and token issuers.
-- Use short-lived Pinecall tokens and validate them on a trusted server.
-- Do not redistribute a model unless its license permits redistribution.
-- Report security issues privately instead of opening a public issue with exploit details.
-
-To report a vulnerability, use the repository's GitHub security reporting flow if enabled, or contact the maintainer through the repository profile before public disclosure.
+---
 
 ## Troubleshooting and FAQ
 
-### The client starts, but chat requests fail
+**Chat requests fail with 401.** The token is wrong or the server's `HANNAH_API_TOKEN` changed. Open Settings → Connection, disconnect, and connect again.
 
-Confirm that the API is running, `VITE_API_BASE_URL` is correct for the current runtime, and `CLIENT_ORIGIN` includes the exact client origin. In browser development, the Vite `/api` proxy usually avoids the need for `VITE_API_BASE_URL`.
+**Chat requests fail but `/api/health` works.** Check that a provider is configured (`ready: true` in health) or that you entered a Groq key. Also check that `CLIENT_ORIGIN` includes your exact origin.
 
-### Why does `localhost` fail on a phone?
+**`localhost` fails on my phone.** On the phone, `localhost` is the phone. Use your computer's LAN IP with `HOST=0.0.0.0` on a trusted network, or an HTTPS API.
 
-On a physical phone, `localhost` points to the phone. Use a reachable HTTPS API URL or the development computer's LAN IP, ensure both devices are on a reachable network, and configure the server's CORS allowlist.
+**"Guardian stopped … before it ran."** The Guardian blocked the action; the reason is on **Memory & trust**. Rephrase the request, or lower strictness if you trust it. Approval is still required either way.
 
-### Why is a local model unavailable?
+**WebLLM won't load.** It needs WebGPU and time to download a model on first use. Check `chrome://gpu`.
 
-WebLLM needs a compatible WebGPU implementation and may need time to download a model. Native llama.cpp needs iOS/Android, a valid `VITE_OFFLINE_MODEL_URL`, enough storage, a complete GGUF download, and a model compatible with the runtime.
+**The avatar doesn't appear.** Check that `client/public/models/avatar.draco.glb` (or `avatar.glb`) exists and that the console shows no WebGL errors. Large models load slowly on phones.
 
-### Why does the avatar not appear?
+**Speech is silent.** Enable voice replies, pick a supported language, and make sure a voice for it is installed on the device.
 
-Confirm that `client/public/models/avatar.draco.glb` exists, the browser can request `/models/avatar.draco.glb`, and the browser console has no WebGL or asset-loading errors. Large models may take time to load on mobile hardware.
+**Is HANNAH a medical or mental-health service?** No. HANNAH is software, not a substitute for emergency services, clinicians, or legal or financial advice.
 
-### Why is speech silent?
+**Can I monetize a fork?** Not under the default license. See [License](#license).
 
-Enable voice replies, select a supported language, confirm the device has a voice installed for that locale, and check browser or operating-system audio permissions. Speech support is platform-dependent.
-
-### Is this a medical or mental-health service?
-
-No. HANNAH is a software project and is not a substitute for emergency services, a licensed clinician, or professional legal, financial, or medical advice. Integrators are responsible for their user-facing disclosures and safety practices.
-
-### Can I monetize a fork?
-
-Not under the default project license. Read [`LICENSE`](./LICENSE) before distributing or operating a monetized fork. The current license requires a separate written commercial license before monetization; unless that agreement says otherwise, it specifies a 25% share of Gross Revenue plus attribution and reporting obligations.
+---
 
 ## Contributing
 
-Contributions are welcome.
+1. Fork the repository and create a focused branch (`git checkout -b feature/your-change`).
+2. Make the smallest complete change. New tools **must** go through `SafetyGuard.screen` and, if they change anything, `SafetyGuard.confirm`.
+3. Never add paid tiers, sample data presented as real, or a bypass around the Guardian or approvals (the nightly check enforces the last one).
+4. Update the docs and `.env.example` files when behavior changes.
+5. Run `npm run build`, `npm test --prefix client`, `npm test --prefix server`, `npm run test:e2e --prefix client` and `git diff --check`.
+6. Open a pull request describing what changed, why, how you tested it, and any platform limits or new variables.
 
-1. Fork the repository.
-2. Create a focused branch:
+Don't commit secrets, `.env` files, downloaded models, build output or generated native web assets. Good starting points are in [`docs/GOOD_FIRST_ISSUE.md`](./docs/GOOD_FIRST_ISSUE.md), and project governance is in [`GOVERNANCE.md`](./GOVERNANCE.md).
 
-   ```bash
-   git checkout -b feature/your-change
-   ```
+To report a security issue, use GitHub's private vulnerability reporting or contact the maintainer through the repository profile. Don't open a public issue with exploit details.
 
-3. Make the smallest complete change that solves the problem.
-4. Update documentation and environment examples when behavior changes.
-5. Run `npm run build` and `git diff --check`.
-6. Open a pull request describing:
-   - What changed and why
-   - How it was tested
-   - Any platform-specific limitations
-   - Any new environment variables or provider requirements
+---
 
-Keep the checked-in Android and iOS project sources in sync with Capacitor config changes. Do not commit generated web bundles, copied native web assets, build outputs, downloaded models, secrets, or unrelated formatting changes.
+## Further documentation
 
-### Pull request checklist
+| Topic | Document |
+| --- | --- |
+| API and MCP integration | [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md) |
+| Platform audit | [`AUDIT.md`](./AUDIT.md) |
+| Safety governance and maturity | [`docs/SAFETY_GOVERNANCE.md`](./docs/SAFETY_GOVERNANCE.md), [`docs/SAFETY_MATURITY.md`](./docs/SAFETY_MATURITY.md), [`RESPONSIBLE_AI.md`](./RESPONSIBLE_AI.md) |
+| Regulatory notes | [`docs/REGULATORY_COMPLIANCE.md`](./docs/REGULATORY_COMPLIANCE.md), [`docs/COMPLIANCE_STATUS.md`](./docs/COMPLIANCE_STATUS.md) |
+| Sync design (experimental) | [`docs/SYNC_PRIVACY.md`](./docs/SYNC_PRIVACY.md) |
+| Capability matrix | [`docs/CAPABILITY_MATRIX.md`](./docs/CAPABILITY_MATRIX.md) |
+| Observability and operations | [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md), [`docs/OPERATIONS_RUNBOOK.md`](./docs/OPERATIONS_RUNBOOK.md) |
+| Releases and stores | [`RELEASE_CHECKLIST.md`](./RELEASE_CHECKLIST.md), [`docs/STORE_SUBMISSION_CHECKLIST.md`](./docs/STORE_SUBMISSION_CHECKLIST.md), [`docs/DATA_SAFETY_FORM.md`](./docs/DATA_SAFETY_FORM.md) |
+| Legal | [`docs/PRIVACY_POLICY.md`](./docs/PRIVACY_POLICY.md), [`docs/TERMS_OF_SERVICE.md`](./docs/TERMS_OF_SERVICE.md) |
 
-- [ ] The change has a focused scope and a descriptive title.
-- [ ] Existing behavior is preserved unless the change explicitly documents a behavior change.
-- [ ] Type-check/build passes.
-- [ ] Documentation and `.env.example` files are updated when needed.
-- [ ] New provider or platform behavior has clear error handling.
-- [ ] No secrets, downloaded models, generated web assets, or native build outputs are included.
-- [ ] Third-party license and attribution requirements were checked.
-
-### Commit and issue conventions
-
-Use descriptive commit messages and include the affected area when useful, for example `client: improve offline model errors`. Bug reports should include the runtime, operating system, browser/device, reproduction steps, expected behavior, actual behavior, console/API errors, and whether the issue reproduces online or offline.
-
-## Roadmap
-
-- [ ] Add a dedicated automated unit/integration test suite.
-- [ ] Add provider adapter interfaces so new model backends are easier to plug in.
-- [ ] Improve conversation persistence and export controls.
-- [ ] Add configurable model download verification and checksums.
-- [ ] Improve accessibility auditing and keyboard navigation coverage.
-- [ ] Add production deployment examples for the API and PWA.
-- [ ] Publish a formal support matrix for browser, iOS, Android, and Electron versions.
-
-Have an idea? Open a feature request with the use case, proposed behavior, and affected platforms.
+---
 
 ## License
 
-HANNAH is licensed under the [HANNAH Source-Available Non-Commercial License 1.0](./LICENSE). Copyright is attributed to Harsh Tambade and HANNAH contributors.
+HANNAH is released under the [HANNAH Source-Available Non-Commercial License 1.0](./LICENSE). Copyright © 2026 Harsh Tambade and HANNAH contributors.
 
-### Commercial use and monetized forks
+You may use, modify and redistribute it **non-commercially**, with attribution. This is a source-available license, **not** an OSI-approved open-source license.
 
-This license permits non-commercial use, modification, and redistribution with attribution. It does **not** grant commercial rights.
+Monetizing a fork or derivative work (selling, hosting for profit, advertising and so on) requires a separate written commercial license. Unless that agreement says otherwise, it carries a **25% share of gross revenue**, attribution, and the reporting and audit terms in [`LICENSE`](./LICENSE). Get legal advice before relying on it commercially.
 
-Anyone who forks, modifies, hosts, distributes, sells, advertises, or otherwise monetizes the project must obtain a separate written commercial license before monetization. Unless that agreement states otherwise, the commercial license requires **25% of Gross Revenue** attributable to the monetized fork or derivative work.
-
-Commercial users must also preserve attribution to **Harsh Tambade and HANNAH contributors**, provide revenue reports, and comply with the payment and audit provisions in [`LICENSE`](./LICENSE). Unauthorized monetization, non-payment, or attribution removal may result in termination of the license and legal enforcement, subject to applicable law.
-
-This is a **source-available license, not an OSI-approved open-source license**. The governing jurisdiction is currently reserved for a separate written commercial agreement. Obtain legal advice before relying on this license for commercial distribution.
+The app itself has no monetization. The license terms apply to forks, not to people using HANNAH.
 
 ## Acknowledgements
 
-HANNAH is built with open-source technologies including React, Vite, TypeScript, Tailwind CSS, Three.js, React Three Fiber, Capacitor, WebLLM, llama.cpp, Express, Ollama, and Lucide. See the package manifests for the complete dependency list and their respective licenses.
+Built with React, Vite, TypeScript, Tailwind CSS, Three.js, React Three Fiber, React Flow, Capacitor, WebLLM, llama.cpp, Express, Ollama and Lucide. See the package manifests for every dependency and its license. Model files, including the avatar, carry their own licenses.
