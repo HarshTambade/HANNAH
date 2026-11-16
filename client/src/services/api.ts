@@ -1,4 +1,16 @@
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "") || "";
+import { IS_WEBSITE, SITE_URL } from "../config/site";
+
+/**
+ * Where the HANNAH API lives. The website calls its own domain (on Vercel the
+ * API is part of the same deployment). The desktop and mobile apps have no
+ * domain of their own, so they call the HANNAH website unless the build says otherwise.
+ */
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL?.trim() || (IS_WEBSITE ? "" : SITE_URL)).replace(/\/+$/, "");
+
+/** The API base this build uses ("" means the page's own origin). */
+export function apiBase() {
+  return apiBaseUrl;
+}
 const TOKEN_KEY = "hannah.session.apiToken";
 const GROQ_KEY = "hannah.session.groqKey";
 

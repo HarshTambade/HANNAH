@@ -1,4 +1,4 @@
-import { apiUrl } from "../services/api";
+import { IS_WEBSITE, SITE_URL } from "./site";
 import { getAppVersion } from "../services/appInfo";
 
 /** The public source repository. Every GitHub link in the app comes from here. */
@@ -14,9 +14,10 @@ export const RELEASE_NOTES_URL = `${RELEASES_URL}/tag/v${APP_VERSION}`;
  * server (server/downloads.js) redirects it to the newest published release
  * that contains that package, so the download starts directly and older
  * releases' file names still work. Package ids match the server's list.
+ * On the website it's a link on the same domain; the apps link to the website.
  */
 export type DownloadPackage = "android" | "macos-arm64" | "macos-intel" | "windows" | "linux-appimage" | "linux-deb";
-export const downloadUrl = (packageId: DownloadPackage) => apiUrl(`/download/${packageId}`);
+export const downloadUrl = (packageId: DownloadPackage) => `${IS_WEBSITE ? "" : SITE_URL}/download/${packageId}`;
 
 export type PlatformDownload = {
   id: "android" | "ios" | "macos" | "windows" | "linux" | "web";

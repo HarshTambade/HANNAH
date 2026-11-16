@@ -1,17 +1,75 @@
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Plugin } from "vite";
+import { CAPABILITIES, FAQS } from "../src/content/landing";
+
+/**
+ * Search and sharing for HANNAH's public pages.
+ *
+ * - Every public page gets its own title, description, canonical URL, Open
+ *   Graph and X card (PNG image), and schema.org data built from the same
+ *   words the page shows (src/content/landing.ts), so the FAQ rich result
+ *   always matches the visible FAQ.
+ * - The public pages (/, /integrations, /marketplace) are rendered to HTML at
+ *   build time, so crawlers, link previews and the first paint get the real
+ *   headings and text without running JavaScript. The app then renders over it.
+ * - robots.txt, sitemap.xml and llms.txt (a plain summary for AI search tools).
+ * - Only production deployments are indexable; previews say noindex.
+ */
 
 const brandName = "HANNAH";
+const DEFAULT_SITE = "https://hannah.eliteforums.in";
+const REPOSITORY_URL = "https://github.com/HarshTambade/Shanaya-Your-AI-companion";
 
-const pages = {
-  home: {
-    title: "HANNAH — Your Personal AI. Your Intelligence. Your World.",
-    description: "HANNAH is an AI companion with a team of agents, voice chat, memory you own and a live 3D avatar. Use any model, cloud or local, and approve every action. Free with your own Groq key.",
+type PublicPage = {
+  path: string;
+  /** Built file, relative to dist. */
+  file: string;
+  title: string;
+  description: string;
+  /** Name in breadcrumbs. */
+  name: string;
+  /** Rendered at build time from this component. */
+  component?: string;
+  props?: Record<string, unknown>;
+};
+
+export const PUBLIC_PAGES: PublicPage[] = [
+  {
+    path: "/",
+    file: "index.html",
+    name: "Home",
+    title: "HANNAH: AI Companion with Voice, AI Agents & a 3D Avatar",
+    description: "Free AI companion with voice chat, a team of AI agents, memory you control and a live 3D avatar. Use any cloud or local AI model and approve every action.",
+    component: "/src/components/LandingPage.tsx",
+    props: { onStart() {}, onIntegrations() {}, onMarketplace() {} },
   },
-  about: {
-    title: "About HANNAH — AI Companion, Voice Chat & Privacy",
-    description: "Learn about HANNAH’s conversational features, voice and avatar experience, supported AI modes, privacy boundaries, and integrations.",
+  {
+    path: "/about/",
+    file: "about/index.html",
+    name: "About",
+    title: "About HANNAH: AI Companion, Voice Chat and Privacy",
+    description: "What HANNAH does, where your data goes, the AI models it supports and how to build on it: voice chat, a 3D avatar, cloud or on-device AI, and an API.",
   },
-} as const;
+  {
+    path: "/integrations",
+    file: "integrations/index.html",
+    name: "Integrations",
+    title: "HANNAH API, MCP Server and Webhooks: Integration Guide",
+    description: "Connect your apps to HANNAH: a REST and OpenAI-compatible API, an MCP server for Claude Desktop, Cursor and VS Code, agent-to-agent (A2A) messaging and signed webhooks.",
+    component: "/src/components/IntegrationsPage.tsx",
+    props: { onBack() {} },
+  },
+  {
+    path: "/marketplace",
+    file: "marketplace/index.html",
+    name: "Marketplace",
+    title: "HANNAH Marketplace: AI Agents and Skills",
+    description: "Add first-party agents and community skills to HANNAH. Each one shows its publisher, permissions and privacy, and is checked for integrity before you install it.",
+    component: "/src/components/MarketplacePage.tsx",
+    props: { onBack() {} },
+  },
+];
 
 type SeoOptions = { mode: string };
 
@@ -29,183 +87,259 @@ function resolveSiteOrigin(raw: string) {
   return url.origin;
 }
 
-function structuredData(siteOrigin: string, pagePath: string, page: (typeof pages)[keyof typeof pages]) {
-  const canonical = new URL(pagePath, siteOrigin).toString();
-  const appUrl = new URL("/", siteOrigin).toString();
-  const imageUrl = new URL("/social-card.svg", siteOrigin).toString();
-  const repositoryUrl = "https://github.com/HarshTambade/Shanaya-Your-AI-companion";
-  const faq = [
+function appVersion() {
+  try {
+    return String(JSON.parse(readFileSync(resolve(import.meta.dirname, "..", "package.json"), "utf8")).version);
+  } catch {
+    return undefined;
+  }
+}
+
+/** schema.org data for one page. Exported for tests. */
+export function structuredData(siteOrigin: string, page: PublicPage) {
+  const at = (path: string) => new URL(path, siteOrigin).toString();
+  const home = at("/");
+  const canonical = at(page.path);
+  const graph: Array<Record<string, unknown>> = [
     {
-      "@type": "Question",
-      name: "Does HANNAH work offline?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "HANNAH supports optional offline inference with WebLLM in compatible browsers and downloaded GGUF models in supported mobile apps. Initial model downloads require internet access.",
-      },
+      "@type": "Organization",
+      "@id": `${home}#organization`,
+      name: brandName,
+      url: home,
+      logo: { "@type": "ImageObject", url: at("/icon-512.png"), width: 512, height: 512 },
+      sameAs: [REPOSITORY_URL],
     },
     {
-      "@type": "Question",
-      name: "Can I talk to HANNAH by voice?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Yes. HANNAH provides multilingual voice input and speech playback where browser or device speech capabilities are available, including English, Hindi, and Marathi options.",
-      },
+      "@type": "WebSite",
+      "@id": `${home}#website`,
+      url: home,
+      name: brandName,
+      alternateName: "HANNAH AI Companion",
+      description: PUBLIC_PAGES[0].description,
+      inLanguage: "en",
+      publisher: { "@id": `${home}#organization` },
     },
     {
-      "@type": "Question",
-      name: "Which platforms support HANNAH?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "HANNAH runs in modern browsers and installs as a PWA. Desktop apps are available for macOS, Windows and Linux, and an Android app as an APK. The iOS app builds from source but isn't distributed yet.",
-      },
+      "@type": "SoftwareApplication",
+      "@id": `${home}#application`,
+      name: brandName,
+      alternateName: "HANNAH AI Companion",
+      url: home,
+      applicationCategory: "LifestyleApplication",
+      applicationSubCategory: "AI companion and personal assistant",
+      operatingSystem: "Web browser, Windows, macOS, Linux, Android",
+      description: PUBLIC_PAGES[0].description,
+      image: at("/social-card.png"),
+      screenshot: ["chat", "models", "automations", "agents", "integrations"].map((name) => at(`/screens/${name}.webp`)),
+      softwareVersion: appVersion(),
+      downloadUrl: `${REPOSITORY_URL}/releases/latest`,
+      installUrl: home,
+      isAccessibleForFree: true,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD", availability: "https://schema.org/InStock" },
+      featureList: CAPABILITIES.map((item) => `${item.title}: ${item.description}`),
+      publisher: { "@id": `${home}#organization` },
+      author: { "@type": "Person", name: "Harsh Tambade", url: "https://github.com/HarshTambade" },
     },
     {
-      "@type": "Question",
-      name: "Do I need a Groq API key to talk to HANNAH?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "The web app asks visitors to provide their own Groq API key before entering the companion. It stays in page memory for the current visit and is sent through the app API only for Groq requests.",
-      },
+      "@type": "WebPage",
+      "@id": `${canonical}#webpage`,
+      url: canonical,
+      name: page.title,
+      description: page.description,
+      isPartOf: { "@id": `${home}#website` },
+      about: { "@id": `${home}#application` },
+      primaryImageOfPage: at("/social-card.png"),
+      inLanguage: "en",
     },
   ];
-  const graph = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        "@id": `${appUrl}#organization`,
-        name: brandName,
-        url: appUrl,
-        sameAs: [repositoryUrl],
-        logo: imageUrl,
-      },
-      {
-        "@type": "WebSite",
-        "@id": `${appUrl}#website`,
-        url: appUrl,
-        name: brandName,
-        inLanguage: "en",
-        publisher: { "@id": `${appUrl}#organization` },
-      },
-      {
-        "@type": "SoftwareApplication",
-        "@id": `${appUrl}#application`,
-        name: brandName,
-        url: appUrl,
-        applicationCategory: "CommunicationApplication",
-        applicationSubCategory: "AI companion",
-        operatingSystem: "Web, Android, iOS, macOS, Windows, Linux",
-        description: pages.home.description,
-        image: imageUrl,
-        browserRequirements: "Requires a modern browser with JavaScript enabled",
-        publisher: { "@id": `${appUrl}#organization` },
-        softwareVersion: process.env.npm_package_version || undefined,
-        featureList: [
-          "Works with 20 AI providers and local models (Ollama, LM Studio, llama.cpp, vLLM, WebLLM)",
-          "Automatic model routing with Balanced, Best quality, Budget, Fastest and Private modes",
-          "Agent team that plans, runs specialist agents and verifies results",
-          "Voice chat in English, Hindi and Marathi",
-          "Memory you can view, edit, export and delete",
-          "Approval required for every action",
-          "Live 3D avatar with facial expressions",
-        ],
-      },
-      {
-        "@type": "WebPage",
-        "@id": `${canonical}#webpage`,
-        url: canonical,
-        name: page.title,
-        description: page.description,
-        isPartOf: { "@id": `${appUrl}#website` },
-        about: { "@id": `${appUrl}#application` },
-        inLanguage: "en",
-      },
-      ...(pagePath === "/" ? [{
-        "@type": "FAQPage",
-        "@id": `${canonical}#faq`,
-        mainEntity: faq,
-      }] : []),
-    ],
-  };
-  return JSON.stringify(graph).replaceAll("<", "\\u003c");
+  if (page.path === "/") {
+    graph.push({
+      "@type": "FAQPage",
+      "@id": `${canonical}#faq`,
+      mainEntity: FAQS.map((item) => ({ "@type": "Question", name: item.q, acceptedAnswer: { "@type": "Answer", text: item.a } })),
+    });
+  } else {
+    graph.push({
+      "@type": "BreadcrumbList",
+      "@id": `${canonical}#breadcrumbs`,
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "HANNAH", item: home },
+        { "@type": "ListItem", position: 2, name: page.name, item: canonical },
+      ],
+    });
+  }
+  return JSON.stringify({ "@context": "https://schema.org", "@graph": graph }).replaceAll("<", "\\u003c");
+}
+
+/** Everything in <head> that depends on the page. Exported for tests. */
+export function headTags(page: PublicPage, { siteOrigin, indexable }: { siteOrigin: string; indexable: boolean }) {
+  const absolute = (path: string) => (siteOrigin ? new URL(path, siteOrigin).toString() : path);
+  const canonical = indexable ? absolute(page.path) : "";
+  const google = process.env.VITE_GOOGLE_SITE_VERIFICATION?.trim();
+  const bing = process.env.VITE_BING_SITE_VERIFICATION?.trim();
+  const tags = [
+    `<title>${escapeAttribute(page.title)}</title>`,
+    `<meta name="description" content="${escapeAttribute(page.description)}" />`,
+    `<meta name="robots" content="${indexable ? "index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" : "noindex,nofollow"}" />`,
+    `<meta name="author" content="Harsh Tambade" />`,
+    `<meta name="referrer" content="strict-origin-when-cross-origin" />`,
+    `<meta name="color-scheme" content="light" />`,
+    google ? `<meta name="google-site-verification" content="${escapeAttribute(google)}" />` : "",
+    bing ? `<meta name="msvalidate.01" content="${escapeAttribute(bing)}" />` : "",
+    canonical ? `<link rel="canonical" href="${escapeAttribute(canonical)}" />` : "",
+    canonical ? `<link rel="alternate" hreflang="en" href="${escapeAttribute(canonical)}" />` : "",
+    canonical ? `<link rel="alternate" hreflang="x-default" href="${escapeAttribute(canonical)}" />` : "",
+    `<meta property="og:type" content="website" />`,
+    `<meta property="og:site_name" content="${brandName}" />`,
+    `<meta property="og:locale" content="en_US" />`,
+    `<meta property="og:title" content="${escapeAttribute(page.title)}" />`,
+    `<meta property="og:description" content="${escapeAttribute(page.description)}" />`,
+    canonical ? `<meta property="og:url" content="${escapeAttribute(canonical)}" />` : "",
+    `<meta property="og:image" content="${escapeAttribute(absolute("/social-card.png"))}" />`,
+    `<meta property="og:image:type" content="image/png" />`,
+    `<meta property="og:image:width" content="1200" />`,
+    `<meta property="og:image:height" content="630" />`,
+    `<meta property="og:image:alt" content="HANNAH, an AI companion with voice, AI agents and a 3D avatar" />`,
+    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:title" content="${escapeAttribute(page.title)}" />`,
+    `<meta name="twitter:description" content="${escapeAttribute(page.description)}" />`,
+    `<meta name="twitter:image" content="${escapeAttribute(absolute("/social-card.png"))}" />`,
+    `<meta name="twitter:image:alt" content="HANNAH, an AI companion with voice, AI agents and a 3D avatar" />`,
+    indexable ? `<script type="application/ld+json">${structuredData(siteOrigin, page)}</script>` : "",
+  ].filter(Boolean);
+  return `<!-- seo:start -->\n    ${tags.join("\n    ")}\n    <!-- seo:end -->`;
+}
+
+/** sitemap.xml for the public pages. Exported for tests. */
+export function sitemap(siteOrigin: string, lastmod: string) {
+  const urls = PUBLIC_PAGES.map((page) => `  <url><loc>${new URL(page.path, siteOrigin).toString()}</loc><lastmod>${lastmod}</lastmod></url>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
+}
+
+/** robots.txt. Exported for tests. */
+export function robots(siteOrigin: string, indexable: boolean) {
+  return [
+    "User-agent: *",
+    ...(indexable ? ["Allow: /"] : ["Disallow: /"]),
+    "Disallow: /api/",
+    "Disallow: /v1/",
+    "Disallow: /mcp",
+    "Disallow: /download/",
+    ...(indexable ? ["", `Sitemap: ${new URL("/sitemap.xml", siteOrigin).toString()}`] : []),
+    "",
+  ].join("\n");
+}
+
+/** llms.txt: a plain-text guide for AI assistants and AI search. Exported for tests. */
+export function llmsTxt(siteOrigin: string) {
+  const at = (path: string) => new URL(path, siteOrigin).toString();
+  return [
+    "# HANNAH",
+    "",
+    `> ${PUBLIC_PAGES[0].description}`,
+    "",
+    "HANNAH runs in the browser, as a desktop app for macOS, Windows and Linux, and on Android. It's free to use; you bring a key for the AI provider you choose (a free Groq key is enough), or run models locally. The source code is public under a source-available, non-commercial license.",
+    "",
+    "## What it does",
+    "",
+    ...CAPABILITIES.map((item) => `- ${item.title}: ${item.description}`),
+    "",
+    "## Pages",
+    "",
+    ...PUBLIC_PAGES.map((page) => `- [${page.name}](${at(page.path)}): ${page.description}`),
+    `- [Source code and documentation](${REPOSITORY_URL})`,
+    `- [Downloads and release notes](${REPOSITORY_URL}/releases)`,
+    "",
+    "## FAQ",
+    "",
+    ...FAQS.flatMap((item) => [`### ${item.q}`, "", item.a, ""]),
+  ].join("\n");
+}
+
+/** Put a page's head tags in place of the ones the template carries. */
+export function withHead(html: string, head: string) {
+  return html.replace(/<!-- seo:start -->[\s\S]*?<!-- seo:end -->/, head);
 }
 
 export function hannahSeoPlugin({ mode }: SeoOptions): Plugin {
   const explicitSiteUrl = process.env.VITE_SITE_URL?.trim() ?? "";
-  const vercelProductionDomain = process.env.VERCEL_ENV === "production"
-    ? process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ?? ""
-    : "";
-  const siteOrigin = resolveSiteOrigin(explicitSiteUrl || vercelProductionDomain);
-  const isProductionDeployment = process.env.VERCEL_ENV
-    ? process.env.VERCEL_ENV === "production"
-    : mode === "production";
+  const isVercelProduction = process.env.VERCEL_ENV === "production";
+  const siteOrigin = resolveSiteOrigin(explicitSiteUrl || (isVercelProduction ? DEFAULT_SITE : ""));
+  const isProductionDeployment = process.env.VERCEL_ENV ? isVercelProduction : mode === "production";
   const indexable = isProductionDeployment && Boolean(siteOrigin);
+  let root = process.cwd();
+  let outDir = resolve(root, "dist");
+  let define: Record<string, string> = {};
 
   return {
     name: "hannah-seo",
+    configResolved(config) {
+      root = config.root;
+      outDir = resolve(config.root, config.build.outDir);
+      define = Object.fromEntries(Object.entries(config.define ?? {}).map(([key, value]) => [key, String(value)]));
+    },
     transformIndexHtml(html, context) {
       const requestPath = context.path.split("?")[0];
-      const normalizedPath = requestPath.endsWith("index.html")
-        ? requestPath.slice(0, -"index.html".length)
-        : requestPath;
-      const isAboutPage = normalizedPath === "/about/" || normalizedPath === "/about";
-      const pagePath = isAboutPage ? "/about/" : "/";
-      const page = isAboutPage ? pages.about : pages.home;
-      const image = siteOrigin ? new URL("/social-card.svg", siteOrigin).toString() : "/social-card.svg";
-      const canonical = indexable ? new URL(pagePath, siteOrigin).toString() : "";
-      const tags = [
-        `<meta name="robots" content="${indexable ? "index,follow,max-image-preview:large" : "noindex,nofollow"}" />`,
-        `<meta name="author" content="HANNAH" />`,
-        `<meta name="publisher" content="HANNAH" />`,
-        `<meta name="keywords" content="personal AI, AI companion, AI agents, model router, local AI, offline AI, voice assistant, WebLLM, Ollama, private AI assistant" />`,
-        `<meta name="referrer" content="strict-origin-when-cross-origin" />`,
-        `<meta name="color-scheme" content="light" />`,
-        canonical ? `<link rel="canonical" href="${escapeAttribute(canonical)}" />` : "",
-        `<link rel="alternate" hreflang="en" href="${escapeAttribute(canonical || pagePath)}" />`,
-        `<link rel="author" href="https://github.com/HarshTambade" />`,
-        `<meta property="og:type" content="website" />`,
-        `<meta property="og:site_name" content="${brandName}" />`,
-        `<meta property="og:title" content="${escapeAttribute(page.title)}" />`,
-        `<meta property="og:description" content="${escapeAttribute(page.description)}" />`,
-        canonical ? `<meta property="og:url" content="${escapeAttribute(canonical)}" />` : "",
-        `<meta property="og:image" content="${escapeAttribute(image)}" />`,
-        `<meta property="og:image:width" content="1200" />`,
-        `<meta property="og:image:height" content="630" />`,
-        `<meta property="og:image:alt" content="HANNAH — Your Personal AI. Your Intelligence. Your World." />`,
-        `<meta name="twitter:card" content="summary_large_image" />`,
-        `<meta name="twitter:title" content="${escapeAttribute(page.title)}" />`,
-        `<meta name="twitter:description" content="${escapeAttribute(page.description)}" />`,
-        `<meta name="twitter:image" content="${escapeAttribute(image)}" />`,
-        indexable ? `<script type="application/ld+json">${structuredData(siteOrigin, pagePath, page)}</script>` : "",
-      ].filter(Boolean).join("\n    ");
-
-      return html
-        .replace("__HANNAH_PAGE_TITLE__", escapeAttribute(page.title))
-        .replace("__HANNAH_PAGE_DESCRIPTION__", escapeAttribute(page.description))
-        .replace("<!-- HANNAH_SEO_TAGS -->", tags);
+      const normalized = requestPath.endsWith("index.html") ? requestPath.slice(0, -"index.html".length) : requestPath;
+      const page = PUBLIC_PAGES.find((item) => item.path === normalized || item.path === `${normalized}/`) ?? PUBLIC_PAGES[0];
+      return html.replace("<!-- HANNAH_SEO_TAGS -->", headTags(page, { siteOrigin, indexable }));
     },
     generateBundle() {
-      const robots = [
-        "User-agent: *",
-        "Allow: /",
-        "Disallow: /api/",
-        "Disallow: /mcp",
-        ...(indexable ? [`Sitemap: ${new URL("/sitemap.xml", siteOrigin).toString()}`] : []),
-        "",
-      ].join("\n");
-      this.emitFile({ type: "asset", fileName: "robots.txt", source: robots });
-
+      this.emitFile({ type: "asset", fileName: "robots.txt", source: robots(siteOrigin, indexable) });
       if (indexable) {
-        const today = new Date().toISOString().slice(0, 10);
-        const sitemapUrls = ["/", "/about/"].map((path) => (
-          `  <url><loc>${new URL(path, siteOrigin).toString()}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>${path === "/" ? "1.0" : "0.7"}</priority></url>`
-        )).join("\n");
-        this.emitFile({
-          type: "asset",
-          fileName: "sitemap.xml",
-          source: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemapUrls}\n</urlset>\n`,
-        });
+        this.emitFile({ type: "asset", fileName: "sitemap.xml", source: sitemap(siteOrigin, new Date().toISOString().slice(0, 10)) });
+        this.emitFile({ type: "asset", fileName: "llms.txt", source: llmsTxt(siteOrigin) });
+      }
+    },
+    // After every file is written (including each route's index.html), render
+    // the public pages to HTML and give Integrations and Marketplace their own head.
+    async writeBundle() {
+      const template = resolve(outDir, "index.html");
+      if (!existsSync(template)) return;
+      const baseHtml = readFileSync(template, "utf8");
+      const rendered = await renderPublicPages(root, define).catch((error: unknown) => {
+        this.warn(`Public pages weren't pre-rendered: ${error instanceof Error ? error.message : String(error)}`);
+        return {} as Record<string, string>;
+      });
+      for (const page of PUBLIC_PAGES) {
+        if (!page.component) continue;
+        const file = resolve(outDir, page.file);
+        let html = page.path === "/" ? baseHtml : withHead(baseHtml, headTags(page, { siteOrigin, indexable }));
+        const body = rendered[page.path];
+        if (body) html = html.replace('<div id="root"></div>', `<div id="root">${body}</div>`);
+        else this.warn(`${page.path} wasn't pre-rendered; it still works, rendered in the browser.`);
+        writeFileSync(file, html);
       }
     },
   };
+}
+
+/** Render the public pages with React on the server (Vite's SSR loader). */
+async function renderPublicPages(root: string, define: Record<string, string>) {
+  const [{ createServer }, { renderToString }, React] = await Promise.all([import("vite"), import("react-dom/server"), import("react")]);
+  const server = await createServer({
+    root,
+    configFile: false,
+    logLevel: "error",
+    appType: "custom",
+    define,
+    optimizeDeps: { noDiscovery: true, include: [] },
+    server: { middlewareMode: true, hmr: false, ws: false },
+  });
+  const output: Record<string, string> = {};
+  try {
+    for (const page of PUBLIC_PAGES) {
+      if (!page.component) continue;
+      // One page failing doesn't stop the others; it's rendered in the browser instead.
+      try {
+        const module = await server.ssrLoadModule(page.component);
+        output[page.path] = renderToString(React.createElement(module.default, page.props));
+      } catch (error) {
+        console.warn(`[hannah-seo] ${page.path}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  } finally {
+    await server.close();
+  }
+  return output;
 }

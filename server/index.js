@@ -69,7 +69,8 @@ if (process.env.CLOUD_API_URL && !process.env.HANNAH_DEFAULT_PROVIDER) process.e
 const app = express();
 const port = Number(process.env.PORT) || 3001;
 const host = process.env.HOST?.trim() || "127.0.0.1";
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173,capacitor://localhost,http://localhost,https://localhost")
+// capacitor://localhost (iOS), https://localhost (Android) and capacitor-electron://localhost (desktop app).
+const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173,capacitor://localhost,http://localhost,https://localhost,capacitor-electron://localhost")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);

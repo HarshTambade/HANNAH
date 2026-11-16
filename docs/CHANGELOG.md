@@ -14,10 +14,12 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Improved
 
+- **Search and sharing.** The home, Integrations and Marketplace pages are rendered to HTML at build time, so search engines and link previews get the real headings and text; Integrations and Marketplace are now indexed too. Every public page has its own title, description and canonical address on hannah.eliteforums.in, a PNG social card (SVG cards don't show on most social sites), schema.org data (app, organization, FAQ matching the visible FAQ, breadcrumbs), a sitemap, robots.txt and an `llms.txt` summary for AI search tools. Footer and menu links to Marketplace and Integrations are real links. Four new FAQ answers (what HANNAH is, which models it works with, hands-free use, its license). PNG app icons for iOS and Android home screens.
 - **App tour on the website.** The screenshots section is now a tour of five real screens (Chat, Models, Automations, Agents, Integrations) in a browser frame with the screen's address and what it does.
 
 ### Fixed
 
+- **Download buttons pointed at the old domain** (shanaya.eliteforums.in), as did every other request from the website, because the website build carried an old `VITE_API_BASE_URL`. On Vercel the website now always calls its own domain, download buttons are links on the same site, and the desktop and mobile apps use https://hannah.eliteforums.in unless a build sets another server. The server also accepts the desktop app's origin by default.
 - The desktop app's launch check in CI gave up after 60 seconds, but CI's macOS machines take about two minutes to start an unsigned app. It now waits up to four minutes there (the app itself starts in seconds).
 - Links that open a new window in the desktop app now open in the system browser.
 - **Automations' "Ask HANNAH" steps failed for most people.** They called the server without the provider, model and API key chosen in chat, so they only worked when the server had its own key. They now use the same AI as chat (cloud provider and model, your key, or Ollama), with no tools. On-device chat models show a clear message instead, because they only run while you chat.

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
-import { isGroqKey, verifyApiAccess } from "../services/api";
+import { apiBase, isGroqKey, verifyApiAccess } from "../services/api";
 import { Account, databaseLabel, type AccountStatus } from "../services/Account";
 import { SignInForm } from "./AccountPanel";
 import {
@@ -7,6 +7,7 @@ import {
   MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, TerminalSquare, Waypoints, Workflow, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
+import { CAPABILITIES as capabilities, FAQS as faqs, ROADMAP as roadmap, type IconName } from "../content/landing";
 import AppTour from "./AppTour";
 import { APP_VERSION, PLATFORM_DOWNLOADS, RELEASE_NOTES_URL, RELEASES_URL, REPOSITORY_URL } from "../config/project";
 
@@ -22,109 +23,14 @@ type LandingPageProps = {
   onConnectHandled?: () => void;
 };
 
-/** Everything here ships in this release. Each line says what it really does. */
-const capabilities = [
-  {
-    icon: Cpu,
-    title: "Any model, your choice",
-    description: "Groq, OpenAI, Anthropic, Gemini, OpenRouter, Mistral, DeepSeek, xAI and more, or models on your own hardware with Ollama, LM Studio, llama.cpp or vLLM.",
-  },
-  {
-    icon: Waypoints,
-    title: "Picks the right model for you",
-    description: "Auto mode chooses a model for each message by Balanced, Best quality, Budget, Fastest or Private rules, shows you why before you send, and falls back if a provider fails.",
-  },
-  {
-    icon: Bot,
-    title: "A team of specialist agents",
-    description: "Turn on Team and HANNAH plans the task, runs Research, Coding, Memory and Tasks agents in parallel, then checks the result before answering.",
-  },
-  {
-    icon: AudioLines,
-    title: "Talk naturally",
-    description: "Speak and listen in English, Hindi and Marathi. Use your device's voices or OpenAI voices, Whisper transcription, and interrupt HANNAH mid-sentence.",
-  },
-  {
-    icon: Brain,
-    title: "Memory you own",
-    description: "See, edit, export or delete everything HANNAH remembers. With an account, sync it through your own Postgres, Supabase, Neon or SQLite database.",
-  },
-  {
-    icon: HardDrive,
-    title: "Local and offline",
-    description: "Run a model in your browser with WebLLM, on your phone with llama.cpp, or on your server. Private mode guarantees nothing goes to a cloud AI provider.",
-  },
-  {
-    icon: Sparkles,
-    title: "A companion with presence",
-    description: "A real-time 3D avatar that smiles, listens, thinks and talks, reacting to the mood of each reply.",
-  },
-  {
-    icon: Workflow,
-    title: "Automations that run",
-    description: "Build a routine from steps, run it daily, on weekdays or every few hours while HANNAH is open, and approve each action before it happens.",
-  },
-  {
-    icon: Cable,
-    title: "Build on it",
-    description: "An OpenAI-compatible API, MCP server and client, agent-to-agent (A2A) messaging, signed webhooks and a JavaScript SDK.",
-  },
-  {
-    icon: PackageOpen,
-    title: "Skills marketplace",
-    description: "Add first-party agents and community instruction skills, checked for integrity and publisher signatures before install.",
-  },
-  {
-    icon: Ear,
-    title: "“Hey HANNAH”",
-    description: "Turn on the wake word and start talking hands-free in the desktop app, on Android or in a browser tab. It's detected on your device; no audio leaves it until you speak to HANNAH.",
-  },
-  {
-    icon: CalendarDays,
-    title: "Calendar and email",
-    description: "Connect Google or Microsoft with their own sign-in. HANNAH reads your calendar and mail when you ask, and adds events, saves drafts or sends mail only after you approve.",
-  },
-  {
-    icon: MonitorSmartphone,
-    title: "Tasks across devices",
-    description: "Sign in on each device and start a task on your laptop, follow it on your phone, and approve its next step from whichever device is in your hand.",
-    // An odd card out: on two-column screens it takes the full row.
-    wide: true,
-  },
-] as const;
+/** Real links (crawlable, open in a new tab) that move inside the app on a plain click. */
+function followInApp(event: MouseEvent<HTMLAnchorElement>, go: () => void) {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  go();
+}
 
-/** Planned, not in this release. */
-const roadmap = [
-  ["Computer use in the desktop app", "Seeing the screen and using the mouse and keyboard, with approval for each action. Today it needs a desktop app you build yourself (see the README)."],
-  ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],
-] as const;
-
-const faqs = [
-  {
-    q: "What do I need to start?",
-    a: "A free Groq API key from console.groq.com is enough for the web app. Your key stays in this browser tab and goes only to Groq. A HANNAH server operator can also give you an access token or an account.",
-  },
-  {
-    q: "Is it free?",
-    a: "HANNAH has no paid tiers. You pay your AI provider directly for what you use, and many providers, including Groq, have free tiers. Local models cost nothing per message.",
-  },
-  {
-    q: "Does HANNAH work offline?",
-    a: "Yes, with a local model: WebLLM in a WebGPU browser (one ~900 MB download, then cached), or a downloaded model in the Android and iOS apps.",
-  },
-  {
-    q: "Can HANNAH do things on my computer?",
-    a: "Yes, in the desktop app. Share a folder in Settings → Desktop access and HANNAH can read files there, change files in folders you mark read-write, and run commands such as your tests. Every write and every command waits for your yes in a system dialog, and the app enforces those limits itself, outside the AI model. Seeing your screen and using the mouse (computer use) still needs a desktop app you build yourself; it's on the roadmap for the downloadable app.",
-  },
-  {
-    q: "Where does my data go?",
-    a: "Chat history and memories stay on your device unless you sign in to an account, which syncs them through a database the operator chooses. Requests go only to the AI provider you pick, and in Private mode only to self-hosted models.",
-  },
-  {
-    q: "Which platforms are supported?",
-    a: "The web app works in modern browsers and installs as a PWA. There are desktop apps for macOS, Windows and Linux and an Android app. The iOS app builds from source but isn't distributed yet.",
-  },
-];
+const capabilityIcons: Record<IconName, typeof Cpu> = { AudioLines, Bot, Brain, Cable, CalendarDays, Cpu, Ear, HardDrive, MonitorSmartphone, PackageOpen, Sparkles, Waypoints, Workflow };
 
 export default function LandingPage({ onStart, onIntegrations, onMarketplace, hasSession = false, onResume, openConnect = false, onConnectHandled }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
@@ -182,7 +88,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
       setKeyError("For your safety, connect over HTTPS before sending an API key.");
       return;
     }
-    const configuredApiUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+    const configuredApiUrl = apiBase();
     if (configuredApiUrl) {
       try {
         const apiOrigin = new URL(configuredApiUrl, window.location.href);
@@ -254,8 +160,8 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
             {sections.map(([label, id]) => (
               <a key={id} href={`#${id}`} onClick={(event) => scrollToSection(event, id)} className="text-[13px] text-slate-600 transition hover:text-ink">{label}</a>
             ))}
-            <button type="button" onClick={onMarketplace} className="text-[13px] text-slate-600 transition hover:text-ink">Marketplace</button>
-            <button type="button" onClick={onIntegrations} className="text-[13px] text-slate-600 transition hover:text-ink">Integrations</button>
+            <a href="/marketplace" onClick={(event) => followInApp(event, onMarketplace)} className="text-[13px] text-slate-600 transition hover:text-ink">Marketplace</a>
+            <a href="/integrations" onClick={(event) => followInApp(event, onIntegrations)} className="text-[13px] text-slate-600 transition hover:text-ink">Integrations</a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -284,8 +190,8 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               {sections.map(([label, id]) => (
                 <a key={id} href={`#${id}`} onClick={(event) => scrollToSection(event, id)} className="rounded-lg px-3 py-3 text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">{label}</a>
               ))}
-              <button type="button" onClick={() => { setMobileNavigationOpen(false); onMarketplace(); }} className="rounded-lg px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">Marketplace</button>
-              <button type="button" onClick={() => { setMobileNavigationOpen(false); onIntegrations(); }} className="rounded-lg px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">Integrations</button>
+              <a href="/marketplace" onClick={(event) => followInApp(event, () => { setMobileNavigationOpen(false); onMarketplace(); })} className="rounded-lg px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">Marketplace</a>
+              <a href="/integrations" onClick={(event) => followInApp(event, () => { setMobileNavigationOpen(false); onIntegrations(); })} className="rounded-lg px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">Integrations</a>
             </div>
           </nav>
         )}
@@ -348,7 +254,8 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
             </div>
             <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {capabilities.map((item) => {
-                const { icon: Icon, title, description } = item;
+                const { title, description } = item;
+                const Icon = capabilityIcons[item.icon];
                 return (
                 <article key={title} className={`rounded-2xl border border-slate-200/80 bg-white p-6 shadow-soft ${"wide" in item ? "sm:col-span-2 lg:col-span-1" : ""}`}>
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon size={18} strokeWidth={1.8} aria-hidden="true" /></span>
@@ -500,8 +407,8 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               <ul className="mt-3 space-y-2 text-slate-600">
                 <li><button type="button" onClick={openKeyDialog} className="hover:text-ink">Open the web app</button></li>
                 <li><a href="#download" onClick={(event) => scrollToSection(event, "download")} className="hover:text-ink">Download</a></li>
-                <li><button type="button" onClick={onMarketplace} className="hover:text-ink">Marketplace</button></li>
-                <li><button type="button" onClick={onIntegrations} className="hover:text-ink">API and integrations</button></li>
+                <li><a href="/marketplace" onClick={(event) => followInApp(event, onMarketplace)} className="hover:text-ink">Marketplace</a></li>
+                <li><a href="/integrations" onClick={(event) => followInApp(event, onIntegrations)} className="hover:text-ink">API and integrations</a></li>
               </ul>
             </div>
             <div>

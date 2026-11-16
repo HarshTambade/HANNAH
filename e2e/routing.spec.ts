@@ -143,3 +143,20 @@ test.describe("with the offline service worker", () => {
     await expect(page.getByText("Page not found")).toHaveCount(0);
   });
 });
+
+test("public pages arrive as real HTML, readable without running JavaScript", async ({ request }) => {
+  // Trailing slash: the preview server only serves a folder's index.html that way (Vercel serves both).
+  for (const [path, heading] of [["/", "Your Personal AI"], ["/integrations/", "Bring HANNAH into your workflow."], ["/marketplace/", "Agents and skills for the way you work."]] as const) {
+    const html = await (await request.get(path)).text();
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    expect(html).toContain("<h1");
+    expect(text).toContain(heading);
+    expect(html.match(/<title>/g)).toHaveLength(1);
+  }
+  const home = await (await request.get("/")).text();
+  expect(home).toContain("Is HANNAH open source?");
+  expect(home).toContain('href="/integrations"');
+  expect(home).toContain('href="/marketplace"');
+  // App screens stay out of search results.
+  expect(await (await request.get("/chat/")).text()).toContain('content="noindex,follow"');
+});

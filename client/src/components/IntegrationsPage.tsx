@@ -4,6 +4,7 @@ import {
   Network, PlugZap, Server, Settings2, ShieldCheck, Terminal, Unplug, Webhook, Workflow,
 } from "lucide-react";
 import { apiUrl } from "../services/api";
+import { SITE_URL } from "../config/site";
 import { pathForScreen } from "../routes";
 import DatabaseIntegration from "./DatabaseIntegration";
 import McpServersCard from "./McpServersCard";
@@ -14,9 +15,11 @@ type IntegrationsPageProps = { onBack: () => void };
 // (server/index.js, api-security.js, v1.js, a2a.js, webhooks.js, mcp-*.mjs).
 // Update this page when those change.
 
-const apiRoot = new URL(apiUrl("/api"), window.location.href).toString().replace(/\/$/, "");
+// Pre-rendered at build time (no window), the examples use the public site.
+const pageBase = typeof window === "undefined" ? `${SITE_URL}/` : window.location.href;
+const apiRoot = new URL(apiUrl("/api"), pageBase).toString().replace(/\/$/, "");
 const serverRoot = apiRoot.replace(/\/api$/, "");
-const mcpEndpoint = new URL(apiUrl("/mcp"), window.location.href).toString();
+const mcpEndpoint = new URL(apiUrl("/mcp"), pageBase).toString();
 const settingsHref = pathForScreen("settings", import.meta.env.BASE_URL);
 
 const localMcpConfig = JSON.stringify({

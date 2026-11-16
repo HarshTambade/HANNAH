@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
   <title id="title">HANNAH AI Companion</title>
-  <desc id="description">A multilingual AI companion with a living 3D avatar and voice chat.</desc>
+  <desc id="description">HANNAH, an AI companion with voice chat, AI agents, memory you control and a live 3D avatar.</desc>
   <defs>
     <radialGradient id="glow" cx="25%" cy="20%" r="85%">
       <stop offset="0" stop-color="#5740a8" stop-opacity=".55"/>
@@ -14,12 +14,23 @@
   <rect width="1200" height="630" fill="#080b14"/>
   <rect width="1200" height="630" fill="url(#glow)"/>
   <path d="M0 505h1200M0 545h1200M0 585h1200M55 0v630M95 0v630M1135 0v630" stroke="#c4b5fd" stroke-opacity=".055"/>
-  <rect x="92" y="120" width="142" height="142" rx="42" fill="#8b5cf6" fill-opacity=".12" stroke="#c4b5fd" stroke-opacity=".48" stroke-width="3"/>
-  <circle cx="163" cy="191" r="43" fill="none" stroke="url(#accent)" stroke-width="7"/>
-  <path d="M163 142v17m0 64v17m49-49h-17m-64 0h-17m83-34-12 12m-45 45-12 12m69 0-12-12m-45-45-12-12" fill="none" stroke="#ddd6fe" stroke-linecap="round" stroke-width="7"/>
-  <circle cx="163" cy="191" r="11" fill="#ddd6fe"/>
+  <svg x="92" y="120" width="142" height="142" viewBox="0 0 512 512">
+    <defs>
+      <linearGradient id="ring-a" gradientUnits="userSpaceOnUse" x1="256" y1="106" x2="406" y2="256"><stop offset="0" stop-color="#4f8ff0"/><stop offset="1" stop-color="#8be3f2"/></linearGradient>
+      <linearGradient id="ring-b" gradientUnits="userSpaceOnUse" x1="406" y1="256" x2="256" y2="406"><stop offset="0" stop-color="#8be3f2"/><stop offset="1" stop-color="#f7e27a"/></linearGradient>
+      <linearGradient id="ring-c" gradientUnits="userSpaceOnUse" x1="256" y1="406" x2="106" y2="256"><stop offset="0" stop-color="#f7e27a"/><stop offset="1" stop-color="#f4a9c0"/></linearGradient>
+      <linearGradient id="ring-d" gradientUnits="userSpaceOnUse" x1="106" y1="256" x2="256" y2="106"><stop offset="0" stop-color="#f4a9c0"/><stop offset="1" stop-color="#4f8ff0"/></linearGradient>
+    </defs>
+    <rect width="512" height="512" rx="120" fill="#0c0e14" stroke="#c4b5fd" stroke-opacity=".35" stroke-width="8"/>
+    <g fill="none" stroke-width="78">
+      <path d="M256 106a150 150 0 0 1 150 150" stroke="url(#ring-a)"/>
+      <path d="M406 256a150 150 0 0 1-150 150" stroke="url(#ring-b)"/>
+      <path d="M256 406a150 150 0 0 1-150-150" stroke="url(#ring-c)"/>
+      <path d="M106 256a150 150 0 0 1 150-150" stroke="url(#ring-d)"/>
+    </g>
+  </svg>
   <text x="92" y="356" fill="#f5f3ff" font-family="Arial, Helvetica, sans-serif" font-size="94" font-weight="700" letter-spacing="-4">HANNAH</text>
-  <text x="98" y="421" fill="#c4b5fd" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="600" letter-spacing="4">AI COMPANION · 3D AVATAR · VOICE CHAT</text>
-  <text x="98" y="487" fill="#aeb6ca" font-family="Arial, Helvetica, sans-serif" font-size="25">Cloud AI with optional on-device inference</text>
+  <text x="98" y="421" fill="#c4b5fd" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="600" letter-spacing="4">AI COMPANION · VOICE · AGENTS · 3D AVATAR</text>
+  <text x="98" y="487" fill="#aeb6ca" font-family="Arial, Helvetica, sans-serif" font-size="25">Any AI model, cloud or local. You approve every action.</text>
   <rect x="98" y="535" width="194" height="4" rx="2" fill="#8b5cf6"/>
 </svg>

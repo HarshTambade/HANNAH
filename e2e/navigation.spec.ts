@@ -17,7 +17,7 @@ test("landing navigation sections and marketplace actions work", async ({ page }
   // In-page links scroll without putting "#section" in the address bar.
   await expect(page).toHaveURL(/\/$/);
 
-  await navigation.getByRole("button", { name: "Marketplace" }).click();
+  await navigation.getByRole("link", { name: "Marketplace" }).click();
   await expect(page.getByRole("heading", { name: "Agents and skills for the way you work." })).toBeVisible();
 
   const studyCoach = page.getByRole("article").filter({ hasText: "Study coach" });
@@ -34,7 +34,7 @@ test("landing navigation sections and marketplace actions work", async ({ page }
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: /Your Personal AI/ })).toBeVisible();
 
-  await navigation.getByRole("button", { name: "Integrations" }).click();
+  await navigation.getByRole("link", { name: "Integrations" }).click();
   await expect(page.getByRole("heading", { name: "Bring HANNAH into your workflow." })).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: /Your Personal AI/ })).toBeVisible();
@@ -48,7 +48,7 @@ test("app screens require a connection and the browser back button works", async
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Marketplace" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Marketplace" }).click();
   await expect(page).toHaveURL(/\/marketplace$/);
   await page.goBack();
   await expect(page.getByRole("heading", { name: /Your Personal AI/ })).toBeVisible();
@@ -65,12 +65,12 @@ test("mobile navigation exposes and opens every section", async ({ page }) => {
   await expect(page.locator("#features")).toBeInViewport();
 
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("navigation", { name: "Mobile main navigation" }).getByRole("button", { name: "Marketplace" }).click();
+  await page.getByRole("navigation", { name: "Mobile main navigation" }).getByRole("link", { name: "Marketplace" }).click();
   await expect(page.getByRole("heading", { name: "Agents and skills for the way you work." })).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: "Open navigation" }).click();
-  await page.getByRole("navigation", { name: "Mobile main navigation" }).getByRole("button", { name: "Integrations" }).click();
+  await page.getByRole("navigation", { name: "Mobile main navigation" }).getByRole("link", { name: "Integrations" }).click();
   await expect(page.getByRole("heading", { name: "Bring HANNAH into your workflow." })).toBeVisible();
 });
 

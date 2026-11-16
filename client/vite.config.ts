@@ -12,10 +12,20 @@ import { wakeModelPlugin } from "./scripts/wakeModel";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
+// On Vercel the website and its API are one deployment on one domain (see
+// vercel.json), so the website always calls its own origin. A leftover
+// VITE_API_BASE_URL (for example an old domain) would otherwise send every
+// request, download link and sign-in to the wrong place. App builds (CI) keep it.
+const sameOriginWebsite = process.env.VERCEL === "1";
+if (sameOriginWebsite && process.env.VITE_API_BASE_URL?.trim()) {
+  console.warn(`Vercel website build: ignoring VITE_API_BASE_URL (${process.env.VITE_API_BASE_URL.trim()}); the API is on the same domain.`);
+}
+
 export default defineConfig(({ mode }) => ({
   define: {
     // Exposed through services/appInfo.ts for feedback and error reports.
     __HANNAH_APP_VERSION__: JSON.stringify(packageJson.version),
+    ...(sameOriginWebsite ? { "import.meta.env.VITE_API_BASE_URL": JSON.stringify("") } : {}),
   },
   plugins: [
     react(),
@@ -25,7 +35,7 @@ export default defineConfig(({ mode }) => ({
     wakeModelPlugin(),
     VitePWA({
       registerType: "prompt",
-      includeAssets: ["icon.svg", "social-card.svg"],
+      includeAssets: ["icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
       manifest: {
         id: "/",
         name: "HANNAH · AI Companion",
@@ -35,7 +45,11 @@ export default defineConfig(({ mode }) => ({
         background_color: "#f8fafc",
         display: "standalone",
         start_url: "/",
-        icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
+        icons: [
+          { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+        ],
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
