@@ -22,7 +22,8 @@ const configuredTokenDigest = configuredTokenIsValid
 // Paths are relative to the /api or /v1 mount.
 const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/a2a", "/route/preview"]);
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
-const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card"]);
+// The calendar/email sign-in callbacks are opened by Google or Microsoft; the single-use state identifies the user.
+const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback"]);
 // A signed-in account (session or developer API key) may use the model routes
 // plus its own account and sync routes. Operator-only routes stay closed.
 function accountMayUse(path) {

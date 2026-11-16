@@ -27,6 +27,8 @@ declare const __HANNAH_APP_VERSION__: string;
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
+  /** Where the "Hey HANNAH" model is downloaded from; defaults to the HANNAH website. */
+  readonly VITE_WAKE_MODEL_URL?: string;
   readonly VITE_PYTHON_FALLBACK_URL?: string;
   readonly VITE_PINECALL_AGENT_ID?: string;
   readonly VITE_OFFLINE_MODEL_URL?: string;

@@ -96,6 +96,56 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_webhooks_user ON hannah_webhooks (user_id)",
     ],
   },
+  {
+    version: 3,
+    name: "tasks across devices",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_device_tasks (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL,
+        device_name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        detail TEXT,
+        status TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        expires_at BIGINT,
+        decided_at BIGINT,
+        decided_by TEXT
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_device_tasks_user ON hannah_device_tasks (user_id, updated_at)",
+    ],
+  },
+  {
+    version: 4,
+    name: "calendar and email connections",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_connections (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        account_email TEXT,
+        scopes TEXT NOT NULL,
+        key_id TEXT NOT NULL,
+        wrapped_key TEXT NOT NULL,
+        ciphertext TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, provider)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_oauth_states (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        key_id TEXT NOT NULL,
+        wrapped_key TEXT NOT NULL,
+        ciphertext TEXT NOT NULL,
+        return_to TEXT,
+        expires_at BIGINT NOT NULL
+      )`,
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

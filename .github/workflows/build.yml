@@ -92,6 +92,11 @@ jobs:
       - run: npm run build
         working-directory: client
       - run: npx playwright install --with-deps
+      # The "Hey HANNAH" test builds the 41 MB speech model from its pinned archive; keep it between runs.
+      - uses: actions/cache@v4
+        with:
+          path: client/.cache/wake-model
+          key: wake-model-vosk-small-en-us-0.15-v1
       - run: npm run test:e2e --prefix client
       - uses: actions/upload-artifact@v4
         if: always()
@@ -221,8 +226,11 @@ jobs:
       - name: Launch the packaged app
         working-directory: client/electron/dist
         shell: bash
+        timeout-minutes: 8
         env:
           HANNAH_SMOKE_TEST: "1"
+          # macOS runners can take two minutes just to start an unsigned app.
+          HANNAH_SMOKE_TIMEOUT_MS: "240000"
         run: |
           case "$RUNNER_OS" in
             macOS) app=$(find . -path "*/HANNAH.app/Contents/MacOS/HANNAH" -type f | head -n 1) ;;
@@ -234,9 +242,9 @@ jobs:
           echo "Launching $app"
           set +e
           if [ "$RUNNER_OS" = "Linux" ]; then
-            output=$(timeout 120 xvfb-run -a "$app" --no-sandbox 2>&1)
+            output=$(timeout 300 xvfb-run -a "$app" --no-sandbox 2>&1)
           elif [ "$RUNNER_OS" = "Windows" ]; then
-            output=$(timeout 120 "$app" 2>&1)
+            output=$(timeout 300 "$app" 2>&1)
           else
             output=$("$app" 2>&1)
           fi

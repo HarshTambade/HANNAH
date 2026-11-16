@@ -8,6 +8,9 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 - **Automations that run.** Saved routines now run daily, on weekdays or every few hours while HANNAH is open in a tab or the desktop app; a run that was due while HANNAH was closed happens once when it reopens. Each step passes its result to the next. Actions (save to memory, create a reminder) pause until you approve or deny them, and every run is kept in a run history with its steps and result. You can run any automation on demand, edit it, and turn its schedule on or off.
 - **Files and terminal on desktop.** Share folders in Settings → Desktop access, and HANNAH and the Coding agent can read them, change files in read-write folders, and run commands such as your tests. The desktop app enforces the limits in its main process, outside the AI model: paths can't leave a shared folder (symlinks included), and every write and every command waits for your yes in a system dialog. Commands run without a shell, with a time limit.
+- **Tasks across devices.** Signed in on more than one device, you can follow agent team tasks and automations from any of them (Dashboard → Across your devices) and approve or deny the next step from whichever device is in your hand. Every approval chat or an automation asks for is mirrored to your other devices; the first answer wins, decided once on the server, and requests expire. A new `approval.requested` webhook lets you forward requests to a phone push service.
+- **Calendar and email.** Connect Google (Calendar, Gmail) or Microsoft (Outlook) with the provider's own sign-in (OAuth with PKCE; tokens encrypted in your account). HANNAH lists events, searches and reads mail when you ask, and adds events, saves drafts or sends mail only after you approve exactly what will happen. Needs the operator's Google and Microsoft sign-in apps: see `docs/CALENDAR_AND_EMAIL.md`.
+- **“Hey HANNAH” wake word.** Turn it on in Settings → Voice to start talking hands-free in the desktop app, on Android or in a desktop browser. Detection runs on the device (Vosk in WebAssembly, listening only for its name); the ~41 MB model downloads once from the website.
 
 ### Improved
 
@@ -15,6 +18,8 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- The desktop app's launch check in CI gave up after 60 seconds, but CI's macOS machines take about two minutes to start an unsigned app. It now waits up to four minutes there (the app itself starts in seconds).
+- Links that open a new window in the desktop app now open in the system browser.
 - **Automations' "Ask HANNAH" steps failed for most people.** They called the server without the provider, model and API key chosen in chat, so they only worked when the server had its own key. They now use the same AI as chat (cloud provider and model, your key, or Ollama), with no tools. On-device chat models show a clear message instead, because they only run while you chat.
 - Saved automations could disappear: the task list kept only the newest 100 entries, and HANNAH's background memory tasks pushed older automations out. Automations are now always kept.
 - An automation's "Show a notification" result was invisible unless browser notifications were allowed. Results and approval requests now also appear as a card in the app, with a link to Automations.

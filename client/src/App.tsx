@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import IntegrationsPage from "./components/IntegrationsPage";
 import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
@@ -13,6 +13,8 @@ import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
 import { REMINDER_FIRED_EVENT, startReminderScheduler, type Reminder } from "./services/ReminderService";
 import { startAutomationRunner } from "./services/AutomationService";
+import { startDeviceTaskSync } from "./services/DeviceTasks";
+import { startWakeWord, WAKE_EVENT } from "./services/WakeWord";
 import { startNativeReminders } from "./services/NativeReminders";
 import { clearApiSession, getAccountHint, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
 import { Account } from "./services/Account";
@@ -37,6 +39,8 @@ export default function App() {
     const initial = currentScreen();
     return appSections.has(initial) && !hasApiSession() ? "landing" : initial;
   });
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
   const [connectRequested, setConnectRequested] = useState(() => appSections.has(currentScreen()) && !hasApiSession());
   // Where a signed-out visitor was going; they land there after connecting.
   const [pendingScreen, setPendingScreen] = useState<AppScreen | null>(() => {
@@ -73,6 +77,15 @@ export default function App() {
   // Reminders fire while the app is open, on any screen.
   useEffect(() => startReminderScheduler(), []);
   useEffect(() => startAutomationRunner(), []);
+  // Tasks and approvals from your other signed-in devices.
+  useEffect(() => startDeviceTaskSync(), []);
+  // "Hey HANNAH" (if turned on): listen on this device and open a voice turn in chat.
+  useEffect(() => startWakeWord(), []);
+  useEffect(() => {
+    const onWake = () => { if (screenRef.current !== "conversation") navigate("conversation"); };
+    window.addEventListener(WAKE_EVENT, onWake);
+    return () => window.removeEventListener(WAKE_EVENT, onWake);
+  }, [navigate]);
   useEffect(() => startNativeReminders(), []);
   // Signed-in users can have reminders reach their own webhooks.
   useEffect(() => {
@@ -228,6 +241,7 @@ export default function App() {
         onOpenAutomations={() => navigate("automations")}
         onOpenMarketplace={() => openSecondary("marketplace")}
         onOpenIntegrations={() => openSecondary("integrations")}
+        onOpenSettings={() => navigate("settings")}
       />
     </AppShell>
   );

@@ -11,6 +11,7 @@ import { GUARDIAN_EVENT, GuardianAgent } from "../services/GuardianAgent";
 import { apiUrl } from "../services/api";
 import { ChaosEngine, type DegradedState } from "../services/ChaosEngine";
 import { RemindersCard } from "./Reminders";
+import { DeviceTasksCard } from "./DeviceTasksPanel";
 
 type DashboardProps = {
   onOpenChat: () => void;
@@ -18,6 +19,7 @@ type DashboardProps = {
   onOpenAutomations: () => void;
   onOpenMarketplace: () => void;
   onOpenIntegrations: () => void;
+  onOpenSettings: () => void;
 };
 
 type ServerHealth = { state: "checking" | "ready" | "no-model" | "unreachable"; provider?: string };
@@ -225,7 +227,7 @@ function FeedbackDonut({ segments }: { segments: Array<{ key: string; label: str
   );
 }
 
-export default function Dashboard({ onOpenChat, onOpenMemory, onOpenAutomations, onOpenMarketplace, onOpenIntegrations }: DashboardProps) {
+export default function Dashboard({ onOpenChat, onOpenMemory, onOpenAutomations, onOpenMarketplace, onOpenIntegrations, onOpenSettings }: DashboardProps) {
   const [snapshot, setSnapshot] = useState(readSnapshot);
   const [health, setHealth] = useState<ServerHealth>({ state: "checking" });
   const [degraded, setDegraded] = useState<DegradedState>(ChaosEngine.getDegraded());
@@ -411,6 +413,8 @@ export default function Dashboard({ onOpenChat, onOpenMemory, onOpenAutomations,
           )}
         </Deck>
       </div>
+
+      <div className="mt-4"><DeviceTasksCard onSignIn={onOpenSettings} /></div>
 
       <div className="mt-4"><RemindersCard /></div>
 

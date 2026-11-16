@@ -3,7 +3,7 @@ import { isGroqKey, verifyApiAccess } from "../services/api";
 import { Account, databaseLabel, type AccountStatus } from "../services/Account";
 import { SignInForm } from "./AccountPanel";
 import {
-  ArrowRight, AudioLines, Bot, Boxes, Brain, Cable, Check, ChevronDown, Cpu, Download, Eye, EyeOff, HardDrive, KeyRound, LockKeyhole, Menu,
+  ArrowRight, AudioLines, Bot, Boxes, Brain, Cable, CalendarDays, Check, ChevronDown, Cpu, Download, Ear, Eye, EyeOff, HardDrive, KeyRound, LockKeyhole, Menu,
   MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, TerminalSquare, Waypoints, Workflow, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
@@ -74,14 +74,28 @@ const capabilities = [
     title: "Skills marketplace",
     description: "Add first-party agents and community instruction skills, checked for integrity and publisher signatures before install.",
   },
-];
+  {
+    icon: Ear,
+    title: "“Hey HANNAH”",
+    description: "Turn on the wake word and start talking hands-free in the desktop app, on Android or in a browser tab. It's detected on your device; no audio leaves it until you speak to HANNAH.",
+  },
+  {
+    icon: CalendarDays,
+    title: "Calendar and email",
+    description: "Connect Google or Microsoft with their own sign-in. HANNAH reads your calendar and mail when you ask, and adds events, saves drafts or sends mail only after you approve.",
+  },
+  {
+    icon: MonitorSmartphone,
+    title: "Tasks across devices",
+    description: "Sign in on each device and start a task on your laptop, follow it on your phone, and approve its next step from whichever device is in your hand.",
+    // An odd card out: on two-column screens it takes the full row.
+    wide: true,
+  },
+] as const;
 
 /** Planned, not in this release. */
 const roadmap = [
-  ["“Hey HANNAH” wake word", "Hands-free start on desktop and Android, detected on the device."],
-  ["Calendar and email", "Connect Google and Microsoft accounts with their own sign-in."],
   ["Computer use in the desktop app", "Seeing the screen and using the mouse and keyboard, with approval for each action. Today it needs a desktop app you build yourself (see the README)."],
-  ["Tasks across devices", "Start a task on your laptop and approve it from your phone."],
   ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],
 ] as const;
 
@@ -333,13 +347,16 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               <p className="section-desc">Everything on this list is in HANNAH {APP_VERSION} today.</p>
             </div>
             <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {capabilities.map(({ icon: Icon, title, description }) => (
-                <article key={title} className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-soft">
+              {capabilities.map((item) => {
+                const { icon: Icon, title, description } = item;
+                return (
+                <article key={title} className={`rounded-2xl border border-slate-200/80 bg-white p-6 shadow-soft ${"wide" in item ? "sm:col-span-2 lg:col-span-1" : ""}`}>
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon size={18} strokeWidth={1.8} aria-hidden="true" /></span>
                   <h3 className="mt-5 text-[15px] font-semibold text-ink">{title}</h3>
                   <p className="mt-2 text-[14px] leading-6 text-slate-600">{description}</p>
                 </article>
-              ))}
+                );
+              })}
             <article className="rounded-2xl border border-violet-200/80 bg-violet-50/60 p-6 shadow-soft sm:col-span-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-violet-700 ring-1 ring-violet-200"><TerminalSquare size={18} strokeWidth={1.8} aria-hidden="true" /></span>

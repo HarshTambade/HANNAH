@@ -33,6 +33,8 @@ const { createMcpClientRouter } = require("./mcp-client");
 const { createA2ARouter } = require("./a2a");
 const { createWebhookRouter, emitUserEvent } = require("./webhooks");
 const { createDownloadRouter } = require("./downloads");
+const { createDeviceTaskRouter } = require("./device-tasks");
+const { createConnectionsRouter } = require("./connections");
 const serverVersion = require("./package.json").version;
 const { assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
 const router = require("./router");
@@ -304,6 +306,9 @@ app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
 app.post("/api/feedback", createRateLimiter(rateLimits.feedback));
 app.post("/api/report-content", createRateLimiter(rateLimits.contentReport));
 app.post("/api/events", createRateLimiter(rateLimits.events));
+app.post("/api/account/mail/send", createRateLimiter(rateLimits.chat));
+app.post("/api/account/mail/drafts", createRateLimiter(rateLimits.chat));
+app.post("/api/account/calendar/events", createRateLimiter(rateLimits.chat));
 app.use(express.json({ limit: "12mb" }));
 if (databaseConfigured()) setSpendStore(createSpendStore());
 const isOperator = (res) => Boolean(res.locals.hannahApiTokenId) && !res.locals.hannahAccount && !res.locals.hannahByok;
@@ -317,6 +322,10 @@ app.use("/api", createAccountRouter({
   },
 }));
 app.use("/api", createWebhookRouter());
+// Tasks across devices and approvals from another device (signed-in accounts).
+app.use("/api", createDeviceTaskRouter());
+// Calendar and email: Google and Microsoft accounts connected with their own sign-in.
+app.use("/api", createConnectionsRouter({ allowedOrigins }));
 app.use("/api", createOrchestrateHandler({ getRequestProvider, preferredProviderId, timeoutMs: cloudRequestTimeout }));
 app.use("/api", createVoiceRouter({ getRequestProvider, allowedProviderIds, timeoutMs: cloudRequestTimeout }));
 // Outside MCP servers (operator-configured, operator-only routes).

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const agentTurn = vi.hoisted(() => vi.fn());
 vi.mock("../services/AgentRuntime", () => ({ runAgentTurn: agentTurn }));
-vi.mock("../services/api", () => ({ getSessionGroqKey: () => "gsk_visitorkey", apiFetch: vi.fn(), apiUrl: (path: string) => path }));
+vi.mock("../services/api", () => ({ getSessionGroqKey: () => "gsk_visitorkey", getAccountHint: () => null, apiFetch: vi.fn(), apiUrl: (path: string) => path }));
 import { AutomationService, automationModel, defaultDeps, describeSchedule, nextRunAt, parseSchedule, planSteps, type AutomationDeps } from "../services/AutomationService";
 import { TaskSpineService } from "../services/TaskSpineService";
 import type { WorkflowSchema } from "../services/WorkflowSchema";
@@ -199,5 +199,43 @@ describe("automation storage", () => {
     const run = AutomationService.runs()[0];
     expect(run.status).toBe("failed");
     expect(run.steps.map((step) => step.status)).toEqual(["done", "failed", "skipped"]);
+  });
+});
+
+describe("approving an automation from another device", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { localStorage: memoryStorage(), dispatchEvent: () => true });
+    vi.stubGlobal("crypto", { randomUUID: () => Math.random().toString(36).slice(2) });
+  });
+
+  it("shares the approval, continues when the phone approves, and reports the run", async () => {
+    const flow = workflow([node("t", "trigger", "T"), node("a", "agent-task", "Plan"), node("m", "tool-action", "Save the result to memory", { action: "save-memory" }), node("o", "output", "Log", { channel: "log" })], [["t", "a"], ["a", "m"], ["m", "o"]], "wf-remote");
+    TaskSpineService.createWorkflow(flow);
+    const answers = new Map<string, "approved" | "denied" | null>();
+    const reports: string[] = [];
+    const asked: string[] = [];
+    const answered: string[] = [];
+    const { deps: base, calls } = deps();
+    const d: AutomationDeps = {
+      ...base,
+      remote: {
+        report: (run) => { reports.push(run.status); },
+        ask: async (id, title) => { asked.push(title); answers.set(id, null); return id; },
+        check: async (id) => answers.get(id) ?? null,
+        answered: (id, approve) => { answered.push(`${id}:${approve}`); },
+      },
+    };
+    const paused = await AutomationService.run(flow, "manual", d);
+    expect(paused.status).toBe("waiting-approval");
+    expect(asked).toEqual(["Morning brief: Save the result to memory"]);
+    expect(await AutomationService.syncRemoteApprovals(d)).toEqual([]);
+
+    answers.set([...answers.keys()][0], "approved");
+    const [finished] = await AutomationService.syncRemoteApprovals(d);
+    expect(finished.status).toBe("done");
+    expect(calls.memory).toEqual(["answer 1"]);
+    // The phone answered, so nothing is sent back; the run's progress was reported.
+    expect(answered).toEqual([]);
+    expect(reports).toEqual(["running", "waiting-approval", "done"]);
   });
 });

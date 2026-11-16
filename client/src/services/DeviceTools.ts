@@ -9,6 +9,7 @@ import { ReminderService, resolveDueAt } from "./ReminderService";
 import { MemoryService } from "./MemoryService";
 import { notifyMemoryChanged } from "./MemoryStore";
 import { getDesktopFileTools } from "./DesktopFiles";
+import { getConnectionTools } from "./Connections";
 
 export type ToolSchema = {
   type: "object";
@@ -331,7 +332,8 @@ export function setExternalTools(tools: HANNAHTool[]) {
 
 export function getDeviceTools() {
   const desktop = getDesktopFileTools();
-  return desktop.length || externalTools.length ? [...deviceTools, ...desktop, ...externalTools] : deviceTools;
+  const connections = getConnectionTools();
+  return desktop.length || connections.length || externalTools.length ? [...deviceTools, ...desktop, ...connections, ...externalTools] : deviceTools;
 }
 
 /**

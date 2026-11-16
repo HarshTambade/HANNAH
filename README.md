@@ -81,14 +81,14 @@ Every screen has its own address, so refresh, bookmarks and the back button work
 | --- | --- | --- |
 | **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog: paste your Groq key (checked with Groq before the app opens). **I have an access token** is optional, for operator-provided models and features. When the server has a database, **Sign in or create one** opens email and password sign-in. |
 | **Chat** | `/chat` | Conversation beside the 3D avatar. Pick a model, or **Auto** to let HANNAH choose a provider and model for each message in your [routing mode](#model-routing). A line above the message box previews the choice before you send. Speak or type, rate replies, approve or decline actions on the in-chat approval cards, and press **Stop** to halt a running task before its next step. Turn on **Team** to have HANNAH plan the task with specialist agents and verify the result. |
-| **Dashboard** | `/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. Also holds **Reminders**: add, cancel, and allow notifications. Empty states show `—` or `0`, never sample numbers. |
+| **Dashboard** | `/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. **Across your devices** shows agent team tasks and automations from all your signed-in devices and lets you approve or deny their next step here (see [Tasks across devices](#tasks-across-devices)). Also holds **Reminders**: add, cancel, and allow notifications. Empty states show `—` or `0`, never sample numbers. |
 | **Agents** | `/agents` | The agent team: Research, Coding, Memory and Tasks specialists with their tools and model choice (Auto or a specific model), the always-on verification agent, and **Team activity**: every team run's plan, which steps ran in parallel, each step's status and result, verification and the final answer. Interrupted or stopped runs can be resumed. |
 | **Models** | `/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
 | **Memory & trust** | `/memory` | The accountability page: an **Agent runs** log (every request with each tool step and how it ended, which survives reloads), Guardian strictness and its decision log (allowed and blocked, with reasons), saved memories you can edit or delete, personalization examples, the active persona, and installed plugins. |
 | **Automations** | `/automations` | Routines built from trigger, agent-task, action and output steps that run on a schedule while HANNAH is open, with approval before every action and a run history. See [Automations](#automations). |
 | **Marketplace** | `/marketplace` | First-party agents and skills that change how HANNAH replies, plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
 | **Integrations** | `/integrations` | REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
-| **Settings** | `/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Voice**: speaking and listening engines, voice choice and interrupt-by-talking. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. |
+| **Settings** | `/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Calendar and email**: connect Google or Microsoft with their own sign-in. **Voice**: speaking and listening engines, voice choice, interrupt-by-talking and the **“Hey HANNAH”** wake word. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. |
 
 The design follows a bento and glassmorphism style: rounded `2rem` cards, pastel tones (sky, lavender, butter, mint), large light-weight stat numbers and a floating header. Layouts are responsive down to phone width.
 
@@ -544,11 +544,29 @@ The server checks the instructions again and labels them as untrusted guidance. 
 **Automations** are routines built from connected steps: a trigger (manual, daily at a time, weekdays, or every few hours), agent tasks, actions and an output. The workflow is stored as JSON ([`WorkflowSchema.ts`](./client/src/services/WorkflowSchema.ts)) on the device.
 
 - **Running.** [`AutomationService.ts`](./client/src/services/AutomationService.ts) checks every 30 seconds while HANNAH is open in a tab or the desktop app and starts what's due. A run missed while HANNAH was closed happens once when it reopens, not once per missed slot. **Run now** starts one on demand.
-- **Steps.** An agent task sends its instruction to `/api/chat` with the previous step's result as context. An action (save to memory, create a reminder) pauses the run until you press **Approve** or **Deny**. An output shows a notification, speaks the result, or only records it.
+- **Steps.** An agent task runs one agent turn, with no tools, on the AI chosen in chat (provider, model and your key, or Ollama), with the previous step's result as context. On-device chat models can't run in the background, so with one selected an agent task says so. An action (save to memory, create a reminder) pauses the run until you press **Approve** or **Deny**, here or on another signed-in device. An output shows a notification and an in-app card, speaks the result, or only records it.
 - **History.** The latest 50 runs are kept on the device with each step's status and result.
 - **Limits.** Nothing runs while every HANNAH window is closed; on Android and iOS the app has to be open. Agent tasks use your connected AI and count toward its usage.
 
 ---
+
+## Tasks across devices
+
+Sign in with the same account on your laptop, phone and desktop app, and each device reports the longer tasks it runs (agent team runs and automations) to your account. **Dashboard → Across your devices** lists them with the device, status and progress.
+
+- **Approve from another device.** Every approval HANNAH asks for in chat, and every automation action, is mirrored to your other signed-in devices. They show it as a card on any screen (with the full request), and you can approve or deny from whichever device is in your hand. The first answer wins: the server records it with a single conditional update, so two devices can't both decide, and an expired request (10 minutes for chat, 30 for automations) can't be approved. The work keeps running on the device that started it, which continues as soon as it sees the answer.
+- **Not running in the background.** A device sees new approvals while HANNAH is open on it (every 8 seconds, and at once when you come back to it). To be told when HANNAH isn't open, add a webhook for `approval.requested` (Settings → Account → Webhooks) and forward it to a push service such as ntfy or Pushover.
+- **Privacy.** Shared tasks hold the task title, progress text and approval text, kept in your account for a week. Turn **Share with my devices** off on a device to keep its tasks and approvals local. Signed out, nothing is shared.
+
+Server: [`server/device-tasks.js`](./server/device-tasks.js). App: [`DeviceTasks.ts`](./client/src/services/DeviceTasks.ts), [`ApprovalCenter.ts`](./client/src/services/ApprovalCenter.ts).
+
+## Calendar and email
+
+Connect Google (Calendar and Gmail) or Microsoft (Outlook calendar and mail) in **Settings → Calendar and email**. You sign in on the provider's own page; HANNAH stores the sign-in encrypted in your account, so it works on all your devices.
+
+- **What HANNAH can do:** list your events, add an event, search and read mail, save a draft and send mail. Adding an event, saving a draft and sending mail each show you exactly what will happen and wait for your approval. Events are created without attendees, so nobody is invited.
+- **Mail is untrusted.** Mail HANNAH reads is marked to the model as other people's content, never instructions.
+- **Server setup:** the operator registers a Google and/or Microsoft sign-in app and sets `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`. Step-by-step: [`docs/CALENDAR_AND_EMAIL.md`](./docs/CALENDAR_AND_EMAIL.md). Gmail access for the public needs Google's app verification.
 
 ## MCP integration
 
@@ -618,6 +636,7 @@ Each screenshot and action is reviewed by the Guardian, then confirmed in a nati
 - **Languages:** English (`en-US`), Hindi (`hi-IN`) and Marathi (`mr-IN`), subject to platform support.
 - **Input:** the microphone stays off until you press **Speak**. Choose the engine in **Settings → Voice**: the browser's or device's recognition, or **Groq Whisper**, which records on the device and transcribes each utterance with Groq. Whisper works in any browser that can record, including with a visitor's own Groq key.
 - **Output:** spoken replies are on by default and can be turned off (stored on the device). Choose **Automatic** (Mithi when `MITHI_TTS_URL` is set, otherwise the device voice), **Device voice** (offline, with a voice picker), or **OpenAI voices** (`gpt-4o-mini-tts`, ten voices; needs an OpenAI key saved to your account or on the server). If a hosted voice fails, HANNAH falls back to the device voice. The voice layer is in [`VoiceEngines.ts`](./client/src/services/VoiceEngines.ts) and [`server/voice.js`](./server/voice.js).
+- **“Hey HANNAH” wake word:** turn it on in Settings → Voice to start a voice turn hands-free in the desktop app, on Android (while HANNAH is on screen) or in a desktop browser tab. Detection runs on the device with [Vosk](https://alphacephei.com/vosk/) (Kaldi compiled to WebAssembly) listening for only two things, "hey hannah" or anything else, so it can't transcribe speech and no audio leaves the device. The first time, the app downloads the ~41 MB English model from the HANNAH website and keeps it. It pauses while HANNAH is listening or speaking. It can't tell "Hey Anna" from "Hey Hannah", and it isn't available on iOS yet. Code: [`WakeWord.ts`](./client/src/services/WakeWord.ts); the website build adds the model with [`scripts/wakeModel.ts`](./client/scripts/wakeModel.ts) (pinned SHA-256).
 - **Interrupt by talking (barge-in):** while HANNAH speaks, the microphone listens with echo cancellation and she stops as soon as you start talking. This audio isn't recorded or sent anywhere. Turn it off in Settings → Voice.
 - **Calls (Pinecall):** need `VITE_PINECALL_AGENT_ID`, a server-side `PINECALL_TOKEN_URL` that returns `{ token, server, expires_in }`, network access and microphone permission. The Pinecall API key never goes to the client.
 
@@ -896,7 +915,9 @@ Treat these as design work in progress, not features. Account sync (see [Account
 - On the web, reminders alert only while HANNAH is open. The Android and iOS apps use system notifications.
 - **Stop** takes effect before the next step; a model request already in flight finishes first.
 - Without a database, spending budgets live in server memory and reset on restart.
-- Accounts use email and password only. There's no OAuth sign-in or password-reset email yet.
+- Accounts use email and password only. There's no OAuth sign-in to HANNAH itself or password-reset email yet (connecting Google or Microsoft for calendar and email is separate).
+- Tasks across devices and the wake word work while HANNAH is open; there's no push notification to a closed app (use the `approval.requested` webhook).
+- Calendar and email need the operator's Google and Microsoft sign-in apps; Gmail for the public needs Google's verification.
 - The Research agent has no web access.
 - The Marketplace has no public registry, and executable plugins aren't supported (they need sandboxing).
 - Webhooks are delivered once, with no retries.

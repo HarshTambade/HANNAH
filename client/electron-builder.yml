@@ -45,7 +45,7 @@ mac:
   # macOS asks before an app uses the microphone or the local network; without
   # these descriptions voice input and local AI servers can't work.
   extendInfo:
-    NSMicrophoneUsageDescription: HANNAH uses the microphone so you can talk with her. Audio is captured only while you're speaking to HANNAH.
+    NSMicrophoneUsageDescription: HANNAH uses the microphone so you can talk with her. If you turn on "Hey HANNAH", it also listens for her name while the app is open; that listening happens on this Mac and the audio never leaves it.
     NSLocalNetworkUsageDescription: HANNAH connects to AI models running on your network, such as Ollama, when you choose local AI.
   hardenedRuntime: true
   entitlements: ../config/entitlements.mac.plist

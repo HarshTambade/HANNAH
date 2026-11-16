@@ -5,7 +5,7 @@
  * something happens in their account.
  *
  * Events: reminder.fired, team.completed (reported by the user's own app),
- * budget.exceeded (from the server), and webhook.test.
+ * budget.exceeded and approval.requested (from the server), and webhook.test.
  *
  * Each delivery carries
  *   X-HANNAH-Event, X-HANNAH-Delivery, X-HANNAH-Timestamp and
@@ -23,7 +23,7 @@ const net = require("node:net");
 const { createHmac, randomBytes, randomUUID } = require("node:crypto");
 const { getDatabase } = require("./db");
 
-const EVENTS = new Set(["reminder.fired", "team.completed", "budget.exceeded", "webhook.test"]);
+const EVENTS = new Set(["reminder.fired", "team.completed", "budget.exceeded", "approval.requested", "webhook.test"]);
 const CLIENT_EVENTS = new Set(["reminder.fired", "team.completed"]);
 const MAX_HOOKS = 5;
 

@@ -19,6 +19,7 @@ import { Account } from "./Account";
 import { runAgentTurn, type AgentActivity, type AgentReply } from "./AgentRuntime";
 import { DAILY_BUDGET_KEY } from "./LLMRouter";
 import { activeSpecialists, SPECIALISTS, type SpecialistId } from "./SpecialistAgents";
+import { DeviceTasks } from "./DeviceTasks";
 
 export type TeamStepStatus = "pending" | "running" | "done" | "failed" | "skipped" | "declined" | "blocked" | "stopped";
 export type TeamStep = {
@@ -87,6 +88,18 @@ function write(runs: TeamRun[]) {
 function save(run: TeamRun) {
   run.updatedAt = Date.now();
   write([structuredClone(run), ...read().filter((item) => item.id !== run.id)]);
+  reportAcrossDevices(run);
+}
+
+/** Tasks across devices: your other signed-in devices see this run's progress. */
+function reportAcrossDevices(run: TeamRun) {
+  const done = run.steps.filter((step) => step.status === "done").length;
+  const status = run.status === "succeeded" ? "done" : run.status === "needs-attention" ? "needs-attention" : run.status === "stopped" ? "stopped" : run.status === "failed" || run.status === "interrupted" ? "failed" : "running";
+  const detail = run.status === "planning" ? "Planning"
+    : run.status === "verifying" ? "Checking the result"
+      : status === "running" ? `${done} of ${run.steps.length} steps done`
+        : run.error || run.reply?.slice(0, 300) || run.summary || "";
+  DeviceTasks.report({ id: run.id, title: run.objective.split("\n")[0].slice(0, 140) || "Agent team task", status, detail });
 }
 
 export const TeamRuns = {

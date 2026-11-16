@@ -28,13 +28,19 @@ if (!statSync(distPath, { throwIfNoEntry: false })?.isDirectory()) {
 }
 
 const files = listFiles(distPath);
-const rendererBytes = files
-  .filter((path) => /\.(?:m?js|css)$/i.test(path))
-  .reduce((total, path) => total + gzipSync(readFileSync(path), { level: 9 }).byteLength, 0);
+// Opt-in on-device engines under models/ (the "Hey HANNAH" wake-word recognizer)
+// load only after the user turns them on, like the avatar and AI models, so
+// they're reported on their own line instead of counting as startup code.
+const optInModels = resolve(distPath, "models");
+const gzipSize = (path) => gzipSync(readFileSync(path), { level: 9 }).byteLength;
+const scripts = files.filter((path) => /\.(?:m?js|css)$/i.test(path));
+const rendererBytes = scripts.filter((path) => !path.startsWith(optInModels)).reduce((total, path) => total + gzipSize(path), 0);
+const engineBytes = scripts.filter((path) => path.startsWith(optInModels)).reduce((total, path) => total + gzipSize(path), 0);
 const webDistributionBytes = files.reduce((total, path) => total + statSync(path).size, 0);
 const rendererPass = rendererBytes <= rendererLimit;
 
 console.log(`Renderer JS/CSS (per-file gzip): ${formatMiB(rendererBytes)} / 5.00 MiB ${rendererPass ? "PASS" : "OVER TARGET"}`);
+if (engineBytes) console.log(`Opt-in on-device engines (per-file gzip, loaded only when turned on): ${formatMiB(engineBytes)}`);
 console.log(`Web distribution: ${formatMiB(webDistributionBytes)} (includes models and static assets)`);
 
 let packagePass = true;

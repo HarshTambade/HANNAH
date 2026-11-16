@@ -19,7 +19,8 @@ export class AccountError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** A call to the signed-in account API. Shared by Account, DeviceTasks and Connections. */
+export async function accountRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
     response = await apiFetch(apiUrl(path), {
@@ -50,7 +51,7 @@ const json = (value: unknown) => JSON.stringify(value);
 
 export const Account = {
   async status() {
-    const status = await request<Partial<AccountStatus>>("/api/account/status");
+    const status = await accountRequest<Partial<AccountStatus>>("/api/account/status");
     // A host without the HANNAH server (for example a static build) can answer
     // with a web page instead; treat anything without the expected shape as
     // "no accounts here" rather than letting Settings or the landing page crash.
@@ -60,21 +61,21 @@ export const Account = {
     return status as AccountStatus;
   },
   async register(email: string, password: string, displayName = "") {
-    return remember(await request<SignedIn>("/api/account/register", { method: "POST", body: json({ email, password, displayName }) }));
+    return remember(await accountRequest<SignedIn>("/api/account/register", { method: "POST", body: json({ email, password, displayName }) }));
   },
   async login(email: string, password: string) {
-    return remember(await request<SignedIn>("/api/account/login", { method: "POST", body: json({ email, password }) }));
+    return remember(await accountRequest<SignedIn>("/api/account/login", { method: "POST", body: json({ email, password }) }));
   },
   async logout() {
     try {
-      await request("/api/account/logout", { method: "POST" });
+      await accountRequest("/api/account/logout", { method: "POST" });
     } finally {
       setAccountHint(null);
     }
   },
   async logoutEverywhere() {
     try {
-      await request("/api/account/logout-all", { method: "POST" });
+      await accountRequest("/api/account/logout-all", { method: "POST" });
     } finally {
       setAccountHint(null);
     }
@@ -91,29 +92,29 @@ export const Account = {
       return getAccountHint() ? undefined : null;
     }
   },
-  credentials: () => request<{ vault: boolean; credentials: StoredCredential[] }>("/api/account/credentials"),
-  saveCredential: (providerId: string, apiKey: string) => request<{ ok: true; hint: string; verified: boolean }>(`/api/account/credentials/${encodeURIComponent(providerId)}`, { method: "PUT", body: json({ apiKey }) }),
-  removeCredential: (providerId: string) => request<{ ok: true }>(`/api/account/credentials/${encodeURIComponent(providerId)}`, { method: "DELETE" }),
-  apiKeys: () => request<{ keys: DeveloperKey[] }>("/api/account/api-keys"),
-  createApiKey: (name: string) => request<{ key: string; id: string; name: string; note: string }>("/api/account/api-keys", { method: "POST", body: json({ name }) }),
-  revokeApiKey: (id: string) => request<{ ok: true }>(`/api/account/api-keys/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  audit: () => request<{ events: AuditEvent[] }>("/api/account/audit"),
-  exportData: () => request<Record<string, unknown>>("/api/account/export"),
+  credentials: () => accountRequest<{ vault: boolean; credentials: StoredCredential[] }>("/api/account/credentials"),
+  saveCredential: (providerId: string, apiKey: string) => accountRequest<{ ok: true; hint: string; verified: boolean }>(`/api/account/credentials/${encodeURIComponent(providerId)}`, { method: "PUT", body: json({ apiKey }) }),
+  removeCredential: (providerId: string) => accountRequest<{ ok: true }>(`/api/account/credentials/${encodeURIComponent(providerId)}`, { method: "DELETE" }),
+  apiKeys: () => accountRequest<{ keys: DeveloperKey[] }>("/api/account/api-keys"),
+  createApiKey: (name: string) => accountRequest<{ key: string; id: string; name: string; note: string }>("/api/account/api-keys", { method: "POST", body: json({ name }) }),
+  revokeApiKey: (id: string) => accountRequest<{ ok: true }>(`/api/account/api-keys/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  audit: () => accountRequest<{ events: AuditEvent[] }>("/api/account/audit"),
+  exportData: () => accountRequest<Record<string, unknown>>("/api/account/export"),
   async deleteAccount(password: string) {
-    await request("/api/account", { method: "DELETE", body: json({ password }) });
+    await accountRequest("/api/account", { method: "DELETE", body: json({ password }) });
     setAccountHint(null);
   },
-  webhooks: () => request<{ events: string[]; webhooks: Webhook[] }>("/api/account/webhooks"),
-  createWebhook: (url: string, events: string[]) => request<{ id: string; secret: string; events: string[] }>("/api/account/webhooks", { method: "POST", body: json({ url, events }) }),
-  removeWebhook: (id: string) => request<{ ok: true }>(`/api/account/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  testWebhook: (id: string) => request<{ ok: boolean; status: number }>(`/api/account/webhooks/${encodeURIComponent(id)}/test`, { method: "POST" }),
+  webhooks: () => accountRequest<{ events: string[]; webhooks: Webhook[] }>("/api/account/webhooks"),
+  createWebhook: (url: string, events: string[]) => accountRequest<{ id: string; secret: string; events: string[] }>("/api/account/webhooks", { method: "POST", body: json({ url, events }) }),
+  removeWebhook: (id: string) => accountRequest<{ ok: true }>(`/api/account/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  testWebhook: (id: string) => accountRequest<{ ok: boolean; status: number }>(`/api/account/webhooks/${encodeURIComponent(id)}/test`, { method: "POST" }),
   /** Tell the account's webhooks about something that happened on this device. Best effort. */
   emitEvent(event: "reminder.fired" | "team.completed", data: Record<string, unknown>) {
     if (!getAccountHint()) return;
-    void request("/api/account/events", { method: "POST", body: json({ event, data }) }).catch(() => undefined);
+    void accountRequest("/api/account/events", { method: "POST", body: json({ event, data }) }).catch(() => undefined);
   },
-  readData: <T,>(namespace: string) => request<{ namespace: string; value: T | null; version: number; updatedAt: number | null }>(`/api/account/data/${namespace}`),
-  writeData: (namespace: string, value: unknown, baseVersion: number) => request<{ version: number; updatedAt: number }>(`/api/account/data/${namespace}`, { method: "PUT", body: json({ value, baseVersion }) }),
+  readData: <T,>(namespace: string) => accountRequest<{ namespace: string; value: T | null; version: number; updatedAt: number | null }>(`/api/account/data/${namespace}`),
+  writeData: (namespace: string, value: unknown, baseVersion: number) => accountRequest<{ version: number; updatedAt: number }>(`/api/account/data/${namespace}`, { method: "PUT", body: json({ value, baseVersion }) }),
 };
 
 /** Plain-language name for a database provider id from the server. */

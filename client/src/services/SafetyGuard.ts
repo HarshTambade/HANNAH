@@ -6,7 +6,7 @@ import { SideEffectLedger } from "./SideEffectLedger";
 import { GuardianAgent } from "./GuardianAgent";
 import { ApprovalCenter } from "./ApprovalCenter";
 
-export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file" | "external_tool";
+export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file" | "external_tool" | "create_event" | "save_email_draft" | "send_email";
 
 export class HITLDeniedError extends Error {
   constructor(message = "Action cancelled. HANNAH did not make any changes.") { super(message); this.name = "HITLDeniedError"; }
@@ -24,6 +24,19 @@ function describeAction(action: SensitiveAction, args: Record<string, unknown>) 
   if (action === "external_tool") {
     const shown = JSON.stringify(args.arguments ?? {}, null, 1);
     return `Run “${String(args.tool ?? "a tool")}” on ${String(args.server ?? "an outside MCP server")}? It's an outside tool, so HANNAH can't check what it changes.\n\nArguments:\n${shown.length > 600 ? `${shown.slice(0, 600)}…` : shown}`;
+  }
+  if (action === "send_email" || action === "save_email_draft") {
+    const lines = [`To: ${String(args.to ?? "")}`, ...(args.cc ? [`Cc: ${String(args.cc)}`] : []), `Subject: ${String(args.subject ?? "")}`];
+    const body = String(args.body ?? "");
+    const from = args.provider ? ` from your ${args.provider === "microsoft" ? "Outlook" : "Gmail"} account` : "";
+    return `${action === "send_email" ? `Send this email${from}? It can't be unsent.` : `Save this email as a draft${from}? It won't be sent.`}\n\n${lines.join("\n")}\n\n${body.slice(0, 1200)}${body.length > 1200 ? "…" : ""}`;
+  }
+  if (action === "create_event") {
+    const when = (value: unknown) => {
+      const date = new Date(String(value ?? ""));
+      return Number.isNaN(date.getTime()) ? String(value ?? "") : date.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    };
+    return `Add this event to your ${args.provider === "microsoft" ? "Outlook" : args.provider === "google" ? "Google" : "connected"} calendar?\n\n${String(args.title ?? "")}\n${when(args.start)}${args.end ? ` – ${when(args.end)}` : " (1 hour)"}${args.location ? `\n${String(args.location)}` : ""}`;
   }
   if (action === "send_message") {
     return `Open a text message draft to ${String(args.recipient ?? "the requested recipient")} with this message:\n\n${String(args.message ?? "")}`;

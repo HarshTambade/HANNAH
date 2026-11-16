@@ -9,6 +9,15 @@ import config from "./capacitor.electron.config";
 const REPOSITORY = "https://github.com/HarshTambade/Shanaya-Your-AI-companion";
 const isMac = process.platform === "darwin";
 
+// Links and sign-in pages (Google and Microsoft refuse sign-in inside an app's
+// web view) open in the system browser; the app never opens new windows itself.
+app.on("web-contents-created", (_event, contents) => {
+  contents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+});
+
 // Windows shows notifications (reminders) only for an app whose identity
 // matches its installer; electron-builder uses the appId for it.
 if (process.platform === "win32") app.setAppUserModelId("com.hannah.companion");
@@ -169,10 +178,12 @@ if (process.env.HANNAH_SMOKE_TEST === "1") {
       }
     }
   };
+  // CI's macOS machines are slow to start an unsigned app (two minutes isn't unusual), so CI sets a longer limit.
+  const limitMs = Number(process.env.HANNAH_SMOKE_TIMEOUT_MS) > 0 ? Number(process.env.HANNAH_SMOKE_TIMEOUT_MS) : 60_000;
   const timer = setTimeout(() => {
-    report("HANNAH_SMOKE_FAIL: within 60 seconds the app page did not load or HannahDesktop did not answer.");
+    report(`HANNAH_SMOKE_FAIL: within ${Math.round(limitMs / 1000)} seconds the app page did not load or HannahDesktop did not answer.`);
     app.exit(1);
-  }, 60_000);
+  }, limitMs);
   // Probe from the app page: the bridge works and the files-and-terminal
   // plugin answers. A build that left the plugin's code out fails here.
   const probe = `(async () => {

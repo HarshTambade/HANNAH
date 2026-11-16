@@ -13,6 +13,7 @@ import { MemoryService } from "../services/MemoryService";
 import { notifyMemoryChanged } from "../services/MemoryStore";
 import { AgentApiError } from "../services/LLMRouter";
 import { ApprovalCenter, type ApprovalRequest } from "../services/ApprovalCenter";
+import { WAKE_EVENT, WakeWord } from "../services/WakeWord";
 import MessageContent from "./MessageContent";
 import type { ChatMessage, Emotion, InferenceMode, SpeechLanguage } from "../types";
 import { useConnectivity } from "../services/connectivity";
@@ -818,6 +819,26 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
 
   startCallListeningRef.current = () => { void startVoiceInputSession(); };
 
+  // "Hey HANNAH": start a voice turn as if the mic button was pressed.
+  const wakeRef = useRef<() => void>(() => undefined);
+  wakeRef.current = () => {
+    if (voiceSessionRef.current || voiceStartPendingRef.current) return;
+    voiceInputEnabledRef.current = true;
+    void startVoiceInputSession();
+  };
+  useEffect(() => {
+    const onWake = () => { WakeWord.consumePendingWake(); wakeRef.current(); };
+    window.addEventListener(WAKE_EVENT, onWake);
+    // Opened because of a wake word heard on another screen.
+    if (WakeWord.consumePendingWake()) wakeRef.current();
+    return () => window.removeEventListener(WAKE_EVENT, onWake);
+  }, []);
+  // The wake word listens again only once this conversation goes quiet.
+  useEffect(() => {
+    WakeWord.setBusy(isListening || isLoading || isSpeaking || isVirtualCallActive);
+  }, [isListening, isLoading, isSpeaking, isVirtualCallActive]);
+  useEffect(() => () => WakeWord.setBusy(false), []);
+
   useEffect(() => {
     if (
       voiceInputEnabledRef.current
@@ -1240,6 +1261,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                     <button type="button" onClick={() => ApprovalCenter.respond(request.id, true)} className="rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Approve</button>
                     <button type="button" onClick={() => ApprovalCenter.respond(request.id, false)} className="rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-50">Decline</button>
                   </div>
+                  {request.shared && <p className="mt-2 text-xs text-amber-800">You can also answer this on your other signed-in devices.</p>}
                 </div>
               </div>
             </div>

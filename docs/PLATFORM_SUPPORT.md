@@ -1,6 +1,6 @@
 # Platform support
 
-Status for **HANNAH 1.3.0**, reviewed 2026-11-16. Every claim below says how it was checked. "Built" means the package compiled and was produced by CI. It doesn't mean someone ran it on that operating system.
+Status for **HANNAH 1.4.0**, reviewed 2026-11-17. Every claim below says how it was checked. "Built" means the package compiled and was produced by CI. It doesn't mean someone ran it on that operating system.
 
 ## How each platform ships
 
@@ -25,13 +25,15 @@ Status for **HANNAH 1.3.0**, reviewed 2026-11-16. Every claim below says how it 
 | Navigation, deep links to screens, back | ✅ T | ✅ D | ✅ D (system back walks app history) | ✅ D (Go menu, ⌘1–6, ⌘[ ⌘]) | ✅ D (Alt+←/→, Ctrl+1–6) | ✅ D |
 | Voice out (text-to-speech) | ✅ T | ✅ D | ✅ D | ✅ D | ✅ D | 🟡 D (depends on installed system voices; OpenAI voices work) |
 | Voice in (microphone) | 🟡 T (browser speech recognition in Chromium and Safari; Whisper anywhere) | ✅ D | ✅ D | ✅ D (needs the new microphone entitlement) | ✅ D | 🟡 D (Whisper; no system speech recognition in Electron) |
-| "Hey HANNAH" wake word | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| "Hey HANNAH" wake word | ✅ T (Chromium, recorded "Hey Hannah" as the microphone; desktop browsers) | ❌ (not yet) | 🟡 D (while HANNAH is on screen; downloads the 41 MB model once) | ✅ D (while the app is open) | ✅ D (while the app is open) | ✅ D (while the app is open) |
 | Files | 🟡 T (export and import JSON) | 🟡 D (app sandbox) | 🟡 D (app storage) | 🟡 D (export and import) | 🟡 D | 🟡 D |
 | Reminders and notifications | 🟡 T (only while the tab is open) | ✅ D (system notifications, even when closed) | ✅ D (system notifications, even when closed) | 🟡 D (while the app runs) | 🟡 D (while the app runs; needs the installer's app identity) | 🟡 D (while the app runs; depends on the desktop's notification service) |
 | Cloud models (20 providers, routing) | ✅ T (mocked providers) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Local models | ✅ T (WebLLM downloaded and answered in Chromium with WebGPU; after the worker change, download progress re-verified, reply not yet re-run) | ✅ D (llama.cpp on-device) | ✅ D (llama.cpp on-device) | 🟡 D (WebLLM with WebGPU; Ollama through the server) | 🟡 D (as macOS) | 🟡 D (as macOS; WebGPU support varies by GPU driver) |
 | Agents and Team mode | ✅ T (mocked models) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Desktop files and terminal | ❌ | ❌ | ❌ | ✅ T (HannahDesktop plugin; see below) | ✅ B | ✅ B |
+| Tasks across devices (follow and approve) | ✅ T (approve from another device, mocked account API; server tests on SQLite) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
+| Calendar and email (Google, Microsoft) | ✅ T (sign-in flow with mocked providers; server tests with fake Google and Graph) | 🟡 D (sign-in opens the system browser) | 🟡 D (sign-in opens the system browser) | 🟡 D (system browser) | 🟡 D (system browser) | 🟡 D (system browser) |
 | Desktop computer use | ❌ | ❌ | ❌ | 🟡 D (only in a self-built desktop app with the bridge, plus the server's Anthropic key) | 🟡 D | 🟡 D |
 | Memory and local storage | ✅ T | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Background work | 🚫 browser: only while open | 🚫 iOS: no background agents; notifications only | 🟡 D (notifications; no foreground service yet) | 🟡 while running | 🟡 while running | 🟡 while running |

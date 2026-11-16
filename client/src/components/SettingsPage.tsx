@@ -4,6 +4,8 @@ import { apiFetch, apiUrl, getAccountHint, getApiAccessToken, getSessionGroqKey,
 import AccountPanel from "./AccountPanel";
 import VoiceSettingsPanel from "./VoiceSettingsPanel";
 import DesktopAccessPanel from "./DesktopAccessPanel";
+import ConnectionsPanel from "./ConnectionsPanel";
+import WakeWordSetting from "./WakeWordSetting";
 import { desktopFilesAvailable } from "../services/DesktopFiles";
 import { DAILY_BUDGET_KEY } from "../services/LLMRouter";
 import { ChatHistory } from "../services/ChatHistory";
@@ -198,8 +200,13 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
         />
       </Section>
 
+      <Section title="Calendar and email" description="Connect Google or Microsoft with their own sign-in. HANNAH reads your calendar and mail when you ask, and adds events, saves drafts or sends mail only after you approve each one.">
+        <ConnectionsPanel />
+      </Section>
+
       <Section title="Voice" description="Choose how HANNAH speaks and listens. Device engines keep audio on this device; hosted engines send it to the provider named.">
         <VoiceSettingsPanel />
+        <WakeWordSetting />
       </Section>
 
       {desktopFilesAvailable() && (

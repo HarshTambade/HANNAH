@@ -17,6 +17,7 @@
  * tools. Runs and their step results are kept on this device (the latest 50).
  */
 import { getSessionGroqKey } from "./api";
+import { DeviceTasks } from "./DeviceTasks";
 import { MemoryService } from "./MemoryService";
 import { ReminderService, notificationPermission } from "./ReminderService";
 import { TaskSpineService } from "./TaskSpineService";
@@ -31,7 +32,7 @@ export type ToolAction = "save-memory" | "create-reminder";
 export type OutputChannel = "notify" | "speak" | "log";
 
 export type StepStatus = "pending" | "running" | "waiting-approval" | "done" | "denied" | "failed" | "skipped";
-export type RunStep = { nodeId: string; kind: WorkflowNode["kind"]; label: string; status: StepStatus; output?: string; error?: string };
+export type RunStep = { nodeId: string; kind: WorkflowNode["kind"]; label: string; status: StepStatus; output?: string; error?: string; remoteApprovalId?: string };
 export type RunStatus = "running" | "waiting-approval" | "done" | "denied" | "failed";
 export type AutomationRun = {
   id: string;
@@ -192,6 +193,13 @@ export type AutomationDeps = {
   saveMemory: (text: string) => void;
   createReminder: (text: string, dueAt: number) => void;
   now: () => number;
+  /** Tasks across devices: report runs and let another signed-in device answer approvals. */
+  remote?: {
+    report: (run: AutomationRun) => void;
+    ask: (id: string, title: string, detail: string) => Promise<string | null>;
+    check: (id: string) => Promise<"approved" | "denied" | null>;
+    answered: (id: string, approve: boolean) => void;
+  };
 };
 
 function storedSetting(key: string) {
@@ -272,6 +280,24 @@ export const defaultDeps: AutomationDeps = {
   saveMemory: (text) => { MemoryService.add("long_term", text.slice(0, 300)); },
   createReminder: (text, dueAt) => { ReminderService.create(text, dueAt); },
   now: () => Date.now(),
+  remote: {
+    report: (run) => {
+      const waiting = run.steps.find((step) => step.status === "waiting-approval");
+      const done = run.steps.filter((step) => step.status === "done").length;
+      DeviceTasks.report({
+        id: run.id,
+        title: `Automation: ${run.name}`,
+        status: run.status === "done" ? "done" : run.status === "failed" ? "failed" : run.status === "denied" ? "stopped" : "running",
+        detail: waiting ? `Waiting for your approval: ${waiting.label}` : run.error || `${done} of ${run.steps.length} steps done`,
+      });
+    },
+    ask: async (id, title, detail) => (await DeviceTasks.requestApproval({ id, title, detail, expiresInMs: 30 * 60_000 }))?.id ?? null,
+    check: async (id) => {
+      const task = await DeviceTasks.status(id);
+      return task?.status === "approved" || task?.status === "denied" ? task.status : null;
+    },
+    answered: (id, approve) => { void DeviceTasks.decide(id, approve).catch(() => undefined); },
+  },
 };
 
 /** The text a step hands to the next one: the newest finished output before it. */
@@ -303,7 +329,10 @@ async function advance(run: AutomationRun, workflow: WorkflowSchema, deps: Autom
         step.output = context;
         run.status = "waiting-approval";
         saveRun(run);
-        deps.notify(`${run.name} needs your approval`, `${node.label}. Open Automations to approve or deny it.`);
+        const remoteId = await deps.remote?.ask(`auto-${run.id}-${index}`, `${run.name}: ${node.label}`, context || node.label).catch(() => null);
+        if (remoteId) { step.remoteApprovalId = remoteId; saveRun(run); }
+        deps.remote?.report(run);
+        deps.notify(`${run.name} needs your approval`, `${node.label}. Open Automations${remoteId ? ", or answer on another signed-in device," : ""} to approve or deny it.`);
         return run;
       } else {
         const text = context || `${run.name} finished.`;
@@ -321,12 +350,14 @@ async function advance(run: AutomationRun, workflow: WorkflowSchema, deps: Autom
       run.error = step.error;
       run.finishedAt = deps.now();
       saveRun(run);
+      deps.remote?.report(run);
       return run;
     }
   }
   run.status = "done";
   run.finishedAt = deps.now();
   saveRun(run);
+  deps.remote?.report(run);
   return run;
 }
 
@@ -380,11 +411,15 @@ export const AutomationService = {
       return run;
     }
     saveRun(run);
+    deps.remote?.report(run);
     return advance(run, workflow, deps);
   },
 
-  /** Approve or deny the action a run is waiting on, then continue or stop. */
-  async decide(runId: string, approve: boolean, deps: AutomationDeps = defaultDeps) {
+  /**
+   * Approve or deny the action a run is waiting on, then continue or stop.
+   * `fromOtherDevice` is set when the answer came from another signed-in device.
+   */
+  async decide(runId: string, approve: boolean, deps: AutomationDeps = defaultDeps, fromOtherDevice = false) {
     const run = readRuns().find((item) => item.id === runId);
     if (!run || run.status !== "waiting-approval") throw new Error("That run isn't waiting for approval.");
     const workflow = findWorkflow(run.workflowId);
@@ -398,12 +433,14 @@ export const AutomationService = {
       return run;
     }
     const step = run.steps[index];
+    if (step.remoteApprovalId && !fromOtherDevice) deps.remote?.answered(step.remoteApprovalId, approve);
     if (!approve) {
       step.status = "denied";
       run.steps.slice(index + 1).forEach((rest) => { rest.status = "skipped"; });
       run.status = "denied";
       run.finishedAt = deps.now();
       saveRun(run);
+      deps.remote?.report(run);
       return run;
     }
     const text = (step.output || `${run.name}: ${node.label}`).trim();
@@ -430,6 +467,19 @@ export const AutomationService = {
     run.status = "running";
     saveRun(run);
     return advance(run, workflow, deps);
+  },
+
+  /** Continue runs whose approval was answered on another device. */
+  async syncRemoteApprovals(deps: AutomationDeps = defaultDeps) {
+    const decided: AutomationRun[] = [];
+    if (!deps.remote) return decided;
+    for (const run of readRuns()) {
+      const step = run.status === "waiting-approval" ? run.steps.find((item) => item.status === "waiting-approval" && item.remoteApprovalId) : undefined;
+      if (!step?.remoteApprovalId) continue;
+      const answer = await deps.remote.check(step.remoteApprovalId).catch(() => null);
+      if (answer) decided.push(await this.decide(run.id, answer === "approved", deps, true));
+    }
+    return decided;
   },
 
   /**
@@ -499,10 +549,18 @@ export function startAutomationRunner() {
   };
   void tick();
   runnerTimer = window.setInterval(() => void tick(), 30_000);
+  // Answers given on another device: check every 5 seconds while a run waits for one.
+  let checking = false;
+  const remoteTimer = window.setInterval(() => {
+    if (checking || !AutomationService.runs().some((run) => run.status === "waiting-approval" && run.steps.some((step) => step.remoteApprovalId))) return;
+    checking = true;
+    void AutomationService.syncRemoteApprovals().catch(() => undefined).finally(() => { checking = false; });
+  }, 5_000);
   const onVisible = () => { if (document.visibilityState === "visible") void tick(); };
   document.addEventListener("visibilitychange", onVisible);
   return () => {
     window.clearInterval(runnerTimer);
+    window.clearInterval(remoteTimer);
     runnerTimer = undefined;
     document.removeEventListener("visibilitychange", onVisible);
   };

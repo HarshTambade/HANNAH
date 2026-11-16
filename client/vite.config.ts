@@ -8,6 +8,7 @@ import { mobileClawVitePlugin } from "capacitor-mobile-claw/vite-plugin";
 import packageJson from "./package.json";
 import { hannahSeoPlugin } from "./scripts/seoPlugin";
 import { appRoutesPlugin } from "./scripts/appRoutesPlugin";
+import { wakeModelPlugin } from "./scripts/wakeModel";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
@@ -21,6 +22,7 @@ export default defineConfig(({ mode }) => ({
     mobileClawVitePlugin(),
     hannahSeoPlugin({ mode }),
     appRoutesPlugin(),
+    wakeModelPlugin(),
     VitePWA({
       registerType: "prompt",
       includeAssets: ["icon.svg", "social-card.svg"],
@@ -38,6 +40,8 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: ["**/*.{js,css,html,svg,wasm}"],
+        // The wake-word engine (models/wake) loads only after it's turned on; don't precache it for everyone.
+        globIgnores: ["models/**"],
         // These paths belong to the HANNAH server, not the app: let navigations
         // to them reach the network instead of the cached app page. Without this,
         // /download/android showed the app's "Page not found" screen.
@@ -67,8 +71,11 @@ export default defineConfig(({ mode }) => ({
         about: resolve(projectRoot, "about/index.html"),
       },
       output: {
+        // The opt-in wake-word engine sits with its model, outside the app's startup code.
+        chunkFileNames: (chunk) => (chunk.name === "vosk" ? "models/wake/[name]-[hash].js" : "assets/[name]-[hash].js"),
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
+          if (/[\\/]node_modules[\\/]vosk-browser[\\/]/.test(id)) return "vosk";
           if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-reconciler)[\\/]/.test(id)) return "vendor-react";
           if (/[\\/]node_modules[\\/](@react-three|three|three-stdlib)[\\/]/.test(id)) return "vendor-three";
           if (/[\\/]node_modules[\\/]@capacitor[\\/]/.test(id)) return "vendor-capacitor";

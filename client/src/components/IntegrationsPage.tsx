@@ -178,6 +178,25 @@ const endpointGroups: Array<{ title: string; items: Endpoint[] }> = [
       { method: "DELETE", path: "/api/account", access: "account", description: "Delete the account and its data." },
     ],
   },
+  {
+    title: "Tasks across devices (signed in from the app)",
+    items: [
+      { method: "GET", path: "/api/account/tasks", access: "account", description: "Tasks and approval requests from all your devices in the last day (?since=<ms> for changes only)." },
+      { method: "PUT", path: "/api/account/tasks/:id", access: "account", description: "The device running a task reports it, or asks for an approval (kind: approval). Approvals expire after 10 minutes by default." },
+      { method: "POST", path: "/api/account/tasks/:id/decision", access: "account", description: "Approve or deny from any of your devices: { approve, deviceId, deviceName }. The first answer wins; later ones get 409." },
+    ],
+  },
+  {
+    title: "Calendar and email (signed in from the app)",
+    items: [
+      { method: "GET", path: "/api/account/connections", access: "account", description: "Which providers this server has set up, and which you've connected." },
+      { method: "POST", path: "/api/account/connections/:provider/start", access: "account", description: "Start Google or Microsoft sign-in (PKCE). Returns the provider's sign-in URL." },
+      { method: "GET", path: "/api/account/calendar/events", access: "account", description: "Events between from and to (ISO 8601, up to 92 days) from your connected calendars." },
+      { method: "POST", path: "/api/account/calendar/events", access: "account", description: "Add an event. The app asks you to approve it first." },
+      { method: "GET", path: "/api/account/mail/messages", access: "account", description: "Search mail (?q= uses the provider's syntax) or list the newest messages." },
+      { method: "POST", path: "/api/account/mail/send", access: "account", description: "Send plain-text mail; /api/account/mail/drafts saves a draft instead. The app asks you to approve both first." },
+    ],
+  },
 ];
 
 const v1Endpoints: Endpoint[] = [
@@ -215,6 +234,7 @@ const webhookEvents = [
   { name: "reminder.fired", detail: "A reminder you set in HANNAH went off." },
   { name: "team.completed", detail: "An agent team finished its task." },
   { name: "budget.exceeded", detail: "Today's estimated spend passed your daily budget." },
+  { name: "approval.requested", detail: "One of your devices is waiting for your approval. Forward it to a phone service (ntfy, Pushover, Slack) to hear about it when HANNAH isn't open." },
   { name: "webhook.test", detail: "Sent when you press Test in Settings." },
 ];
 
@@ -229,7 +249,7 @@ const envVars = [
   { group: "Access", items: [
     { name: "HANNAH_API_TOKEN", detail: "Operator token for every /api and /v1 route. 32–512 characters. Leave it unset to serve only visitors who bring their own key." },
     { name: "CLIENT_ORIGIN", detail: "Comma-separated origins allowed to call the API from a browser." },
-    { name: "HANNAH_PUBLIC_URL", detail: "Public base URL used in the A2A agent card. Defaults to the request's host." },
+    { name: "HANNAH_PUBLIC_URL", detail: "Public base URL used in the A2A agent card and the calendar and email sign-in redirect. Defaults to the request's host." },
   ] },
   { group: "Providers", items: [
     { name: "GROQ_API_KEY", detail: "Default cloud provider key for operator requests. Keep it server-side." },
@@ -243,7 +263,12 @@ const envVars = [
   ] },
   { group: "Accounts and data", items: [
     { name: "DATABASE_URL", detail: "Postgres (Supabase, Neon or any host) or a sqlite: URL. Turns on accounts and sync." },
-    { name: "HANNAH_VAULT_KEY", detail: "Encrypts saved provider keys. Back it up: losing it makes them unreadable." },
+    { name: "HANNAH_VAULT_KEY", detail: "Encrypts saved provider keys and calendar and email sign-ins. Back it up: losing it makes them unreadable." },
+  ] },
+  { group: "Calendar and email", items: [
+    { name: "GOOGLE_CLIENT_ID", detail: "With GOOGLE_CLIENT_SECRET, turns on Google Calendar and Gmail. Redirect URI: <public URL>/api/account/connections/google/callback." },
+    { name: "MICROSOFT_CLIENT_ID", detail: "With MICROSOFT_CLIENT_SECRET, turns on Outlook Calendar and Mail. Same redirect path ending in /microsoft/callback." },
+    { name: "MICROSOFT_TENANT", detail: "Which Microsoft accounts may sign in: common (default), organizations, consumers or your tenant ID." },
   ] },
   { group: "Rate limits", items: [
     { name: "HANNAH_RATE_LIMIT_WINDOW_MS", detail: "Window length. Default 60,000 (one minute), maximum one hour." },
