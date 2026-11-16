@@ -214,3 +214,24 @@ test("production accepts the legacy SHANAYA_API_TOKEN name", () => {
   const result = spawnSync(process.execPath, ["-e", "require('./index')"], { cwd: __dirname, encoding: "utf8", env });
   assert.equal(result.status, 0, result.stderr);
 });
+
+test("the model catalog lists capabilities and prices without credentials", async () => {
+  const response = await fetch(baseUrl + "/api/catalog", { headers: { Authorization: "Bearer " + token } });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const text = JSON.stringify(body);
+  assert.ok(!/api[_-]?key|gsk_|sk-/i.test(text.replace(/"docs":"[^"]*"/g, "")), "catalog must not contain credentials");
+  const groq = body.providers.find((provider) => provider.id === "groq");
+  assert.ok(groq.models.some((model) => model.tools === true && typeof model.context === "number"));
+  const openai = body.providers.find((provider) => provider.id === "openai");
+  const mini = openai.models.find((model) => model.id === "gpt-4o-mini");
+  assert.deepEqual(mini.price, { inputPerMTok: 0.15, outputPerMTok: 0.6, currency: "USD" });
+});
+
+test("a visitor key sees only Groq in the model catalog", async () => {
+  const response = await fetch(baseUrl + "/api/catalog", { headers: { "X-Groq-API-Key": visitorKey } });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.byok, true);
+  assert.deepEqual(body.providers.map((provider) => provider.id), ["groq"]);
+});

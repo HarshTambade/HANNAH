@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import IntegrationsPage from "./components/IntegrationsPage";
 import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
+import ModelsPage from "./components/ModelsPage";
 import WorkflowBuilder from "./components/WorkflowBuilder";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
 import ChatUI from "./components/ChatUI";
@@ -18,6 +19,7 @@ const routes: Record<Screen, string> = {
   landing: "",
   conversation: "#/chat",
   companion: "#/dashboard",
+  models: "#/models",
   accountability: "#/memory",
   automations: "#/automations",
   settings: "#/settings",
@@ -25,7 +27,7 @@ const routes: Record<Screen, string> = {
   marketplace: "#/marketplace",
 };
 
-const appSections = new Set<Screen>(["conversation", "companion", "accountability", "automations", "settings"]);
+const appSections = new Set<Screen>(["conversation", "companion", "models", "accountability", "automations", "settings"]);
 
 // Only "#/..." hashes are routes; "#experience" etc. are landing-page anchors.
 function screenFromHash(): Screen {
@@ -146,6 +148,14 @@ export default function App() {
     return (
       <AppShell {...shellProps}>
         <div className="mx-auto max-w-6xl px-3 pb-12 pt-5 sm:px-6 sm:pt-8"><AgentAccountabilityDashboard /></div>
+      </AppShell>
+    );
+  }
+
+  if (screen === "models") {
+    return (
+      <AppShell {...shellProps}>
+        <ModelsPage />
       </AppShell>
     );
   }

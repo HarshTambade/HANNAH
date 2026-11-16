@@ -19,7 +19,7 @@ const configuredTokenDigest = configuredTokenIsValid
 // Their key is forwarded to Groq's official API and nowhere else (see
 // getRequestProviderApiKey in index.js); server-held provider keys, desktop
 // control, TTS, calls, feedback and sync still require the operator token.
-const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers"]);
+const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog"]);
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 
 function isGroqKey(value) {

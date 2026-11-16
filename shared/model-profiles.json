@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "reviewed": "2026-11-16",
+  "about": "Curated profiles used by HANNAH's model advisor. Tiers and strengths are HANNAH's editorial summary of each model family, not benchmark scores. Open-weight memory figures are approximate 4-bit (Q4_K_M or MXFP4) download sizes; architecture numbers drive the KV-cache estimate. Models a provider reports at runtime but that are not listed here still appear, marked as unprofiled. Edit this file to add or correct a model.",
+  "tiers": {
+    "frontier": "Top-end reasoning and coding; best for demanding or long multi-step work.",
+    "strong": "Capable general model; handles most coding, research and agent tasks.",
+    "efficient": "Good everyday quality at low cost or modest hardware.",
+    "small": "Fast and light; best for simple chat, drafts and routine tasks."
+  },
+  "open": [
+    { "id": "llama3.2-3b", "label": "Llama 3.2 3B Instruct", "family": "Llama", "paramsB": 3.2, "weightsGB": 2.0, "layers": 28, "kvHeads": 8, "headDim": 128, "maxContext": 131072, "tier": "small", "strengths": ["chat"], "tools": true, "vision": false, "license": "Llama 3.2 Community License", "licenseNote": "Commercial use allowed with conditions, including an acceptable-use policy.", "ollama": "llama3.2:3b" },
+    { "id": "phi3.5-mini", "label": "Phi-3.5 Mini Instruct", "family": "Phi", "paramsB": 3.8, "weightsGB": 2.2, "layers": 32, "kvHeads": 32, "headDim": 96, "maxContext": 131072, "tier": "small", "strengths": ["chat", "reasoning"], "tools": false, "vision": false, "license": "MIT", "licenseNote": "Permissive.", "ollama": "phi3.5" },
+    { "id": "mistral-7b", "label": "Mistral 7B Instruct", "family": "Mistral", "paramsB": 7.2, "weightsGB": 4.1, "layers": 32, "kvHeads": 8, "headDim": 128, "maxContext": 32768, "tier": "small", "strengths": ["chat"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "mistral:7b" },
+    { "id": "qwen2.5-7b", "label": "Qwen2.5 7B Instruct", "family": "Qwen", "paramsB": 7.6, "weightsGB": 4.7, "layers": 28, "kvHeads": 4, "headDim": 128, "maxContext": 32768, "tier": "efficient", "strengths": ["chat", "multilingual"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "qwen2.5:7b" },
+    { "id": "qwen2.5-coder-7b", "label": "Qwen2.5 Coder 7B Instruct", "family": "Qwen", "paramsB": 7.6, "weightsGB": 4.7, "layers": 28, "kvHeads": 4, "headDim": 128, "maxContext": 32768, "tier": "efficient", "strengths": ["coding"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "qwen2.5-coder:7b" },
+    { "id": "llama3.1-8b", "label": "Llama 3.1 8B Instruct", "family": "Llama", "paramsB": 8.0, "weightsGB": 4.9, "layers": 32, "kvHeads": 8, "headDim": 128, "maxContext": 131072, "tier": "efficient", "strengths": ["chat"], "tools": true, "vision": false, "license": "Llama 3.1 Community License", "licenseNote": "Commercial use allowed with conditions, including an acceptable-use policy.", "ollama": "llama3.1:8b" },
+    { "id": "qwen3-8b", "label": "Qwen3 8B", "family": "Qwen", "paramsB": 8.2, "weightsGB": 5.2, "layers": 36, "kvHeads": 8, "headDim": 128, "maxContext": 40960, "tier": "efficient", "strengths": ["chat", "reasoning", "multilingual", "agentic"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "qwen3:8b" },
+    { "id": "gemma2-9b", "label": "Gemma 2 9B Instruct", "family": "Gemma", "paramsB": 9.2, "weightsGB": 5.4, "layers": 42, "kvHeads": 8, "headDim": 256, "maxContext": 8192, "tier": "efficient", "strengths": ["chat", "multilingual"], "tools": false, "vision": false, "license": "Gemma Terms of Use", "licenseNote": "Usage restrictions apply; review the terms before commercial use.", "ollama": "gemma2:9b" },
+    { "id": "qwen2.5-coder-14b", "label": "Qwen2.5 Coder 14B Instruct", "family": "Qwen", "paramsB": 14.7, "weightsGB": 9.0, "layers": 48, "kvHeads": 8, "headDim": 128, "maxContext": 32768, "tier": "strong", "strengths": ["coding"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "qwen2.5-coder:14b" },
+    { "id": "deepseek-r1-14b", "label": "DeepSeek R1 Distill Qwen 14B", "family": "DeepSeek", "paramsB": 14.8, "weightsGB": 9.0, "layers": 48, "kvHeads": 8, "headDim": 128, "maxContext": 131072, "tier": "strong", "strengths": ["reasoning"], "tools": false, "vision": false, "license": "MIT", "licenseNote": "Permissive; derived from Apache-2.0 Qwen weights.", "ollama": "deepseek-r1:14b" },
+    { "id": "qwen3-14b", "label": "Qwen3 14B", "family": "Qwen", "paramsB": 14.8, "weightsGB": 9.3, "layers": 40, "kvHeads": 8, "headDim": 128, "maxContext": 40960, "tier": "strong", "strengths": ["chat", "reasoning", "coding", "agentic"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "qwen3:14b" },
+    { "id": "gpt-oss-20b", "label": "gpt-oss 20B", "family": "gpt-oss", "paramsB": 21, "activeParamsB": 3.6, "weightsGB": 14, "layers": 24, "kvHeads": 8, "headDim": 64, "maxContext": 131072, "tier": "strong", "strengths": ["reasoning", "agentic", "coding"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "gpt-oss:20b", "hosted": [{ "provider": "groq", "model": "openai/gpt-oss-20b" }] },
+    { "id": "qwen2.5-coder-32b", "label": "Qwen2.5 Coder 32B Instruct", "family": "Qwen", "paramsB": 32.8, "weightsGB": 20, "layers": 64, "kvHeads": 8, "headDim": 128, "maxContext": 32768, "tier": "strong", "strengths": ["coding"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "qwen2.5-coder:32b" },
+    { "id": "qwen3-32b", "label": "Qwen3 32B", "family": "Qwen", "paramsB": 32.8, "weightsGB": 20, "layers": 64, "kvHeads": 8, "headDim": 128, "maxContext": 40960, "tier": "strong", "strengths": ["reasoning", "coding", "agentic", "multilingual"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "qwen3:32b", "hosted": [{ "provider": "groq", "model": "qwen/qwen3-32b" }] },
+    { "id": "llama3.3-70b", "label": "Llama 3.3 70B Instruct", "family": "Llama", "paramsB": 70.6, "weightsGB": 43, "layers": 80, "kvHeads": 8, "headDim": 128, "maxContext": 131072, "tier": "strong", "strengths": ["chat", "multilingual"], "tools": true, "vision": false, "license": "Llama 3.3 Community License", "licenseNote": "Commercial use allowed with conditions, including an acceptable-use policy.", "ollama": "llama3.3:70b", "hosted": [{ "provider": "groq", "model": "llama-3.3-70b-versatile" }] },
+    { "id": "gpt-oss-120b", "label": "gpt-oss 120B", "family": "gpt-oss", "paramsB": 117, "activeParamsB": 5.1, "weightsGB": 65, "layers": 36, "kvHeads": 8, "headDim": 64, "maxContext": 131072, "tier": "frontier", "strengths": ["reasoning", "coding", "agentic"], "tools": true, "vision": false, "license": "Apache-2.0", "licenseNote": "Permissive.", "ollama": "gpt-oss:120b", "hosted": [{ "provider": "groq", "model": "openai/gpt-oss-120b" }] }
+  ],
+  "hosted": [
+    { "provider": "groq", "model": "openai/gpt-oss-120b", "tier": "frontier", "strengths": ["reasoning", "coding", "agentic"], "speed": "fast" },
+    { "provider": "groq", "model": "openai/gpt-oss-20b", "tier": "strong", "strengths": ["reasoning", "agentic"], "speed": "fast" },
+    { "provider": "groq", "model": "qwen/qwen3-32b", "tier": "strong", "strengths": ["reasoning", "coding", "multilingual"], "speed": "fast" },
+    { "provider": "groq", "model": "moonshotai/kimi-k2-instruct", "tier": "strong", "strengths": ["coding", "agentic"], "speed": "fast" },
+    { "provider": "groq", "model": "llama-3.3-70b-versatile", "tier": "strong", "strengths": ["chat", "multilingual"], "speed": "fast" },
+    { "provider": "groq", "model": "meta-llama/llama-4-maverick-17b-128e-instruct", "tier": "strong", "strengths": ["chat", "vision", "multilingual"], "speed": "fast", "vision": true },
+    { "provider": "groq", "model": "meta-llama/llama-4-scout-17b-16e-instruct", "tier": "efficient", "strengths": ["chat", "vision"], "speed": "fast", "vision": true },
+    { "provider": "groq", "model": "llama-3.1-8b-instant", "tier": "small", "strengths": ["chat"], "speed": "fast" },
+    { "provider": "openai", "model": "gpt-4.1", "tier": "frontier", "strengths": ["coding", "agentic", "vision", "long-context"], "speed": "standard" },
+    { "provider": "openai", "model": "gpt-4.1-mini", "tier": "strong", "strengths": ["chat", "coding", "vision", "long-context"], "speed": "standard" },
+    { "provider": "openai", "model": "o3", "tier": "frontier", "strengths": ["reasoning", "coding", "research"], "speed": "slow" },
+    { "provider": "openai", "model": "o4-mini", "tier": "strong", "strengths": ["reasoning", "coding"], "speed": "standard" },
+    { "provider": "openai", "model": "gpt-4o-mini", "tier": "efficient", "strengths": ["chat", "vision"], "speed": "standard" },
+    { "provider": "anthropic", "model": "claude-opus-4-1", "tier": "frontier", "strengths": ["coding", "agentic", "reasoning", "research", "vision"], "speed": "slow" },
+    { "provider": "anthropic", "model": "claude-sonnet-4-5", "tier": "frontier", "strengths": ["coding", "agentic", "reasoning", "vision"], "speed": "standard" },
+    { "provider": "anthropic", "model": "claude-haiku-4-5", "tier": "strong", "strengths": ["chat", "coding", "vision"], "speed": "fast" },
+    { "provider": "gemini", "model": "gemini-2.5-pro", "tier": "frontier", "strengths": ["reasoning", "research", "vision", "long-context"], "speed": "standard" },
+    { "provider": "gemini", "model": "gemini-2.5-flash", "tier": "strong", "strengths": ["chat", "vision", "long-context"], "speed": "fast" },
+    { "provider": "gemini", "model": "gemini-2.0-flash", "tier": "efficient", "strengths": ["chat", "vision", "long-context"], "speed": "fast" }
+  ]
+}

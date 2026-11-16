@@ -101,7 +101,7 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
               <pre className="overflow-x-auto p-4 text-[11px] leading-5 text-slate-600"><code>{apiExample}</code></pre>
             </div>
 
-            <p className="mt-4 flex items-start gap-2 text-[11px] leading-5 text-slate-500"><KeyRound size={13} className="mt-0.5 shrink-0 text-brand-600" />Groq is the default. Send your own key with X-Groq-API-Key (no access token needed for /api/agent, /api/chat, /api/models and /api/providers), or use the operator's bearer token for other providers and routes. Never put keys in frontend source code or public URLs.</p>
+            <p className="mt-4 flex items-start gap-2 text-[11px] leading-5 text-slate-500"><KeyRound size={13} className="mt-0.5 shrink-0 text-brand-600" />Groq is the default. Send your own key with X-Groq-API-Key (no access token needed for /api/agent, /api/chat, /api/models, /api/providers and /api/catalog), or use the operator's bearer token for other providers and routes. Never put keys in frontend source code or public URLs.</p>
           </section>
 
           <section className="rounded-[1.75rem] border-[6px] border-white/90 bg-white p-5 sm:p-7 shadow-[0_24px_60px_-30px_rgba(38,44,74,0.35)]">

@@ -23,7 +23,7 @@ const {
 } = require("./feedback");
 const { createContentReportHandler } = require("./content-reports");
 const { createSyncHandler, createSyncFetchHandler } = require("./cloud-sync");
-const { tokenUsageMiddleware } = require("./cost-tracking");
+const { knownPriceFor, tokenUsageMiddleware } = require("./cost-tracking");
 const {
   defaultModelFor,
   defaultProviderId,
@@ -257,6 +257,43 @@ app.get("/api/providers", (_req, res) => {
     return res.json({ defaultProvider: "groq", byok: true, providers: groq ? [{ ...groq, configured: true }] : [] });
   }
   res.json({ defaultProvider: defaultProviderId(), providers });
+});
+
+// Model catalog for the advisor: capability flags and list prices per provider.
+// Never includes credentials; for bring-your-own-key visitors only Groq is usable.
+app.get("/api/catalog", (_req, res) => {
+  const byok = Boolean(res.locals.hannahByok);
+  const providers = listProviders()
+    .filter((provider) => !byok || provider.id === "groq")
+    .map((provider) => {
+      return {
+        id: provider.id,
+        label: provider.label,
+        kind: provider.kind,
+        local: Boolean(provider.local),
+        free: Boolean(provider.free),
+        docs: provider.docs,
+        configured: byok ? true : Boolean(provider.configured),
+        models: provider.models.map((model) => {
+          const price = knownPriceFor(model.id);
+          return {
+            id: model.id,
+            label: model.label,
+            tools: Boolean(model.tools),
+            vision: Boolean(model.vision),
+            context: Number.isFinite(model.context) ? model.context : null,
+            free: Boolean(model.free),
+            notes: model.notes || "",
+            price: price ? { inputPerMTok: price.input, outputPerMTok: price.output, currency: "USD" } : null,
+          };
+        }),
+      };
+    });
+  res.json({
+    byok,
+    priceNote: "List prices from this server's table. Providers change prices; check their pricing page before relying on an estimate.",
+    providers,
+  });
 });
 
 app.get("/api/models", async (req, res) => {

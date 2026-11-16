@@ -79,6 +79,7 @@ The app uses hash routes. Every screen except the landing page, Marketplace and 
 | **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog: paste your Groq key (checked with Groq before the app opens). **I have an access token** is optional, for operator-provided models and features. |
 | **Chat** | `#/chat` | Conversation beside the 3D avatar. Choose a model and inference mode, speak or type, rate replies, and approve or decline actions on the in-chat approval cards. |
 | **Dashboard** | `#/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. Empty states show `—` or `0`, never sample numbers. |
+| **Models** | `#/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
 | **Memory & trust** | `#/memory` | The accountability page: Guardian strictness and its decision log (allowed and blocked, with reasons), saved memories you can edit or delete, personalization examples, the active persona, and installed plugins. |
 | **Automations** | `#/automations` | Visual workflow designer (React Flow) with trigger, agent-task, tool-action and output nodes. Designs are saved on this device. See [Automations](#automations) for current limits. |
 | **Marketplace** | `#/marketplace` | First-party agents and skills that change how HANNAH replies. Install, activate, enable or remove them at any time. |
@@ -584,7 +585,7 @@ See [`docs/OPERATIONS_RUNBOOK.md`](./docs/OPERATIONS_RUNBOOK.md) and [`docs/OBSE
 
 There are two ways to authenticate:
 
-- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models` and `/api/providers` only, and the key goes only to Groq's official API.
+- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models`, `/api/providers` and `/api/catalog` only, and the key goes only to Groq's official API.
 - **Operator token:** send `Authorization: Bearer <HANNAH_API_TOKEN>`. This works for every route.
 
 `/api/health` is public. Full examples are in [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
@@ -595,6 +596,7 @@ There are two ways to authenticate:
 | `GET /api/health/agent` | Probes the optional Python fallback. |
 | `GET /api/providers` | Providers configured on the server. |
 | `GET /api/models?provider=` | Models available for a provider. |
+| `GET /api/catalog` | Every provider's models with tool, vision and context flags and known list prices, for the model advisor. No credentials. |
 | `POST /api/agent` | One agent step: messages plus JSON-schema tools in; reply, tool calls, emotion, model, provider, latency and usage out. |
 | `POST /api/chat` | Plain chat (user and assistant messages only); returns `{ reply, emotion }`. |
 | `POST /api/tts` | Text plus `en`, `hi` or `mr` → WAV through Mithi. |
@@ -722,7 +724,7 @@ Treat these as design work in progress, not features. In particular, **end-to-en
 - iOS needs Apple signing for an installable build.
 - With `VITE_AVATAR_MODEL_URL` unset, the 7.4 MB avatar can stall slow devices on first load.
 
-The long-term plan is in [`docs/ROADMAP.md`](./docs/ROADMAP.md), and open debt is in [`docs/TECHNICAL_DEBT.md`](./docs/TECHNICAL_DEBT.md).
+The current plan, with each brief area marked done, partial or missing, is in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md). Open debt is in [`docs/TECHNICAL_DEBT.md`](./docs/TECHNICAL_DEBT.md).
 
 ---
 
@@ -767,6 +769,7 @@ To report a security issue, use GitHub's private vulnerability reporting or cont
 
 | Topic | Document |
 | --- | --- |
+| Architecture, decisions and roadmap | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
 | API and MCP integration | [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md) |
 | Platform audit | [`AUDIT.md`](./AUDIT.md) |
 | Safety governance and maturity | [`docs/SAFETY_GOVERNANCE.md`](./docs/SAFETY_GOVERNANCE.md), [`docs/SAFETY_MATURITY.md`](./docs/SAFETY_MATURITY.md), [`RESPONSIBLE_AI.md`](./RESPONSIBLE_AI.md) |

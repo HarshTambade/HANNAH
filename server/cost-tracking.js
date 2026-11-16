@@ -27,13 +27,23 @@ function numberOrZero(value) {
   return Number.isFinite(value) ? value : 0;
 }
 
-function priceFor(model) {
-  if (typeof model !== "string") return DEFAULT_PRICE;
+/**
+ * List price for a model, or null when the table has no entry. The longest
+ * matching key wins, so "gpt-4o-mini" is not priced as "gpt-4o".
+ */
+function knownPriceFor(model) {
+  if (typeof model !== "string") return null;
   const normalized = model.toLowerCase();
+  let match = null;
   for (const [key, price] of Object.entries(MODEL_PRICES)) {
-    if (normalized.includes(key.toLowerCase())) return price;
+    const candidate = key.toLowerCase();
+    if (normalized.includes(candidate) && (!match || candidate.length > match.key.length)) match = { key: candidate, price };
   }
-  return DEFAULT_PRICE;
+  return match ? match.price : null;
+}
+
+function priceFor(model) {
+  return knownPriceFor(model) || DEFAULT_PRICE;
 }
 
 function estimateCost(model, inputTokens, outputTokens) {
@@ -84,6 +94,7 @@ function tokenUsageMiddleware(req, res, next) {
 
 module.exports = {
   estimateCost,
+  knownPriceFor,
   hashUserId,
   tokenUsageMiddleware,
 };

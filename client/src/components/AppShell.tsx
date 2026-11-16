@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { Brain, LayoutDashboard, MessageSquare, Settings2, Workflow } from "lucide-react";
+import { Brain, Cpu, LayoutDashboard, MessageSquare, Settings2, Workflow } from "lucide-react";
 
-export type AppSection = "conversation" | "companion" | "accountability" | "automations" | "settings";
+export type AppSection = "conversation" | "companion" | "models" | "accountability" | "automations" | "settings";
 
 const navItems: Array<{ id: AppSection; label: string; Icon: typeof MessageSquare }> = [
   { id: "conversation", label: "Chat", Icon: MessageSquare },
   { id: "companion", label: "Dashboard", Icon: LayoutDashboard },
+  { id: "models", label: "Models", Icon: Cpu },
   { id: "accountability", label: "Memory & style", Icon: Brain },
   { id: "automations", label: "Automations", Icon: Workflow },
   { id: "settings", label: "Settings", Icon: Settings2 },
