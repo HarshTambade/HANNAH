@@ -43,15 +43,29 @@ jobs:
             package-lock.json
             client/package-lock.json
             server/package-lock.json
+      - name: Check that every version field matches (and the tag, on releases)
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            node scripts/check-versions.mjs --tag "$GITHUB_REF_NAME"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.release_tag }}" ]; then
+            node scripts/check-versions.mjs --tag "${{ inputs.release_tag }}"
+          else
+            node scripts/check-versions.mjs
+          fi
       - run: npm ci --ignore-scripts
       - run: npm audit --audit-level=high
       - run: npm ci --ignore-scripts
         working-directory: client
       - run: npm audit --audit-level=high
         working-directory: client
+      - run: npm ci --ignore-scripts
+        working-directory: server
       - run: npm audit --prefix server --audit-level=high
       - run: npm test
         working-directory: client
+      - name: Server tests (API, accounts on SQLite and Postgres, routing)
+        run: npm test
+        working-directory: server
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -193,7 +207,9 @@ jobs:
           # Do not let electron-builder attempt an automatic Snap Store upload;
           # snapcraft is not installed on the runner and Snap is not required
           # for the release assets staged by this workflow.
-          pack_args=(--publish never --config.win.target=portable)
+          # Windows ships the NSIS installer from electron-builder.yml: Start-menu entry,
+          # uninstaller, and the only target electron-updater can update.
+          pack_args=(--publish never)
           # Skip macOS code signing only for unsigned builds; signed releases keep their identity.
           if [ "$ELECTRON_RELEASE_REQUESTED" != "true" ]; then
             pack_args+=(--config.mac.identity=null)
@@ -443,7 +459,8 @@ jobs:
   release:
     name: Publish release installers
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
-    needs: [electron, android, ios]
+    # Nothing is published unless the tests and every platform build passed.
+    needs: [quality, e2e, electron, android, ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -460,104 +477,66 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - run: node scripts/check-versions.mjs --tag "$RELEASE_TAG"
       - uses: actions/download-artifact@v4
         with:
           pattern: hannah-*
           path: release-input
           merge-multiple: false
       - name: Stage platform installers
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p release-assets
-
-          find_file() {
-            local root="$1"
-            local pattern="$2"
-            local exclude="${3:-}"
-            if [ -n "$exclude" ]; then
-              find "$root" -type f -iname "$pattern" ! -path "$exclude" -print -quit
-            else
-              find "$root" -type f -iname "$pattern" -print -quit
-            fi
-          }
-
-          copy_required() {
-            local root="$1"
-            local pattern="$2"
-            local destination="$3"
-            local exclude="${4:-}"
-            local source
-            source="$(find_file "$root" "$pattern" "$exclude")"
-            if [ -z "$source" ]; then
-              echo "Missing release package: $pattern under $root" >&2
-              exit 1
-            fi
-            cp "$source" "release-assets/$destination"
-          }
-
-          copy_required release-input/hannah-android '*.apk' 'HANNAH-Android.apk'
-          copy_required release-input/hannah-android '*.aab' 'HANNAH-Android.aab'
-          copy_required release-input/hannah-electron-macos-latest '*.dmg' 'HANNAH-macOS.dmg'
-          copy_required release-input/hannah-electron-windows-latest '*.exe' 'HANNAH-Windows.exe' '*/win-unpacked/*'
-
-          for root in release-input/hannah-electron-*; do
-            find "$root" -type f \( -iname '*.dmg' -o -iname '*.zip' -o -iname '*.exe' -o -iname '*.AppImage' -o -iname '*.deb' -o -iname '*.blockmap' -o -name 'latest*.yml' \) -exec cp -n {} release-assets/ \;
-          done
-
-          copy_required release-input/hannah-electron-ubuntu-latest '*.AppImage' 'HANNAH-Linux.AppImage'
-          copy_required release-input/hannah-electron-ubuntu-latest '*.deb' 'HANNAH-Linux.deb'
-
-          for manifest in latest.yml latest-mac.yml latest-linux.yml; do
-            if [ ! -f "release-assets/$manifest" ]; then
-              echo "Missing Electron auto-update manifest: $manifest" >&2
-              exit 1
-            fi
-          done
-
-          for manifest in release-assets/latest*.yml; do
-            [ -f "$manifest" ] || continue
-            if ! grep -q '^stagingPercentage:' "$manifest"; then
-              printf '\nstagingPercentage: 10\n' >> "$manifest"
-            fi
-          done
-
-          ios_ipa="$(find_file release-input/hannah-ios-archive '*.ipa')"
-          if [ -z "$ios_ipa" ]; then
-            echo "Missing signed iOS IPA; configure iOS signing before publishing a release." >&2
-            exit 1
-          fi
-          cp "$ios_ipa" release-assets/HANNAH-iOS.ipa
-
-      - name: Publish GitHub Release
+        run: bash scripts/stage-release-assets.sh release-input release/assets
+      - name: Sign Linux packages with GPG (when a release key is configured)
         env:
-          GH_TOKEN: ${{ github.token }}
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
           if [ -z "$GPG_PRIVATE_KEY" ] || [ -z "$GPG_PASSPHRASE" ]; then
-            echo "GPG_PRIVATE_KEY and GPG_PASSPHRASE are required to sign Linux release packages." >&2
-            exit 1
+            echo "::notice::GPG_PRIVATE_KEY and GPG_PASSPHRASE are not set; Linux packages ship with SHA-256 checksums only."
+            exit 0
           fi
           umask 077
-          gpg_key_path="$RUNNER_TEMP/hannah-release-signing.asc"
-          gpg_passphrase_path="$RUNNER_TEMP/hannah-release-signing.passphrase"
-          trap 'rm -f "$gpg_key_path" "$gpg_passphrase_path"' EXIT
-          printf '%s' "$GPG_PRIVATE_KEY" > "$gpg_key_path"
-          printf '%s' "$GPG_PASSPHRASE" > "$gpg_passphrase_path"
-          gpg --batch --import "$gpg_key_path"
-          for package in release-assets/HANNAH-Linux.AppImage release-assets/HANNAH-Linux.deb; do
-            if [ -f "$package" ]; then
-              gpg --batch --yes --pinentry-mode loopback --passphrase-file "$gpg_passphrase_path" --armor --detach-sign --output "$package.asc" "$package"
-            fi
+          key="$RUNNER_TEMP/release-key.asc"; pass="$RUNNER_TEMP/release-key.pass"
+          trap 'rm -f "$key" "$pass"' EXIT
+          printf '%s' "$GPG_PRIVATE_KEY" > "$key"; printf '%s' "$GPG_PASSPHRASE" > "$pass"
+          gpg --batch --import "$key"
+          for package in release/assets/HANNAH-Linux.AppImage release/assets/HANNAH-Linux.deb; do
+            gpg --batch --yes --pinentry-mode loopback --passphrase-file "$pass" --armor --detach-sign --output "$package.asc" "$package"
           done
-          find release-assets -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > release-assets/SHA256SUMS
+          (cd release/assets && sha256sum HANNAH-Linux.*.asc >> SHA256SUMS)
+          echo "GPG_SIGNED=true" >> "$GITHUB_ENV"
+      - name: Write release notes
+        env:
+          MAC_SIGNED: ${{ secrets.MACOS_CSC_LINK != '' && secrets.APPLE_ID != '' }}
+          WIN_SIGNED: ${{ secrets.WINDOWS_CERTIFICATE != '' || secrets.WINDOWS_CSC_LINK != '' }}
+        run: |
+          node scripts/release-notes.mjs "$RELEASE_TAG" release/SIGNING_STATUS > release/notes.md
+          cat release/notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+            gh release edit "$RELEASE_TAG" --title "HANNAH $RELEASE_TAG" --notes-file release/notes.md
+            gh release upload "$RELEASE_TAG" release/assets/* --clobber
           else
-            gh release create "$RELEASE_TAG" release-assets/* \
+            gh release create "$RELEASE_TAG" release/assets/* \
               --target "$GITHUB_SHA" \
-              --generate-notes \
-              --title "HANNAH $RELEASE_TAG"
+              --title "HANNAH $RELEASE_TAG" \
+              --notes-file release/notes.md \
+              --latest
           fi
+      - name: Verify the published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          published="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | sort)"
+          expected="$(cd release/assets && ls -1 | sort)"
+          if [ "$published" != "$expected" ]; then
+            echo "Published assets differ from the staged ones:" >&2
+            diff <(echo "$expected") <(echo "$published") >&2 || true
+            exit 1
+          fi
+          echo "Release $RELEASE_TAG has all $(echo "$published" | wc -l) assets."

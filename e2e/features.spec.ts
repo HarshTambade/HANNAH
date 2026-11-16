@@ -23,7 +23,7 @@ async function connectAsGuest(page: Page) {
 
 test("the model advisor recommends models for the user's device", async ({ page }) => {
   await connectAsGuest(page);
-  await page.goto("/#/models");
+  await page.goto("/models");
   await expect(page.getByRole("heading", { name: "Find the right model for you." })).toBeVisible();
   await page.getByRole("radiogroup", { name: "Optimize for" }).getByRole("radio", { name: "Privacy-first" }).click();
   await expect(page.getByText("Showing local models only")).toBeVisible();
@@ -42,14 +42,14 @@ test("Use in chat opens the chat with the recommended model selected", async ({ 
     return route.fulfill({ contentType: "application/json", body: JSON.stringify({ provider: "Groq", defaultModel: "llama-3.1-8b-instant", models: ["llama-3.1-8b-instant"] }) });
   });
   await page.addInitScript(() => localStorage.setItem("hannah.onboarding.v1", "complete"));
-  await page.goto("/#/models");
+  await page.goto("/models");
   // Target the hosted card by name: the list re-sorts once the catalog arrives.
   const pick = page.getByRole("article", { name: "GPT-OSS 120B on Groq" });
   await expect(pick).toBeVisible();
   const modelId = "openai/gpt-oss-120b";
   await pick.getByRole("button", { name: "Use in chat" }).click();
 
-  await expect(page).toHaveURL(/#\/chat/);
+  await expect(page).toHaveURL(/\/chat$/);
   await expect(page.getByRole("textbox", { name: "Message HANNAH" })).toBeVisible();
   await page.getByRole("button", { name: "Inference and privacy settings" }).click();
   await expect(page.getByLabel(/Groq model/)).toHaveValue(modelId);
@@ -57,7 +57,7 @@ test("Use in chat opens the chat with the recommended model selected", async ({ 
 
 test("reminders can be added and cancelled from the dashboard", async ({ page }) => {
   await connectAsGuest(page);
-  await page.goto("/#/dashboard");
+  await page.goto("/dashboard");
   const card = page.getByRole("region", { name: "Reminders" });
   await card.getByLabel("Reminder").fill("Review the pull request");
   await card.getByRole("button", { name: "Add" }).click();
@@ -68,7 +68,7 @@ test("reminders can be added and cancelled from the dashboard", async ({ page })
 
 test("a community instruction skill installs only after its manifest is checked", async ({ page }) => {
   await connectAsGuest(page);
-  await page.goto("/#/marketplace");
+  await page.goto("/marketplace");
   const panel = page.getByRole("region", { name: "Community skills" });
   await panel.getByLabel("Manifest JSON").fill(JSON.stringify({ manifestVersion: 1, type: "executable-plugin" }));
   await panel.getByRole("button", { name: "Check manifest" }).click();
@@ -85,7 +85,7 @@ test("a community instruction skill installs only after its manifest is checked"
 
 test("the Agents screen shows each specialist's tools and can turn one off", async ({ page }) => {
   await connectAsGuest(page);
-  await page.goto("/#/agents");
+  await page.goto("/agents");
   await expect(page.getByRole("heading", { name: "Agents", exact: true })).toBeVisible();
   const research = page.getByRole("region", { name: "Research agent" });
   await expect(research).toContainText("read_app_file");
@@ -103,7 +103,7 @@ test("voice settings offer device and hosted engines with honest availability", 
     stt: [{ id: "groq-whisper", label: "Groq Whisper", hosted: true, available: true, model: "whisper-large-v3-turbo" }],
     mithi: false,
   }) }));
-  await page.goto("/#/settings");
+  await page.goto("/settings");
   const voice = page.getByRole("region", { name: "Voice" });
   await expect(voice.getByRole("radio", { name: /Device voice/ })).toBeVisible();
   await expect(voice.getByRole("radio", { name: /OpenAI voices/ })).toBeDisabled();
@@ -147,8 +147,8 @@ test("signing in with an account opens the app", async ({ page }) => {
   await expect(dialog.getByRole("alert")).toContainText("don't match");
   await dialog.getByLabel("Password").fill("correct horse battery");
   await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/#\/chat/);
-  await page.goto("/#/settings");
+  await expect(page).toHaveURL(/\/chat$/);
+  await page.goto("/settings");
   const account = page.getByRole("region", { name: "Account" });
   await expect(account).toContainText("ada@example.com");
   await expect(account.getByRole("list", { name: "Saved provider keys" })).toContainText("gsk_…abcd");
@@ -160,7 +160,7 @@ test("the Integrations page explains bringing your own database", async ({ page 
     if (url.pathname === "/api/db/status") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ database: { configured: false, ready: false, kind: null, provider: null }, vault: false }) });
     return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
   });
-  await page.goto("/#/integrations");
+  await page.goto("/integrations");
   const card = page.getByRole("region", { name: "Database" });
   await expect(card).toContainText("Not connected");
   await card.getByRole("tab", { name: "Neon" }).click();

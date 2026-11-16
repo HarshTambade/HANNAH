@@ -18,57 +18,56 @@ import { Account } from "./services/Account";
 import { resetSyncState, startAccountSync } from "./services/AccountSync";
 import { refreshMcpTools } from "./services/McpTools";
 import type { Emotion, InferenceMode } from "./types";
-
-type Screen = "landing" | "integrations" | "marketplace" | AppSection;
-
-const routes: Record<Screen, string> = {
-  landing: "",
-  conversation: "#/chat",
-  companion: "#/dashboard",
-  agents: "#/agents",
-  models: "#/models",
-  accountability: "#/memory",
-  automations: "#/automations",
-  settings: "#/settings",
-  integrations: "#/integrations",
-  marketplace: "#/marketplace",
-};
+import NotFoundPage from "./components/NotFoundPage";
+import { legacyHashRedirect, pathForScreen, ROUTE_TITLES, screenForLocation, type AppScreen, type Screen } from "./routes";
 
 const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "settings"]);
+const base = import.meta.env.BASE_URL;
 
-// Only "#/..." hashes are routes; "#experience" etc. are landing-page anchors.
-function screenFromHash(): Screen {
-  const hash = window.location.hash;
-  if (!hash.startsWith("#/")) return "landing";
-  const match = (Object.entries(routes) as Array<[Screen, string]>).find(([, value]) => value === hash);
-  return match?.[0] ?? "landing";
+function currentScreen(): Screen {
+  return screenForLocation(window.location, base);
 }
 
 export default function App() {
+  // Old "#/chat" links become "/chat" before anything renders.
   const [screen, setScreen] = useState<Screen>(() => {
-    const initial = screenFromHash();
+    const redirect = legacyHashRedirect(window.location, base);
+    if (redirect) window.history.replaceState(null, "", redirect);
+    const initial = currentScreen();
     return appSections.has(initial) && !hasApiSession() ? "landing" : initial;
   });
-  const [connectRequested, setConnectRequested] = useState(() => appSections.has(screenFromHash()) && !hasApiSession());
+  const [connectRequested, setConnectRequested] = useState(() => appSections.has(currentScreen()) && !hasApiSession());
+  // Where a signed-out visitor was going; they land there after connecting.
+  const [pendingScreen, setPendingScreen] = useState<AppScreen | null>(() => {
+    const initial = currentScreen();
+    return appSections.has(initial) && !hasApiSession() ? initial as AppScreen : null;
+  });
   const [groqApiKey, setGroqApiKey] = useState(getSessionGroqKey);
   const [emotion, setEmotion] = useState<Emotion>("neutral");
   const [avatarMotion, setAvatarMotion] = useState<AvatarMotion>("loading");
   const [avatarActivity, setAvatarActivity] = useState<AvatarActivity>("idle");
-  const [returnScreen, setReturnScreen] = useState<Screen>("landing");
+  const [returnScreen, setReturnScreen] = useState<AppScreen>("landing");
   const preferredMode: InferenceMode = "cloud";
 
-  const navigate = useCallback((next: Screen) => {
+  const navigate = useCallback((next: AppScreen) => {
+    // App screens need a connection; ask for one and come back afterwards.
     if (appSections.has(next) && !hasApiSession()) {
       setConnectRequested(true);
+      setPendingScreen(next);
       next = "landing";
     }
     setScreen(next);
-    const target = routes[next];
-    if (window.location.hash !== target) {
-      const url = `${window.location.pathname}${window.location.search}${target}`;
-      window.history.pushState(null, "", url);
+    const target = pathForScreen(next, base);
+    if (window.location.pathname !== target || window.location.hash) {
+      window.history.pushState(null, "", `${target}${window.location.search}`);
     }
+    // A new screen starts at the top, like a page load.
+    window.scrollTo?.(0, 0);
   }, []);
+
+  useEffect(() => {
+    document.title = ROUTE_TITLES[screen];
+  }, [screen]);
 
   // Reminders fire while the app is open, on any screen.
   useEffect(() => startReminderScheduler(), []);
@@ -94,7 +93,7 @@ export default function App() {
 
   useEffect(() => {
     const onPop = () => {
-      const next = screenFromHash();
+      const next = currentScreen();
       if (appSections.has(next) && !hasApiSession()) {
         setConnectRequested(true);
         setScreen("landing");
@@ -102,12 +101,9 @@ export default function App() {
         setScreen(next);
       }
     };
+    // Landing-page "#section" anchors change only the hash; they stay on the landing page.
     window.addEventListener("popstate", onPop);
-    window.addEventListener("hashchange", onPop);
-    return () => {
-      window.removeEventListener("popstate", onPop);
-      window.removeEventListener("hashchange", onPop);
-    };
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   const disconnect = useCallback(() => {
@@ -127,12 +123,14 @@ export default function App() {
   }, [navigate]);
 
   const openSecondary = (target: "integrations" | "marketplace") => {
-    setReturnScreen(screen);
+    setReturnScreen(screen === "not-found" ? "landing" : screen);
     navigate(target);
   };
 
   if (screen === "integrations") return <IntegrationsPage onBack={() => navigate(returnScreen === "integrations" ? "landing" : returnScreen)} />;
   if (screen === "marketplace") return <MarketplacePage onBack={() => navigate(returnScreen === "marketplace" ? "landing" : returnScreen)} />;
+
+  if (screen === "not-found") return <NotFoundPage onHome={() => navigate("landing")} onChat={() => navigate("conversation")} />;
 
   if (screen === "landing") {
     return (
@@ -144,9 +142,10 @@ export default function App() {
           setApiAccessToken(apiToken);
           setSessionGroqKey(providerKey);
           setGroqApiKey(providerKey);
-          navigate("conversation");
+          navigate(pendingScreen ?? "conversation");
+          setPendingScreen(null);
         }}
-        onResume={() => navigate("conversation")}
+        onResume={() => { navigate(pendingScreen ?? "conversation"); setPendingScreen(null); }}
         onIntegrations={() => openSecondary("integrations")}
         onMarketplace={() => openSecondary("marketplace")}
       />

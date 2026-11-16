@@ -23,7 +23,7 @@ Each phase is marked against its acceptance criteria (brief §20), not by whethe
 | 10 · Proactive and workflows | **Partial** | Reminders, webhooks. | Saved automations don't run yet. A scheduler needs Phase 4's durable tasks. Then a natural-language workflow builder with approval before activation. |
 | 11 · Visual context | **Partial** | Vision flags per model; screenshots in the desktop agent. | Explicit screen and camera sharing with indicators; redaction. |
 | 12 · Marketplace and developer platform | **Partial** | `/v1`, MCP server and client, A2A, signed webhooks, JS SDK, signed instruction skills. | Python SDK, skill sandbox (D7), registry. |
-| 13 · Productionization | **Partial** | CI, unit, API and browser tests, nightly bypass check. | Load tests, agent evaluations, backup and restore runbook. |
+| 13 · Productionization | **Partial** | CI with unit, API (now in CI), browser and red-team tests; one version across web, desktop, Android and iOS, checked in CI; a release job that waits for every test and build, stages packages under stable names with checksums, writes notes with each package's signing status, and verifies the upload ([`docs/PLATFORM_SUPPORT.md`](./PLATFORM_SUPPORT.md)). Path-based routes, per-platform navigation, and a desktop menu and security policy. | Signing credentials (Apple, Android, Windows, GPG); runs of the packaged apps on each OS; load tests, agent evaluations, backup and restore runbook. |
 
 **Order of the next increments** (each depends only on finished work): Phase 4 durable server tasks → Phase 7 memory model and relevance retrieval → Phase 10 scheduler on top of durable tasks → Phase 5 desktop runtime with scoped tools → Phase 8 native wake word.
 

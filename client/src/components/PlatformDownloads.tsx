@@ -1,16 +1,6 @@
 import { useState } from "react";
 import { Download, ExternalLink } from "lucide-react";
-
-const releasesUrl = "https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases";
-const latestAssetUrl = `${releasesUrl}/latest/download`;
-
-const platforms = [
-  { name: "Android", packageType: "APK · GitHub Release", href: import.meta.env.VITE_ANDROID_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/HANNAH-Android.apk` },
-  { name: "iOS", packageType: "TestFlight / App Store · Apple signing required", href: import.meta.env.VITE_IOS_DOWNLOAD_URL?.trim() || releasesUrl },
-  { name: "macOS", packageType: "DMG · GitHub Release", href: import.meta.env.VITE_MACOS_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/HANNAH-macOS.dmg` },
-  { name: "Windows", packageType: "EXE · GitHub Release", href: import.meta.env.VITE_WINDOWS_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/HANNAH-Windows.exe` },
-  { name: "Linux", packageType: "AppImage · GitHub Release", href: import.meta.env.VITE_LINUX_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/HANNAH-Linux.AppImage` },
-];
+import { APP_VERSION, PLATFORM_DOWNLOADS, RELEASES_URL } from "../config/project";
 
 export default function PlatformDownloads() {
   const [isOpen, setIsOpen] = useState(false);
@@ -35,31 +25,27 @@ export default function PlatformDownloads() {
           aria-label="HANNAH downloads by platform"
           className="absolute right-0 top-[calc(100%+0.6rem)] z-50 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-soft-lg"
         >
-          <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Choose your platform</p>
+          <p className="px-2 pb-2 text-[11px] font-semibold text-slate-500">HANNAH {APP_VERSION}</p>
           <div className="space-y-1">
-            {platforms.map((platform) => (
+            {PLATFORM_DOWNLOADS.filter((platform) => platform.files.length).flatMap((platform) => platform.files.map((file) => (
               <a
-                key={platform.name}
+                key={file.href}
                 role="menuitem"
-                href={platform.href}
-                target="_blank"
-                rel="noreferrer"
+                href={file.href}
                 onClick={() => setIsOpen(false)}
                 className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 transition hover:border-brand-200 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/50"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-ink">Download for {platform.name}</span>
-                  <span className="mt-0.5 block truncate text-[10px] text-slate-500">
-                    {platform.packageType}
-                  </span>
+                  <span className="block text-sm font-medium text-ink">{platform.name}</span>
+                  <span className="mt-0.5 block truncate text-[11px] text-slate-500">{file.label}</span>
                 </span>
-                <ExternalLink size={13} className="shrink-0 text-slate-500" />
+                <Download size={13} className="shrink-0 text-slate-500" />
               </a>
-            ))}
+            )))}
           </div>
-          <p className="mt-2 border-t border-slate-200 px-2 pt-2 text-[10px] leading-relaxed text-slate-500">
-            Android and desktop installers download from the latest GitHub Release. iOS installation requires Apple signing and TestFlight or the App Store. Set a platform URL in the client environment to use a store listing or another installer host.
-          </p>
+          <a href={RELEASES_URL} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-1.5 border-t border-slate-200 px-2 pt-2 text-[11px] text-slate-500 hover:text-ink">
+            All releases and install notes <ExternalLink size={11} />
+          </a>
         </div>
       )}
     </div>

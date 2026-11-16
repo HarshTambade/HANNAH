@@ -6,9 +6,13 @@
  * progress (bytes, shard count) and only gives up when the download has truly
  * stalled for several minutes. Every failure keeps a plain-language reason so
  * the chat can show it and offer a retry.
+ *
+ * The engine library runs only inside workers/webllm.worker.ts. This file
+ * talks to it with a few typed messages, so the ~2 MB (gzip) library is never
+ * part of the main bundle.
  */
 import { useEffect, useSyncExternalStore } from "react";
-import type { MLCEngineInterface } from "@mlc-ai/web-llm";
+import type { WorkerRequest, WorkerResponse } from "../workers/webllm.worker";
 
 export type WebLLMStatus = "idle" | "loading" | "ready" | "error" | "unsupported";
 export type WebLLMMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -29,10 +33,12 @@ const GENERATE_TIMEOUT_MS = 3 * 60 * 1000;
 
 let state: WebLLMState = { status: "idle", modelId: null, progress: 0, detail: "", error: null };
 const listeners = new Set<() => void>();
-let engine: MLCEngineInterface | null = null;
 let worker: Worker | null = null;
 let loading: Promise<void> | null = null;
 let stallTimer: ReturnType<typeof setTimeout> | null = null;
+let nextId = 1;
+type Pending = { resolve: (content: string) => void; reject: (error: Error) => void; onProgress?: (progress: number, text: string) => void };
+const pending = new Map<number, Pending>();
 
 function setState(next: Partial<WebLLMState>) {
   state = { ...state, ...next };
@@ -79,30 +85,58 @@ function clearStall() {
 function armStall() {
   clearStall();
   stallTimer = setTimeout(() => {
-    void reset();
+    reset();
     setState({ status: "error", error: "The model download stopped making progress for 10 minutes. Check your connection, then retry; finished parts are kept." });
   }, STALL_TIMEOUT_MS);
 }
 
-async function reset() {
+function reset() {
   clearStall();
-  const current = engine;
-  engine = null;
   loading = null;
-  try {
-    await current?.unload();
-  } catch {
-    // The worker is terminated next either way.
-  }
   worker?.terminate();
   worker = null;
+  for (const request of pending.values()) request.reject(new Error("The browser model was stopped."));
+  pending.clear();
+}
+
+function startWorker() {
+  const next = new Worker(new URL("../workers/webllm.worker.ts", import.meta.url), { type: "module" });
+  next.onmessage = (event: MessageEvent<WorkerResponse>) => {
+    const message = event.data;
+    const request = pending.get(message.id);
+    if (!request) return;
+    if (message.type === "progress") {
+      request.onProgress?.(message.progress, message.text);
+      return;
+    }
+    pending.delete(message.id);
+    if (message.type === "done") request.resolve(message.content ?? "");
+    else request.reject(new Error(message.message));
+  };
+  next.onerror = (event) => {
+    const reason = describeWebLLMError(event.message || "the model worker stopped");
+    reset();
+    setState({ status: "error", error: reason });
+  };
+  return next;
+}
+
+type WorkerCall = WorkerRequest extends infer R ? R extends { id: number } ? Omit<R, "id"> : never : never;
+
+function call(request: WorkerCall, onProgress?: Pending["onProgress"]) {
+  if (!worker) return Promise.reject(new Error("The browser model isn't running."));
+  const id = nextId++;
+  return new Promise<string>((resolve, reject) => {
+    pending.set(id, { resolve, reject, onProgress });
+    worker!.postMessage({ ...request, id } as WorkerRequest);
+  });
 }
 
 /** Load `modelId` into the shared engine. Safe to call repeatedly. */
 export function loadWebLLM(modelId: string) {
   if (state.modelId === modelId && (state.status === "ready" || state.status === "loading")) return loading ?? Promise.resolve();
   loading = (async () => {
-    await reset();
+    reset();
     setState({ status: "loading", modelId, progress: 0, detail: "Checking WebGPU support…", error: null });
     const support = await detectWebGPU();
     if (!support.supported) {
@@ -111,25 +145,16 @@ export function loadWebLLM(modelId: string) {
     }
     setState({ status: "loading", detail: "Starting the browser model…" });
     try {
-      const { CreateWebWorkerMLCEngine } = await import("@mlc-ai/web-llm");
-      worker = new Worker(new URL("../workers/webllm.worker.ts", import.meta.url), { type: "module" });
-      worker.addEventListener("error", (event) => {
-        if (state.status === "loading" || state.status === "ready") {
-          void reset();
-          setState({ status: "error", error: describeWebLLMError(event.message || "the model worker stopped") });
-        }
-      });
+      worker = startWorker();
       armStall();
-      engine = await CreateWebWorkerMLCEngine(worker, modelId, {
-        initProgressCallback: (report) => {
-          armStall();
-          setState({ progress: Math.max(0, Math.min(1, report.progress || 0)), detail: report.text || "" });
-        },
+      await call({ type: "load", modelId }, (progress, text) => {
+        armStall();
+        setState({ progress: Math.max(0, Math.min(1, progress || 0)), detail: text || "" });
       });
       clearStall();
       setState({ status: "ready", progress: 1, detail: "Browser model ready" });
     } catch (error) {
-      await reset();
+      reset();
       setState({ status: "error", error: describeWebLLMError(error) });
     }
   })();
@@ -138,18 +163,16 @@ export function loadWebLLM(modelId: string) {
 
 /** Reply to a conversation with the loaded model. */
 export async function generateWebLLM(messages: WebLLMMessage[]) {
-  if (!engine || state.status !== "ready") throw new Error("The browser model isn't ready yet.");
-  const reply = engine.chat.completions.create({ messages, stream: false });
+  if (!worker || state.status !== "ready") throw new Error("The browser model isn't ready yet.");
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      void engine?.interruptGenerate();
+      void call({ type: "interrupt" }).catch(() => undefined);
       reject(new Error("The browser model took too long to answer."));
     }, GENERATE_TIMEOUT_MS);
   });
   try {
-    const completion = await Promise.race([reply, timeout]);
-    return completion.choices[0]?.message?.content ?? "";
+    return await Promise.race([call({ type: "generate", messages }), timeout]);
   } finally {
     clearTimeout(timer);
   }

@@ -77,14 +77,14 @@ test("a visitor connects with only a Groq key and chats with the WebGL avatar", 
   expect(protectedRequests.every((request) => request.authorization === "" && request.groqKey === groqKey)).toBe(true);
 
   // The dashboard reflects the real turn that just happened.
-  await page.getByRole("navigation", { name: "App navigation" }).getByRole("button", { name: "Dashboard" }).click();
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("link", { name: "Dashboard" }).click();
   await expect(page.getByRole("heading", { name: "Where you left off" })).toBeVisible();
   await expect(page.getByText("I had a long day. Can we talk?")).toBeVisible();
   await expect(page.getByRole("region", { name: "Overview" }).getByText("1", { exact: true }).first()).toBeVisible();
 
   // History survives a reload because the key is kept for this tab.
   await page.reload();
-  await page.getByRole("navigation", { name: "App navigation" }).getByRole("button", { name: "Chat" }).click();
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("link", { name: "Chat" }).click();
   await expect(page.getByText("I'm glad you reached out.")).toBeVisible();
 });
 
@@ -130,7 +130,7 @@ test("a file write waits for in-app approval and declining changes nothing", asy
     return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
   });
   await page.addInitScript((token) => sessionStorage.setItem("hannah.session.apiToken", token), apiToken);
-  await page.goto("/#/chat");
+  await page.goto("/chat");
 
   await page.getByRole("textbox", { name: "Message HANNAH" }).fill("Save my study plan to a file");
   await page.getByRole("button", { name: "Send message" }).click();
@@ -174,7 +174,7 @@ test("Team mode plans, runs specialists in parallel, verifies and shows the run 
     window.localStorage.setItem("hannah.onboarding.v1", "complete");
     window.sessionStorage.setItem("hannah.session.groqKey", key);
   }, groqKey);
-  await page.goto("/#/chat");
+  await page.goto("/chat");
   await page.getByRole("switch", { name: "Team" }).click();
   await expect(page.getByRole("switch", { name: "Team" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("textbox", { name: "Message HANNAH" }).fill("Explain bento layouts and check what I like");
@@ -183,7 +183,7 @@ test("Team mode plans, runs specialists in parallel, verifies and shows the run 
   expect(phases).toEqual(["plan", "verify"]);
   expect(agentCalls).toBe(2);
 
-  await page.getByRole("navigation", { name: "App navigation" }).getByRole("button", { name: "Agents" }).click();
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("link", { name: "Agents" }).click();
   const activity = page.getByRole("region", { name: "Team activity" });
   await expect(activity).toContainText("Explain bento layouts and check what I like");
   await expect(activity).toContainText("Done");
@@ -227,7 +227,7 @@ test("Auto previews the route before sending and Private mode stays self-hosted"
     window.localStorage.setItem("hannah.cloudModel:groq", "auto");
     sessionStorage.setItem("hannah.session.apiToken", token);
   }, apiToken);
-  await page.goto("/#/chat");
+  await page.goto("/chat");
 
   const message = page.getByRole("textbox", { name: "Message HANNAH" });
   await expect(message).toBeVisible();

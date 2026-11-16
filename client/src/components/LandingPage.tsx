@@ -1,11 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import { isGroqKey, verifyApiAccess } from "../services/api";
 import { Account, databaseLabel, type AccountStatus } from "../services/Account";
 import { SignInForm } from "./AccountPanel";
 import {
-  ArrowRight, AudioLines, Cable, Check, Eye, EyeOff, Globe2, Heart, KeyRound, LockKeyhole, Menu, MessageCircle, PackageOpen, ShieldCheck, Sparkles, X,
+  ArrowRight, AudioLines, Bot, Boxes, Brain, Cable, Check, ChevronDown, Cpu, Download, Eye, EyeOff, HardDrive, KeyRound, LockKeyhole, Menu,
+  MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, Waypoints, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
+import { APP_VERSION, PLATFORM_DOWNLOADS, RELEASE_NOTES_URL, RELEASES_URL, REPOSITORY_URL } from "../config/project";
 
 type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
@@ -19,36 +21,89 @@ type LandingPageProps = {
   onConnectHandled?: () => void;
 };
 
-const statCards = [
-  { value: "3", label: "Voice languages: English, Hindi and Marathi", icon: "globe" },
-  { value: "6", label: "Ways to run the AI, from cloud to fully on-device", icon: "cpu" },
-  { value: "Yours", label: "Chat history stays in your browser, not on our server", icon: "local" },
-];
-
-const features = [
+/** Everything here ships in this release. Each line says what it really does. */
+const capabilities = [
   {
-    icon: MessageCircle,
-    color: "brand",
-    title: "A conversation with presence",
-    description: "Talk through an idea, untangle a long day, or follow your curiosity. HANNAH meets you with thoughtful, natural replies.",
+    icon: Cpu,
+    title: "Any model, your choice",
+    description: "Groq, OpenAI, Anthropic, Gemini, OpenRouter, Mistral, DeepSeek, xAI and more, or models on your own hardware with Ollama, LM Studio, llama.cpp or vLLM.",
+  },
+  {
+    icon: Waypoints,
+    title: "Picks the right model for you",
+    description: "Auto mode chooses a model for each message by Balanced, Best quality, Budget, Fastest or Private rules, shows you why before you send, and falls back if a provider fails.",
+  },
+  {
+    icon: Bot,
+    title: "A team of specialist agents",
+    description: "Turn on Team and HANNAH plans the task, runs Research, Coding, Memory and Tasks agents in parallel, then checks the result before answering.",
   },
   {
     icon: AudioLines,
-    color: "amber",
-    title: "Speak the way you want",
-    description: "Type or use voice in English, Hindi, and Marathi, depending on the speech support available on your device.",
+    title: "Talk naturally",
+    description: "Speak and listen in English, Hindi and Marathi. Use your device's voices or OpenAI voices, Whisper transcription, and interrupt HANNAH mid-sentence.",
+  },
+  {
+    icon: Brain,
+    title: "Memory you own",
+    description: "See, edit, export or delete everything HANNAH remembers. With an account, sync it through your own Postgres, Supabase, Neon or SQLite database.",
+  },
+  {
+    icon: HardDrive,
+    title: "Local and offline",
+    description: "Run a model in your browser with WebLLM, on your phone with llama.cpp, or on your server. Private mode guarantees nothing goes to a cloud AI provider.",
   },
   {
     icon: Sparkles,
-    color: "violet",
-    title: "A character that feels alive",
-    description: "A real-time 3D avatar brings movement and emotion to the conversation, right in your browser.",
+    title: "A companion with presence",
+    description: "A real-time 3D avatar that smiles, listens, thinks and talks, reacting to the mood of each reply.",
   },
   {
-    icon: ShieldCheck,
-    color: "emerald",
-    title: "Governed by design",
-    description: "Every action is checked by HANNAH's Guardian and waits for your approval before anything on your device or data changes.",
+    icon: Cable,
+    title: "Build on it",
+    description: "An OpenAI-compatible API, MCP server and client, agent-to-agent (A2A) messaging, signed webhooks and a JavaScript SDK.",
+  },
+  {
+    icon: PackageOpen,
+    title: "Skills marketplace",
+    description: "Add first-party agents and community instruction skills, checked for integrity and publisher signatures before install.",
+  },
+];
+
+/** Planned, not in this release. */
+const roadmap = [
+  ["“Hey HANNAH” wake word", "Hands-free start on desktop and Android, detected on the device."],
+  ["Calendar and email", "Connect Google and Microsoft accounts with their own sign-in."],
+  ["Automations that run", "Saved workflows run on a schedule, with your approval built in."],
+  ["Files and terminal on desktop", "Scoped folders and approved commands, enforced outside the model."],
+  ["Tasks across devices", "Start a task on your laptop and approve it from your phone."],
+  ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],
+] as const;
+
+const faqs = [
+  {
+    q: "What do I need to start?",
+    a: "A free Groq API key from console.groq.com is enough for the web app. Your key stays in this browser tab and goes only to Groq. A HANNAH server operator can also give you an access token or an account.",
+  },
+  {
+    q: "Is it free?",
+    a: "HANNAH has no paid tiers. You pay your AI provider directly for what you use, and many providers, including Groq, have free tiers. Local models cost nothing per message.",
+  },
+  {
+    q: "Does HANNAH work offline?",
+    a: "Yes, with a local model: WebLLM in a WebGPU browser (one ~900 MB download, then cached), or a downloaded model in the Android and iOS apps.",
+  },
+  {
+    q: "Can HANNAH do things on my computer?",
+    a: "The desktop app can operate your computer through Anthropic computer use when the server is configured for it, and every action waits for your approval. File and terminal tools are still on the roadmap.",
+  },
+  {
+    q: "Where does my data go?",
+    a: "Chat history and memories stay on your device unless you sign in to an account, which syncs them through a database the operator chooses. Requests go only to the AI provider you pick, and in Private mode only to self-hosted models.",
+  },
+  {
+    q: "Which platforms are supported?",
+    a: "The web app works in modern browsers and installs as a PWA. There are desktop apps for macOS, Windows and Linux and an Android app. The iOS app builds from source but isn't distributed yet.",
   },
 ];
 
@@ -133,6 +188,23 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
     onStart({ apiToken: token, groqApiKey: key });
   };
 
+  // In-page links scroll smoothly without adding "#section" to the address bar.
+  const scrollToSection = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    event.preventDefault();
+    setMobileNavigationOpen(false);
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    target.focus({ preventScroll: true });
+  };
+
+  // A link to /#privacy (for example from the About page) still lands on that section.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (id && !id.startsWith("/")) document.getElementById(id)?.scrollIntoView({ block: "start" });
+  }, []);
+
   const openKeyDialog = () => {
     if (hasSession && onResume) {
       onResume();
@@ -142,251 +214,303 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
     setKeyDialogOpen(true);
   };
 
+  const sections: Array<[string, string]> = [["Features", "features"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
+
   return (
     <main className="landing-page relative h-[100dvh] overflow-x-hidden overflow-y-auto bg-slate-50 text-ink selection:bg-brand-200/30">
-      {/* Hero gradient blob background */}
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute -left-20 top-[-10%] h-[40rem] w-[40rem] rounded-full bg-brand-100/60 blur-[120px]" />
-        <div className="absolute -right-20 top-[40%] h-[40rem] w-[40rem] rounded-full bg-amber-100/40 blur-[130px]" />
-        <div className="absolute top-[20%] left-[10%] h-[30rem] w-[30rem] rounded-full bg-violet-100/50 blur-[110px]" />
-        <div className="landing-grain absolute inset-0 opacity-[0.08]" />
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute -left-40 -top-40 h-[42rem] w-[42rem] rounded-full bg-brand-100/50 blur-[140px]" />
+        <div className="landing-grain absolute inset-0 opacity-[0.06]" />
       </div>
 
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-2xl">
-        <div className="mx-auto flex max-w-7xl h-[4.5rem] items-center justify-between px-5 sm:px-8 lg:px-12">
-          <a href="#home" className="flex items-center gap-3" aria-label="HANNAH home">
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur-2xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-5 sm:px-8 lg:px-12">
+          <a href="#home" onClick={(event) => scrollToSection(event, "home")} className="flex items-center gap-2.5" aria-label="HANNAH home">
             <span className="logo-ring !h-6 !w-6" aria-hidden="true" />
-            <span>
-              <span className="block text-[15px] font-medium text-ink">HANNAH</span>
-              <span className="block text-[11px] text-slate-500">AI companion</span>
-            </span>
+            <span className="text-[15px] font-semibold tracking-tight text-ink">HANNAH</span>
+            <span className="hidden rounded-full border border-slate-200 bg-white px-2 py-0.5 font-mono text-[10px] text-slate-500 sm:inline">v{APP_VERSION}</span>
           </a>
 
-          <nav className="hidden items-center gap-8 md:flex" aria-label="Main navigation">
-            <a href="#experience" className="text-xs text-slate-500 transition hover:text-ink">The experience</a>
-            <a href="#how-it-works" className="text-xs text-slate-500 transition hover:text-ink">How it works</a>
-            <a href="#modes" className="text-xs text-slate-500 transition hover:text-ink">Hybrid AI</a>
-            <a href="#privacy" className="text-xs text-slate-500 transition hover:text-ink">Your privacy</a>
-            <button type="button" onClick={onMarketplace} className="text-xs text-slate-500 transition hover:text-ink">Marketplace</button>
-            <button type="button" onClick={onIntegrations} className="text-xs text-slate-500 transition hover:text-ink">Integrations</button>
+          <nav className="hidden items-center gap-7 md:flex" aria-label="Main navigation">
+            {sections.map(([label, id]) => (
+              <a key={id} href={`#${id}`} onClick={(event) => scrollToSection(event, id)} className="text-[13px] text-slate-600 transition hover:text-ink">{label}</a>
+            ))}
+            <button type="button" onClick={onMarketplace} className="text-[13px] text-slate-600 transition hover:text-ink">Marketplace</button>
+            <button type="button" onClick={onIntegrations} className="text-[13px] text-slate-600 transition hover:text-ink">Integrations</button>
           </nav>
 
-          <button
-            type="button"
-            aria-label={mobileNavigationOpen ? "Close navigation" : "Open navigation"}
-            aria-expanded={mobileNavigationOpen}
-            aria-controls="main-mobile-navigation"
-            onClick={() => setMobileNavigationOpen((open) => !open)}
-            className="mr-2 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 md:hidden"
-          >
-            {mobileNavigationOpen ? <X size={17} /> : <Menu size={17} />}
-          </button>
-
-          <button
-            type="button"
-            onClick={openKeyDialog}
-            className="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-bold text-ink transition hover:border-brand-300 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/50"
-          >
-            Talk to HANNAH <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label={mobileNavigationOpen ? "Close navigation" : "Open navigation"}
+              aria-expanded={mobileNavigationOpen}
+              aria-controls="main-mobile-navigation"
+              onClick={() => setMobileNavigationOpen((open) => !open)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 md:hidden"
+            >
+              {mobileNavigationOpen ? <X size={17} /> : <Menu size={17} />}
+            </button>
+            <button
+              type="button"
+              onClick={openKeyDialog}
+              className="group inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+            >
+              {hasSession ? "Open HANNAH" : "Talk to HANNAH"} <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
+            </button>
+          </div>
         </div>
         {mobileNavigationOpen && (
           <nav id="main-mobile-navigation" aria-label="Mobile main navigation" className="border-t border-slate-200 bg-white/95 px-5 py-3 shadow-soft md:hidden">
             <div className="mx-auto flex max-w-7xl flex-col gap-1">
-              {[
-                ["The experience", "#experience"],
-                ["How it works", "#how-it-works"],
-                ["Hybrid AI", "#modes"],
-                ["Your privacy", "#privacy"],
-              ].map(([label, href]) => (
-                <a key={href} href={href} onClick={() => setMobileNavigationOpen(false)} className="rounded-lg px-3 py-2.5 text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">{label}</a>
+              {sections.map(([label, id]) => (
+                <a key={id} href={`#${id}`} onClick={(event) => scrollToSection(event, id)} className="rounded-lg px-3 py-3 text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">{label}</a>
               ))}
-              <button type="button" onClick={() => { setMobileNavigationOpen(false); onMarketplace(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">Marketplace</button>
-              <button type="button" onClick={() => { setMobileNavigationOpen(false); onIntegrations(); }} className="rounded-lg px-3 py-2.5 text-left text-xs text-slate-600 transition hover:bg-brand-50 hover:text-brand-700">Integrations</button>
+              <button type="button" onClick={() => { setMobileNavigationOpen(false); onMarketplace(); }} className="rounded-lg px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">Marketplace</button>
+              <button type="button" onClick={() => { setMobileNavigationOpen(false); onIntegrations(); }} className="rounded-lg px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">Integrations</button>
             </div>
           </nav>
         )}
       </header>
 
       <div className="relative z-10">
-        <section id="home" className="mx-auto grid max-w-7xl items-center gap-8 px-5 pb-16 pt-10 sm:px-8 sm:pt-16 lg:grid-cols-[0.95fr_1.05fr] lg:gap-6 lg:px-12 lg:pb-24 lg:pt-8">
-          <div className="relative z-10 max-w-[42rem] py-4 lg:py-0">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-brand-600">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-              </span>
-              HANNAH v1.0.3
-            </div>
-
-            <h1 className="display-title text-[clamp(2.6rem,6vw,5.4rem)]">
-              An AI companion
-              <span className="mt-1 block text-[clamp(2.6rem,6vw,5.4rem)] bg-gradient-to-r from-brand-600 via-violet-600 to-amber-500 bg-clip-text pb-2 text-transparent">
-                that truly understands.
-              </span>
+        {/* Hero */}
+        <section id="home" tabIndex={-1} className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-16 pt-10 outline-none sm:px-8 sm:pt-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24">
+          <div className="max-w-[40rem]">
+            <a href={RELEASE_NOTES_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-200 hover:text-ink">
+              <span className="font-semibold text-brand-600">New in {APP_VERSION}</span>
+              <span className="h-3 w-px bg-slate-200" aria-hidden="true" />
+              Smart model routing, agent team, voice <ArrowRight size={12} />
+            </a>
+            <h1 className="display-title mt-6 text-[clamp(2.5rem,5.6vw,4.9rem)]">
+              Your Personal AI.
+              <span className="block text-brand-600">Your Intelligence.</span>
+              <span className="block">Your World.</span>
             </h1>
-            <p className="mt-6 max-w-[34rem] text-[14px] leading-[1.8] text-slate-600 sm:text-[15px]">
-              Meet HANNAH: a private, governed AI companion for real conversation, voice, and the little things you feel like sharing.
+            <p className="mt-6 max-w-[36rem] text-[16px] leading-[1.75] text-slate-600">
+              HANNAH is an AI companion that talks with you, remembers what you ask it to, and gets real work done with a team of agents. You choose the models, where they run, and what HANNAH is allowed to do.
             </p>
-
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={openKeyDialog}
-                className="btn-primary group min-h-[3.5rem] !gap-3 !rounded-2xl !px-6 text-sm transition hover:-translate-y-0.5"
-              >
-                Talk to HANNAH
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20"><ArrowRight size={14} /></span>
+              <button type="button" onClick={openKeyDialog} className="btn-primary group min-h-[3.25rem] !gap-3 !rounded-2xl !px-6 text-sm">
+                {hasSession ? "Open HANNAH" : "Talk to HANNAH"}
+                <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />
               </button>
-              <a href="#experience" className="inline-flex min-h-[3.5rem] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-ink transition hover:border-brand-300 hover:text-brand-600">
-                Discover the experience <ArrowRight size={13} />
+              <a href="#download" onClick={(event) => scrollToSection(event, "download")} className="inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-ink transition hover:border-brand-300">
+                <Download size={15} /> Download the app
               </a>
             </div>
-
-            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
-              <button type="button" onClick={onIntegrations} className="inline-flex items-center gap-2 text-left text-xs font-bold text-slate-500 transition hover:text-brand-600">
-                <Cable size={13} /> Connect HANNAH to another app with the API or MCP
-              </button>
-              <button type="button" onClick={onMarketplace} className="inline-flex items-center gap-2 text-left text-xs font-bold text-slate-500 transition hover:text-violet-600">
-                <PackageOpen size={13} /> Browse agents and skills
-              </button>
-            </div>
-
-            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-slate-200 pt-6 text-xs text-slate-400">
-              <span className="inline-flex items-center gap-2"><ShieldCheck size={13} className="text-emerald-400" /> Zero-trust governance</span>
-              <span className="inline-flex items-center gap-2"><Globe2 size={13} className="text-brand-400" /> English · हिन्दी · मराठी</span>
-              <span className="inline-flex items-center gap-2"><LockKeyhole size={13} className="text-violet-400" /> History stays on your device</span>
-            </div>
+            <p className="mt-4 text-[13px] text-slate-500">Free to use with your own Groq key. No paid tiers.</p>
+            <ul className="mt-9 grid gap-3 border-t border-slate-200 pt-6 text-[13px] text-slate-600 sm:grid-cols-3">
+              <li className="flex items-center gap-2"><ShieldCheck size={15} className="shrink-0 text-emerald-600" aria-hidden="true" /> You approve every action</li>
+              <li className="flex items-center gap-2"><LockKeyhole size={15} className="shrink-0 text-brand-600" aria-hidden="true" /> Private mode stays local</li>
+              <li className="flex items-center gap-2"><MonitorSmartphone size={15} className="shrink-0 text-violet-600" aria-hidden="true" /> Web, desktop and Android</li>
+            </ul>
           </div>
 
-          <div className="relative mx-auto h-[min(62dvh,560px)] w-full max-w-[560px] lg:h-[min(70dvh,640px)] lg:min-h-[520px]">
-            {/* Avatar stage */}
-            <div className="absolute inset-x-[8%] bottom-[4%] top-[4%] rounded-[2.5rem] border border-slate-200 bg-white/80 shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-sm" />
-            <div className="absolute inset-x-[11%] bottom-[7%] top-[7%] overflow-hidden rounded-[2rem] border border-brand-100/60 shadow-[0_0_80px_rgba(14,165,233,0.10)]">
+          <div className="relative mx-auto h-[min(60dvh,540px)] w-full max-w-[520px] lg:h-[min(70dvh,620px)] lg:min-h-[500px]">
+            <div className="absolute inset-0 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_90px_-40px_rgba(15,23,42,0.35)]">
               <div className="avatar-stage absolute inset-0" />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70" />
               <div className="absolute inset-0">
                 <AvatarScene emotion="neutral" />
               </div>
-              <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-4 py-4 sm:px-5">
-                <span className="rounded-full border border-white/60 bg-white/85 px-3 py-1.5 font-mono text-[10px] tracking-[0.18em] text-brand-700 backdrop-blur">HANNAH · LIVE</span>
-                <span className="flex items-center gap-1.5 rounded-full border border-white/60 bg-white/85 px-2.5 py-1.5 text-[10px] text-slate-600 backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" /> Ready</span>
-              </div>
-              <div className="pointer-events-none absolute inset-x-4 bottom-4 flex items-center justify-between gap-2 rounded-xl border border-white/50 bg-white/85 px-3 py-2 text-[11px] text-slate-600 backdrop-blur sm:inset-x-5 sm:bottom-5">
-                <span>3 voice languages</span><span className="h-1 w-1 rounded-full bg-slate-400" /><span>Cloud and local AI</span>
-              </div>
+              <p className="pointer-events-none absolute inset-x-4 bottom-4 rounded-xl border border-white/60 bg-white/85 px-3 py-2 text-center text-[12px] text-slate-600 backdrop-blur">
+                Live 3D avatar: move your pointer, or tap her.
+              </p>
             </div>
           </div>
         </section>
 
-        {/* Stat strip */}
-        <section id="experience" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-10">
-            <div>
-              <p className="section-kicker">The experience</p>
-              <h2 className="section-title">More than an answer on a screen.</h2>
-              <p className="section-desc">A familiar place to think out loud, ask anything, or simply have someone thoughtful to talk to.</p>
-            </div>
-          </div>
-          <div className="deck-frame">
-            <div className="deck-card tone-sky grid gap-3 sm:grid-cols-3">
-              {statCards.map(({ value, label, icon: IconName }) => {
-                const Icon = IconName === "cpu" ? ShieldCheck : IconName === "globe" ? Globe2 : Heart;
-                return (
-                  <div key={label} className="glass-tile p-5">
-                    <Icon size={20} strokeWidth={1.6} className="text-slate-700" />
-                    <div className="metric-value mt-4">{value}</div>
-                    <div className="metric-sub">{label}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        {/* Feature grid */}
-        <section id="how-it-works" className="border-y border-slate-100 bg-white/60 backdrop-blur-sm">
-          <div className="mx-auto max-w-7xl px-5 py-24 sm:px-8 sm:py-32 lg:px-12">
-            <div className="max-w-2xl mb-12">
-              <p className="section-kicker">How it works</p>
-              <h2 className="section-title">Your space. Your conversation.</h2>
-              <p className="section-desc">You decide when to begin and whether to type or use your voice.</p>
-              <button type="button" onClick={openKeyDialog} className="group mt-6 inline-flex items-center gap-2 text-[13px] font-bold text-brand-600 transition hover:text-brand-700">
-                Talk to HANNAH <ArrowRight size={14} className="transition group-hover:translate-x-1" />
-              </button>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {features.map(({ icon: Icon, color, title, description }, index) => {
-                const colorMap: Record<string, { bg: string; border: string; icon: string; dot: string }> = {
-                  brand: { bg: "bg-brand-50", border: "border-brand-100", icon: "text-brand-600", dot: "bg-brand-500" },
-                  amber: { bg: "bg-amber-50", border: "border-amber-100", icon: "text-amber-600", dot: "bg-amber-500" },
-                  violet: { bg: "bg-violet-50", border: "border-violet-100", icon: "text-violet-600", dot: "bg-violet-500" },
-                  emerald: { bg: "bg-emerald-50", border: "border-emerald-100", icon: "text-emerald-600", dot: "bg-emerald-500" },
-                };
-                const resolved = colorMap[color] ?? colorMap.brand;
-                return (
-                  <article key={title} className={`relative rounded-2xl border ${resolved.border} bg-white p-6 shadow-soft transition hover:-translate-y-1 hover:border-brand-200`}>
-                    <span className="absolute right-4 top-4 font-mono text-[11px] text-slate-200">0{index + 1}</span>
-                    <div className={`mb-5 flex h-10 w-10 items-center justify-center rounded-xl ${resolved.bg} ${resolved.icon}`}>
-                      <Icon size={17} strokeWidth={1.7} />
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <span className={`h-1.5 w-1.5 rounded-full ${resolved.dot}`} />
-                      <span className="text-xs font-semibold text-ink">{title}</span>
-                    </div>
-                    <p className="mt-2.5 text-[13px] leading-6 text-slate-600">{description}</p>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        <section id="modes" className="border-y border-slate-100 bg-white/65 backdrop-blur-sm">
+        {/* Capabilities */}
+        <section id="features" tabIndex={-1} className="border-y border-slate-200/70 bg-white/60 outline-none backdrop-blur-sm">
           <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
             <div className="max-w-2xl">
-              <p className="section-kicker">Hybrid AI</p>
-              <h2 className="section-title">Choose where HANNAH thinks.</h2>
-              <p className="section-desc">Use a hosted model, a browser model, or a model on your own device or server.</p>
+              <p className="section-kicker">Available now</p>
+              <h2 className="section-title">One companion. Every kind of intelligence.</h2>
+              <p className="section-desc">Everything on this list is in HANNAH {APP_VERSION} today.</p>
             </div>
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {capabilities.map(({ icon: Icon, title, description }) => (
+                <article key={title} className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-soft">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon size={18} strokeWidth={1.8} aria-hidden="true" /></span>
+                  <h3 className="mt-5 text-[15px] font-semibold text-ink">{title}</h3>
+                  <p className="mt-2 text-[14px] leading-6 text-slate-600">{description}</p>
+                </article>
+              ))}
+            </div>
+            <div className="mt-3 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[15px] font-semibold text-ink">Computer use on desktop</h3>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Preview</span>
+              </div>
+              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-700">
+                The desktop app can see your screen and use your mouse and keyboard through Anthropic computer use, with your approval for every action. It needs the server operator to enable it with an Anthropic key.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Real screens */}
+        <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
+          <div className="max-w-2xl">
+            <p className="section-kicker">The app</p>
+            <h2 className="section-title">Designed to stay out of your way.</h2>
+            <p className="section-desc">Screens from HANNAH {APP_VERSION}.</p>
+          </div>
+          <div className="mt-10 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+            <figure className="deck-frame">
+              <img src="/screens/chat.webp" width={1280} height={800} loading="lazy" decoding="async" alt="HANNAH's chat screen: the 3D avatar beside the conversation, with the route preview above the message box." className="w-full rounded-[1.1rem] border border-slate-200" />
+              <figcaption className="px-2 pb-1 pt-3 text-[13px] text-slate-600">Chat, with the model HANNAH picked shown before you send.</figcaption>
+            </figure>
+            <figure className="deck-frame">
+              <img src="/screens/models.webp" width={1280} height={800} loading="lazy" decoding="async" alt="HANNAH's Models screen: your device, what you need, and how to optimize the recommendations." className="w-full rounded-[1.1rem] border border-slate-200" />
+              <figcaption className="px-2 pb-1 pt-3 text-[13px] text-slate-600">Models: recommendations for your task, budget and hardware.</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        {/* Privacy and control */}
+        <section id="privacy" tabIndex={-1} className="border-y border-slate-200/70 bg-white/60 outline-none backdrop-blur-sm">
+          <div className="mx-auto grid max-w-7xl gap-10 px-5 py-20 sm:px-8 sm:py-24 lg:grid-cols-[0.9fr_1.1fr] lg:px-12">
+            <div>
+              <p className="section-kicker">Privacy and control</p>
+              <h2 className="section-title">You stay in charge.</h2>
+              <p className="section-desc">HANNAH enforces these rules in code, outside the AI model, so a clever prompt can't talk its way around them.</p>
+            </div>
+            <ul className="grid gap-3 sm:grid-cols-2">
               {[
-                { title: "Cloud with your key", detail: "Use your own free Groq key, or any provider your server operator has configured. Needs an internet connection." },
-                { title: "Browser and local server", detail: "Run WebLLM in a WebGPU browser or connect to an Ollama endpoint you control." },
-                { title: "On-device models", detail: "Prepare a llama.cpp model in the iOS or Android app, then use it offline." },
-              ].map((mode) => (
-                <article key={mode.title} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
-                  <h3 className="font-display text-sm font-bold text-ink">{mode.title}</h3>
-                  <p className="mt-2 text-[13px] leading-6 text-slate-600">{mode.detail}</p>
+                ["Approval for every action", "HANNAH's Guardian checks each tool call, then waits for your yes before anything on your device or data changes."],
+                ["Private mode means private", "The server refuses to send a Private-mode request to any hosted provider, even a model you picked by hand."],
+                ["Your keys stay yours", "A visitor's Groq key lives only in that browser tab. Account keys are stored encrypted on the server."],
+                ["Your data, your database", "History stays on your device. Accounts sync through a database you choose, and you can export or delete everything."],
+              ].map(([title, text]) => (
+                <li key={title} className="rounded-2xl border border-slate-200/80 bg-white p-5">
+                  <p className="flex items-center gap-2 text-[14px] font-semibold text-ink"><Check size={15} className="text-emerald-600" aria-hidden="true" /> {title}</p>
+                  <p className="mt-2 text-[14px] leading-6 text-slate-600">{text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* Roadmap */}
+        <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
+          <div className="max-w-2xl">
+            <p className="section-kicker">Coming next</p>
+            <h2 className="section-title">On the roadmap.</h2>
+            <p className="section-desc">Planned and not in this release yet. Follow progress on GitHub.</p>
+          </div>
+          <ul className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {roadmap.map(([title, text]) => (
+              <li key={title} className="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[14px] font-semibold text-ink">{title}</p>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">Planned</span>
+                </div>
+                <p className="mt-2 text-[14px] leading-6 text-slate-600">{text}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Download */}
+        <section id="download" tabIndex={-1} className="border-y border-slate-200/70 bg-white/60 outline-none backdrop-blur-sm">
+          <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="section-kicker">Download</p>
+                <h2 className="section-title">HANNAH {APP_VERSION} for every device.</h2>
+                <p className="section-desc">Installers come from the latest GitHub release, each with a SHA-256 checksum.</p>
+              </div>
+              <a href={RELEASE_NOTES_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-brand-600 hover:text-brand-700">Release notes <ArrowRight size={13} /></a>
+            </div>
+            <div className="mt-10 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {PLATFORM_DOWNLOADS.map((platform) => (
+                <article key={platform.id} aria-label={`HANNAH for ${platform.name}`} className="flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5">
+                  <h3 className="flex items-center gap-2 text-[15px] font-semibold text-ink"><Boxes size={16} className="text-slate-500" aria-hidden="true" /> {platform.name}</h3>
+                  <p className="mt-2 flex-1 text-[13px] leading-6 text-slate-600">{platform.note}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {platform.id === "web" && (
+                      <button type="button" onClick={openKeyDialog} className="btn-primary !rounded-xl !px-4 !py-2 text-[13px]">Open the web app</button>
+                    )}
+                    {platform.files.map((file) => (
+                      <a key={file.href} href={file.href} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3.5 py-2 text-[13px] font-semibold text-ink transition hover:border-brand-300 hover:text-brand-700">
+                        <Download size={14} aria-hidden="true" /> {file.label}
+                      </a>
+                    ))}
+                    {platform.id === "ios" && !platform.files.length && (
+                      <a href={`${REPOSITORY_URL}#mobile-desktop-and-pwa-builds`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3.5 py-2 text-[13px] font-semibold text-ink transition hover:border-brand-300">Build from source</a>
+                    )}
+                  </div>
                 </article>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Privacy card */}
-        <section id="privacy" className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28 lg:px-12">
-          <div className="grid gap-6 rounded-2xl border border-brand-100 bg-gradient-to-b from-brand-50 to-white p-6 sm:p-9 lg:grid-cols-[1fr_auto] lg:items-center lg:gap-0 lg:p-11">
-            <div className="max-w-2xl">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600">
-                <LockKeyhole size={17} />
-              </div>
-              <h2 className="mt-5 font-display text-2xl font-bold tracking-[-0.04em] text-ink sm:text-3xl">Your key stays yours.</h2>
-              <p className="mt-3 text-[13px] leading-6 text-slate-600 sm:text-xs">
-                If you add your own Groq key, it is kept only for this browser tab and cleared when you close it. HANNAH sends it to its API server in a request header for cloud replies; it is never written to the server's disk.
-              </p>
-            </div>
-            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="inline-flex min-h-[3rem] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white px-4 text-xs font-bold text-slate-600 transition hover:border-brand-300 hover:text-ink">
-              Get a Groq API key <ArrowRight size={13} />
-            </a>
+        {/* FAQ */}
+        <section id="faq" tabIndex={-1} className="mx-auto max-w-4xl px-5 py-20 outline-none sm:px-8 sm:py-24">
+          <p className="section-kicker">Questions</p>
+          <h2 className="section-title">Frequently asked.</h2>
+          <div className="mt-8 divide-y divide-slate-200 rounded-2xl border border-slate-200/80 bg-white">
+            {faqs.map(({ q, a }) => (
+              <details key={q} className="group px-5 py-1">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 text-[15px] font-semibold text-ink">
+                  {q}
+                  <ChevronDown size={16} className="shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden="true" />
+                </summary>
+                <p className="pb-5 text-[14px] leading-6 text-slate-600">{a}</p>
+              </details>
+            ))}
           </div>
         </section>
 
-        <footer className="border-t border-slate-200">
-          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 text-[11px] text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
-            <span>© {new Date().getFullYear()} HANNAH · A thoughtful AI companion.</span>
-            <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
+        {/* Closing call to action */}
+        <section className="mx-auto max-w-7xl px-5 pb-20 sm:px-8 lg:px-12">
+          <div className="flex flex-col items-start justify-between gap-6 rounded-[2rem] bg-ink px-7 py-10 text-white sm:px-10 lg:flex-row lg:items-center">
+            <div>
+              <h2 className="font-display text-[clamp(1.6rem,3vw,2.3rem)] font-medium tracking-tight">Say hello to HANNAH.</h2>
+              <p className="mt-2 max-w-xl text-[15px] text-slate-300">Start in your browser in a minute with a free Groq key, or download the app.</p>
+            </div>
+            <button type="button" onClick={openKeyDialog} className="inline-flex min-h-[3rem] items-center gap-2 rounded-2xl bg-white px-6 text-sm font-semibold text-ink transition hover:bg-slate-100">
+              {hasSession ? "Open HANNAH" : "Talk to HANNAH"} <ArrowRight size={15} />
+            </button>
           </div>
+        </section>
+
+        <footer className="border-t border-slate-200 bg-white/70 pb-[env(safe-area-inset-bottom)]">
+          <div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 text-[13px] sm:grid-cols-2 sm:px-8 lg:grid-cols-[1.4fr_1fr_1fr_1fr] lg:px-12">
+            <div>
+              <p className="flex items-center gap-2 font-semibold text-ink"><span className="logo-ring !h-5 !w-5" aria-hidden="true" /> HANNAH</p>
+              <p className="mt-3 max-w-xs leading-6 text-slate-500">Your Personal AI. Your Intelligence. Your World.</p>
+              <p className="mt-3 font-mono text-[12px] text-slate-500">Version {APP_VERSION}</p>
+            </div>
+            <div>
+              <p className="font-semibold text-ink">Product</p>
+              <ul className="mt-3 space-y-2 text-slate-600">
+                <li><button type="button" onClick={openKeyDialog} className="hover:text-ink">Open the web app</button></li>
+                <li><a href="#download" onClick={(event) => scrollToSection(event, "download")} className="hover:text-ink">Download</a></li>
+                <li><button type="button" onClick={onMarketplace} className="hover:text-ink">Marketplace</button></li>
+                <li><button type="button" onClick={onIntegrations} className="hover:text-ink">API and integrations</button></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold text-ink">Resources</p>
+              <ul className="mt-3 space-y-2 text-slate-600">
+                <li><a href="/about/" className="hover:text-ink">About HANNAH</a></li>
+                <li><a href={`${REPOSITORY_URL}#readme`} target="_blank" rel="noreferrer" className="hover:text-ink">Documentation</a></li>
+                <li><a href={RELEASES_URL} target="_blank" rel="noreferrer" className="hover:text-ink">Releases</a></li>
+                <li><a href={REPOSITORY_URL} target="_blank" rel="noreferrer" className="hover:text-ink">Source code</a></li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold text-ink">Legal</p>
+              <ul className="mt-3 space-y-2 text-slate-600">
+                <li><a href={`${REPOSITORY_URL}/blob/main/docs/PRIVACY_POLICY.md`} target="_blank" rel="noreferrer" className="hover:text-ink">Privacy policy</a></li>
+                <li><a href={`${REPOSITORY_URL}/blob/main/docs/TERMS_OF_SERVICE.md`} target="_blank" rel="noreferrer" className="hover:text-ink">Terms of service</a></li>
+                <li><a href={`${REPOSITORY_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className="hover:text-ink">License</a></li>
+              </ul>
+            </div>
+          </div>
+          <p className="mx-auto max-w-7xl px-5 pb-8 text-[12px] text-slate-500 sm:px-8 lg:px-12">© {new Date().getFullYear()} Harsh Tambade and HANNAH contributors. Source-available under the HANNAH Non-Commercial License.</p>
         </footer>
       </div>
 

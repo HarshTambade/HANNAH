@@ -7,6 +7,7 @@ import { visualizer } from "rollup-plugin-visualizer";
 import { mobileClawVitePlugin } from "capacitor-mobile-claw/vite-plugin";
 import packageJson from "./package.json";
 import { hannahSeoPlugin } from "./scripts/seoPlugin";
+import { appRoutesPlugin } from "./scripts/appRoutesPlugin";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
@@ -19,6 +20,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     mobileClawVitePlugin(),
     hannahSeoPlugin({ mode }),
+    appRoutesPlugin(),
     VitePWA({
       registerType: "prompt",
       includeAssets: ["icon.svg", "social-card.svg"],

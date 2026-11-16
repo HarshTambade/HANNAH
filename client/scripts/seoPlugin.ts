@@ -4,8 +4,8 @@ const brandName = "HANNAH";
 
 const pages = {
   home: {
-    title: "HANNAH — Your AI Companion | 3D Avatar & Voice Chat",
-    description: "Meet HANNAH, an expressive AI companion for thoughtful conversation, multilingual voice chat, and a living 3D avatar. Bring your own Groq key to begin.",
+    title: "HANNAH — Your Personal AI. Your Intelligence. Your World.",
+    description: "HANNAH is an AI companion with a team of agents, voice chat, memory you own and a live 3D avatar. Use any model, cloud or local, and approve every action. Free with your own Groq key.",
   },
   about: {
     title: "About HANNAH — AI Companion, Voice Chat & Privacy",
@@ -33,7 +33,7 @@ function structuredData(siteOrigin: string, pagePath: string, page: (typeof page
   const canonical = new URL(pagePath, siteOrigin).toString();
   const appUrl = new URL("/", siteOrigin).toString();
   const imageUrl = new URL("/social-card.svg", siteOrigin).toString();
-  const repositoryUrl = "https://github.com/HarshTambade/HANNAH---Your-AI-companion-";
+  const repositoryUrl = "https://github.com/HarshTambade/Shanaya-Your-AI-companion";
   const faq = [
     {
       "@type": "Question",
@@ -56,7 +56,7 @@ function structuredData(siteOrigin: string, pagePath: string, page: (typeof page
       name: "Which platforms support HANNAH?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "HANNAH supports the web and PWA, with Capacitor-based Android and iOS builds and an Electron desktop shell for macOS, Windows, and Linux.",
+        text: "HANNAH runs in modern browsers and installs as a PWA. Desktop apps are available for macOS, Windows and Linux, and an Android app as an APK. The iOS app builds from source but isn't distributed yet.",
       },
     },
     {
@@ -99,11 +99,15 @@ function structuredData(siteOrigin: string, pagePath: string, page: (typeof page
         image: imageUrl,
         browserRequirements: "Requires a modern browser with JavaScript enabled",
         publisher: { "@id": `${appUrl}#organization` },
+        softwareVersion: process.env.npm_package_version || undefined,
         featureList: [
-          "Responsive 3D avatar with emotion-aware expressions",
-          "English, Hindi, and Marathi voice interaction",
-          "Bring-your-own-key Groq cloud inference with optional local AI modes",
-          "Confirmation prompts for supported sensitive device actions",
+          "Works with 20 AI providers and local models (Ollama, LM Studio, llama.cpp, vLLM, WebLLM)",
+          "Automatic model routing with Balanced, Best quality, Budget, Fastest and Private modes",
+          "Agent team that plans, runs specialist agents and verifies results",
+          "Voice chat in English, Hindi and Marathi",
+          "Memory you can view, edit, export and delete",
+          "Approval required for every action",
+          "Live 3D avatar with facial expressions",
         ],
       },
       {
@@ -153,7 +157,7 @@ export function hannahSeoPlugin({ mode }: SeoOptions): Plugin {
         `<meta name="robots" content="${indexable ? "index,follow,max-image-preview:large" : "noindex,nofollow"}" />`,
         `<meta name="author" content="HANNAH" />`,
         `<meta name="publisher" content="HANNAH" />`,
-        `<meta name="keywords" content="AI companion, AI chatbot, 3D AI avatar, voice AI companion, multilingual AI, offline AI, local AI, WebLLM, private AI assistant" />`,
+        `<meta name="keywords" content="personal AI, AI companion, AI agents, model router, local AI, offline AI, voice assistant, WebLLM, Ollama, private AI assistant" />`,
         `<meta name="referrer" content="strict-origin-when-cross-origin" />`,
         `<meta name="color-scheme" content="light" />`,
         canonical ? `<link rel="canonical" href="${escapeAttribute(canonical)}" />` : "",
@@ -167,7 +171,7 @@ export function hannahSeoPlugin({ mode }: SeoOptions): Plugin {
         `<meta property="og:image" content="${escapeAttribute(image)}" />`,
         `<meta property="og:image:width" content="1200" />`,
         `<meta property="og:image:height" content="630" />`,
-        `<meta property="og:image:alt" content="HANNAH, a multilingual AI companion with a living 3D avatar" />`,
+        `<meta property="og:image:alt" content="HANNAH — Your Personal AI. Your Intelligence. Your World." />`,
         `<meta name="twitter:card" content="summary_large_image" />`,
         `<meta name="twitter:title" content="${escapeAttribute(page.title)}" />`,
         `<meta name="twitter:description" content="${escapeAttribute(page.description)}" />`,
