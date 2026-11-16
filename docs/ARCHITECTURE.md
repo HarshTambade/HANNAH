@@ -2,14 +2,37 @@
 
 Status: living document · Last reviewed 2026-11-16
 
-This document compares the HANNAH product brief ("One Companion. Unlimited Intelligence.") with what the repository does today, records the main architecture decisions, and sets out a phased plan. It covers code that runs in the shipped app. Experimental modules that no screen uses are listed separately, because counting them as features would overstate the product.
+This document compares the HANNAH product briefs with what the repository does today, records the main architecture decisions, and sets out a phased plan. The first brief was "One Companion. Unlimited Intelligence." The current one is "Your Personal AI. Your Intelligence. Your World.", with Phases 0–13. The document covers code that runs in the shipped app. Experimental modules that no screen uses are listed separately, because counting them as features would overstate the product.
 
-## 1. Where HANNAH is today
+## 0. The current brief, phase by phase
+
+Each phase is marked against its acceptance criteria (brief §20), not by whether a screen exists.
+
+| Phase | Status | What exists | What's left |
+| --- | --- | --- | --- |
+| 0 · Audit and architecture | **Done** | This document; audits on 2026-11-16 (tests green, `npm audit --omit=dev` clean for server, client and root; no env files tracked). | Keep current. An old commit (976a2ef) once tracked `vercel-env.txt`, so rotate any keys it held. |
+| 1 · Core platform | **Mostly** | Accounts on your own database (Postgres or SQLite), hashed sessions, envelope-encrypted key vault, per-user security log, export and deletion, settings sync, app shell. | Workspaces and roles; device management; OAuth or passkey sign-in. |
+| 2 · Universal model gateway | **Mostly** | 20 providers on three wire protocols, live discovery, capability flags, SSE streaming, prompt-format tools when native tools are missing, normalized errors, retry and fallback, usage and spend. | Azure OpenAI, Bedrock (SigV4), Hugging Face and MLX adapters; embeddings; image and audio inputs. |
+| 3 · Model router | **Done (this increment)** | [`server/router.js`](../server/router.js): request classification; Best quality, Balanced, Budget, Fastest, Private, Offline and Custom modes across every provider the caller may use; Private enforced on the server (routed, fallback and pinned requests); measured latency and provider health; cross-provider fallback within the policy; `POST /api/route/preview`; the chat route chip with reason, limitations and pinnable alternatives; a cost confirmation; dollar estimates only from verified, dated prices ([`shared/model-prices.json`](../shared/model-prices.json)). The same routing is available on `/v1` through `hannah.routing`. | Verify prices against provider pages and record dates; persist latency and health across restarts; route by modality (images, audio). |
+| 4 · Agent orchestration | **Partial** | Bounded tool loop, Guardian → HITL on every tool, Team plan → execute → verify with specialists, resumable runs saved on the device. | **Next:** durable task records on the server (owner, states including queued and waiting-for-approval, checkpoints, idempotent steps), so tasks resume across devices. Then Security and Data Analyst agents. |
+| 5 · Desktop runtime | **Partial** | Capacitor Electron builds; Anthropic computer use through the desktop bridge, with approval for each action. | A runtime process separate from the UI, with approved workspace folders, a scoped filesystem, terminal allowlists, a Playwright browser agent, accessibility adapters and an emergency stop. See D10. |
+| 6 · Coding and computer use | **Not started** | Only the computer-use bridge above. | Repository inspection, edits, tests, git, diffs and an execution timeline on the Phase 5 runtime. |
+| 7 · User-owned memory | **Partial** | On-device memories (view, edit, delete, export), account sync with three-way merge. | Categories, provenance, sensitivity, relevance-ranked retrieval instead of sending everything, project scoping, a knowledge graph, pgvector. |
+| 8 · Voice and wake word | **Partial** | Voice layer (device or OpenAI TTS, device or Whisper STT, barge-in). | On-device "Hey HANNAH" in native code (Porcupine or openWakeWord). Not inside the WebView. Also streaming TTS. |
+| 9 · Capacitor mobile | **Partial** | Android and iOS builds, on-device llama.cpp, background reminder notifications. | Secure storage plugin, offline queues, App Intents and Siri shortcuts, an Android foreground service for voice. |
+| 10 · Proactive and workflows | **Partial** | Reminders, webhooks. | Saved automations don't run yet. A scheduler needs Phase 4's durable tasks. Then a natural-language workflow builder with approval before activation. |
+| 11 · Visual context | **Partial** | Vision flags per model; screenshots in the desktop agent. | Explicit screen and camera sharing with indicators; redaction. |
+| 12 · Marketplace and developer platform | **Partial** | `/v1`, MCP server and client, A2A, signed webhooks, JS SDK, signed instruction skills. | Python SDK, skill sandbox (D7), registry. |
+| 13 · Productionization | **Partial** | CI, unit, API and browser tests, nightly bypass check. | Load tests, agent evaluations, backup and restore runbook. |
+
+**Order of the next increments** (each depends only on finished work): Phase 4 durable server tasks → Phase 7 memory model and relevance retrieval → Phase 10 scheduler on top of durable tasks → Phase 5 desktop runtime with scoped tools → Phase 8 native wake word.
+
+## 1. Where HANNAH is today (first brief)
 
 | Brief area | Status | What exists | Main gaps |
 | --- | --- | --- | --- |
 | §2 Universal model compatibility | **Strong base** | 20 providers in [`server/providers/catalog.js`](../server/providers/catalog.js) on three wire protocols (OpenAI-compatible, Anthropic, Ollama) in [`runtime.js`](../server/providers/runtime.js): Groq, OpenAI, Anthropic, Gemini, OpenRouter, Together, Cerebras, DeepSeek, Mistral, xAI, Fireworks, NVIDIA NIM, SambaNova, Perplexity, Hyperbolic, Ollama, LM Studio, llama.cpp, vLLM and any custom OpenAI-compatible endpoint. Live model discovery, per-model tool, vision and context flags, model fallback chains, HTTPS enforcement, BYOK for Groq. | Streaming, capability negotiation and normalized errors are done (M2). Left: Azure, Bedrock, Hugging Face and MLX adapters; embeddings. |
-| §3 Model recommendation | **First milestone done** | **Models** screen ([`ModelsPage.tsx`](../client/src/components/ModelsPage.tsx), [`ModelAdvisor.ts`](../client/src/services/ModelAdvisor.ts)). It detects and lets you edit hardware, and estimates local fit from weights + KV cache at your context + runtime overhead, after memory reserved for other apps (VRAM, split GPU/RAM, Apple unified memory or CPU). It covers all six budget modes from the brief, the eight "best for" choices, monthly cost estimates, the brief's comparison attributes, hybrid local + cloud pairing, and "Use in chat". Curated profiles live in [`shared/model-profiles.json`](../shared/model-profiles.json); the server catalog is `GET /api/catalog`. | Automatic per-message routing by complexity; measured latency; live pricing; budget limits enforced at request time; installed-model detection from Ollama. |
+| §3 Model recommendation | **First milestone done** | **Models** screen ([`ModelsPage.tsx`](../client/src/components/ModelsPage.tsx), [`ModelAdvisor.ts`](../client/src/services/ModelAdvisor.ts)). It detects and lets you edit hardware, and estimates local fit from weights + KV cache at your context + runtime overhead, after memory reserved for other apps (VRAM, split GPU/RAM, Apple unified memory or CPU). It covers all six budget modes from the brief, the eight "best for" choices, monthly cost estimates, the brief's comparison attributes, hybrid local + cloud pairing, and "Use in chat". Curated profiles live in [`shared/model-profiles.json`](../shared/model-profiles.json); the server catalog is `GET /api/catalog`. | Done since: per-message routing with seven modes, measured latency, budgets at request time (M3, M11). Monthly estimates now appear only for verified prices. Left: verified price dates; installed-model detection from Ollama. |
 | §4 Autonomous agent engine | **Partial, core done** | Bounded tool loop, task profiles, Guardian then the user on every tool, circuit breaker, side-effect ledger, Stop, a persistent run log, and plan → execute → verify with resumable runs (Team mode). | Browser automation and terminal access (need sandboxing). |
 | §5 Multi-agent system | **Done (first version)** | **Team** mode: server planning and verification ([`orchestrate.js`](../server/orchestrate.js)), client orchestrator ([`Orchestrator.ts`](../client/src/services/Orchestrator.ts)) running Research, Coding, Memory and Tasks specialists in parallel with their own tools and models, a revision round, persistent and resumable runs, and the **Agents** screen. | Specialists that browse the web or run code; agents that hand work to each other mid-step. |
 | §6 Companion | **Partial** | Persona prompt, emotion-aware replies driving a 3D avatar, English, Hindi and Marathi, user-controlled memory (view, edit, delete, export). | Memory categories, relevance-ranked retrieval (all memories are sent today, capped at 12), and a per-category memory off switch. |
@@ -19,7 +42,7 @@ This document compares the HANNAH product brief ("One Companion. Unlimited Intel
 | §10 Skills marketplace | **Partial** | First-party agents and skills, plus community instruction skills from a manifest with validation, integrity hash and Ed25519 publisher signatures (trusted-publisher list). | A public registry, reviews, sandboxed executable skills. |
 | §11 Memory and sync | **Partial** | On-device stores, plus bring-your-own-database accounts (Postgres or SQLite) with a three-way-merge sync of memories, reminders, skills, chat and preferences. | Vector search and relevance-ranked memory retrieval. |
 | §12 Cross-platform | **Done for builds** | One React codebase builds to web/PWA, Android, iOS (unsigned), macOS, Windows and Linux (Capacitor Electron). | Signed iOS, a desktop local runtime with authorized filesystem and terminal, background jobs. |
-| §14 Security and privacy | **Partial, strong defaults** | Guardian → HITL on every tool (including outside MCP tools), prompt-injection guardrails, secret redaction, HTTPS-only providers, local-only model modes, no telemetry unless configured, accounts with scrypt and hashed sessions, an envelope-encrypted key vault with rotation, a per-user security log with export, and SSRF-guarded webhooks. | Strict-privacy mode enforced server-side, sandboxing, OAuth or passkey sign-in. |
+| §14 Security and privacy | **Partial, strong defaults** | Guardian → HITL on every tool (including outside MCP tools), prompt-injection guardrails, secret redaction, HTTPS-only providers, local-only model modes, no telemetry unless configured, accounts with scrypt and hashed sessions, an envelope-encrypted key vault with rotation, a per-user security log with export, SSRF-guarded webhooks, and Private routing enforced on the server (D9). | Privacy rules for memory and documents (which memories may go to which provider), sandboxing, OAuth or passkey sign-in. |
 
 ### Experimental modules (not in the app)
 
@@ -48,7 +71,7 @@ Provider-specific options pass through an allow-listed `extensions` field instea
 
 ### D4 · Recommendations run on the device
 
-Only the device knows its hardware, so the advisor runs in the client and takes the server catalog as input. Profiles are a dated, editable JSON file, and their tiers are labelled as curated, not benchmarks. Models a provider reports that aren't profiled show up as "unrated" instead of being hidden. Prices come from the server's table with a "verify with provider" note, because prices change.
+Only the device knows its hardware, so the advisor runs in the client and takes the server catalog as input. Profiles are a dated, editable JSON file, and their tiers are labelled as curated, not benchmarks. Models a provider reports that aren't profiled show up as "unrated" instead of being hidden. Prices come from [`shared/model-prices.json`](../shared/model-prices.json). Monthly estimates are shown only for prices with a recent verification date. Others are labelled "not verified" (see D9).
 
 ### D5 · Credentials: tab-scoped today, vault after accounts
 
@@ -66,6 +89,19 @@ Instruction-only skills are safe in process. Executable skills (code or MCP serv
 
 **Decision (product owner, 2026-11-16):** the operator connects any database they like through one `DATABASE_URL`. HANNAH runs a portable SQL subset on any Postgres (Supabase, Neon, RDS and others) and on SQLite for single self-hosted servers. Without a database, everything stays on the device, as before. Migrations run automatically. The tests run the same suite on SQLite and on real Postgres (PGlite). Accounts use email and password for now, because that needs no third-party service. OAuth or magic links can be added later. `pgvector` memory retrieval is still open.
 
+### D9 · The router decides; the gateway transports; privacy is enforced in code
+
+Model choice lives in [`server/router.js`](../server/router.js), separate from wire protocols in `gateway.js`. That keeps routing testable without network calls and lets `/api/agent`, `/api/route/preview` and `/v1` share one policy. Rules:
+
+- **Privacy is a filter, not a preference.** Private and Offline remove hosted providers from candidates, alternatives and fallbacks, and block a pinned hosted model with `403 privacy_blocked`. "Self-hosted" means a local runtime, a loopback or private-network endpoint, or a provider the operator lists in `HANNAH_SELF_HOSTED_PROVIDERS`. A local runtime only counts when it's explicitly configured.
+- **Prices are data with provenance.** [`shared/model-prices.json`](../shared/model-prices.json) records a source page per provider and an optional `verified` date per price. Budgets use every price, to stay conservative. People only see dollar estimates from prices verified in the last 120 days. On 2026-11-16 the official prices couldn't be confirmed (third-party sources disagreed), so no entry is marked verified.
+- **Health and latency come from real outcomes only.** They're kept per process. Persisting them is future work.
+- **Compatibility:** Auto without a `routing` field keeps the older single-provider behavior, so older clients and integrations don't change.
+
+### D10 · Desktop runtime: keep Electron, add a separate runtime process (proposed)
+
+The brief asks to evaluate Tauri first. The desktop app is already a Capacitor Electron build that shares the web codebase and has a working computer-use bridge. Moving to Tauri would mean rebuilding the shell, IPC and packaging before adding any capability. **Proposal:** keep Electron for the UI, and put the execution runtime (filesystem, terminal, browser automation, OS adapters) in a separate least-privilege process. That process exposes a narrow, typed IPC with workspace scoping, command allowlists, risk classes and an audit log. Rust can be used inside that process later without changing the UI. This needs confirmation before Phase 5 starts.
+
 ## 3. Roadmap
 
 Each milestone ends with the tests from brief §18 passing, docs updated, and the README's status section changed. Nothing is presented as working before its end-to-end path runs.
@@ -82,6 +118,8 @@ Each milestone ends with the tests from brief §18 passing, docs updated, and th
 | **M8 ✅** | Developer platform v1 | §9 | `/v1` (SSE, tools, auto, usage), per-account developer keys, signed webhooks with an SSRF guard, an MCP client, an A2A agent card with `message/send`, and a JavaScript SDK. |
 | **M9 ✅** | Voice layer | §7 | One interface over engines: device TTS (local) and OpenAI TTS (hosted) with voice selection, Mithi, device recognition (local) and Groq Whisper (hosted), and barge-in. |
 | M10 · mostly done | Marketplace v2 | §10 | **Done:** manifest v1 for instruction skills with validation, integrity hash, Ed25519 publisher signatures and a trusted-publisher list, injection screening on client and server, and install, enable and uninstall. **Left:** a public registry and reviews, and sandboxed executable plugins. |
+| **M11 ✅** | Routing modes and privacy-aware routing (Phase 3) | current §3, §15.3 | Seven modes across all usable providers; Private enforced on the server for routed, fallback and pinned requests; route preview with reason, limitations and alternatives; cost confirmation; estimates only from verified prices; fallback to the next allowed provider. 11 server tests (unit and API against fake providers), 5 client unit tests, and 1 browser test. |
+| M12 · next | Durable server tasks (Phase 4) | current §4.2 | Task records in the account database with owner, plan, status (queued, running, paused, waiting-for-approval, failed, completed, cancelled), checkpoints and idempotent steps; Team runs and approvals resume on another device; tests for restart and cross-user isolation. |
 
 ## 4. Decisions needed from the product owner
 
@@ -89,6 +127,8 @@ Each milestone ends with the tests from brief §18 passing, docs updated, and th
 2. **Monetization (D6):** confirm that billing, paid skills and revenue sharing stay out.
 3. **More sign-in methods:** email and password ships now. Should OAuth (Google or GitHub) or magic links be added? Magic links need an email-sending service.
 4. **Executable plugins:** whether to build the sandbox (D7) at all, given the security cost.
+5. **Desktop runtime (D10):** confirm keeping Electron with a separate runtime process, instead of moving to Tauri.
+6. **Price verification:** who checks provider pricing pages and records `verified` dates in `shared/model-prices.json`. Until someone does, the app shows no dollar estimates.
 
 ## 5. Conventions
 

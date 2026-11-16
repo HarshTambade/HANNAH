@@ -159,7 +159,7 @@ export default function App() {
     return (
       <AppShell {...shellProps} fill>
         <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col p-2 sm:p-4">
-          <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-2 sm:gap-3 lg:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)] lg:grid-rows-1">
+          <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] gap-2 sm:gap-3 lg:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)] lg:grid-rows-1">
             <section
               role="region"
               aria-label="HANNAH avatar"
@@ -170,7 +170,7 @@ export default function App() {
             >
               <AvatarScene emotion={emotion} activity={avatarActivity} onMotionChange={setAvatarMotion} />
             </section>
-            <div className="min-h-0">
+            <div className="min-h-0 min-w-0">
               <ChatUI onEmotionChange={setEmotion} onActivityChange={setAvatarActivity} panel groqApiKey={groqApiKey} initialMode={preferredMode} onSessionExpired={reconnect} />
             </div>
           </div>

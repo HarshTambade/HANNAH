@@ -26,6 +26,9 @@ import {
 import { apiFetch, apiHeaders, apiUrl, isAccountSession, isLocalDevelopmentHost, isGuestSession } from "../services/api";
 import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
 import type { AvatarActivity } from "../services/avatar/expressions";
+import { costLabel, needsCostConfirmation, readRoutingPreferences, type RouteChoice, type RoutePreview } from "../services/ModelRouting";
+import RoutePreviewChip from "./RoutePreviewChip";
+import RoutingSettings from "./RoutingSettings";
 import { clearMobileAgentConversation, getMobileAgentStatus, removeMobileAgentApiKey, runMobileAgentTurn, setMobileAgentApiKey } from "../services/MobileAgent";
 import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuardrails";
 import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent";
@@ -169,6 +172,10 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const [isSpeaking, setIsSpeaking] = useState(false);
   // With voice off, the avatar still "says" each new reply for about as long as it takes to read aloud.
   const [isPresentingReply, setIsPresentingReply] = useState(false);
+  // Latest route preview for the draft, and a verified-cost confirmation waiting on the user.
+  const routePreviewRef = useRef<RoutePreview | null>(null);
+  const costApprovedRef = useRef(false);
+  const [pendingCost, setPendingCost] = useState<RoutePreview | null>(null);
   const presentTimerRef = useRef<number | null>(null);
   const [isVirtualCallActive, setIsVirtualCallActive] = useState(false);
   const [isCallMicEnabled, setIsCallMicEnabled] = useState(false);
@@ -429,6 +436,23 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     }
   };
 
+  /** Pin a model the route preview offered, replacing Auto for this chat. */
+  const pinRoute = (choice: RouteChoice) => {
+    try {
+      window.localStorage.setItem(`hannah.cloudModel:${choice.providerId}`, choice.model);
+    } catch {
+      // The selection still applies on this page.
+    }
+    if (choice.providerId === cloudProviderId) {
+      setCloudModels((list) => (list.includes(choice.model) ? list : [...list, choice.model]));
+      setCloudModel(choice.model);
+    } else {
+      setCloudProviderId(choice.providerId);
+      setCloudProvider(choice.providerLabel);
+    }
+    setPendingCost(null);
+  };
+
   const submitMessage = async (event?: FormEvent<HTMLFormElement>, transcript?: string, speakReply = voiceEnabled) => {
     event?.preventDefault();
     const content = (transcript ?? input).trim();
@@ -441,6 +465,13 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       setError(nativeStatus === "downloadable" ? "Prepare the offline model while online, then try again." : "This device does not have a supported on-device AI model.");
       return false;
     }
+    // Spending check: a verified estimate at or above the user's threshold waits for a go-ahead.
+    if (effectiveMode === "cloud" && cloudModel === "auto" && transcript === undefined && !costApprovedRef.current && needsCostConfirmation(routePreviewRef.current, readRoutingPreferences())) {
+      setPendingCost(routePreviewRef.current);
+      return false;
+    }
+    costApprovedRef.current = false;
+    setPendingCost(null);
 
 
     isSubmittingTurnRef.current = true;
@@ -978,7 +1009,8 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                     ? <option value="">Waiting for server model settings…</option>
                     : [<option key="auto" value="auto">Auto: HANNAH picks for each message</option>, ...cloudModels.map((model) => <option key={model} value={model}>{modelLabel(model)}</option>)]}
                 </select>
-                <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{cloudModel === "auto" ? "Auto sends quick messages to a fast, light model and harder coding, research or reasoning to a stronger one. The Dashboard shows which models answered." : "Groq is the default. Other providers appear after their server-side credentials are configured. Model names load from the selected provider when its API supports model discovery."}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{cloudModel === "auto" ? "Auto picks a provider and model for each message within the mode below. Before you send, the line above the message box shows the choice, why, and alternatives." : "Groq is the default. Other providers appear after their server-side credentials are configured. Model names load from the selected provider when its API supports model discovery."}</p>
+                {cloudModel === "auto" && <RoutingSettings providers={cloudProviders.map(({ id, label }) => ({ id, label }))} disabled={isLoading} />}
               </div>
             )}
 
@@ -1262,8 +1294,8 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       )}
 
       <div className="shrink-0 border-t border-slate-200/70 bg-white/40 p-2.5 md:p-3">
-        <div className="mx-auto flex max-w-[720px] items-center justify-between gap-2 px-1 pb-2">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="mx-auto flex max-w-[720px] flex-wrap items-center justify-between gap-2 px-1 pb-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <select
               value={speechLanguage}
               onChange={(event) => setSpeechLanguage(event.target.value as SpeechLanguage)}
@@ -1322,6 +1354,31 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
           </button>
         </div>
         {voiceStatus && <p aria-live="polite" className="mx-auto mb-1 max-w-[720px] px-1 text-xs text-slate-500">{voiceStatus}</p>}
+        <RoutePreviewChip
+          enabled={effectiveMode === "cloud" && cloudModel === "auto"}
+          draft={input}
+          history={messages}
+          providerId={cloudProviderId}
+          groqApiKey={groqApiKey}
+          disabled={isLoading}
+          onPreview={(preview) => { routePreviewRef.current = preview; }}
+          onPin={pinRoute}
+        />
+        {pendingCost && (
+          <div role="alertdialog" aria-label="Confirm estimated cost" className="mx-auto mb-1.5 w-full min-w-0 max-w-[720px] break-words rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <p className="font-semibold">This message is estimated at {costLabel(pendingCost.estimate)} with {pendingCost.providerLabel} · {pendingCost.model}.</p>
+            <p className="mt-0.5 text-amber-800">{pendingCost.reason} The estimate assumes {pendingCost.estimate.assumption}.</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button type="button" className="rounded-lg bg-amber-600 px-2.5 py-1 font-medium text-white hover:bg-amber-700" onClick={() => { costApprovedRef.current = true; void submitMessage(); }}>Send anyway</button>
+              {pendingCost.alternatives.filter((choice) => choice.estimate.basis === "local" || (choice.estimate.usd !== null && choice.estimate.usd < (pendingCost.estimate.usd ?? 0))).slice(0, 2).map((choice) => (
+                <button key={`${choice.providerId}/${choice.model}`} type="button" className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100" onClick={() => pinRoute(choice)}>
+                  Use {choice.model} ({costLabel(choice.estimate)})
+                </button>
+              ))}
+              <button type="button" className="rounded-lg px-2.5 py-1 font-medium text-amber-800 hover:bg-amber-100" onClick={() => setPendingCost(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
         <form onSubmit={(event) => void submitMessage(event)} className="mx-auto flex max-w-[720px] items-end gap-2 rounded-xl border border-slate-200 bg-white p-1.5 transition focus-within:border-brand-400/60 shadow-soft">
           <textarea
             ref={inputRef}

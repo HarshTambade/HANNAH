@@ -11,6 +11,12 @@
  * a bare model id for the default provider, or "hannah-auto" to let HANNAH
  * route by request complexity. Tools follow OpenAI semantics: HANNAH returns
  * tool calls for the caller to run; it never executes them on this route.
+ *
+ * With "hannah-auto", an optional `hannah.routing` body field picks the mode
+ * ({ mode: "quality" | "balanced" | "budget" | "fastest" | "private" |
+ * "offline" | "custom", providers?, maxTier?, localOnly? }). HANNAH then
+ * chooses across every provider the credential may use. Private and Offline
+ * never reach a hosted provider, whether the model is routed or pinned.
  */
 
 const express = require("express");
@@ -18,6 +24,7 @@ const { randomUUID } = require("node:crypto");
 const { defaultModelFor, listProviders } = require("./providers/catalog");
 const { streamProvider } = require("./providers/runtime");
 const gateway = require("./gateway");
+const modelRouter = require("./router");
 
 const MAX_MESSAGES = 100;
 const MAX_TOTAL_CHARS = 400_000;
@@ -88,7 +95,7 @@ function parseModelRef(value, fallbackProviderId) {
   return { auto: false, providerId: fallbackProviderId, model: raw };
 }
 
-function createV1Router({ getRequestProvider, allowedProviderIds = () => null, defaultProviderId, timeoutMs, chatLimiter }) {
+function createV1Router({ getRequestProvider, allowedProviderIds = () => null, usableProviders = () => [], defaultProviderId, timeoutMs, chatLimiter }) {
   const router = express.Router();
 
   router.get("/models", (req, res) => {
@@ -118,12 +125,34 @@ function createV1Router({ getRequestProvider, allowedProviderIds = () => null, d
     const maxTokens = Number.isInteger(body.max_tokens ?? body.max_completion_tokens) ? Math.min(8192, Math.max(1, body.max_tokens ?? body.max_completion_tokens)) : undefined;
     const temperature = Number.isFinite(body.temperature) ? Math.min(2, Math.max(0, body.temperature)) : undefined;
     const ref = parseModelRef(body.model, req.get("x-hannah-provider") || defaultProviderId(req, res));
+    let policy;
+    try {
+      policy = modelRouter.normalizeRouting(body.hannah?.routing);
+    } catch (error) {
+      return openAiError(res, 400, error.message, error.code);
+    }
 
     let target;
-    try {
-      target = getRequestProvider(req, ref.providerId);
-    } catch (error) {
-      return openAiError(res, error.status || 400, error.message, "provider_unavailable");
+    let decision = null;
+    let usable = [];
+    if (ref.auto && policy) {
+      usable = usableProviders(req, res);
+      try {
+        decision = modelRouter.route({ messages, tools, policy, usableProviders: usable.map((item) => item.provider), preferredProviderId: req.get("x-hannah-provider") || undefined });
+      } catch (error) {
+        if (error instanceof modelRouter.RoutingError) return openAiError(res, error.status, error.message, error.code);
+        throw error;
+      }
+      target = usable.find((item) => item.provider.id === decision.providerId);
+    } else {
+      try {
+        target = getRequestProvider(req, ref.providerId);
+      } catch (error) {
+        return openAiError(res, error.status || 400, error.message, "provider_unavailable");
+      }
+      if (modelRouter.privacyBlocks(policy, target.provider)) {
+        return openAiError(res, 403, `${policy.mode === "offline" ? "Offline" : "Private"} routing is on, so HANNAH won't send this to ${target.provider.label}, a hosted provider.`, "privacy_blocked", "permission_error");
+      }
     }
     const credentialId = res.locals.hannahApiTokenId;
     const callerBudget = req.get("x-hannah-daily-budget");
@@ -137,7 +166,10 @@ function createV1Router({ getRequestProvider, allowedProviderIds = () => null, d
 
     let model = ref.model || defaultModelFor(target.provider);
     let routing = null;
-    if (ref.auto) {
+    if (decision) {
+      model = decision.model;
+      routing = decision;
+    } else if (ref.auto) {
       const classification = gateway.classifyRequest(messages, tools);
       const pick = gateway.pickAutoModel(target.provider.id, classification, { needsTools: tools.length > 0, budgetTight: budget.tight });
       if (pick?.model) model = pick.model;
@@ -181,10 +213,22 @@ function createV1Router({ getRequestProvider, allowedProviderIds = () => null, d
     }
 
     try {
-      const providers = ref.auto && !ref.explicitProvider ? gateway.providerFallbacks(target.provider.id, { byok: Boolean(res.locals.hannahByok), allowed: allowedProviderIds(req, res) }) : [target.provider.id];
+      // Routed requests fall back to the router's alternatives, which already obey the policy.
+      const alternatives = decision ? new Map(decision.alternatives.map((choice) => [choice.providerId, choice.model])) : null;
+      const providers = decision
+        ? [target.provider.id, ...alternatives.keys()].filter((id, index, all) => all.indexOf(id) === index).slice(0, 3)
+        : ref.auto && !ref.explicitProvider ? gateway.providerFallbacks(target.provider.id, { byok: Boolean(res.locals.hannahByok), allowed: allowedProviderIds(req, res) }) : [target.provider.id];
       const message = await gateway.completeWithFallback({
         providers,
-        resolve: (providerId) => (providerId === target.provider.id ? target : getRequestProvider(req, providerId)),
+        resolve: (providerId) => {
+          if (providerId === target.provider.id) return target;
+          if (decision) {
+            const next = usable.find((item) => item.provider.id === providerId);
+            if (!next || modelRouter.privacyBlocks(policy, next.provider)) throw new Error("Fallback provider not allowed.");
+            return { ...next, model: alternatives.get(providerId) };
+          }
+          return getRequestProvider(req, providerId);
+        },
         model,
         messages,
         tools,

@@ -225,7 +225,8 @@ test("the model catalog lists capabilities and prices without credentials", asyn
   assert.ok(groq.models.some((model) => model.tools === true && typeof model.context === "number"));
   const openai = body.providers.find((provider) => provider.id === "openai");
   const mini = openai.models.find((model) => model.id === "gpt-4o-mini");
-  assert.deepEqual(mini.price, { inputPerMTok: 0.15, outputPerMTok: 0.6, currency: "USD" });
+  // Carried-over prices have no verification date, so the app won't turn them into estimates.
+  assert.deepEqual(mini.price, { inputPerMTok: 0.15, outputPerMTok: 0.6, currency: "USD", verified: null, source: null });
 });
 
 test("a visitor key sees only Groq in the model catalog", async () => {

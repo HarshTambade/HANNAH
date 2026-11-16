@@ -5,6 +5,7 @@ import type { InferenceMode } from "../types";
 import { resolveInferenceMode, getNetworkStatus } from "./AIService";
 import { ChaosEngine } from "./ChaosEngine";
 import type { PersonalizationContext } from "./DynamicFewShotInjector";
+import { routingRequest } from "./ModelRouting";
 
 export type AgentMessage = {
   role: "user" | "assistant" | "tool";
@@ -201,6 +202,8 @@ export class LLMRouter {
       provider: selectedProvider,
       ...(mode === "cloud" && model ? { model } : {}),
       ...(mode === "cloud" && model === "auto" && extra.routeHint ? { routeHint: extra.routeHint } : {}),
+      // Auto: HANNAH chooses across your providers within your routing mode (Private stays self-hosted).
+      ...(mode === "cloud" && model === "auto" ? { routing: routingRequest() } : {}),
       ...(marketplaceItemIds.length ? { marketplaceItemIds } : {}),
       ...(personalization ? { personalization } : {}),
       ...(memories.length ? { memories } : {}),
@@ -210,7 +213,8 @@ export class LLMRouter {
       tools: tools.map(({ name, description, inputSchema }) => ({ type: "function", function: { name, description, parameters: inputSchema } })),
     };
     try {
-      const result = await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && selectedProvider === "groq" ? groqApiKey : undefined, true);
+      // A visitor's Groq key goes along for Auto too; the server only ever uses it with Groq.
+      const result = await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && (selectedProvider === "groq" || model === "auto") ? groqApiKey : undefined, true);
       if (mode === "cloud") ChaosEngine.clearDegraded();
       return result;
     } catch (primaryError) {

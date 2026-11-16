@@ -92,8 +92,22 @@ describe("recommend", () => {
     const result = recommend({ ...needs, budget: "low-cost", priority: "cheapest", monthlyMessages: 1000 }, laptop({ ramGB: 4 }), catalog);
     expect(result.recommendations.some((item) => item.model === "gpt-4.1")).toBe(false);
     const mini = result.recommendations.find((item) => item.model === "gpt-4o-mini");
+    // An unverified list price is labelled as such and never turned into an estimate.
+    expect(mini?.monthlyCostUsd).toBeNull();
+    expect(mini?.cost).toMatch(/not verified/);
+
+    const verifiedCatalog = {
+      ...catalog,
+      providers: catalog.providers.map((provider) => ({
+        ...provider,
+        models: provider.models.map((model) => (model.id === "gpt-4o-mini" && model.price ? { ...model, price: { ...model.price, verified: "2026-11-01" } } : model)),
+      })),
+    };
+    const verified = recommend({ ...needs, budget: "low-cost", priority: "cheapest", monthlyMessages: 1000 }, laptop({ ramGB: 4 }), verifiedCatalog)
+      .recommendations.find((item) => item.model === "gpt-4o-mini");
     // 1000 × (1500 × $0.15 + 500 × $0.60) / 1M
-    expect(mini?.monthlyCostUsd).toBeCloseTo(0.525, 5);
+    expect(verified?.monthlyCostUsd).toBeCloseTo(0.525, 5);
+    expect(verified?.cost).toMatch(/checked 2026-11-01/);
   });
 
   it("marks models from unconfigured providers as needing a key", () => {

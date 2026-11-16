@@ -25,7 +25,7 @@ const { createContentReportHandler } = require("./content-reports");
 const { createSyncHandler, createSyncFetchHandler } = require("./cloud-sync");
 const { accountAuth, accountsUseServerKeys, createAccountRouter, createSpendStore, createSyncBlobStore } = require("./accounts");
 const { databaseConfigured } = require("./db");
-const { knownPriceFor, tokenUsageMiddleware } = require("./cost-tracking");
+const { knownPriceFor, tokenUsageMiddleware, verifiedPriceFor } = require("./cost-tracking");
 const { createV1Router } = require("./v1");
 const { createOrchestrateHandler } = require("./orchestrate");
 const { createVoiceRouter } = require("./voice");
@@ -34,9 +34,11 @@ const { createA2ARouter } = require("./a2a");
 const { createWebhookRouter, emitUserEvent } = require("./webhooks");
 const serverVersion = require("./package.json").version;
 const { assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
+const router = require("./router");
 const {
   defaultModelFor,
   defaultProviderId,
+  getProvider,
   listProviders,
   modelChain,
   providerKey,
@@ -161,6 +163,25 @@ function preferredProviderId(req, res) {
   return [...allowed][0] || defaultProviderId();
 }
 
+/** Every provider this caller can actually reach, each with the key to use. Never includes credentials in output. */
+function usableProviders(req, res) {
+  const allowed = allowedProviderIds(req, res);
+  const out = [];
+  for (const listed of listProviders()) {
+    if (allowed ? !allowed.has(listed.id) : !listed.configured) continue;
+    // A local runtime counts only when the operator set it up (a base URL or a
+    // model list); Ollama's built-in localhost default alone isn't evidence it runs.
+    const preset = getProvider(listed.id);
+    if (listed.local && !(preset?.envBaseUrl && process.env[preset.envBaseUrl]?.trim()) && !(preset?.envModels && process.env[preset.envModels]?.trim())) continue;
+    try {
+      out.push(getRequestProvider(req, listed.id));
+    } catch {
+      // Not usable by this caller (no key, no base URL); skip it.
+    }
+  }
+  return out;
+}
+
 function getRequestProvider(req, providerId) {
   let provider;
   try {
@@ -272,6 +293,7 @@ const rateLimits = rateLimitSettings();
 app.post("/api/chat", createRateLimiter(rateLimits.chat));
 app.post("/api/agent", createRateLimiter(rateLimits.agent));
 app.post("/api/orchestrate", createRateLimiter(rateLimits.agent));
+app.post("/api/route/preview", createRateLimiter(rateLimits.events));
 app.post("/api/a2a", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/transcribe", createRateLimiter(rateLimits.chat));
@@ -303,6 +325,7 @@ app.use(createA2ARouter({ getRequestProvider, preferredProviderId, systemPrompt,
 app.use("/v1", requireApiToken, tokenUsageMiddleware, createV1Router({
   getRequestProvider,
   allowedProviderIds,
+  usableProviders,
   defaultProviderId: preferredProviderId,
   timeoutMs: cloudRequestTimeout,
   chatLimiter: createRateLimiter(rateLimits.agent),
@@ -404,6 +427,7 @@ app.get("/api/catalog", (req, res) => {
         configured: allowed ? true : Boolean(provider.configured),
         models: provider.models.map((model) => {
           const price = knownPriceFor(model.id);
+          const verified = verifiedPriceFor(model.id);
           return {
             id: model.id,
             label: model.label,
@@ -412,14 +436,14 @@ app.get("/api/catalog", (req, res) => {
             context: Number.isFinite(model.context) ? model.context : null,
             free: Boolean(model.free),
             notes: model.notes || "",
-            price: price ? { inputPerMTok: price.input, outputPerMTok: price.output, currency: "USD" } : null,
+            price: price ? { inputPerMTok: price.input, outputPerMTok: price.output, currency: "USD", verified: verified?.verified ?? null, source: verified?.source ?? null } : null,
           };
         }),
       };
     });
   res.json({
     byok,
-    priceNote: "List prices from this server's table. Providers change prices; check their pricing page before relying on an estimate.",
+    priceNote: "List prices from shared/model-prices.json. Cost estimates appear only for prices with a recent verification date; others are marked unverified. Check the provider's pricing page before relying on any figure.",
     providers,
   });
 });
@@ -594,18 +618,16 @@ app.post("/api/agent", async (req, res) => {
   if (!tools) return res.status(400).json({ error: "The agent tool schemas are invalid." });
   const communitySkills = normalizeCommunitySkills(req.body?.communitySkills);
   if (!communitySkills) return res.status(400).json({ error: "A community skill was rejected: at most 3, each up to 1,200 characters, with no instruction-override text." });
-  const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || preferredProviderId(req, res));
-  let provider;
-  let requestApiKey;
-  try {
-    ({ provider, apiKey: requestApiKey } = getRequestProvider(req, providerId));
-  } catch (error) {
-    return res.status(error.status || 400).json({ error: error.message });
-  }
   if (typeof model === "string" && (model.length > 200 || /[\r\n]/.test(model))) {
     return res.status(400).json({ error: "The selected model identifier is invalid." });
   }
-  const wantsAuto = typeof model === "string" && model.trim().toLowerCase() === "auto";
+  let policy;
+  try {
+    policy = router.normalizeRouting(req.body?.routing);
+  } catch (error) {
+    return res.status(400).json({ error: error.message, code: error.code });
+  }
+  const wantsAuto = mode === "cloud" && typeof model === "string" && model.trim().toLowerCase() === "auto";
   const credentialId = res.locals.hannahApiTokenId;
   const callerBudget = req.body?.budget?.dailyUsd;
   let budget;
@@ -614,7 +636,7 @@ app.post("/api/agent", async (req, res) => {
     budget = assertWithinBudget(credentialId, callerBudget);
   } catch (error) {
     if (res.locals.hannahAccount) void emitUserEvent(res.locals.hannahAccount.id, "budget.exceeded", { message: error.message });
-    const normalized = normalizeProviderError(error, provider.label);
+    const normalized = normalizeProviderError(error, "HANNAH");
     return res.status(normalized.status).json({ error: normalized.message, code: normalized.code, retryable: false, budget: budgetStatus(credentialId, callerBudget) });
   }
   const normalizedMessages = messages.map((message) => ({
@@ -623,64 +645,159 @@ app.post("/api/agent", async (req, res) => {
     ...(message.tool_call_id ? { tool_call_id: message.tool_call_id } : {}),
     ...(message.tool_calls ? { tool_calls: message.tool_calls } : {}),
   }));
-  let routing = null;
-  let requestedModel = typeof model === "string" && model.trim() && !wantsAuto ? model.trim() : defaultModelFor(provider);
-  if (wantsAuto) {
-    const classification = classifyRequest(normalizedMessages, tools);
-    // A specialist agent can ask for a tier (for example "complex" for coding).
-    if (["simple", "standard", "complex"].includes(req.body?.routeHint)) {
-      classification.level = req.body.routeHint;
-      classification.reasons = [...classification.reasons, `${req.body.routeHint} requested by the specialist agent`];
-    }
-    const pick = pickAutoModel(provider.id, classification, { needsTools: tools.length > 0, budgetTight: budget.tight });
-    if (pick?.model) requestedModel = pick.model;
-    routing = { ...classification, model: requestedModel, tier: pick?.tier, reason: pick?.reason };
-  }
-  const selectedModels = modelChain(provider, requestedModel);
-  if (!selectedModels.length) return res.status(400).json({ error: `No model is configured for ${provider.label}.` });
+  const agentSystemPrompt = buildAgentSystemPrompt(marketplacePackages, req.body?.personalization, normalizeMemories(req.body?.memories), communitySkills);
 
+  // Build the ordered list of attempts: [{ provider, apiKey, model }].
+  let attempts;
+  let routing = null;
+  if (wantsAuto && policy) {
+    // Routed: HANNAH picks across every provider this caller may use, within the policy.
+    const usable = usableProviders(req, res);
+    let decision;
+    try {
+      decision = router.route({
+        messages: normalizedMessages,
+        tools,
+        policy,
+        routeHint: req.body?.routeHint,
+        usableProviders: usable.map((item) => item.provider),
+        preferredProviderId: typeof req.body?.provider === "string" ? req.body.provider : undefined,
+        budgetTight: budget.tight,
+        overheadChars: agentSystemPrompt.length,
+      });
+    } catch (error) {
+      if (error instanceof router.RoutingError) return res.status(error.status).json({ error: error.message, code: error.code });
+      throw error;
+    }
+    const keyFor = new Map(usable.map((item) => [item.provider.id, item]));
+    attempts = [decision, ...decision.alternatives]
+      .slice(0, 3)
+      .map((choice) => ({ ...keyFor.get(choice.providerId), model: choice.model }))
+      .filter((attempt) => attempt.provider && !router.privacyBlocks(policy, attempt.provider));
+    routing = decision;
+  } else {
+    const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || preferredProviderId(req, res));
+    let resolved;
+    try {
+      resolved = getRequestProvider(req, providerId);
+    } catch (error) {
+      return res.status(error.status || 400).json({ error: error.message });
+    }
+    // Private and Offline modes never send a request to a hosted provider, even a pinned one.
+    if (router.privacyBlocks(policy, resolved.provider)) {
+      return res.status(403).json({
+        error: `${policy.mode === "offline" ? "Offline" : "Private"} mode is on, so HANNAH won't send this to ${resolved.provider.label}, a hosted provider. Pick a self-hosted model or change the routing mode.`,
+        code: "privacy_blocked",
+      });
+    }
+    let requestedModel = typeof model === "string" && model.trim() && !wantsAuto ? model.trim() : defaultModelFor(resolved.provider);
+    if (wantsAuto) {
+      // Auto without a routing policy (older clients): pick within the chosen provider.
+      const classification = classifyRequest(normalizedMessages, tools);
+      // A specialist agent can ask for a tier (for example "complex" for coding).
+      if (["simple", "standard", "complex"].includes(req.body?.routeHint)) {
+        classification.level = req.body.routeHint;
+        classification.reasons = [...classification.reasons, `${req.body.routeHint} requested by the specialist agent`];
+      }
+      const pick = pickAutoModel(resolved.provider.id, classification, { needsTools: tools.length > 0, budgetTight: budget.tight });
+      if (pick?.model) requestedModel = pick.model;
+      routing = { ...classification, model: requestedModel, tier: pick?.tier, reason: pick?.reason };
+    }
+    const selectedModels = modelChain(resolved.provider, requestedModel);
+    if (!selectedModels.length) return res.status(400).json({ error: `No model is configured for ${resolved.provider.label}.` });
+    attempts = [{ ...resolved, model: selectedModels[0] }];
+  }
+  if (!attempts.length) return res.status(409).json({ error: "No model is available for this request.", code: "no_route" });
+
+  const fellBackFrom = [];
+  for (let index = 0; index < attempts.length; index += 1) {
+    const { provider, apiKey, model: attemptModel } = attempts[index];
+    const startedAt = Date.now();
+    try {
+      const message = await complete({
+        provider,
+        apiKey,
+        model: attemptModel,
+        messages: normalizedMessages,
+        tools,
+        systemPrompt: agentSystemPrompt,
+        timeoutMs: provider.local ? 120_000 : cloudRequestTimeout,
+        // A routed attempt is one model; the next provider is the fallback.
+        singleModel: Boolean(policy && wantsAuto),
+      });
+      router.recordOutcome(provider.id, { ok: true, latencyMs: Date.now() - startedAt });
+      const usedModel = message.model || attemptModel;
+      res.locals.tokenUsage = {
+        provider: provider.id || provider.label,
+        model: usedModel,
+        inputTokens: message.usage?.promptTokens,
+        outputTokens: message.usage?.completionTokens,
+      };
+      recordSpend(credentialId, usedModel, message.usage?.promptTokens, message.usage?.completionTokens);
+      return res.json({
+        message: { content: typeof message.content === "string" ? message.content : "", tool_calls: Array.isArray(message.tool_calls) ? message.tool_calls : [] },
+        provider: provider.label,
+        providerId: provider.id,
+        model: usedModel,
+        toolMode: message.toolMode,
+        ...(routing ? { routing: { ...routing, ...(fellBackFrom.length ? { fellBackFrom } : {}) } } : {}),
+        budget: budgetStatus(credentialId, callerBudget),
+        usage: {
+          inputTokens: Number.isFinite(message.usage?.promptTokens) ? message.usage.promptTokens : null,
+          outputTokens: Number.isFinite(message.usage?.completionTokens) ? message.usage.completionTokens : null,
+        },
+      });
+    } catch (error) {
+      console.error(`${provider.label} agent request failed (${error?.name || "request error"}).`);
+      const normalized = normalizeProviderError(error, provider.label);
+      router.recordOutcome(provider.id, { ok: false, retryable: normalized.retryable });
+      if (normalized.retryable && index < attempts.length - 1) {
+        fellBackFrom.push({ providerId: provider.id, model: attemptModel, code: normalized.code });
+        continue;
+      }
+      // A rejected provider key keeps its 401/403 so the app can ask for a new key.
+      const status = normalized.code === "auth" ? (error.status || 401) : normalized.status;
+      return res.status(status).json({
+        error: (mode === "ollama" || provider.local) && ["network", "timeout"].includes(normalized.code)
+          ? `Could not reach ${provider.label}. Check that it's running and the model is available.`
+          : normalized.message,
+        code: normalized.code,
+        retryable: normalized.retryable,
+        ...(fellBackFrom.length ? { fellBackFrom } : {}),
+      });
+    }
+  }
+  return res.status(502).json({ error: "No provider could complete the request.", code: "unavailable" });
+});
+
+// Route preview: what HANNAH would use for this request, why, what it may
+// cost, and the alternatives. No model is called.
+app.post("/api/route/preview", (req, res) => {
+  const messages = req.body?.messages;
+  if (!Array.isArray(messages) || messages.length < 1 || messages.length > 40 || !messages.every(isValidAgentMessage)) {
+    return res.status(400).json({ error: "The conversation is invalid or too long." });
+  }
+  const toolCount = Number.isInteger(req.body?.toolCount) && req.body.toolCount >= 0 && req.body.toolCount <= 64 ? req.body.toolCount : 0;
+  let policy;
   try {
-    const message = await complete({
-      provider,
-      apiKey: requestApiKey,
-      model: selectedModels[0],
-      messages: normalizedMessages,
-      tools,
-      systemPrompt: buildAgentSystemPrompt(marketplacePackages, req.body?.personalization, normalizeMemories(req.body?.memories), communitySkills),
-      timeoutMs: provider.local ? 120_000 : cloudRequestTimeout,
+    policy = router.normalizeRouting(req.body?.routing ?? {});
+    const credentialId = res.locals.hannahApiTokenId;
+    const budget = budgetStatus(credentialId, req.body?.budget?.dailyUsd);
+    const decision = router.route({
+      messages: messages.map((message) => ({ role: message.role, content: message.content })),
+      tools: Array.from({ length: toolCount }, (_, index) => ({ function: { name: `tool_${index}` } })),
+      policy,
+      routeHint: req.body?.routeHint,
+      usableProviders: usableProviders(req, res).map((item) => item.provider),
+      preferredProviderId: typeof req.body?.provider === "string" ? req.body.provider : undefined,
+      budgetTight: budget.tight,
+      overheadChars: systemPrompt.length,
     });
-    const usedModel = message.model || requestedModel;
-    res.locals.tokenUsage = {
-      provider: provider.id || provider.label,
-      model: usedModel,
-      inputTokens: message.usage?.promptTokens,
-      outputTokens: message.usage?.completionTokens,
-    };
-    recordSpend(credentialId, usedModel, message.usage?.promptTokens, message.usage?.completionTokens);
-    return res.json({
-      message: { content: typeof message.content === "string" ? message.content : "", tool_calls: Array.isArray(message.tool_calls) ? message.tool_calls : [] },
-      provider: provider.label,
-      model: usedModel,
-      toolMode: message.toolMode,
-      ...(routing ? { routing } : {}),
-      budget: budgetStatus(credentialId, callerBudget),
-      usage: {
-        inputTokens: Number.isFinite(message.usage?.promptTokens) ? message.usage.promptTokens : null,
-        outputTokens: Number.isFinite(message.usage?.completionTokens) ? message.usage.completionTokens : null,
-      },
-    });
+    return res.json({ ...decision, budget });
   } catch (error) {
-    console.error(`${provider.label} agent request failed (${error?.name || "request error"}).`);
-    const normalized = normalizeProviderError(error, provider.label);
-    // A rejected provider key keeps its 401/403 so the app can ask for a new key.
-    const status = normalized.code === "auth" ? (error.status || 401) : normalized.status;
-    return res.status(status).json({
-      error: (mode === "ollama" || provider.local) && ["network", "timeout"].includes(normalized.code)
-        ? "Could not reach Ollama. Check that it's running and the model is pulled."
-        : normalized.message,
-      code: normalized.code,
-      retryable: normalized.retryable,
-    });
+    if (error instanceof router.RoutingError) return res.status(error.status).json({ error: error.message, code: error.code });
+    console.error(`Route preview failed (${error?.name || "error"}).`);
+    return res.status(500).json({ error: "HANNAH couldn't work out a route for this request." });
   }
 });
 

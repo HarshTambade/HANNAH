@@ -31,7 +31,7 @@ export const SYNC_NAMESPACES: Namespace[] = [
   { name: "reminders", label: "Reminders", storageKey: "hannah.reminders.v1", idOf: (item) => item.id as string, stampOf: (item) => stamp(item.firedAt, item.createdAt), event: "hannah:reminders", limit: 200 },
   { name: "communitySkills", label: "Community skills", storageKey: "hannah.communitySkills.v1", idOf: (item) => (item.manifest as Item | undefined)?.id as string, stampOf: (item) => stamp(item.installedAt), event: "hannah:community-skills", limit: 50 },
   { name: "chatHistory", label: "Chat history", storageKey: "hannah.chat.history.v1", idOf: (item) => item.id as string, event: "hannah:chat-history", limit: 200 },
-  { name: "settings", label: "Preferences", keys: ["hannah.budget.dailyUsd", "hannah.guardian.strictness.v1", "hannah.cloudProvider", "hannah.voiceEnabled", "hannah.voice.settings.v1", "hannah.speechLanguage", "hannah.specialists.v1", "hannah.chat.team"], event: "hannah:settings" },
+  { name: "settings", label: "Preferences", keys: ["hannah.budget.dailyUsd", "hannah.guardian.strictness.v1", "hannah.cloudProvider", "hannah.voiceEnabled", "hannah.voice.settings.v1", "hannah.speechLanguage", "hannah.specialists.v1", "hannah.chat.team", "hannah.routing.v1"], event: "hannah:settings" },
 ];
 
 const BASE_PREFIX = "hannah.sync.base.";

@@ -33,6 +33,7 @@ Three rules shape the product:
 - [Quick start](#quick-start)
 - [Configuration](#configuration)
 - [Inference modes](#inference-modes)
+- [Model routing](#model-routing)
 - [Agent runtime and tools](#agent-runtime-and-tools)
 - [Agent team](#agent-team)
 - [Accounts and your own database](#accounts-and-your-own-database)
@@ -79,7 +80,7 @@ The app uses hash routes. Every screen except the landing page, Marketplace and 
 | Screen | Route | What it does |
 | --- | --- | --- |
 | **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog: paste your Groq key (checked with Groq before the app opens). **I have an access token** is optional, for operator-provided models and features. When the server has a database, **Sign in or create one** opens email and password sign-in. |
-| **Chat** | `#/chat` | Conversation beside the 3D avatar. Pick a model, or **Auto** to let HANNAH route each message by complexity. Speak or type, rate replies, approve or decline actions on the in-chat approval cards, and press **Stop** to halt a running task before its next step. Turn on **Team** to have HANNAH plan the task with specialist agents and verify the result. |
+| **Chat** | `#/chat` | Conversation beside the 3D avatar. Pick a model, or **Auto** to let HANNAH choose a provider and model for each message in your [routing mode](#model-routing). A line above the message box previews the choice before you send. Speak or type, rate replies, approve or decline actions on the in-chat approval cards, and press **Stop** to halt a running task before its next step. Turn on **Team** to have HANNAH plan the task with specialist agents and verify the result. |
 | **Dashboard** | `#/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. Also holds **Reminders**: add, cancel, and allow notifications. Empty states show `—` or `0`, never sample numbers. |
 | **Agents** | `#/agents` | The agent team: Research, Coding, Memory and Tasks specialists with their tools and model choice (Auto or a specific model), the always-on verification agent, and **Team activity**: every team run's plan, which steps ran in parallel, each step's status and result, verification and the final answer. Interrupted or stopped runs can be resumed. |
 | **Models** | `#/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
@@ -379,7 +380,8 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | `OPENAI_TTS_MODEL`, `GROQ_STT_MODEL` | `gpt-4o-mini-tts`, `whisper-large-v3-turbo` | Models for the hosted voice engines. |
 | `HANNAH_MCP_SERVERS` | — | JSON list of outside MCP servers HANNAH can use as a client, for example `[{"id":"docs","name":"Team docs","url":"https://…/mcp","headers":{"Authorization":"Bearer …"}}]`. |
 | `HANNAH_PUBLIC_URL` | request host | Public base URL used in the A2A agent card. |
-| `HANNAH_PROVIDER_FALLBACKS` | — | Comma-separated providers to try when `hannah-auto` requests fail with a retryable error, for example `openrouter,together`. Never used for visitor keys or a pinned provider. |
+| `HANNAH_PROVIDER_FALLBACKS` | — | Comma-separated providers to try when `hannah-auto` requests without a routing mode fail with a retryable error, for example `openrouter,together`. Never used for visitor keys or a pinned provider. Routed requests fall back to the router's own alternatives. |
+| `HANNAH_SELF_HOSTED_PROVIDERS` | — | Providers to treat as self-hosted in Private mode even on a public address, for example `custom,vllm` for your own inference box. Local runtimes and loopback or private-network endpoints count already. |
 | `MCP_ENABLED`, `MCP_API_TOKEN`, `HANNAH_API_URL` | `false`, —, `http://127.0.0.1:3001` | Remote MCP endpoint. |
 | `ANTHROPIC_DESKTOP_MODEL` | `claude-sonnet-5-5` | Model for desktop computer use (needs `ANTHROPIC_API_KEY`). |
 | `MITHI_TTS_URL` | — | Optional Mithi text-to-speech service. |
@@ -404,6 +406,29 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | **Desktop Agent** | Electron with the desktop bridge | Computer use with approval for every action. |
 
 When offline, HANNAH chooses llama.cpp on mobile and WebLLM on web and desktop.
+
+## Model routing
+
+With the chat model set to **Auto**, the [router](./server/router.js) picks a provider and model for each message from every provider you can use: the server's providers for the operator, your saved keys when signed in, or Groq for a visitor key. Choose how in chat settings, under **How Auto chooses**:
+
+| Mode | Picks |
+| --- | --- |
+| **Balanced** (default) | A model that fits the message: light for everyday chat, stronger for coding, research and reasoning. |
+| **Best quality** | The most capable model you can use, every time. |
+| **Budget** | The lowest-cost model that can still handle the message. |
+| **Fastest** | The lowest measured latency (after three real replies), then models profiled as fast. |
+| **Private** | Only self-hosted models: Ollama, LM Studio, llama.cpp, vLLM, or a provider on a loopback or private-network address, or one listed in `HANNAH_SELF_HOSTED_PROVIDERS`. |
+| **Custom** | Your own provider list, a ceiling on the quality tier, and optionally self-hosted only. |
+
+For fully offline use, pick the **WebLLM Local** or **On-device AI** inference mode, which never touches the network. API callers can send `mode: "offline"`, which the server treats like Private.
+
+**Before you send**, the line above the message box shows the mode, provider and model. Open it for the reason, quality tier, cost, where the data goes, limitations, and up to three alternatives. **Use this** pins an alternative for the chat. The preview (`POST /api/route/preview`) calls no model.
+
+**Privacy is enforced on the server.** In Private mode the server refuses to send a request to a hosted provider. That covers routed requests, fallbacks, and a model you pinned by hand, which gets `403 privacy_blocked`. If no self-hosted model is set up, you get a clear error instead of a quiet switch to the cloud. A local runtime counts only when its base URL or model list is set, because Ollama's built-in localhost default alone doesn't prove anything is running.
+
+**Cost estimates are shown only when they can be defended.** Prices live in [`shared/model-prices.json`](./shared/model-prices.json), and each provider entry links to its official pricing page. The app shows a dollar estimate only for an entry with a `verified` date from the last 120 days. Every estimate states the reply length it assumes (about 700 tokens). Above your threshold (default $0.05), HANNAH asks before sending and offers cheaper alternatives. No entry is verified yet, so the app shows "No verified price" until an operator checks a provider's page and adds the date. Daily budgets still count every listed price, so caps err on the safe side.
+
+**Failures:** when a routed request fails with a retryable error (rate limit, outage, timeout), HANNAH tries the next alternative that meets the same policy, up to three in all. The reply's `routing.fellBackFrom` says what was skipped. A provider that fails three times in a row sits out for a minute. Measured latency and health are kept per server process.
 
 ---
 
@@ -677,7 +702,7 @@ See [`docs/OPERATIONS_RUNBOOK.md`](./docs/OPERATIONS_RUNBOOK.md) and [`docs/OBSE
 
 There are two ways to authenticate:
 
-- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models`, `/api/providers`, `/api/catalog`, `/api/orchestrate`, `/api/voice/*`, `/api/a2a`, `/v1/chat/completions`, `/v1/models` and `/v1/usage` only, and the key goes only to Groq's official API.
+- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models`, `/api/providers`, `/api/catalog`, `/api/orchestrate`, `/api/voice/*`, `/api/a2a`, `/api/route/preview`, `/v1/chat/completions`, `/v1/models` and `/v1/usage` only, and the key goes only to Groq's official API.
 - **Operator token:** send `Authorization: Bearer <HANNAH_API_TOKEN>`. This works for every route.
 - **Account:** a session (cookie, or `Authorization: Bearer hs_…` in native apps) or a developer key (`Authorization: Bearer hk_…`). This works for the model routes above plus `/api/orchestrate`, `/api/voice/*`, `/api/a2a` and the account's own `/api/account/*` routes. Developer keys can't manage the account.
 
@@ -690,8 +715,9 @@ There are two ways to authenticate:
 | `GET /api/providers` | Providers configured on the server. |
 | `GET /api/models?provider=` | Models available for a provider. |
 | `GET /api/catalog` | Every provider's models with tool, vision and context flags and known list prices, for the model advisor. No credentials. |
+| `POST /api/route/preview` | Which provider and model Auto would use for `messages` under `routing` (`{ mode, providers?, maxTier?, localOnly? }`), with the reason, limitations, alternatives and a cost estimate when a verified price exists. Calls no model. `409` with `no_private_route` or `no_route` when nothing fits. |
 | `GET /v1/models` | OpenAI-compatible model list: `hannah-auto` plus `<provider>/<model>` for each usable model. |
-| `POST /v1/chat/completions` | OpenAI-compatible chat completions with `"stream": true` over SSE, tool calls (returned for the caller to run), `hannah-auto` routing, normalized errors and the daily budget. Text content only. |
+| `POST /v1/chat/completions` | OpenAI-compatible chat completions with `"stream": true` over SSE, tool calls (returned for the caller to run), `hannah-auto` routing (add `"hannah": { "routing": { "mode": "private" } }` to choose a [routing mode](#model-routing)), normalized errors and the daily budget. Text content only. |
 | `GET /v1/usage` | Today's estimated spend and budget for this credential. |
 | `POST /api/agent` | One agent step: messages plus JSON-schema tools in; reply, tool calls, emotion, model, provider, latency and usage out. |
 | `POST /api/chat` | Plain chat (user and assistant messages only); returns `{ reply, emotion }`. |
@@ -855,6 +881,8 @@ Treat these as design work in progress, not features. Account sync (see [Account
 - The Research agent has no web access.
 - The Marketplace has no public registry, and executable plugins aren't supported (they need sandboxing).
 - Webhooks are delivered once, with no retries.
+- No price in `shared/model-prices.json` has a verification date yet, so the app shows no dollar estimates until an operator verifies them.
+- The router's measured latency and provider health are per server process, and Fastest mode needs three real replies before it uses measurements.
 - The Marketplace has no third-party listings.
 - iOS needs Apple signing for an installable build.
 - With `VITE_AVATAR_MODEL_URL` unset, the 7.4 MB avatar can stall slow devices on first load.

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "about": "List prices in USD per 1M tokens, used for two different jobs. (1) Budgets: every entry counts toward daily spending caps, so caps err on the safe side. (2) Estimates shown to people: HANNAH shows a dollar estimate only for an entry whose `verified` date is set and no older than `verifiedMaxAgeDays`. Set `verified` (YYYY-MM-DD) only after checking the provider's official pricing page given in `sources`. Entries carried over from the original table have no verification date.",
+  "verifiedMaxAgeDays": 120,
+  "sources": {
+    "openai": "https://openai.com/api/pricing/",
+    "anthropic": "https://www.anthropic.com/pricing#api",
+    "groq": "https://groq.com/pricing"
+  },
+  "defaultForBudgets": { "input": 0.5, "output": 1.5 },
+  "prices": [
+    { "model": "gpt-4o", "provider": "openai", "input": 2.5, "output": 10, "verified": null },
+    { "model": "gpt-4o-mini", "provider": "openai", "input": 0.15, "output": 0.6, "verified": null },
+    { "model": "gpt-4.1", "provider": "openai", "input": 2, "output": 8, "verified": null },
+    { "model": "gpt-4.1-mini", "provider": "openai", "input": 0.4, "output": 1.6, "verified": null },
+    { "model": "o3-mini", "provider": "openai", "input": 1.1, "output": 4.4, "verified": null },
+    { "model": "claude-sonnet-4-5", "provider": "anthropic", "input": 3, "output": 15, "verified": null },
+    { "model": "claude-haiku-4-5", "provider": "anthropic", "input": 0.8, "output": 4, "verified": null },
+    { "model": "claude-opus-4-1", "provider": "anthropic", "input": 15, "output": 75, "verified": null },
+    { "model": "llama-3.3-70b-versatile", "provider": "groq", "input": 0.59, "output": 0.79, "verified": null },
+    { "model": "llama-3.1-8b-instant", "provider": "groq", "input": 0.05, "output": 0.08, "verified": null },
+    { "model": "qwen/qwen3-32b", "provider": "groq", "input": 0.29, "output": 0.59, "verified": null }
+  ]
+}

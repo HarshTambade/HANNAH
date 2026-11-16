@@ -189,3 +189,66 @@ test("Team mode plans, runs specialists in parallel, verifies and shows the run 
   await expect(activity).toContainText("Done");
   await expect(activity).toContainText("2/2 steps");
 });
+
+test("Auto previews the route before sending and Private mode stays self-hosted", async ({ page }) => {
+  const agentBodies: Array<Record<string, unknown>> = [];
+  const previewBodies: Array<Record<string, unknown>> = [];
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/providers") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ defaultProvider: "groq", providers: [{ id: "groq", label: "Groq", local: false, configured: true }] }) });
+    if (url.pathname === "/api/models") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ provider: "Groq", defaultModel: "llama-3.1-8b-instant", models: ["llama-3.1-8b-instant"] }) });
+    if (url.pathname === "/api/route/preview") {
+      const body = request.postDataJSON() as { routing: { mode: string } };
+      previewBodies.push(body);
+      if (body.routing.mode === "private") {
+        return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: "Private mode only uses models on your own hardware, and none is set up on this server.", code: "no_private_route" }) });
+      }
+      return route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          mode: "balanced", modeLabel: "Balanced", level: "simple", task: "chat", reasons: ["short everyday message"],
+          providerId: "groq", providerLabel: "Groq", model: "llama-3.1-8b-instant", tier: "small", local: false,
+          estimate: { inputTokens: 520, outputTokens: 700, assumption: "about 700 reply tokens", usd: null, basis: "unverified", note: "No verified price on file." },
+          reason: "Balanced: a small model for a simple chat request (short everyday message).",
+          alternatives: [{ providerId: "groq", providerLabel: "Groq", model: "openai/gpt-oss-120b", tier: "frontier", local: false, estimate: { inputTokens: 520, outputTokens: 700, assumption: "about 700 reply tokens", usd: null, basis: "unverified" } }],
+          limitations: [], privacy: "any",
+        }),
+      });
+    }
+    if (url.pathname === "/api/agent") {
+      agentBodies.push(request.postDataJSON());
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { content: JSON.stringify({ reply: "Routed hello.", emotion: "neutral" }), tool_calls: [] }, provider: "Groq", model: "llama-3.1-8b-instant" }) });
+    }
+    return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+  });
+  await page.addInitScript((token) => {
+    window.localStorage.setItem("hannah.onboarding.v1", "complete");
+    window.localStorage.setItem("hannah.cloudModel:groq", "auto");
+    sessionStorage.setItem("hannah.session.apiToken", token);
+  }, apiToken);
+  await page.goto("/#/chat");
+
+  const message = page.getByRole("textbox", { name: "Message HANNAH" });
+  await expect(message).toBeVisible();
+  await message.fill("hi there");
+  const chip = page.getByRole("button", { name: /^Route: Balanced uses Groq llama-3\.1-8b-instant/ });
+  await expect(chip).toBeVisible();
+  await chip.click();
+  await expect(page.getByText("Balanced: a small model for a simple chat request")).toBeVisible();
+  await expect(page.getByText("No verified price").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use this" })).toBeVisible();
+
+  // Switch to Private: the preview explains there's no self-hosted model before anything is sent.
+  await page.getByRole("button", { name: "Inference and privacy settings" }).click();
+  await page.getByRole("radio", { name: "Private" }).click();
+  await expect(page.getByText("Private mode only uses models on your own hardware")).toBeVisible();
+  expect(previewBodies.at(-1)?.routing).toEqual({ mode: "private" });
+
+  // Back to Balanced, send, and the agent request carries the routing policy.
+  await page.getByRole("radio", { name: "Balanced" }).click();
+  await page.getByRole("button", { name: "Inference and privacy settings" }).click();
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText("Routed hello.")).toBeVisible();
+  expect(agentBodies[0]).toMatchObject({ model: "auto", routing: { mode: "balanced" } });
+});

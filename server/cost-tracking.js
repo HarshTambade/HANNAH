@@ -6,22 +6,12 @@ const path = require("node:path");
 
 const COST_LOG = process.env.TOKEN_COST_LOG?.trim() || "logs/token_usage.jsonl";
 
-// Conservative USD per 1M tokens. Unknown models fall back to the default.
-const MODEL_PRICES = {
-  "gpt-4o": { input: 2.5, output: 10 },
-  "gpt-4o-mini": { input: 0.15, output: 0.6 },
-  "gpt-4.1": { input: 2, output: 8 },
-  "gpt-4.1-mini": { input: 0.4, output: 1.6 },
-  "o3-mini": { input: 1.1, output: 4.4 },
-  "claude-sonnet-4-5": { input: 3, output: 15 },
-  "claude-haiku-4-5": { input: 0.8, output: 4 },
-  "claude-opus-4-1": { input: 15, output: 75 },
-  "llama-3.3-70b-versatile": { input: 0.59, output: 0.79 },
-  "llama-3.1-8b-instant": { input: 0.05, output: 0.08 },
-  "qwen/qwen3-32b": { input: 0.29, output: 0.59 },
-};
-
-const DEFAULT_PRICE = { input: 0.5, output: 1.5 };
+// Prices live in a dated data file so they can be checked and corrected
+// without a code change. See its "about" field for how entries are used.
+const priceData = require("../shared/model-prices.json");
+const MODEL_PRICES = Object.fromEntries(priceData.prices.map((entry) => [entry.model, entry]));
+const DEFAULT_PRICE = priceData.defaultForBudgets;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function numberOrZero(value) {
   return Number.isFinite(value) ? value : 0;
@@ -39,7 +29,30 @@ function knownPriceFor(model) {
     const candidate = key.toLowerCase();
     if (normalized.includes(candidate) && (!match || candidate.length > match.key.length)) match = { key: candidate, price };
   }
-  return match ? match.price : null;
+  return match ? { input: match.price.input, output: match.price.output } : null;
+}
+
+/**
+ * A price that may be shown to people as an estimate: only entries with a
+ * recent verification date. Returns null otherwise, so the app says "no
+ * verified price" instead of guessing.
+ */
+function verifiedPriceFor(model, now = Date.now()) {
+  if (typeof model !== "string") return null;
+  const normalized = model.toLowerCase();
+  let match = null;
+  for (const [key, entry] of Object.entries(MODEL_PRICES)) {
+    const candidate = key.toLowerCase();
+    if (normalized.includes(candidate) && (!match || candidate.length > match.key.length)) match = { key: candidate, entry };
+  }
+  const verified = match?.entry.verified ? Date.parse(`${match.entry.verified}T00:00:00Z`) : NaN;
+  if (!Number.isFinite(verified) || now - verified > priceData.verifiedMaxAgeDays * DAY_MS) return null;
+  return {
+    input: match.entry.input,
+    output: match.entry.output,
+    verified: match.entry.verified,
+    source: priceData.sources[match.entry.provider] || null,
+  };
 }
 
 function priceFor(model) {
@@ -95,6 +108,7 @@ function tokenUsageMiddleware(req, res, next) {
 module.exports = {
   estimateCost,
   knownPriceFor,
+  verifiedPriceFor,
   hashUserId,
   tokenUsageMiddleware,
 };

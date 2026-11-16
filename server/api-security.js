@@ -20,7 +20,7 @@ const configuredTokenDigest = configuredTokenIsValid
 // getRequestProviderApiKey in index.js); server-held provider keys, desktop
 // control, TTS, calls, feedback and sync still require the operator token.
 // Paths are relative to the /api or /v1 mount.
-const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/a2a"]);
+const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/a2a", "/route/preview"]);
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
 const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card"]);
 // A signed-in account (session or developer API key) may use the model routes

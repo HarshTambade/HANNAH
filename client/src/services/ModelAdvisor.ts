@@ -41,7 +41,7 @@ export type AdvisorNeeds = {
   monthlyMessages?: number;
 };
 
-export type CatalogModel = { id: string; label: string; tools: boolean; vision: boolean; context: number | null; free: boolean; notes?: string; price: { inputPerMTok: number; outputPerMTok: number; currency: string } | null };
+export type CatalogModel = { id: string; label: string; tools: boolean; vision: boolean; context: number | null; free: boolean; notes?: string; price: { inputPerMTok: number; outputPerMTok: number; currency: string; verified?: string | null; source?: string | null } | null };
 export type CatalogProvider = { id: string; label: string; kind: string; local: boolean; free: boolean; docs?: string; configured: boolean; models: CatalogModel[] };
 export type ModelCatalog = { byok: boolean; priceNote?: string; providers: CatalogProvider[] };
 
@@ -275,8 +275,9 @@ function localOnly(needs: AdvisorNeeds) {
     || needs.budget === "free-local" || needs.budget === "personal-compute";
 }
 
+/** A monthly estimate, only from a price with a verification date (see shared/model-prices.json). */
 function monthlyCost(price: CatalogModel["price"], messages?: number) {
-  if (!price || !messages) return null;
+  if (!price || !messages || !price.verified) return null;
   return (messages * (AVERAGE_INPUT_TOKENS * price.inputPerMTok + AVERAGE_OUTPUT_TOKENS * price.outputPerMTok)) / 1_000_000;
 }
 
@@ -323,7 +324,9 @@ function hostedCandidates(needs: AdvisorNeeds, catalog: ModelCatalog | null): Re
       const cost = free
         ? "Free tier (rate-limited)"
         : model.price
-          ? `$${model.price.inputPerMTok}/M in · $${model.price.outputPerMTok}/M out${monthly !== null ? ` · ≈ ${formatUsd(monthly)}/month` : ""}`
+          ? model.price.verified
+            ? `$${model.price.inputPerMTok}/M in · $${model.price.outputPerMTok}/M out${monthly !== null ? ` · ≈ ${formatUsd(monthly)}/month` : ""} (checked ${model.price.verified})`
+            : `List price $${model.price.inputPerMTok}/M in · $${model.price.outputPerMTok}/M out, not verified; check the provider`
           : "Price not in HANNAH's table; check the provider";
       const reasons = [
         taskMatch(task, strengths) === 2 ? `it's strong at ${STRENGTH_LABEL[TASK_STRENGTHS[task][0]] ?? task}` : "",
