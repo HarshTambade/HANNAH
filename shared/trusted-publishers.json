@@ -1,0 +1,5 @@
+{
+  "reviewed": "2026-11-16",
+  "note": "Publishers whose Ed25519 keys HANNAH trusts for community skills. Add an entry only after confirming the key with the publisher through a channel you trust. A skill signed by a key that isn't listed still installs, but shows as signed by an unknown publisher.",
+  "publishers": []
+}

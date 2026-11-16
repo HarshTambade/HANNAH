@@ -24,6 +24,54 @@ function writeSession(key: string, value: string) {
 let apiAccessToken = readSession(TOKEN_KEY);
 let groqApiKey = readSession(GROQ_KEY);
 
+// Account session. On the web the session is an HttpOnly cookie the app can't
+// read, so only a "signed in as" hint is kept here. Native apps and builds that
+// call a different API origin can't use the cookie and keep the session token
+// (hs_…, never a provider key) instead.
+const ACCOUNT_KEY = "hannah.account.v1";
+export const ACCOUNT_EVENT = "hannah:account";
+export type AccountHint = { email: string; displayName?: string; sessionToken?: string };
+
+function readAccount(): AccountHint | null {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ACCOUNT_KEY) || "null") as AccountHint | null;
+    return parsed && typeof parsed.email === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+let accountHint = readAccount();
+
+export function getAccountHint() {
+  return accountHint;
+}
+
+export function setAccountHint(value: AccountHint | null) {
+  accountHint = value;
+  try {
+    if (value) window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(value));
+    else window.localStorage.removeItem(ACCOUNT_KEY);
+  } catch {
+    // Storage blocked: the hint lives in memory for this page.
+  }
+  try {
+    window.dispatchEvent(new Event(ACCOUNT_EVENT));
+  } catch {
+    // No window events in some environments.
+  }
+}
+
+/** True when the API is on another origin, so the session cookie can't be used. */
+export function usesBearerSession() {
+  if (!apiBaseUrl) return false;
+  try {
+    return new URL(apiBaseUrl, window.location.href).origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+}
+
 export function setApiAccessToken(token: string) {
   apiAccessToken = token.trim();
   writeSession(TOKEN_KEY, apiAccessToken);
@@ -45,6 +93,7 @@ export function getSessionGroqKey() {
 export function clearApiSession() {
   setApiAccessToken("");
   setSessionGroqKey("");
+  setAccountHint(null);
 }
 
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
@@ -54,21 +103,28 @@ export function isGroqKey(value: string) {
   return GROQ_KEY_PATTERN.test(value.trim());
 }
 
-/** Connected either with the operator's access token or with the visitor's own Groq key. */
+/** Connected with the operator's access token, a signed-in account, or the visitor's own Groq key. */
 export function hasApiSession() {
-  return apiAccessToken.length >= 32 || isGroqKey(groqApiKey);
+  return apiAccessToken.length >= 32 || Boolean(accountHint) || isGroqKey(groqApiKey);
 }
 
-/** Guest (bring-your-own-key) session: no operator token, only a Groq key. */
+/** Guest (bring-your-own-key) session: no operator token or account, only a Groq key. */
 export function isGuestSession() {
-  return !apiAccessToken && isGroqKey(groqApiKey);
+  return !apiAccessToken && !accountHint && isGroqKey(groqApiKey);
+}
+
+/** Signed in to an account on this server. */
+export function isAccountSession() {
+  return !apiAccessToken && Boolean(accountHint);
 }
 
 export function apiHeaders(init?: HeadersInit) {
   const headers = new Headers(init);
   if (apiAccessToken) headers.set("Authorization", "Bearer " + apiAccessToken);
-  // Guests authenticate with their own Groq key, which the server forwards only to Groq.
-  else if (isGroqKey(groqApiKey) && !headers.has("X-Groq-API-Key")) headers.set("X-Groq-API-Key", groqApiKey);
+  else if (accountHint?.sessionToken && !headers.has("Authorization")) headers.set("Authorization", "Bearer " + accountHint.sessionToken);
+  // A Groq key from this tab is sent alongside an account session too; the
+  // server forwards it only to Groq.
+  if (!apiAccessToken && isGroqKey(groqApiKey) && !headers.has("X-Groq-API-Key")) headers.set("X-Groq-API-Key", groqApiKey);
   return headers;
 }
 

@@ -190,7 +190,7 @@ export class LLMRouter {
     return resolveInferenceMode(preferred, browserConnected && network.connected);
   }
 
-  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = []): Promise<AgentStep> {
+  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = [], extra: { routeHint?: "simple" | "standard" | "complex" } = {}): Promise<AgentStep> {
     if (mode === "cloud" && ChaosEngine.consume("network-drop")) {
       ChaosEngine.setDegraded("Offline: cloud request dropped; switching to local AI.");
       throw new Error("Chaos injection: simulated cloud network drop.");
@@ -200,6 +200,7 @@ export class LLMRouter {
       mode,
       provider: selectedProvider,
       ...(mode === "cloud" && model ? { model } : {}),
+      ...(mode === "cloud" && model === "auto" && extra.routeHint ? { routeHint: extra.routeHint } : {}),
       ...(marketplaceItemIds.length ? { marketplaceItemIds } : {}),
       ...(personalization ? { personalization } : {}),
       ...(memories.length ? { memories } : {}),

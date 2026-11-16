@@ -11,7 +11,7 @@ HANNAH is operated by the HANNAH project operator. For privacy requests, contact
 
 ## 1. The short version
 
-- **No account is required.** HANNAH does not create a HANNAH account, profile, advertising identifier, or server-side chat history.
+- **No account is required.** HANNAH works without an account, profile or advertising identifier. Accounts are optional: they exist only if you create one on a HANNAH server whose operator connected a database. In that case, the operator's database stores your email, a password hash, your provider keys (encrypted), and the memories, reminders, chat history and preferences you sync. You can export or delete all of it in **Settings → Account**.
 - **You choose where inference runs.** WebLLM, the downloaded on-device model, and a loopback Ollama server keep prompts on your device or local machine. Cloud and cloud-backed agent modes send the conversation to the provider you select.
 - **We do not sell your data** and we do not use it for advertising, cross-app tracking, or training HANNAH’s own models.
 - **Cloud AI is third-party processing.** When you use cloud mode, your messages and relevant context are sent through the HANNAH API to the configured provider, such as Groq, OpenAI, or Anthropic. Those providers process the data under their own terms and privacy policies.
@@ -96,9 +96,9 @@ Cloud providers may retain request data under their own policies and settings. W
 
 ## 6. How to delete your data
 
-Because HANNAH has no account system, most deletion happens on your device:
+Without an account, deletion happens on your device. With an account, **Settings → Account → Delete account** removes your account, saved keys, developer keys, webhooks and synced data from the server's database. Data on your device then follows the steps below:
 
-1. **Chat:** open a new conversation, or close the app. The active transcript is not stored in a HANNAH server database.
+1. **Chat:** open a new conversation, or close the app. Without an account, the transcript isn't stored in a HANNAH server database. With account sync on, chat history is also stored in your account until you clear it or delete the account.
 2. **Memories:** open **Settings → Privacy and voice**, review saved memories, delete individual entries, or clear all memories.
 3. **Files:** use the app’s file controls to delete files in HANNAH’s private Documents area, or uninstall the app.
 4. **On-device model and browser model:** uninstall the app or clear the browser’s site data.

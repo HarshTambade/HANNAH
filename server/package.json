@@ -8,7 +8,9 @@
     "dev": "node index.js",
     "start": "node index.js",
     "test": "node --test",
-    "mcp:stdio": "node mcp-stdio.mjs"
+    "mcp:stdio": "node mcp-stdio.mjs",
+    "db:check": "node scripts/db.js check",
+    "db:migrate": "node scripts/db.js migrate"
   },
   "engines": {
     "node": ">=20"
@@ -22,6 +24,10 @@
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "mongodb": "^6.22.0",
+    "pg": "^8.23.1",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.16"
   }
 }

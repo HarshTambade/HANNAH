@@ -8,7 +8,8 @@ test("a visitor connects with only a Groq key and chats with the WebGL avatar", 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (url.pathname !== "/api/health") {
+    // Public endpoints (health, whether this server offers accounts) need no credentials.
+    if (!["/api/health", "/api/account/status", "/api/db/status"].includes(url.pathname)) {
       protectedRequests.push({ authorization: request.headers().authorization ?? "", groqKey: request.headers()["x-groq-api-key"] ?? "" });
     }
 
@@ -139,4 +140,49 @@ test("a file write waits for in-app approval and declining changes nothing", asy
   await expect(approval).toHaveCount(0);
   await expect(page.getByText("Action cancelled. HANNAH did not make any changes.")).toBeVisible();
   expect(agentCalls).toBe(1);
+});
+
+test("Team mode plans, runs specialists in parallel, verifies and shows the run on the Agents screen", async ({ page }) => {
+  const phases: string[] = [];
+  let agentCalls = 0;
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/providers") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ defaultProvider: "groq", providers: [{ id: "groq", label: "Groq", local: false, configured: true }] }) });
+    if (url.pathname === "/api/models") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ provider: "Groq", defaultModel: "openai/gpt-oss-120b", models: ["openai/gpt-oss-120b"] }) });
+    if (url.pathname === "/api/orchestrate") {
+      const body = request.postDataJSON();
+      phases.push(body.phase);
+      if (body.phase === "plan") {
+        return route.fulfill({ contentType: "application/json", body: JSON.stringify({ summary: "Two lookups", fallback: false, steps: [
+          { id: "s1", agent: "research", task: "Explain what a bento layout is", dependsOn: [] },
+          { id: "s2", agent: "memory", task: "Check what the user likes", dependsOn: [] },
+        ] }) });
+      }
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ verdict: "pass", issues: [], revise: [], reply: "Here's the combined answer from your team.", emotion: "happy" }) });
+    }
+    if (url.pathname === "/api/agent") {
+      agentCalls += 1;
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { content: JSON.stringify({ reply: `Step result ${agentCalls}`, emotion: "neutral" }), tool_calls: [] } }) });
+    }
+    return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "Not mocked" }) });
+  });
+  await page.addInitScript((key) => {
+    window.localStorage.setItem("hannah.onboarding.v1", "complete");
+    window.sessionStorage.setItem("hannah.session.groqKey", key);
+  }, groqKey);
+  await page.goto("/#/chat");
+  await page.getByRole("switch", { name: "Team" }).click();
+  await expect(page.getByRole("switch", { name: "Team" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("textbox", { name: "Message HANNAH" }).fill("Explain bento layouts and check what I like");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText("Here's the combined answer from your team.")).toBeVisible();
+  expect(phases).toEqual(["plan", "verify"]);
+  expect(agentCalls).toBe(2);
+
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("button", { name: "Agents" }).click();
+  const activity = page.getByRole("region", { name: "Team activity" });
+  await expect(activity).toContainText("Explain bento layouts and check what I like");
+  await expect(activity).toContainText("Done");
+  await expect(activity).toContainText("2/2 steps");
 });

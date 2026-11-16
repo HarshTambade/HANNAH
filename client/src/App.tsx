@@ -3,6 +3,7 @@ import IntegrationsPage from "./components/IntegrationsPage";
 import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
 import ModelsPage from "./components/ModelsPage";
+import AgentsPage from "./components/AgentsPage";
 import WorkflowBuilder from "./components/WorkflowBuilder";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
 import ChatUI from "./components/ChatUI";
@@ -10,8 +11,12 @@ import AvatarScene, { type AvatarMotion } from "./components/AvatarScene";
 import AppShell, { type AppSection } from "./components/AppShell";
 import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
-import { startReminderScheduler } from "./services/ReminderService";
-import { clearApiSession, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
+import { REMINDER_FIRED_EVENT, startReminderScheduler, type Reminder } from "./services/ReminderService";
+import { startNativeReminders } from "./services/NativeReminders";
+import { clearApiSession, getAccountHint, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
+import { Account } from "./services/Account";
+import { resetSyncState, startAccountSync } from "./services/AccountSync";
+import { refreshMcpTools } from "./services/McpTools";
 import type { Emotion, InferenceMode } from "./types";
 
 type Screen = "landing" | "integrations" | "marketplace" | AppSection;
@@ -20,6 +25,7 @@ const routes: Record<Screen, string> = {
   landing: "",
   conversation: "#/chat",
   companion: "#/dashboard",
+  agents: "#/agents",
   models: "#/models",
   accountability: "#/memory",
   automations: "#/automations",
@@ -28,7 +34,7 @@ const routes: Record<Screen, string> = {
   marketplace: "#/marketplace",
 };
 
-const appSections = new Set<Screen>(["conversation", "companion", "models", "accountability", "automations", "settings"]);
+const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "settings"]);
 
 // Only "#/..." hashes are routes; "#experience" etc. are landing-page anchors.
 function screenFromHash(): Screen {
@@ -65,6 +71,25 @@ export default function App() {
 
   // Reminders fire while the app is open, on any screen.
   useEffect(() => startReminderScheduler(), []);
+  useEffect(() => startNativeReminders(), []);
+  // Signed-in users can have reminders reach their own webhooks.
+  useEffect(() => {
+    const onFired = (event: Event) => {
+      const reminder = (event as CustomEvent<Reminder>).detail;
+      if (reminder) Account.emitEvent("reminder.fired", { id: reminder.id, text: reminder.text, dueAt: new Date(reminder.dueAt).toISOString() });
+    };
+    window.addEventListener(REMINDER_FIRED_EVENT, onFired);
+    return () => window.removeEventListener(REMINDER_FIRED_EVENT, onFired);
+  }, []);
+  // Confirm a remembered account session is still valid, then keep data in sync.
+  useEffect(() => {
+    void Account.refresh();
+    return startAccountSync();
+  }, []);
+  // Outside MCP tools (operator sessions only), refreshed when the screen changes.
+  useEffect(() => {
+    if (screen !== "landing") void refreshMcpTools();
+  }, [screen]);
 
   useEffect(() => {
     const onPop = () => {
@@ -85,6 +110,10 @@ export default function App() {
   }, []);
 
   const disconnect = useCallback(() => {
+    if (getAccountHint()) {
+      void Account.logout().catch(() => {});
+      resetSyncState();
+    }
     clearApiSession();
     setGroqApiKey("");
     navigate("landing");
@@ -152,6 +181,14 @@ export default function App() {
     return (
       <AppShell {...shellProps}>
         <div className="mx-auto max-w-6xl px-3 pb-12 pt-5 sm:px-6 sm:pt-8"><AgentAccountabilityDashboard /></div>
+      </AppShell>
+    );
+  }
+
+  if (screen === "agents") {
+    return (
+      <AppShell {...shellProps}>
+        <AgentsPage />
       </AppShell>
     );
   }

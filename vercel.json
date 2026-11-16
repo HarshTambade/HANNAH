@@ -16,6 +16,12 @@
   },
   "rewrites": [
     {
+      "source": "/.well-known/agent-card.json",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
       "source": "/mcp",
       "destination": {
         "service": "server"

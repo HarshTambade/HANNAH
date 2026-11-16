@@ -4,6 +4,8 @@ import {
   PlugZap, Server, ShieldCheck, Terminal,
 } from "lucide-react";
 import { apiUrl } from "../services/api";
+import DatabaseIntegration from "./DatabaseIntegration";
+import McpServersCard from "./McpServersCard";
 
 type IntegrationsPageProps = { onBack: () => void };
 
@@ -148,6 +150,9 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
             </div>
           </section>
         </div>
+
+        <DatabaseIntegration />
+        <McpServersCard />
 
         <section className="mt-6 grid gap-5 lg:grid-cols-2">
           <div className="rounded-[1.75rem] border-[6px] border-white/90 bg-white p-5 sm:p-7 shadow-[0_24px_60px_-30px_rgba(38,44,74,0.35)]">

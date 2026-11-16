@@ -88,12 +88,12 @@ function parseModelRef(value, fallbackProviderId) {
   return { auto: false, providerId: fallbackProviderId, model: raw };
 }
 
-function createV1Router({ getRequestProvider, defaultProviderId, timeoutMs, chatLimiter }) {
+function createV1Router({ getRequestProvider, allowedProviderIds = () => null, defaultProviderId, timeoutMs, chatLimiter }) {
   const router = express.Router();
 
-  router.get("/models", (_req, res) => {
-    const byok = Boolean(res.locals.hannahByok);
-    const providers = listProviders().filter((provider) => (byok ? provider.id === "groq" : provider.configured));
+  router.get("/models", (req, res) => {
+    const allowed = allowedProviderIds(req, res);
+    const providers = listProviders().filter((provider) => (allowed ? allowed.has(provider.id) : provider.configured));
     const data = [{ id: "hannah-auto", object: "model", created: 0, owned_by: "hannah", hannah: { description: "HANNAH picks a model by request complexity." } }];
     for (const provider of providers) {
       for (const model of provider.models) {
@@ -103,7 +103,8 @@ function createV1Router({ getRequestProvider, defaultProviderId, timeoutMs, chat
     res.json({ object: "list", data });
   });
 
-  router.get("/usage", (req, res) => {
+  router.get("/usage", async (req, res) => {
+    await gateway.hydrateSpend(res.locals.hannahApiTokenId);
     res.json({ object: "usage", day: new Date().toISOString().slice(0, 10), ...gateway.budgetStatus(res.locals.hannahApiTokenId, req.get("x-hannah-daily-budget")), note: "Estimated from list prices; free tiers and unpriced models count as $0." });
   });
 
@@ -116,7 +117,7 @@ function createV1Router({ getRequestProvider, defaultProviderId, timeoutMs, chat
     if (!tools) return openAiError(res, 400, "tools must be up to 64 OpenAI function tools.", "invalid_tools");
     const maxTokens = Number.isInteger(body.max_tokens ?? body.max_completion_tokens) ? Math.min(8192, Math.max(1, body.max_tokens ?? body.max_completion_tokens)) : undefined;
     const temperature = Number.isFinite(body.temperature) ? Math.min(2, Math.max(0, body.temperature)) : undefined;
-    const ref = parseModelRef(body.model, req.get("x-hannah-provider") || defaultProviderId());
+    const ref = parseModelRef(body.model, req.get("x-hannah-provider") || defaultProviderId(req, res));
 
     let target;
     try {
@@ -127,6 +128,7 @@ function createV1Router({ getRequestProvider, defaultProviderId, timeoutMs, chat
     const credentialId = res.locals.hannahApiTokenId;
     const callerBudget = req.get("x-hannah-daily-budget");
     let budget;
+    await gateway.hydrateSpend(credentialId);
     try {
       budget = gateway.assertWithinBudget(credentialId, callerBudget);
     } catch (error) {
@@ -179,7 +181,7 @@ function createV1Router({ getRequestProvider, defaultProviderId, timeoutMs, chat
     }
 
     try {
-      const providers = ref.auto && !ref.explicitProvider ? gateway.providerFallbacks(target.provider.id, { byok: Boolean(res.locals.hannahByok) }) : [target.provider.id];
+      const providers = ref.auto && !ref.explicitProvider ? gateway.providerFallbacks(target.provider.id, { byok: Boolean(res.locals.hannahByok), allowed: allowedProviderIds(req, res) }) : [target.provider.id];
       const message = await gateway.completeWithFallback({
         providers,
         resolve: (providerId) => (providerId === target.provider.id ? target : getRequestProvider(req, providerId)),

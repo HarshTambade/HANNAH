@@ -22,9 +22,16 @@
  *   "permissions": [],                           // must be empty for instruction skills
  *   "privacy": { "dataLeavesDevice": false, "notes": "…" },
  *   "instructions": "…",                         // ≤ 1200 characters
- *   "integrity": { "sha256": "<hex of instructions>" }   // optional
+ *   "integrity": { "sha256": "<hex of instructions>" },  // optional
+ *   "signature": { "alg": "Ed25519", "publicKey": "<base64>", "value": "<base64>" }  // optional
  * }
+ *
+ * Signatures cover the whole manifest with keys sorted and "signature" removed.
+ * Publishers sign with server/scripts/sign-skill.js. Keys listed in
+ * shared/trusted-publishers.json show as a trusted publisher; any other valid
+ * signature shows as "signed by an unknown key" with its fingerprint.
  */
+import trustedPublisherData from "../../../shared/trusted-publishers.json";
 
 export const MANIFEST_VERSION = 1;
 const STORAGE_KEY = "hannah.communitySkills.v1";
@@ -48,8 +55,54 @@ export type SkillManifest = {
   integrity?: { sha256: string };
 };
 
-export type InstalledSkill = { manifest: SkillManifest; enabled: boolean; installedAt: number; integrity: "verified" | "unsigned" };
-export type ValidationResult = { ok: true; manifest: SkillManifest; warnings: string[]; integrity: "verified" | "unsigned" } | { ok: false; errors: string[] };
+export type SignatureCheck = { status: "trusted" | "signed" | "none" | "unverifiable"; fingerprint?: string; trustedName?: string };
+export type InstalledSkill = { manifest: SkillManifest; enabled: boolean; installedAt: number; integrity: "verified" | "unsigned"; signature?: SignatureCheck };
+export type ValidationResult = { ok: true; manifest: SkillManifest; warnings: string[]; integrity: "verified" | "unsigned"; signature: SignatureCheck } | { ok: false; errors: string[] };
+
+type TrustedPublisher = { name: string; publicKey: string };
+const trustedPublishers: TrustedPublisher[] = Array.isArray((trustedPublisherData as { publishers?: unknown }).publishers)
+  ? ((trustedPublisherData as { publishers: unknown[] }).publishers.filter((item): item is TrustedPublisher => Boolean(item && typeof (item as TrustedPublisher).publicKey === "string" && typeof (item as TrustedPublisher).name === "string")))
+  : [];
+
+/** JSON with object keys sorted at every level: what a signature covers. Exported for tests. */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
+function base64Bytes(value: unknown, length: number) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
+  try {
+    const bytes = Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
+    return bytes.length === length ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+async function checkSignature(raw: Record<string, unknown>): Promise<SignatureCheck | { error: string }> {
+  const signature = raw.signature;
+  if (signature === undefined) return { status: "none" };
+  if (!isPlainObject(signature) || signature.alg !== "Ed25519") return { error: `"signature.alg" must be "Ed25519".` };
+  const publicKey = base64Bytes(signature.publicKey, 32);
+  const value = base64Bytes(signature.value, 64);
+  if (!publicKey || !value) return { error: "The signature's public key or value isn't valid base64 of the right length." };
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", publicKey));
+  const fingerprint = [...digest.slice(0, 8)].map((byte) => byte.toString(16).padStart(2, "0")).join("").replace(/(.{4})(?=.)/g, "$1 ");
+  const { signature: _omit, ...signed } = raw;
+  let valid: boolean;
+  try {
+    const key = await crypto.subtle.importKey("raw", publicKey, { name: "Ed25519" }, false, ["verify"]);
+    valid = await crypto.subtle.verify({ name: "Ed25519" }, key, value, new TextEncoder().encode(canonicalJson(signed)));
+  } catch {
+    // Older browsers lack Ed25519 in WebCrypto: say so instead of guessing.
+    return { status: "unverifiable", fingerprint };
+  }
+  if (!valid) return { error: "The signature doesn't match this manifest, so it may have been altered after signing." };
+  const trusted = trustedPublishers.find((item) => item.publicKey === signature.publicKey);
+  return trusted ? { status: "trusted", fingerprint, trustedName: trusted.name } : { status: "signed", fingerprint };
+}
 
 const INJECTION_PATTERNS: Array<[RegExp, string]> = [
   [/ignore (all |any )?(previous|prior|above|earlier) (instructions|rules|messages)/i, "tries to override earlier instructions"],
@@ -143,12 +196,20 @@ export async function validateManifest(input: unknown): Promise<ValidationResult
   } else {
     warnings.push("No integrity hash: HANNAH can't confirm the instructions match what the publisher released.");
   }
-  warnings.push("Publisher identity isn't verified. Only install skills from people you trust.");
+  const signature = await checkSignature(value);
+  if ("error" in signature) errors.push(signature.error);
+  else if (signature.status === "trusted") {
+    if (signature.trustedName !== publisher.name) warnings.push(`Signed by ${signature.trustedName}, a trusted publisher, though the manifest names "${publisher.name}".`);
+  } else if (signature.status === "signed") warnings.push(`Signed, but by a key HANNAH doesn't know (fingerprint ${signature.fingerprint}). Check it with the publisher before trusting it.`);
+  else if (signature.status === "unverifiable") warnings.push("This browser can't check Ed25519 signatures, so the signature wasn't verified.");
+  else warnings.push("Not signed: HANNAH can't confirm who published it. Only install skills from people you trust.");
 
   if (errors.length) return { ok: false, errors };
+  const signatureCheck = signature as SignatureCheck;
   return {
     ok: true,
     integrity,
+    signature: signatureCheck,
     warnings,
     manifest: { manifestVersion: 1, id, type: "instruction-skill", name, description, version, publisher, category, license, permissions: [], privacy, instructions, ...(integrity === "verified" ? { integrity: { sha256: String((value.integrity as Record<string, unknown>).sha256).toLowerCase() } } : {}) },
   };
@@ -180,9 +241,9 @@ export const CommunitySkills = {
   list() {
     return read();
   },
-  install(manifest: SkillManifest, integrity: InstalledSkill["integrity"]) {
+  install(manifest: SkillManifest, integrity: InstalledSkill["integrity"], signature?: SignatureCheck) {
     const others = read().filter((item) => item.manifest.id !== manifest.id);
-    write([...others, { manifest, integrity, enabled: false, installedAt: Date.now() }]);
+    write([...others, { manifest, integrity, ...(signature ? { signature } : {}), enabled: false, installedAt: Date.now() }]);
   },
   setEnabled(id: string, enabled: boolean) {
     const skills = read();

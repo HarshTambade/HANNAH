@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { isGroqKey, verifyApiAccess } from "../services/api";
+import { Account, databaseLabel, type AccountStatus } from "../services/Account";
+import { SignInForm } from "./AccountPanel";
 import {
   ArrowRight, AudioLines, Cable, Check, Eye, EyeOff, Globe2, Heart, KeyRound, LockKeyhole, Menu, MessageCircle, PackageOpen, ShieldCheck, Sparkles, X,
 } from "lucide-react";
@@ -59,6 +61,16 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
   const [showApiKey, setShowApiKey] = useState(false);
   const [keyError, setKeyError] = useState("");
   const [verifying, setVerifying] = useState(false);
+  const [accountInfo, setAccountInfo] = useState<AccountStatus | null>(null);
+  const [accountMode, setAccountMode] = useState(false);
+
+  useEffect(() => {
+    if (!keyDialogOpen || accountInfo) return;
+    let active = true;
+    Account.status().then((status) => { if (active) setAccountInfo(status); }).catch(() => {});
+    return () => { active = false; };
+  }, [keyDialogOpen, accountInfo]);
+  const accountsEnabled = Boolean(accountInfo?.accounts.enabled);
 
   useEffect(() => {
     if (!openConnect) return;
@@ -387,11 +399,19 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
                   <span className="flex items-center gap-2 text-sm font-medium text-ink"><span className="logo-ring" aria-hidden="true" /> HANNAH</span>
                   <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-slate-600 transition hover:bg-white hover:text-ink"><X size={15} /></button>
                 </div>
-                <span className="pill-badge mt-6"><span className="pill-badge-dot"><Check size={9} strokeWidth={3} /></span>Free · No sign-up</span>
-                <h2 id="connect-title" className="display-title mt-3 text-[2rem]">Connect with HANNAH.</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-700">Paste your own Groq API key and start talking. There's no account and nothing to pay.</p>
+                <span className="pill-badge mt-6"><span className="pill-badge-dot"><Check size={9} strokeWidth={3} /></span>{accountMode ? "Your account on this server" : "Free · No sign-up"}</span>
+                <h2 id="connect-title" className="display-title mt-3 text-[2rem]">{accountMode ? "Welcome back." : "Connect with HANNAH."}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{accountMode
+                  ? `Sign in to use your saved keys, memories and reminders on any device. Stored on ${databaseLabel(accountInfo?.database.provider)}, run by this server's operator.`
+                  : "Paste your own Groq API key and start talking. There's no account and nothing to pay."}</p>
               </div>
 
+              {accountMode && accountInfo ? (
+                <div className="px-6 pb-6 pt-5 sm:px-7">
+                  <SignInForm signupAllowed={accountInfo.accounts.signup} vault={accountInfo.vault} onSignedIn={(key) => onStart({ apiToken: "", groqApiKey: key })} />
+                  <button type="button" onClick={() => setAccountMode(false)} className="mt-4 w-full text-center text-xs font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-ink">Use a Groq key without an account</button>
+                </div>
+              ) : (
               <form className="px-6 pb-6 pt-5 sm:px-7" onSubmit={beginConversation}>
                 <label htmlFor="groq-key" className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><KeyRound size={13} /> Your Groq API key</label>
                 <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 pr-2 transition focus-within:border-sky-400 focus-within:bg-white">
@@ -442,7 +462,11 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
                 <button type="submit" disabled={verifying} className="btn-primary group mt-5 min-h-[3.25rem] w-full !rounded-2xl text-sm disabled:cursor-wait">
                   {verifying ? "Checking your key…" : "Continue to HANNAH"} {!verifying && <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />}
                 </button>
+                {accountsEnabled && (
+                  <button type="button" onClick={() => { setAccountMode(true); setKeyError(""); }} className="mt-4 w-full text-center text-xs font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-ink">Have an account? Sign in or create one</button>
+                )}
               </form>
+              )}
             </div>
           </section>
         </div>

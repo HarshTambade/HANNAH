@@ -34,6 +34,8 @@ Three rules shape the product:
 - [Configuration](#configuration)
 - [Inference modes](#inference-modes)
 - [Agent runtime and tools](#agent-runtime-and-tools)
+- [Agent team](#agent-team)
+- [Accounts and your own database](#accounts-and-your-own-database)
 - [Marketplace: agents and skills](#marketplace-agents-and-skills)
 - [Automations](#automations)
 - [MCP integration](#mcp-integration)
@@ -76,15 +78,16 @@ The app uses hash routes. Every screen except the landing page, Marketplace and 
 
 | Screen | Route | What it does |
 | --- | --- | --- |
-| **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog: paste your Groq key (checked with Groq before the app opens). **I have an access token** is optional, for operator-provided models and features. |
-| **Chat** | `#/chat` | Conversation beside the 3D avatar. Pick a model, or **Auto** to let HANNAH route each message by complexity. Speak or type, rate replies, approve or decline actions on the in-chat approval cards, and press **Stop** to halt a running task before its next step. |
+| **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog: paste your Groq key (checked with Groq before the app opens). **I have an access token** is optional, for operator-provided models and features. When the server has a database, **Sign in or create one** opens email and password sign-in. |
+| **Chat** | `#/chat` | Conversation beside the 3D avatar. Pick a model, or **Auto** to let HANNAH route each message by complexity. Speak or type, rate replies, approve or decline actions on the in-chat approval cards, and press **Stop** to halt a running task before its next step. Turn on **Team** to have HANNAH plan the task with specialist agents and verify the result. |
 | **Dashboard** | `#/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. Also holds **Reminders**: add, cancel, and allow notifications. Empty states show `—` or `0`, never sample numbers. |
+| **Agents** | `#/agents` | The agent team: Research, Coding, Memory and Tasks specialists with their tools and model choice (Auto or a specific model), the always-on verification agent, and **Team activity**: every team run's plan, which steps ran in parallel, each step's status and result, verification and the final answer. Interrupted or stopped runs can be resumed. |
 | **Models** | `#/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
 | **Memory & trust** | `#/memory` | The accountability page: an **Agent runs** log (every request with each tool step and how it ended, which survives reloads), Guardian strictness and its decision log (allowed and blocked, with reasons), saved memories you can edit or delete, personalization examples, the active persona, and installed plugins. |
 | **Automations** | `#/automations` | Visual workflow designer (React Flow) with trigger, agent-task, tool-action and output nodes. Designs are saved on this device. See [Automations](#automations) for current limits. |
 | **Marketplace** | `#/marketplace` | First-party agents and skills that change how HANNAH replies, plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
-| **Integrations** | `#/integrations` | REST and MCP guide with copyable examples, tool limits, server environment and host setup. |
-| **Settings** | `#/settings` | Connection (token, Groq key, disconnect). Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. |
+| **Integrations** | `#/integrations` | REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
+| **Settings** | `#/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Voice**: speaking and listening engines, voice choice and interrupt-by-talking. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. |
 
 The design follows a bento and glassmorphism style: rounded `2rem` cards, pastel tones (sky, lavender, butter, mint), large light-weight stat numbers and a floating header. Layouts are responsive down to phone width.
 
@@ -240,7 +243,11 @@ The browser uses same-origin `/api` URLs, so `VITE_API_BASE_URL` stays empty on 
 | Memories | `localStorage` (`hannah.memory.v1`), sent with your requests so HANNAH can use them | Until you edit or delete them on Memory & trust. |
 | Guardian log and strictness | `localStorage` (`hannah.guardian.*`) | Last 100 decisions. |
 | Reply ratings | `localStorage` (`hannah.personalization.v1`) | Until you clear style data. |
-| Conversation content on the server | Passed to the provider for the request and not stored. The server has no conversation database. | Request lifetime. |
+| Conversation content on the server | Passed to the provider for the request and not stored. | Request lifetime. |
+| Account data (only if you sign in, and only when the operator connected a database) | The operator's database: your email, a scrypt password hash, session and API-key hashes, provider keys encrypted with envelope encryption, synced memories, reminders, chat history and preferences, webhooks and a security log | Until you delete it, or delete the account in Settings → Account. |
+| Account session | An HttpOnly cookie on the web (the app can't read it); a session token in app storage on native apps | 30 days from last use, or until you sign out. |
+| Team runs | `localStorage` (`hannah.teamRuns.v1`): plans, step results and final answers | Last 20 runs, or until cleared on the Agents screen. |
+| Voice with hosted engines | Reply text goes to OpenAI (OpenAI voices) and recordings to Groq (Whisper) only when you choose those engines | Request lifetime on HANNAH's server; the provider's own policy applies. |
 
 **Telemetry.** The client sends a small allow-list of metadata events (for example `chat_opened` and `tool_confirmation_approved`) to your own server's `/api/events`, which writes them to its log. No message text, prompts or keys are included. **Sentry** and **PostHog** stay off unless you set their keys, and Sentry events are scrubbed of keys, tokens, chat text and file paths.
 
@@ -363,7 +370,15 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `http://localhost:11434`, `qwen3:8b` | Ollama. |
 | `LMSTUDIO_*`, `LLAMACPP_*`, `VLLM_*` | — | Other local OpenAI-compatible runtimes. |
 | `CLOUD_REQUEST_TIMEOUT_MS` | `60000` | Per-model timeout (3–120 s). |
-| `HANNAH_DAILY_BUDGET_USD` | — | Daily spending cap per token or visitor key, estimated from list prices. Users can set a lower cap in Settings. Kept in memory per server process. |
+| `HANNAH_DAILY_BUDGET_USD` | — | Daily spending cap per token, account or visitor key, estimated from list prices. Users can set a lower cap in Settings. Stored in the database when one is connected, otherwise in memory per server process. |
+| `DATABASE_URL` | — | Turns on accounts, sync, the key vault, developer keys, webhooks and persistent budgets. `postgres://…` for Supabase, Neon or any Postgres, or `sqlite:./data/hannah.db` for one self-hosted server. See [Accounts and your own database](#accounts-and-your-own-database). |
+| `DATABASE_SSL`, `DATABASE_CA_CERT`, `DATABASE_POOL_MAX` | verified TLS, —, `3` | TLS mode (`no-verify` or `off` only if your provider needs it), a custom CA certificate, and the connection pool size. |
+| `HANNAH_VAULT_KEY`, `HANNAH_VAULT_PREVIOUS_KEYS` | — | 32-byte master key (`openssl rand -hex 32`) that encrypts saved provider keys, and older keys still accepted during rotation. |
+| `HANNAH_ALLOW_SIGNUP` | `true` | Set `false` to close new sign-ups. |
+| `HANNAH_ACCOUNTS_USE_SERVER_KEYS` | `false` | `true` lets signed-in users use the server's provider keys, which you pay for. By default each user brings their own keys. |
+| `OPENAI_TTS_MODEL`, `GROQ_STT_MODEL` | `gpt-4o-mini-tts`, `whisper-large-v3-turbo` | Models for the hosted voice engines. |
+| `HANNAH_MCP_SERVERS` | — | JSON list of outside MCP servers HANNAH can use as a client, for example `[{"id":"docs","name":"Team docs","url":"https://…/mcp","headers":{"Authorization":"Bearer …"}}]`. |
+| `HANNAH_PUBLIC_URL` | request host | Public base URL used in the A2A agent card. |
 | `HANNAH_PROVIDER_FALLBACKS` | — | Comma-separated providers to try when `hannah-auto` requests fail with a retryable error, for example `openrouter,together`. Never used for visitor keys or a pinned provider. |
 | `MCP_ENABLED`, `MCP_API_TOKEN`, `HANNAH_API_URL` | `false`, —, `http://127.0.0.1:3001` | Remote MCP endpoint. |
 | `ANTHROPIC_DESKTOP_MODEL` | `claude-sonnet-5-5` | Model for desktop computer use (needs `ANTHROPIC_API_KEY`). |
@@ -407,7 +422,10 @@ When offline, HANNAH chooses llama.cpp on mobile and WebLLM on web and desktop.
 | `toggle_setting` | ✅ | For example the flashlight. iOS and Android don't allow apps to toggle Wi-Fi or Bluetooth. |
 | `send_message` | ✅ | Opens an SMS draft; you press Send. |
 | `make_call` | ✅ | Opens the dialer; you press Call. |
-| `create_reminder`, `list_reminders`, `cancel_reminder` | — | On-device reminders; they alert while HANNAH is open. |
+| `create_reminder`, `list_reminders`, `cancel_reminder` | — | Reminders. They alert in the app and, in the Android and iOS apps, as system notifications even when HANNAH is closed. |
+| `search_memories` | — | Searches the facts you asked HANNAH to remember. |
+| `save_memory` | ✅ | Saves one fact you asked her to remember. |
+| `mcp_<server>_<tool>` | ✅ | Tools from outside MCP servers the operator connected (operator sessions only). Every call needs approval. |
 
 The Guardian reviews **every** tool, including the ones that need no approval. Memory writes and deletions and saved-credential removal also need approval. Shell execution, arbitrary file-system access and notification reading are not available.
 
@@ -419,12 +437,57 @@ The Guardian reviews **every** tool, including the ones that need no approval. M
 | --- | --- | :---: |
 | `chat` | none | 4 |
 | `code` | list, read, write files | 12 |
-| `system` | device status, battery, open app, toggle setting, all file tools | 6 |
+| `system` | device status, battery, open app, toggle setting, all file tools, reminders, memory search and save | 6 |
 | `research` | list and read files | 10 |
 | `maintenance` | none | 4 |
 | `default` | all | 8 |
 
 Local models (WebLLM and llama.cpp) receive tools through a JSON request format in the prompt, so the model has to follow that format.
+
+---
+
+## Agent team
+
+Turn on **Team** under the chat box (cloud and Ollama modes) and HANNAH works on the request with specialist agents:
+
+1. **Plan.** The server asks a model to split the request into up to six steps. Each step goes to one specialist and can depend on earlier steps. A plan that doesn't validate falls back to a single step for the best-matching specialist.
+2. **Execute.** Steps whose dependencies are done run in parallel, up to three at a time. Each step is a normal agent turn limited to that specialist's tools and model, so the Guardian and your approval apply to every tool call. When a step is declined, blocked or fails, the steps that depend on it are skipped.
+3. **Verify.** A verification agent with no tools checks the results against your request and writes the final answer. It can send up to three steps back once, with feedback.
+
+| Specialist | Tools | Auto tier |
+| --- | --- | --- |
+| Research | list and read app files (no web access; it says when facts may be out of date) | complex |
+| Coding | list, read and write app files (can't run code) | complex |
+| Memory | search memories, save memory | simple |
+| Tasks | reminders, device status, open app, message and call drafts | standard |
+
+On the **Agents** screen you can turn specialists off, pick a model for each, and watch runs live. Every run is saved after each change. A run cut short by Stop or a closed tab can be **resumed**: finished steps keep their results and only the rest runs again. Code: [`Orchestrator.ts`](./client/src/services/Orchestrator.ts), [`SpecialistAgents.ts`](./client/src/services/SpecialistAgents.ts) and [`server/orchestrate.js`](./server/orchestrate.js).
+
+---
+
+## Accounts and your own database
+
+Accounts are optional, and they use **a database you choose**. Set `DATABASE_URL` on the server:
+
+| Database | `DATABASE_URL` | Notes |
+| --- | --- | --- |
+| **Supabase** | `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres` | Project Settings → Database → connection string. Use the pooler on serverless hosts. If TLS verification fails, set `DATABASE_CA_CERT` or `DATABASE_SSL=no-verify`. |
+| **Neon** | `postgresql://<user>:<password>@ep-<name>-pooler.<region>.aws.neon.tech/neondb?sslmode=require` | Use the pooled connection string. |
+| **Any Postgres 13+** | `postgresql://<user>:<password>@<host>:5432/<db>?sslmode=require` | RDS, Cloud SQL, Azure, Railway, Render, Aiven or your own server. |
+| **SQLite** | `sqlite:./data/hannah.db` | One self-hosted server or the desktop app (Node 22.5+). Not for Vercel or other serverless hosts, whose disks are temporary. |
+
+Tables are created and migrated automatically on first use, and `npm run db:check --prefix server` confirms the connection. Also set `HANNAH_VAULT_KEY` (`openssl rand -hex 32`) so users can save provider keys. **Integrations → Database** walks through the same setup and lets the operator test a connection string.
+
+With a database, users get:
+
+- **Sign-in** with email and password. Passwords are hashed with scrypt, and sessions are random tokens stored only as hashes. On the web the session is an HttpOnly, SameSite cookie.
+- **Provider keys in an encrypted vault.** Each key is encrypted with its own data key, which is wrapped with the master key and bound to the user and provider. A saved key is sent only to that provider's hosted HTTPS API, and it's never shown or exported again.
+- **Sync** of memories, reminders, community skills, chat history and preferences. The merge is three-way, so an edit or deletion made on one device isn't lost to another.
+- **Developer API keys** (`hk_…`) for `/v1`, A2A and the SDK. They're shown once, stored as hashes and revocable.
+- **Webhooks**: HMAC-signed POSTs when a reminder goes off, a team task finishes or the daily budget runs out. Only https URLs on public addresses are accepted.
+- **Budgets that persist** across restarts and serverless instances, a **security activity** log, **export** and **account deletion**.
+
+Signed-in users bring their own provider keys unless the operator sets `HANNAH_ACCOUNTS_USE_SERVER_KEYS=true`. Code: [`server/db`](./server/db), [`server/accounts.js`](./server/accounts.js), [`server/vault.js`](./server/vault.js) and [`server/webhooks.js`](./server/webhooks.js). The account tests run on both SQLite and real Postgres (PGlite).
 
 ---
 
@@ -442,9 +505,12 @@ Entries add **prompt guidance only**. They don't add tools, request permissions,
 - every field;
 - that the skill requests no permissions;
 - the optional SHA-256 hash against the instructions;
+- the optional Ed25519 **publisher signature** over the whole manifest;
 - the instructions for prompt-injection text.
 
-The server checks the instructions again and labels them as untrusted guidance. At most three can be on at once. Executable plugins and MCP-server packages are refused until package signing and sandboxed execution exist. Publisher verification, a public registry and reviews aren't built yet.
+Publishers sign with `node server/scripts/sign-skill.js keygen <dir>`, then `node server/scripts/sign-skill.js sign manifest.json <key.pem>`. Keys listed in [`shared/trusted-publishers.json`](./shared/trusted-publishers.json) show as a **trusted publisher**. The list starts empty, and you add a key only after confirming it with the publisher. Any other valid signature shows as signed by an unknown key, with its fingerprint. A manifest changed after signing is rejected.
+
+The server checks the instructions again and labels them as untrusted guidance. At most three can be on at once. Executable plugins and MCP-server packages are refused until package signing and sandboxed execution exist. A public registry, reviews and sandboxed executable plugins aren't built yet.
 
 ---
 
@@ -484,6 +550,10 @@ HANNAH includes a Model Context Protocol server, so MCP hosts (IDEs, desktop ass
 
 The MCP server exposes no shell, file, messaging or computer-control tools. See [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
 
+**HANNAH as an MCP client.** List outside Streamable HTTP servers in `HANNAH_MCP_SERVERS` and their tools become available in chat for sessions with the operator token. Each call goes through the Guardian and an approval card that shows the server, tool and arguments, because HANNAH can't know what an outside tool changes. URLs must be https, or http on localhost. [`server/mcp-client.js`](./server/mcp-client.js) is tested against HANNAH's own MCP server.
+
+**Agent2Agent (A2A).** `GET /.well-known/agent-card.json` serves HANNAH's agent card, and `POST /api/a2a` accepts JSON-RPC `message/send` with text parts. Remote agents get conversation only, with no device tools, memories or account data. They use the same credentials as the API.
+
 ---
 
 ## Desktop computer use
@@ -502,8 +572,9 @@ Each screenshot and action is reviewed by the Guardian, then confirmed in a nati
 ## Voice and calls
 
 - **Languages:** English (`en-US`), Hindi (`hi-IN`) and Marathi (`mr-IN`), subject to platform support.
-- **Input:** the microphone stays off until you press **Speak**. Recognition comes from the browser or OS.
-- **Output:** spoken replies are on by default and can be turned off (stored on the device). If `MITHI_TTS_URL` is set, reply text goes to a [Mithi v1 Flash](https://huggingface.co/Oomni/mithi-v1-flash) service ([`server/mithi_tts_service.py`](./server/mithi_tts_service.py)); otherwise an installed system voice is used.
+- **Input:** the microphone stays off until you press **Speak**. Choose the engine in **Settings → Voice**: the browser's or device's recognition, or **Groq Whisper**, which records on the device and transcribes each utterance with Groq. Whisper works in any browser that can record, including with a visitor's own Groq key.
+- **Output:** spoken replies are on by default and can be turned off (stored on the device). Choose **Automatic** (Mithi when `MITHI_TTS_URL` is set, otherwise the device voice), **Device voice** (offline, with a voice picker), or **OpenAI voices** (`gpt-4o-mini-tts`, ten voices; needs an OpenAI key saved to your account or on the server). If a hosted voice fails, HANNAH falls back to the device voice. The voice layer is in [`VoiceEngines.ts`](./client/src/services/VoiceEngines.ts) and [`server/voice.js`](./server/voice.js).
+- **Interrupt by talking (barge-in):** while HANNAH speaks, the microphone listens with echo cancellation and she stops as soon as you start talking. This audio isn't recorded or sent anywhere. Turn it off in Settings → Voice.
 - **Calls (Pinecall):** need `VITE_PINECALL_AGENT_ID`, a server-side `PINECALL_TOKEN_URL` that returns `{ token, server, expires_in }`, network access and microphone permission. The Pinecall API key never goes to the client.
 
 ```bash
@@ -597,10 +668,11 @@ See [`docs/OPERATIONS_RUNBOOK.md`](./docs/OPERATIONS_RUNBOOK.md) and [`docs/OBSE
 
 There are two ways to authenticate:
 
-- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models`, `/api/providers`, `/api/catalog`, `/v1/chat/completions`, `/v1/models` and `/v1/usage` only, and the key goes only to Groq's official API.
+- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models`, `/api/providers`, `/api/catalog`, `/api/orchestrate`, `/api/voice/*`, `/api/a2a`, `/v1/chat/completions`, `/v1/models` and `/v1/usage` only, and the key goes only to Groq's official API.
 - **Operator token:** send `Authorization: Bearer <HANNAH_API_TOKEN>`. This works for every route.
+- **Account:** a session (cookie, or `Authorization: Bearer hs_…` in native apps) or a developer key (`Authorization: Bearer hk_…`). This works for the model routes above plus `/api/orchestrate`, `/api/voice/*`, `/api/a2a` and the account's own `/api/account/*` routes. Developer keys can't manage the account.
 
-`/api/health` is public. Full examples are in [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
+`/api/health`, `/api/account/status`, `/api/db/status`, sign-in and the A2A agent card are public. Full examples are in [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
 
 | Method and route | Purpose |
 | --- | --- |
@@ -614,6 +686,20 @@ There are two ways to authenticate:
 | `GET /v1/usage` | Today's estimated spend and budget for this credential. |
 | `POST /api/agent` | One agent step: messages plus JSON-schema tools in; reply, tool calls, emotion, model, provider, latency and usage out. |
 | `POST /api/chat` | Plain chat (user and assistant messages only); returns `{ reply, emotion }`. |
+| `POST /api/orchestrate` | Agent team planning (`phase: "plan"`) and verification (`phase: "verify"`). |
+| `GET /api/voice/providers` | Hosted voice engines this caller can use. |
+| `POST /api/voice/speak` | Text → MP3 with an OpenAI voice. |
+| `POST /api/voice/transcribe` | Raw audio body → text with Groq Whisper (`?language=en`). |
+| `GET /api/account/status`, `GET /api/db/status` | Whether accounts are on, the database provider and schema version, and the signed-in user. Public. |
+| `POST /api/account/register`, `/login`, `/logout`, `/logout-all` | Email and password accounts. |
+| `GET`, `PUT`, `DELETE /api/account/credentials/:provider` | Provider keys in the encrypted vault. |
+| `GET`, `POST`, `DELETE /api/account/api-keys` | Developer API keys (shown once). |
+| `GET`, `PUT /api/account/data/:namespace` | Sync documents with optimistic versions (`memories`, `reminders`, `communitySkills`, `chatHistory`, `settings`). |
+| `GET`, `POST`, `DELETE /api/account/webhooks`, `POST …/:id/test`, `POST /api/account/events` | Signed webhooks. |
+| `GET /api/account/audit`, `GET /api/account/export`, `DELETE /api/account` | Security log, export, deletion (needs the password). |
+| `POST /api/db/test` | Operator only: try a database URL without saving it. |
+| `GET /api/mcp/servers`, `POST /api/mcp/call` | Operator only: outside MCP servers' tools. |
+| `GET /.well-known/agent-card.json`, `POST /api/a2a` | A2A agent card and JSON-RPC `message/send`. |
 | `POST /api/tts` | Text plus `en`, `hi` or `mr` → WAV through Mithi. |
 | `GET /api/pinecall/token` | Short-lived call credentials from your issuer (503 if not configured). |
 | `POST /api/desktop/computer` | Anthropic computer-use step for the Electron bridge. |
@@ -621,11 +707,11 @@ There are two ways to authenticate:
 | `POST /api/report-content` | Metadata-only report of an AI reply (message id and reason). |
 | `POST /api/events` | Allow-listed metadata events, written to the server log. |
 | `POST /api/undo` | Logs an undo request for a recorded side effect. |
-| `GET`/`POST /api/sync/memory` | Versioned blob store for memory sync. **In-memory only**: data is lost on restart and not shared across serverless instances. |
+| `GET`/`POST /api/sync/memory` | Versioned store for end-to-end encrypted memory blobs. Kept in the database when `DATABASE_URL` is set; otherwise in memory only and lost on restart. |
 | `GET /api/presence` | A short status line for the UI. |
 | `POST /mcp` | MCP Streamable HTTP (when enabled; uses `MCP_API_TOKEN`). |
 
-Use any OpenAI SDK by pointing it at `/v1`:
+Use the [JavaScript SDK](./sdk/js), or any OpenAI SDK pointed at `/v1`:
 
 ```bash
 curl -s http://localhost:3001/v1/chat/completions \
@@ -663,8 +749,17 @@ curl -s http://localhost:3001/api/chat \
 │   └── playwright.config.ts
 ├── server/                     # Express API, providers, MCP, sync, feedback
 │   ├── providers/              # Provider catalog and runtime adapters
+│   ├── db/                     # Bring-your-own database: adapters and migrations
+│   ├── accounts.js · vault.js  # Accounts, sessions, encrypted key vault, sync
+│   ├── gateway.js · v1.js      # Model gateway and OpenAI-compatible /v1
+│   ├── orchestrate.js          # Agent team planning and verification
+│   ├── voice.js                # Hosted voice engines
+│   ├── mcp-client.js · a2a.js  # MCP client and Agent2Agent endpoint
+│   ├── webhooks.js             # Signed account webhooks
+│   ├── scripts/                # db:check / db:migrate, skill signing
 │   └── *.test.js               # node:test suites
-├── shared/                     # Marketplace catalog shared by client and server
+├── sdk/js/                     # Dependency-free JavaScript SDK
+├── shared/                     # Marketplace catalog, model profiles, trusted skill publishers
 ├── backend/                    # Optional FastAPI fallback, tools, audit log, tests
 ├── apps/                       # Alternate frontend and Python-enabled Electron shell
 ├── e2e/                        # Playwright end-to-end tests
@@ -706,7 +801,7 @@ curl -s http://localhost:3001/api/chat \
 
 ```bash
 npm test --prefix client                 # Vitest: safety chain, router, guardrails, stores
-npm test --prefix server                 # API auth, rate limits, observability, reports
+npm test --prefix server                 # API auth, accounts (SQLite + Postgres), gateway, team, voice, MCP client, A2A, SDK
 python3 -m pip install -r backend/requirements-test.txt
 python3 -m pytest -q backend/tests       # Python fallback, approvals, audit chain
 npm run test:e2e --prefix client         # Playwright with a mocked API (no provider key)
@@ -717,8 +812,8 @@ The suites cover:
 
 - **Safety chain:** Guardian blocks before any prompt, decline and approve paths, Strict mode blocking deletes, and failing closed.
 - **Agent loop:** the tool-result loop, iteration caps and prompt-injection flags.
-- **Server:** token checks and rate limits.
-- **End to end:** sending a message, avatar emotion, the approval card (declining changes nothing), a rejected token, navigation, Marketplace actions and mobile navigation.
+- **Server:** token checks and rate limits; accounts, vault, sync, developer keys and webhooks on SQLite and on real Postgres (PGlite); team planning and verification; voice routes; the MCP client against a real MCP server; A2A; and the SDK end to end.
+- **End to end:** sending a message, avatar emotion, the approval card (declining changes nothing), a rejected token, navigation, Marketplace actions, mobile navigation, a full Team run shown on the Agents screen, account sign-in, voice settings and the database setup card.
 
 If e2e tests time out on a slow machine, run them with `--workers=1`, because the avatar load is heavy under software WebGL.
 
@@ -739,14 +834,18 @@ Not covered automatically: physical-device permissions, speech, calls, app resum
 - Multi-agent work: `CastOrchestrator`, `GovernedCollectiveIntelligence`, `TypedRails`, `KYBERNETES`.
 - Interoperability: `PAPAdapter`, `AgentInteropService`, `IdentityInteropLayer`, `AAIF*`.
 
-Treat these as design work in progress, not features. In particular, **end-to-end encrypted sync is not active**, and the server's sync endpoint keeps data in memory only.
+Treat these as design work in progress, not features. Account sync (see [Accounts and your own database](#accounts-and-your-own-database)) is the shipped sync. The CRDT and end-to-end encrypted sync modules above aren't active.
 
 **Known gaps:**
 
 - Saved automations don't run yet.
-- Reminders alert only while HANNAH is open; background delivery needs native local notifications.
+- On the web, reminders alert only while HANNAH is open. The Android and iOS apps use system notifications.
 - **Stop** takes effect before the next step; a model request already in flight finishes first.
-- Spending budgets live in server memory and reset on restart or across serverless instances.
+- Without a database, spending budgets live in server memory and reset on restart.
+- Accounts use email and password only. There's no OAuth sign-in or password-reset email yet.
+- The Research agent has no web access.
+- The Marketplace has no public registry, and executable plugins aren't supported (they need sandboxing).
+- Webhooks are delivered once, with no retries.
 - The Marketplace has no third-party listings.
 - iOS needs Apple signing for an installable build.
 - With `VITE_AVATAR_MODEL_URL` unset, the 7.4 MB avatar can stall slow devices on first load.

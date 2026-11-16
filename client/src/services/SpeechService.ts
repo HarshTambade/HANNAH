@@ -20,7 +20,7 @@ function preferredVoice<T extends { name: string }>(voices: T[], language: Speec
   return undefined;
 }
 
-function speakInBrowser(text: string, language: SpeechLanguage) {
+function speakInBrowser(text: string, language: SpeechLanguage, voiceName = "") {
   const synthesis = typeof window !== "undefined" ? window.speechSynthesis : undefined;
   if (!synthesis || typeof SpeechSynthesisUtterance === "undefined") {
     throw new Error(`Speech output is unavailable for ${language} on this device.`);
@@ -32,7 +32,9 @@ function speakInBrowser(text: string, language: SpeechLanguage) {
     const voices = synthesis.getVoices();
     const matchingVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith(prefix));
     const softFemaleVoices = matchingVoices.filter((voice) => !/\b(male|david|fred|daniel|james|tom|alex)\b/i.test(voice.name));
-    const voice = preferredVoice(softFemaleVoices, language)
+    const chosen = voiceName ? voices.find((candidate) => candidate.name === voiceName) : undefined;
+    const voice = chosen
+      ?? preferredVoice(softFemaleVoices, language)
       ?? softFemaleVoices.find((candidate) => /\b(female|woman)\b/i.test(candidate.name))
       ?? softFemaleVoices[0]
       ?? preferredVoice(matchingVoices, language)
@@ -51,10 +53,18 @@ function speakInBrowser(text: string, language: SpeechLanguage) {
   });
 }
 
+export type SpeakOptions = {
+  /** Skip the optional Mithi server voice and use the device's own voices. */
+  systemOnly?: boolean;
+  /** A specific installed voice, by name. */
+  voiceName?: string;
+};
+
 export class SpeechService {
-  static async speak(text: string, language: SpeechLanguage) {
+  static async speak(text: string, language: SpeechLanguage, options: SpeakOptions = {}) {
     const network = await getNetworkStatus().catch(() => ({ connected: typeof navigator === "undefined" || navigator.onLine }));
     try {
+      if (options.systemOnly) throw new Error("System voice selected.");
       if (!network.connected) throw new Error("Use the installed device voice while offline.");
       const response = await apiFetch(apiUrl("/api/tts"), {
         method: "POST",
@@ -89,7 +99,7 @@ export class SpeechService {
       // The Mithi service is optional; continue with a voice installed on the device.
     }
 
-    if (Capacitor.getPlatform() === "web") return speakInBrowser(text, language);
+    if (Capacitor.getPlatform() === "web") return speakInBrowser(text, language, options.voiceName);
 
     try {
       const { voices } = await SpeechSynthesis.getVoices();
@@ -99,7 +109,8 @@ export class SpeechService {
       );
 
       // The OS speech plugin can select Charvi only if that voice is installed as a system voice.
-      const voice = preferredVoice(offlineVoices, language)
+      const voice = (options.voiceName ? offlineVoices.find((candidate) => candidate.name === options.voiceName) : undefined)
+        || preferredVoice(offlineVoices, language)
         || offlineVoices.find((candidate) => candidate.gender === "female")
         || offlineVoices[0];
 
@@ -118,7 +129,7 @@ export class SpeechService {
       });
       return voice.name;
     } catch (error) {
-      if (typeof window !== "undefined" && window.speechSynthesis) return speakInBrowser(text, language);
+      if (typeof window !== "undefined" && window.speechSynthesis) return speakInBrowser(text, language, options.voiceName);
       throw error;
     }
   }

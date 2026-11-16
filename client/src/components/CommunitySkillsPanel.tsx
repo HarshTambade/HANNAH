@@ -80,7 +80,8 @@ export default function CommunitySkillsPanel() {
                 <p className="font-display text-base font-medium text-ink">{result.manifest.name} <span className="text-xs font-normal text-slate-500">v{result.manifest.version}</span></p>
                 <p className="mt-1 text-slate-700">{result.manifest.description}</p>
                 <dl className="mt-3 grid grid-cols-[8rem_minmax(0,1fr)] gap-y-1.5 text-xs">
-                  <dt className="text-slate-500">Publisher</dt><dd className="text-ink">{result.manifest.publisher.name}{result.manifest.publisher.url ? ` · ${result.manifest.publisher.url}` : ""} (not verified)</dd>
+                  <dt className="text-slate-500">Publisher</dt><dd className="text-ink">{result.manifest.publisher.name}{result.manifest.publisher.url ? ` · ${result.manifest.publisher.url}` : ""} {result.signature.status === "trusted" ? `(verified: ${result.signature.trustedName})` : "(not verified)"}</dd>
+                  <dt className="text-slate-500">Signature</dt><dd className="text-ink">{result.signature.status === "trusted" ? "Signed by a trusted publisher" : result.signature.status === "signed" ? `Signed by an unknown key · ${result.signature.fingerprint}` : result.signature.status === "unverifiable" ? "Signed, but this browser can't check it" : "Not signed"}</dd>
                   <dt className="text-slate-500">Permissions</dt><dd className="text-ink">None: guidance text only</dd>
                   <dt className="text-slate-500">Privacy</dt><dd className="text-ink">{result.manifest.privacy.dataLeavesDevice ? "Publisher says data leaves the device" : "No data leaves your device because of this skill"}{result.manifest.privacy.notes ? `. ${result.manifest.privacy.notes}` : ""}</dd>
                   <dt className="text-slate-500">License</dt><dd className="text-ink">{result.manifest.license}</dd>
@@ -88,7 +89,7 @@ export default function CommunitySkillsPanel() {
                 </dl>
                 <details className="mt-3 text-xs"><summary className="cursor-pointer text-slate-600">Read the instructions</summary><p className="mt-1.5 whitespace-pre-wrap rounded-xl bg-slate-50 p-2 text-slate-700">{result.manifest.instructions}</p></details>
                 {result.warnings.map((warning) => <p key={warning} className="mt-2 text-xs text-amber-800">{warning}</p>)}
-                <button type="button" className="btn-primary mt-3" onClick={() => { CommunitySkills.install(result.manifest, result.integrity); setMessage(`${result.manifest.name} installed. Turn it on below.`); setResult(null); setSource(""); }}>Install skill</button>
+                <button type="button" className="btn-primary mt-3" onClick={() => { CommunitySkills.install(result.manifest, result.integrity, result.signature); setMessage(`${result.manifest.name} installed. Turn it on below.`); setResult(null); setSource(""); }}>Install skill</button>
               </div>
             )}
             {message && <p role="status" className="mt-2 text-xs text-teal-800">{message}</p>}
@@ -101,7 +102,7 @@ export default function CommunitySkillsPanel() {
               <li key={item.manifest.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white/80 px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-ink">{item.manifest.name} <span className="text-xs font-normal text-slate-500">v{item.manifest.version} · {item.manifest.publisher.name}</span></p>
-                  <p className="text-xs text-slate-500">{item.integrity === "verified" ? "Integrity verified" : "Unsigned"} · installed {new Date(item.installedAt).toLocaleDateString()}</p>
+                  <p className="text-xs text-slate-500">{item.signature?.status === "trusted" ? `Trusted publisher: ${item.signature.trustedName}` : item.signature?.status === "signed" ? "Signed (unknown key)" : item.integrity === "verified" ? "Integrity hash matches" : "Unsigned"} · installed {new Date(item.installedAt).toLocaleDateString()}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button type="button" role="switch" aria-checked={item.enabled} aria-label={`${item.enabled ? "Turn off" : "Turn on"} ${item.manifest.name}`}

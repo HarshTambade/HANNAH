@@ -60,3 +60,90 @@ test("a community instruction skill installs only after its manifest is checked"
   await toggle.click();
   await expect(panel.getByRole("switch", { name: "Turn off Meeting notes" })).toHaveAttribute("aria-checked", "true");
 });
+
+test("the Agents screen shows each specialist's tools and can turn one off", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.goto("/#/agents");
+  await expect(page.getByRole("heading", { name: "Agents", exact: true })).toBeVisible();
+  const research = page.getByRole("region", { name: "Research agent" });
+  await expect(research).toContainText("read_app_file");
+  await expect(research.getByLabel("Model")).toHaveValue("auto");
+  const toggle = research.getByRole("switch", { name: "Turn off the Research agent" });
+  await toggle.click();
+  await expect(research.getByRole("switch", { name: "Turn on the Research agent" })).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("region", { name: "Team activity" })).toContainText("No team runs yet");
+});
+
+test("voice settings offer device and hosted engines with honest availability", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.route("**/api/voice/providers", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({
+    tts: [{ id: "openai", label: "OpenAI voices", hosted: true, available: false, voices: ["coral"], model: "gpt-4o-mini-tts" }],
+    stt: [{ id: "groq-whisper", label: "Groq Whisper", hosted: true, available: true, model: "whisper-large-v3-turbo" }],
+    mithi: false,
+  }) }));
+  await page.goto("/#/settings");
+  const voice = page.getByRole("region", { name: "Voice" });
+  await expect(voice.getByRole("radio", { name: /Device voice/ })).toBeVisible();
+  await expect(voice.getByRole("radio", { name: /OpenAI voices/ })).toBeDisabled();
+  await expect(voice).toContainText("Needs an OpenAI key");
+  await voice.getByRole("radio", { name: /Groq Whisper/ }).check();
+  await expect(voice.getByLabel("Interrupt by talking")).toBeChecked();
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("hannah.voice.settings.v1") || "{}"));
+  expect(stored.stt).toBe("groq-whisper");
+});
+
+test("signing in with an account opens the app", async ({ page }) => {
+  let signedIn = false;
+  await page.route(/\/(api|v1)\//, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/account/status") {
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({
+        accounts: { enabled: true, signup: true, serverKeys: false },
+        database: { configured: true, ready: true, kind: "postgres", provider: "supabase", schemaVersion: 2 },
+        vault: true,
+        user: signedIn ? { id: "u1", email: "ada@example.com", displayName: "Ada", via: "session", providers: ["groq"] } : null,
+      }) });
+    }
+    if (url.pathname === "/api/account/login") {
+      const body = route.request().postDataJSON();
+      if (body.password !== "correct horse battery") return route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ error: "That email and password don't match an account." }) });
+      signedIn = true;
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ user: { id: "u1", email: "ada@example.com", displayName: "Ada" } }) });
+    }
+    if (url.pathname.startsWith("/api/account/data/")) return route.fulfill({ contentType: "application/json", body: JSON.stringify({ value: null, version: 0 }) });
+    if (url.pathname === "/api/account/credentials") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ vault: true, credentials: [{ providerId: "groq", label: "Groq", hint: "gsk_…abcd", updatedAt: 1 }] }) });
+    return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Talk to HANNAH/i }).first().click();
+  await page.getByRole("button", { name: "Have an account? Sign in or create one" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Supabase");
+  await dialog.getByLabel("Email").fill("ada@example.com");
+  await dialog.getByLabel("Password").fill("wrong password");
+  await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("don't match");
+  await dialog.getByLabel("Password").fill("correct horse battery");
+  await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/#\/chat/);
+  await page.goto("/#/settings");
+  const account = page.getByRole("region", { name: "Account" });
+  await expect(account).toContainText("ada@example.com");
+  await expect(account.getByRole("list", { name: "Saved provider keys" })).toContainText("gsk_…abcd");
+});
+
+test("the Integrations page explains bringing your own database", async ({ page }) => {
+  await page.route(/\/(api|v1)\//, (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/db/status") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ database: { configured: false, ready: false, kind: null, provider: null }, vault: false }) });
+    return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+  });
+  await page.goto("/#/integrations");
+  const card = page.getByRole("region", { name: "Database" });
+  await expect(card).toContainText("Not connected");
+  await card.getByRole("tab", { name: "Neon" }).click();
+  await expect(card).toContainText("neon.tech");
+  await card.getByRole("tab", { name: "SQLite" }).click();
+  await expect(card).toContainText("sqlite:./data/hannah.db");
+  await expect(card.getByRole("button", { name: "Test connection" })).toBeDisabled();
+});

@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Server, Trash2, Wallet } from "lucide-react";
-import { apiFetch, apiUrl, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
+import { apiFetch, apiUrl, getAccountHint, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
+import AccountPanel from "./AccountPanel";
+import VoiceSettingsPanel from "./VoiceSettingsPanel";
 import { DAILY_BUDGET_KEY } from "../services/LLMRouter";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
@@ -46,6 +48,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
   const [hasGroqKey, setHasGroqKey] = useState(() => Boolean(getSessionGroqKey()));
   // Guests connect with only their Groq key; removing it ends the session.
   const usingAccessToken = Boolean(getApiAccessToken());
+  const usingAccount = !usingAccessToken && Boolean(getAccountHint());
   const [notice, setNotice] = useState("");
   const [budgetInput, setBudgetInput] = useState(() => {
     try { return window.localStorage.getItem(DAILY_BUDGET_KEY) || ""; } catch { return ""; }
@@ -163,7 +166,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="flex items-center gap-2 text-slate-500"><Server size={15} /> Signed in with</dt>
-            <dd className="font-medium text-ink">{usingAccessToken ? "Access token" : "Your Groq key"}</dd>
+            <dd className="font-medium text-ink">{usingAccessToken ? "Access token" : usingAccount ? `Account · ${getAccountHint()?.email}` : "Your Groq key"}</dd>
           </div>
         </dl>
         <form onSubmit={saveGroqKey} className="mt-4 flex gap-2">
@@ -181,9 +184,20 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
             <button type="button" onClick={() => setShowKey((value) => !value)} aria-label={showKey ? "Hide key" : "Show key"} className="rounded-lg p-2 text-slate-400 hover:text-ink">{showKey ? <EyeOff size={15} /> : <Eye size={15} />}</button>
           </div>
           <button type="submit" disabled={!groqKey.trim()} className="btn-outline disabled:opacity-40">Save</button>
-          {hasGroqKey && <button type="button" onClick={() => { if (!usingAccessToken) { onDisconnect(); return; } setSessionGroqKey(""); onGroqKeyChange(""); setHasGroqKey(false); setNotice("Groq key removed."); }} className="btn-ghost" title={usingAccessToken ? undefined : "Removing your key disconnects this tab"}>Remove</button>}
+          {hasGroqKey && <button type="button" onClick={() => { if (!usingAccessToken && !usingAccount) { onDisconnect(); return; } setSessionGroqKey(""); onGroqKeyChange(""); setHasGroqKey(false); setNotice("Groq key removed."); }} className="btn-ghost" title={usingAccessToken ? undefined : "Removing your key disconnects this tab"}>Remove</button>}
         </form>
         <button type="button" onClick={onDisconnect} className="btn-outline mt-5 text-rose-600 hover:!border-rose-300 hover:!text-rose-700"><LogOut size={15} /> Disconnect this tab</button>
+      </Section>
+
+      <Section title="Account" description="Optional. Signing in keeps your provider keys (encrypted), memories, reminders and preferences on this server's database so they follow you across devices.">
+        <AccountPanel
+          onSignedOut={() => { if (!getApiAccessToken() && !getSessionGroqKey()) onDisconnect(); else setNotice("Signed out."); }}
+          onTabGroqKey={(key) => { setSessionGroqKey(key); onGroqKeyChange(key); setHasGroqKey(true); }}
+        />
+      </Section>
+
+      <Section title="Voice" description="Choose how HANNAH speaks and listens. Device engines keep audio on this device; hosted engines send it to the provider named.">
+        <VoiceSettingsPanel />
       </Section>
 
       <Section title="Spending" description="An estimate from list prices for the tokens HANNAH used today. Free tiers and unpriced models count as $0. The server enforces the limit for this key or token.">
@@ -204,7 +218,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
         </form>
       </Section>
 
-      <Section title="Your data" description="Stored only in this browser’s local storage. Nothing here is uploaded except the messages and saved memories sent with each chat request.">
+      <Section title="Your data" description={usingAccount ? "Kept in this browser and synced to your account. Clearing here also clears it on your other devices at the next sync." : "Stored only in this browser’s local storage. Nothing here is uploaded except the messages and saved memories sent with each chat request."}>
         <ul className="divide-y divide-slate-100">
           {dataRows.map((row) => (
             <li key={row.label} className="flex items-center justify-between gap-3 py-3 first:pt-0">

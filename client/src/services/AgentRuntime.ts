@@ -38,7 +38,8 @@ const hardMaxIterations = 20;
 
 export type AgentPhase = "thinking" | "acting" | "tool-result";
 export type AgentActivity = { phase: AgentPhase; message: string };
-export type AgentReply = { reply: string; emotion: Emotion; meta?: AgentStepMeta };
+/** outcome is set when the turn ended early: the user declined, the Guardian blocked, or Stop was pressed. */
+export type AgentReply = { reply: string; emotion: Emotion; meta?: AgentStepMeta; outcome?: "declined" | "blocked" | "stopped" };
 
 const agentRules = [
   "You are HANNAH, a warm, attentive, candid companion and capable personal assistant. Sound natural and emotionally perceptive, while staying honest that you are an AI and never inventing real-world personal experiences.",
@@ -149,6 +150,12 @@ type AgentTurnOptions = {
   onActivity?: (activity: AgentActivity) => void;
   /** Emergency stop: checked before every model step and every tool. */
   signal?: AbortSignal;
+  /** Specialist agents: use exactly these tools instead of the task profile's. */
+  allowedTools?: string[];
+  /** Specialist agents: tier to ask Auto routing for. */
+  routeHint?: "simple" | "standard" | "complex";
+  /** Shown in the run log, for example "Research agent". */
+  agentLabel?: string;
 };
 
 export const STOPPED_REPLY = "Stopped. HANNAH ran nothing further after you pressed stop; steps that already finished stay done.";
@@ -156,7 +163,7 @@ export const STOPPED_REPLY = "Stopped. HANNAH ran nothing further after you pres
 /** Runs one agent turn and records it in the persistent execution log. */
 export async function runAgentTurn(options: AgentTurnOptions): Promise<AgentReply> {
   const objective = [...options.messages].reverse().find((message) => message.role === "user")?.content ?? "";
-  const runId = AgentRunLog.start({ objective, mode: options.mode, model: options.model });
+  const runId = AgentRunLog.start({ objective: options.agentLabel ? `${options.agentLabel}: ${objective}` : objective, mode: options.mode, model: options.model });
   try {
     const reply = await runAgentLoop(options, runId);
     AgentRunLog.finish(runId, "succeeded", { model: reply.meta?.model });
@@ -180,7 +187,8 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
   const maxIterations = Math.max(1, Math.min(hardMaxIterations, Math.floor(requestedIterations)));
   const allTools = [...getDeviceTools()].filter((tool) => !deniedTools.has(normalizeToolName(tool.name)));
   const profileTools = selectToolsForProfile(profile, allTools);
-  const tools = profileTools.length ? profileTools : allTools;
+  const specialistTools = options.allowedTools ? allTools.filter((tool) => options.allowedTools!.includes(tool.name)) : null;
+  const tools = specialistTools ?? (profileTools.length ? profileTools : allTools);
   const marketplaceItemIds = MarketplaceService.getActivePackageIds();
   const marketplaceInstructions = MarketplaceService.getRuntimeInstructions();
   const personalization = DynamicFewShotInjector.context();
@@ -197,7 +205,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
 
   const stopped = () => {
     AgentRunLog.finish(runId, "stopped");
-    return completeTurn({ reply: STOPPED_REPLY, emotion: "neutral" });
+    return completeTurn({ reply: STOPPED_REPLY, emotion: "neutral", outcome: "stopped" });
   };
   for (let turn = 0; turn < maxIterations; turn += 1) {
     if (options.signal?.aborted) return stopped();
@@ -214,11 +222,12 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
     options.onActivity?.({ phase: "thinking", message: "HANNAH is thinking…" });
     let content = "";
     let toolCalls: AgentToolCall[] = [];
-    const activeTools = selectRelevantTools(tools, conversation);
+    // Specialists already have a narrow tool set; trimming it further could hide the tool they need.
+    const activeTools = specialistTools ? tools : selectRelevantTools(tools, conversation);
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memories);
+        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memories, { routeHint: options.routeHint });
         content = step.content;
         if (step.meta?.provider) meta.provider = step.meta.provider;
         if (step.meta?.model) meta.model = step.meta.model;
@@ -281,7 +290,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
           const blocked = error instanceof GuardianBlockedError;
           AgentRunLog.step(runId, { tool: tool.name, outcome: blocked ? "blocked" : "declined", detail: blocked ? error.reason : undefined });
           AgentRunLog.finish(runId, blocked ? "blocked" : "declined");
-          return completeTurn({ reply: error.message, emotion: "neutral" });
+          return completeTurn({ reply: error.message, emotion: "neutral", outcome: blocked ? "blocked" : "declined" });
         }
         toolCircuitBreaker.recordFailure(tool.name);
         result = { error: error instanceof Error ? error.message : "The action failed." };

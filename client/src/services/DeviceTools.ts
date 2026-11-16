@@ -6,6 +6,8 @@ import { Network } from "@capacitor/network";
 import type { DeviceTool as MobileClawTool } from "capacitor-mobile-claw";
 import { HITLDeniedError, SafetyGuard, type SensitiveAction } from "./SafetyGuard";
 import { ReminderService, resolveDueAt } from "./ReminderService";
+import { MemoryService } from "./MemoryService";
+import { notifyMemoryChanged } from "./MemoryStore";
 
 export type ToolSchema = {
   type: "object";
@@ -19,6 +21,8 @@ export type HANNAHTool = {
   inputSchema: ToolSchema;
   requiresApproval?: boolean;
   sensitive?: SensitiveAction;
+  /** What the approval card shows, when it isn't the raw arguments. */
+  approvalDetails?: (args: Record<string, unknown>) => Record<string, unknown>;
   execute: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
@@ -279,6 +283,31 @@ const deviceTools: HANNAHTool[] = [
       return { cancelled: true, text: cancelled.text };
     },
   },
+  {
+    name: "search_memories",
+    description: "Search the facts the user asked HANNAH to remember on this device. Returns matching memories, newest first.",
+    inputSchema: { type: "object", properties: { query: { type: "string", description: "Words to look for. Leave empty to list recent memories." } } },
+    execute: async (args) => {
+      const terms = String(args.query ?? "").toLowerCase().split(/\s+/).filter((term) => term.length > 1);
+      const records = MemoryService.list().filter((record) => record.layer !== "session");
+      const matches = terms.length ? records.filter((record) => terms.some((term) => record.content.toLowerCase().includes(term))) : records;
+      return { memories: matches.slice(0, 20).map((record) => ({ id: record.id, content: record.content, savedAt: record.createdAt })) };
+    },
+  },
+  {
+    name: "save_memory",
+    description: "Save one fact the user explicitly asked HANNAH to remember. The user approves each save.",
+    inputSchema: { type: "object", properties: { content: { type: "string", description: "The fact, in one short sentence (up to 300 characters)." } }, required: ["content"] },
+    requiresApproval: true,
+    sensitive: "store_memory",
+    execute: async (args) => {
+      const content = String(args.content ?? "").trim().replace(/[\r\n]+/g, " ").slice(0, 300);
+      if (!content) throw new Error("There's nothing to save.");
+      const record = MemoryService.add("long_term", content);
+      notifyMemoryChanged();
+      return { saved: true, id: record.id, content };
+    },
+  },
 ];
 
 function safeDocumentPath(value: unknown, allowRoot = false) {
@@ -292,8 +321,15 @@ function safeDocumentPath(value: unknown, allowRoot = false) {
   return segments.join("/");
 }
 
+// Tools from outside MCP servers, registered at runtime (see McpTools.ts).
+let externalTools: HANNAHTool[] = [];
+
+export function setExternalTools(tools: HANNAHTool[]) {
+  externalTools = tools.filter((tool) => tool.requiresApproval && tool.sensitive);
+}
+
 export function getDeviceTools() {
-  return deviceTools;
+  return externalTools.length ? [...deviceTools, ...externalTools] : deviceTools;
 }
 
 /**
@@ -304,7 +340,7 @@ export async function executeHANNAHTool(tool: HANNAHTool, args: Record<string, u
   SafetyGuard.screen(tool.name, args, context.intent);
   if (tool.requiresApproval) {
     if (!tool.sensitive) throw new Error(`The approval-required tool "${tool.name}" has no SafetyGuard action configured.`);
-    if (!await SafetyGuard.confirm(tool.sensitive, args)) throw new HITLDeniedError();
+    if (!await SafetyGuard.confirm(tool.sensitive, tool.approvalDetails ? tool.approvalDetails(args) : args)) throw new HITLDeniedError();
   }
   return tool.execute(args);
 }

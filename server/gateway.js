@@ -202,9 +202,27 @@ function pickAutoModel(providerId, classification, { needsTools = false, budgetT
 }
 
 // ---------------------------------------------------------------------------
-// Budgets (in memory per server process; resets at UTC midnight)
+// Budgets. Kept in memory per process; with a database (setSpendStore) the
+// day's total is loaded before each request and every charge is written
+// through, so budgets survive restarts and hold across serverless instances.
 
 const spend = new Map();
+let spendStore = null;
+
+function setSpendStore(store) {
+  spendStore = store;
+}
+
+/** Refresh this credential's spend from the store. Call before assertWithinBudget. */
+async function hydrateSpend(credentialId) {
+  if (!spendStore || !credentialId) return;
+  try {
+    const usd = await spendStore.load(credentialId, dayKey());
+    spend.set(credentialId, { day: dayKey(), usd: Number(usd) || 0 });
+  } catch (error) {
+    console.error(`Spend lookup failed (${error?.code || error?.name || "error"}); using this instance's total.`);
+  }
+}
 
 function dayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -221,6 +239,9 @@ function recordSpend(credentialId, model, inputTokens, outputTokens) {
   const usd = ((Number(inputTokens) || 0) * price.input + (Number(outputTokens) || 0) * price.output) / 1_000_000;
   const current = spentToday(credentialId);
   spend.set(credentialId, { day: dayKey(), usd: current + usd });
+  if (spendStore && usd > 0) {
+    Promise.resolve(spendStore.add(credentialId, dayKey(), usd)).catch((error) => console.error(`Spend write failed (${error?.code || error?.name || "error"}).`));
+  }
   return usd;
 }
 
@@ -252,8 +273,12 @@ function assertWithinBudget(credentialId, requested) {
 // Completion
 
 /** Ordered providers to try when the caller didn't pin one. Never for visitor keys. */
-function providerFallbacks(primaryId, { byok = false } = {}) {
+function providerFallbacks(primaryId, { byok = false, allowed = null } = {}) {
   if (byok) return [primaryId];
+  if (allowed) {
+    const extra = String(process.env.HANNAH_PROVIDER_FALLBACKS || "").split(",").map((id) => id.trim()).filter((id) => id && id !== primaryId && allowed.has(id));
+    return [primaryId, ...new Set(extra)];
+  }
   const configured = new Set(listProviders().filter((provider) => provider.configured && (provider.local || providerKey(provider))).map((provider) => provider.id));
   const extra = String(process.env.HANNAH_PROVIDER_FALLBACKS || "").split(",").map((id) => id.trim()).filter((id) => id && id !== primaryId && configured.has(id));
   return [primaryId, ...new Set(extra)];
@@ -327,6 +352,8 @@ async function completeWithFallback({ providers, resolve, ...request }) {
 module.exports = {
   assertWithinBudget,
   budgetStatus,
+  hydrateSpend,
+  setSpendStore,
   classifyRequest,
   complete,
   completeWithFallback,

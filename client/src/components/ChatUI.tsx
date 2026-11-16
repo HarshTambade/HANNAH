@@ -3,8 +3,10 @@ import { Capacitor } from "@capacitor/core";
 import { useBrowserLLM } from "use-browser-llm";
 import {
   ArrowUp, Bookmark, BookmarkCheck, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
-  RotateCcw, Settings2, ShieldAlert, Smartphone, Speaker, Square, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
+  RotateCcw, Settings2, ShieldAlert, Smartphone, Speaker, Square, Users, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
 } from "lucide-react";
+import { runTeamTask } from "../services/Orchestrator";
+import { readVoiceSettings, startBargeInMonitor, VoiceIn, VoiceOut } from "../services/VoiceEngines";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
 import { MemoryService } from "../services/MemoryService";
@@ -21,9 +23,7 @@ import {
   resolveInferenceMode,
   type OfflineModelStatus,
 } from "../services/AIService";
-import { apiFetch, apiHeaders, apiUrl, isLocalDevelopmentHost, isGuestSession } from "../services/api";
-import { SpeechService } from "../services/SpeechService";
-import { VoiceService } from "../services/VoiceService";
+import { apiFetch, apiHeaders, apiUrl, isAccountSession, isLocalDevelopmentHost, isGuestSession } from "../services/api";
 import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
 import { clearMobileAgentConversation, getMobileAgentStatus, removeMobileAgentApiKey, runMobileAgentTurn, setMobileAgentApiKey } from "../services/MobileAgent";
 import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuardrails";
@@ -142,7 +142,17 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [cloudProvider, setCloudProvider] = useState("Groq");
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
   const [apiError, setApiError] = useState("");
-  const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("en-US");
+  const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>(() => {
+    try {
+      const stored = window.localStorage.getItem("hannah.speechLanguage");
+      return stored === "hi-IN" || stored === "mr-IN" ? stored : "en-US";
+    } catch {
+      return "en-US";
+    }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem("hannah.speechLanguage", speechLanguage); } catch { /* kept for this page */ }
+  }, [speechLanguage]);
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
       const saved = window.localStorage.getItem("hannah.voiceEnabled");
@@ -197,6 +207,13 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [isSavingMobileApiKey, setIsSavingMobileApiKey] = useState(false);
   const [isRemovingMobileApiKey, setIsRemovingMobileApiKey] = useState(false);
   const [agentActivity, setAgentActivity] = useState<AgentActivity | null>(null);
+  // Team mode: plan with specialist agents, run steps in parallel, verify.
+  const [teamMode, setTeamMode] = useState(() => {
+    try { return window.localStorage.getItem("hannah.chat.team") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem("hannah.chat.team", String(teamMode)); } catch { /* preference stays for this page */ }
+  }, [teamMode]);
   const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -457,7 +474,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       } else {
         const controller = new AbortController();
         stopRef.current = controller;
-        result = await runAgentTurn({
+        const useTeam = teamMode && (effectiveMode === "cloud" || effectiveMode === "ollama");
+        result = await (useTeam ? runTeamTask : runAgentTurn)({
           signal: controller.signal,
           mode: effectiveMode,
           providerId: cloudProviderId,
@@ -517,16 +535,21 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       if (speakReply) {
         setVoiceStatus("HANNAH is speaking…");
         setIsSpeaking(true);
-        spokenReply = SpeechService.speak(result.reply, speechLanguage)
-          .then((voiceName) => setVoiceStatus(`Speaking with ${voiceName}`))
+        // Barge-in: start talking and HANNAH stops speaking.
+        const bargeIn = readVoiceSettings().bargeIn ? startBargeInMonitor(() => { void VoiceOut.cancel(); }) : null;
+        spokenReply = VoiceOut.speak(result.reply, speechLanguage)
+          .then((voiceName) => setVoiceStatus(voiceName === "interrupted" ? "You started talking, so HANNAH stopped." : `Speaking with ${voiceName}`))
           .catch((speechError) => setVoiceStatus(speechError instanceof Error ? speechError.message : "Offline voice unavailable."))
-          .finally(() => setIsSpeaking(false));
+          .finally(() => {
+            setIsSpeaking(false);
+            void bargeIn?.then((stop) => stop());
+          });
       }
     } catch (requestError) {
       UsageStats.record({ latencyMs: Math.round(performance.now() - turnStartedAt), ok: false, mode: effectiveMode, voice: transcript !== undefined });
       if (requestError instanceof AgentApiError && requestError.status === 401) {
         setApiStatus("unauthorized");
-        setError(isGuestSession() ? "Groq no longer accepts your key. Reconnect with a valid Groq key to keep chatting." : "Your access token is no longer accepted. Reconnect with a valid token to keep chatting.");
+        setError(isAccountSession() ? "Your session has ended or a saved key was rejected. Sign in again, or update the key in Settings → Account." : isGuestSession() ? "Groq no longer accepts your key. Reconnect with a valid Groq key to keep chatting." : "Your access token is no longer accepted. Reconnect with a valid token to keep chatting.");
       } else {
         setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
       }
@@ -625,7 +648,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     setCallDuration(0);
     callSpeakerRef.current = true;
     setIsCallSpeakerOn(true);
-    void SpeechService.cancel().catch(() => undefined);
+    void VoiceOut.cancel().catch(() => undefined);
     setVoiceStatus("Virtual call ended");
   };
 
@@ -636,7 +659,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     setVoiceStatus(enabled ? "Call speaker on" : "Call speaker muted");
     if (!enabled) {
       setIsSpeaking(false);
-      void SpeechService.cancel().catch(() => undefined);
+      void VoiceOut.cancel().catch(() => undefined);
     }
   };
 
@@ -645,7 +668,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     voiceStartPendingRef.current = true;
     setError("");
     try {
-      const stop = await VoiceService.startSession(speechLanguage, (transcript, isFinal) => {
+      const stop = await VoiceIn.startSession(speechLanguage, (transcript, isFinal) => {
         if (voiceTurnPendingRef.current) return;
         setInput(transcript);
         if (!isFinal) return;
@@ -1243,6 +1266,20 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               {voiceEnabled ? <Speaker size={12} /> : <VolumeX size={12} />}
               <span>Voice</span>
             </button>
+            {(effectiveMode === "cloud" || effectiveMode === "ollama") && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={teamMode}
+                onClick={() => setTeamMode((value) => !value)}
+                disabled={isLoading}
+                title={teamMode ? "Team on: HANNAH plans with specialist agents and verifies the result" : "Team off: HANNAH answers directly"}
+                className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition disabled:opacity-50 ${teamMode ? "border-teal-200 bg-teal-50 text-teal-700" : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                <Users size={12} />
+                <span>Team</span>
+              </button>
+            )}
             {!isOnline && <span className="hidden truncate text-xs text-slate-500 sm:inline">On-device mode</span>}
           </div>
           <button

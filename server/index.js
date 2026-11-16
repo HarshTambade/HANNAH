@@ -23,9 +23,17 @@ const {
 } = require("./feedback");
 const { createContentReportHandler } = require("./content-reports");
 const { createSyncHandler, createSyncFetchHandler } = require("./cloud-sync");
+const { accountAuth, accountsUseServerKeys, createAccountRouter, createSpendStore, createSyncBlobStore } = require("./accounts");
+const { databaseConfigured } = require("./db");
 const { knownPriceFor, tokenUsageMiddleware } = require("./cost-tracking");
 const { createV1Router } = require("./v1");
-const { assertWithinBudget, budgetStatus, classifyRequest, complete, normalizeProviderError, pickAutoModel, recordSpend } = require("./gateway");
+const { createOrchestrateHandler } = require("./orchestrate");
+const { createVoiceRouter } = require("./voice");
+const { createMcpClientRouter } = require("./mcp-client");
+const { createA2ARouter } = require("./a2a");
+const { createWebhookRouter, emitUserEvent } = require("./webhooks");
+const serverVersion = require("./package.json").version;
+const { assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
 const {
   defaultModelFor,
   defaultProviderId,
@@ -78,9 +86,36 @@ const cloudModels = modelChain(configuredDefaultProvider, defaultModelFor(config
 const cloudRequestTimeout = Math.max(3_000, Math.min(120_000, Number(process.env.CLOUD_REQUEST_TIMEOUT_MS) || 60_000));
 const cloudProvider = configuredDefaultProvider.label;
 
+function hostedProvider(provider) {
+  try {
+    return !provider.local && provider.id !== "custom" && new URL(provider.baseUrl).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function getRequestProviderApiKey(req, provider) {
+  const account = req.res?.locals?.hannahAccount;
+  const vaultKey = account?.keys?.get(provider.id);
+  if (vaultKey) {
+    // A user's stored key only goes to that provider's own hosted HTTPS API.
+    if (!hostedProvider(provider)) {
+      const error = new Error("Your saved key can only be used with the provider's hosted API.");
+      error.status = 400;
+      throw error;
+    }
+    return vaultKey;
+  }
   const suppliedKey = req.get("x-groq-api-key")?.trim();
-  if (!suppliedKey) return providerKey(provider);
+  if (!suppliedKey) {
+    if (account && !provider.local && !accountsUseServerKeys()) {
+      const error = new Error(`Add your ${provider.label} API key in Settings → Account to use ${provider.label}.`);
+      error.status = 400;
+      error.reason = "account-key-required";
+      throw error;
+    }
+    return providerKey(provider);
+  }
   // A visitor-provided Groq key may only go to Groq's official HTTPS API.
   let officialGroq = false;
   try {
@@ -100,6 +135,30 @@ function getRequestProviderApiKey(req, provider) {
     throw error;
   }
   return suppliedKey;
+}
+
+/**
+ * Providers this caller may use, or null for every configured provider (operator).
+ * Visitors with a Groq key get Groq; accounts get the providers they saved keys
+ * for, plus the server's when HANNAH_ACCOUNTS_USE_SERVER_KEYS=true.
+ */
+function allowedProviderIds(req, res) {
+  const account = res.locals.hannahAccount;
+  if (account) {
+    if (accountsUseServerKeys()) return null;
+    const ids = new Set(account.keys.keys());
+    if (req.get("x-groq-api-key")) ids.add("groq");
+    return ids;
+  }
+  if (res.locals.hannahByok) return new Set(["groq"]);
+  return null;
+}
+
+/** The default provider for this caller: the server default when allowed, else their first usable one. */
+function preferredProviderId(req, res) {
+  const allowed = allowedProviderIds(req, res);
+  if (!allowed || allowed.has(defaultProviderId())) return defaultProviderId();
+  return [...allowed][0] || defaultProviderId();
 }
 
 function getRequestProvider(req, providerId) {
@@ -203,21 +262,48 @@ function buildAgentSystemPrompt(packages, personalization, memories = [], commun
 }
 const allowedEmotions = new Set(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 
-app.use(cors({ origin: corsOrigin }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
+// Accounts (when DATABASE_URL is set): recognize a session or developer key first.
+app.use("/api", accountAuth());
+app.use("/v1", accountAuth());
 app.use("/api", requireApiToken);
 app.use("/api", tokenUsageMiddleware);
 const rateLimits = rateLimitSettings();
 app.post("/api/chat", createRateLimiter(rateLimits.chat));
 app.post("/api/agent", createRateLimiter(rateLimits.agent));
+app.post("/api/orchestrate", createRateLimiter(rateLimits.agent));
+app.post("/api/a2a", createRateLimiter(rateLimits.chat));
+app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
+app.post("/api/voice/transcribe", createRateLimiter(rateLimits.chat));
 app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
 app.post("/api/feedback", createRateLimiter(rateLimits.feedback));
 app.post("/api/report-content", createRateLimiter(rateLimits.contentReport));
 app.post("/api/events", createRateLimiter(rateLimits.events));
 app.use(express.json({ limit: "12mb" }));
-// OpenAI-compatible developer API. Same credentials as /api (operator token or a visitor's Groq key).
+if (databaseConfigured()) setSpendStore(createSpendStore());
+const isOperator = (res) => Boolean(res.locals.hannahApiTokenId) && !res.locals.hannahAccount && !res.locals.hannahByok;
+app.use("/api", createAccountRouter({
+  isOperator,
+  async verifyProviderKey(preset, apiKey) {
+    const provider = resolveProvider({ id: preset.id });
+    const { liveModels, status } = await discoverProviderModels(provider, apiKey, Math.min(6_000, cloudRequestTimeout));
+    if (status === 401 || status === 403) return false;
+    return liveModels.length > 0 ? true : null;
+  },
+}));
+app.use("/api", createWebhookRouter());
+app.use("/api", createOrchestrateHandler({ getRequestProvider, preferredProviderId, timeoutMs: cloudRequestTimeout }));
+app.use("/api", createVoiceRouter({ getRequestProvider, allowedProviderIds, timeoutMs: cloudRequestTimeout }));
+// Outside MCP servers (operator-configured, operator-only routes).
+app.use("/api", createMcpClientRouter({ timeoutMs: cloudRequestTimeout }));
+// Agent2Agent: public agent card, authenticated message/send.
+app.use(createA2ARouter({ getRequestProvider, preferredProviderId, systemPrompt, parseAssistantOutput, timeoutMs: cloudRequestTimeout, version: serverVersion }));
+// OpenAI-compatible developer API. Same credentials as /api (operator token, a
+// visitor's Groq key, or an account session or developer key).
 app.use("/v1", requireApiToken, tokenUsageMiddleware, createV1Router({
   getRequestProvider,
-  defaultProviderId,
+  allowedProviderIds,
+  defaultProviderId: preferredProviderId,
   timeoutMs: cloudRequestTimeout,
   chatLimiter: createRateLimiter(rateLimits.agent),
 }));
@@ -277,14 +363,21 @@ app.post("/api/events", (req, res) => {
 });
 
 app.post("/api/feedback", createFeedbackHandler());
-app.post("/api/sync/memory", createSyncHandler());
-app.get("/api/sync/memory", createSyncFetchHandler());
+const syncBlobStore = databaseConfigured() ? createSyncBlobStore() : undefined;
+app.post("/api/sync/memory", createSyncHandler(syncBlobStore));
+app.get("/api/sync/memory", createSyncFetchHandler(syncBlobStore));
 app.post("/api/report-content", createContentReportHandler());
 
-app.get("/api/providers", (_req, res) => {
+app.get("/api/providers", (req, res) => {
   const providers = listProviders().map(({ id, label, kind, local, free, docs, requiresKey, configured, defaultModel }) => ({
     id, label, kind, local, free, docs, requiresKey, configured, defaultModel,
   }));
+  if (res.locals.hannahAccount) {
+    const allowed = allowedProviderIds(req, res);
+    const usable = allowed ? providers.filter((provider) => allowed.has(provider.id)).map((provider) => ({ ...provider, configured: true })) : providers;
+    const preferred = usable.find((provider) => provider.id === defaultProviderId()) || usable[0];
+    return res.json({ defaultProvider: preferred?.id || defaultProviderId(), account: true, providers: usable });
+  }
   if (res.locals.hannahByok) {
     // A bring-your-own-key visitor can only reach Groq, with their own key.
     const groq = providers.find((provider) => provider.id === "groq");
@@ -295,10 +388,11 @@ app.get("/api/providers", (_req, res) => {
 
 // Model catalog for the advisor: capability flags and list prices per provider.
 // Never includes credentials; for bring-your-own-key visitors only Groq is usable.
-app.get("/api/catalog", (_req, res) => {
+app.get("/api/catalog", (req, res) => {
   const byok = Boolean(res.locals.hannahByok);
+  const allowed = allowedProviderIds(req, res);
   const providers = listProviders()
-    .filter((provider) => !byok || provider.id === "groq")
+    .filter((provider) => !allowed || allowed.has(provider.id))
     .map((provider) => {
       return {
         id: provider.id,
@@ -307,7 +401,7 @@ app.get("/api/catalog", (_req, res) => {
         local: Boolean(provider.local),
         free: Boolean(provider.free),
         docs: provider.docs,
-        configured: byok ? true : Boolean(provider.configured),
+        configured: allowed ? true : Boolean(provider.configured),
         models: provider.models.map((model) => {
           const price = knownPriceFor(model.id);
           return {
@@ -333,7 +427,7 @@ app.get("/api/catalog", (_req, res) => {
 app.get("/api/models", async (req, res) => {
   const providerId = typeof req.query.provider === "string" && req.query.provider.trim()
     ? req.query.provider.trim()
-    : defaultProviderId();
+    : preferredProviderId(req, res);
   try {
     const { provider, apiKey } = getRequestProvider(req, providerId);
     const { models, liveModels, status } = await discoverProviderModels(provider, apiKey, Math.min(5_000, cloudRequestTimeout));
@@ -500,7 +594,7 @@ app.post("/api/agent", async (req, res) => {
   if (!tools) return res.status(400).json({ error: "The agent tool schemas are invalid." });
   const communitySkills = normalizeCommunitySkills(req.body?.communitySkills);
   if (!communitySkills) return res.status(400).json({ error: "A community skill was rejected: at most 3, each up to 1,200 characters, with no instruction-override text." });
-  const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || defaultProviderId());
+  const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || preferredProviderId(req, res));
   let provider;
   let requestApiKey;
   try {
@@ -515,9 +609,11 @@ app.post("/api/agent", async (req, res) => {
   const credentialId = res.locals.hannahApiTokenId;
   const callerBudget = req.body?.budget?.dailyUsd;
   let budget;
+  await hydrateSpend(credentialId);
   try {
     budget = assertWithinBudget(credentialId, callerBudget);
   } catch (error) {
+    if (res.locals.hannahAccount) void emitUserEvent(res.locals.hannahAccount.id, "budget.exceeded", { message: error.message });
     const normalized = normalizeProviderError(error, provider.label);
     return res.status(normalized.status).json({ error: normalized.message, code: normalized.code, retryable: false, budget: budgetStatus(credentialId, callerBudget) });
   }
@@ -531,6 +627,11 @@ app.post("/api/agent", async (req, res) => {
   let requestedModel = typeof model === "string" && model.trim() && !wantsAuto ? model.trim() : defaultModelFor(provider);
   if (wantsAuto) {
     const classification = classifyRequest(normalizedMessages, tools);
+    // A specialist agent can ask for a tier (for example "complex" for coding).
+    if (["simple", "standard", "complex"].includes(req.body?.routeHint)) {
+      classification.level = req.body.routeHint;
+      classification.reasons = [...classification.reasons, `${req.body.routeHint} requested by the specialist agent`];
+    }
     const pick = pickAutoModel(provider.id, classification, { needsTools: tools.length > 0, budgetTight: budget.tight });
     if (pick?.model) requestedModel = pick.model;
     routing = { ...classification, model: requestedModel, tier: pick?.tier, reason: pick?.reason };
@@ -661,7 +762,7 @@ app.post("/api/chat", async (req, res) => {
     return res.status(400).json({ error: "Each message needs a valid role and non-empty content up to 4,000 characters." });
   }
 
-  const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || defaultProviderId());
+  const providerId = mode === "ollama" ? "ollama" : (req.body?.provider || preferredProviderId(req, res));
   let provider;
   let requestApiKey;
   try {

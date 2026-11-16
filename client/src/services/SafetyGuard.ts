@@ -6,7 +6,7 @@ import { SideEffectLedger } from "./SideEffectLedger";
 import { GuardianAgent } from "./GuardianAgent";
 import { ApprovalCenter } from "./ApprovalCenter";
 
-export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file";
+export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file" | "external_tool";
 
 export class HITLDeniedError extends Error {
   constructor(message = "Action cancelled. HANNAH did not make any changes.") { super(message); this.name = "HITLDeniedError"; }
@@ -21,6 +21,10 @@ export class GuardianBlockedError extends HITLDeniedError {
 }
 
 function describeAction(action: SensitiveAction, args: Record<string, unknown>) {
+  if (action === "external_tool") {
+    const shown = JSON.stringify(args.arguments ?? {}, null, 1);
+    return `Run “${String(args.tool ?? "a tool")}” on ${String(args.server ?? "an outside MCP server")}? It's an outside tool, so HANNAH can't check what it changes.\n\nArguments:\n${shown.length > 600 ? `${shown.slice(0, 600)}…` : shown}`;
+  }
   if (action === "send_message") {
     return `Open a text message draft to ${String(args.recipient ?? "the requested recipient")} with this message:\n\n${String(args.message ?? "")}`;
   }
@@ -31,7 +35,7 @@ function describeAction(action: SensitiveAction, args: Record<string, unknown>) 
     return `Delete this saved information from HANNAH's on-device memory?\n\n${String(args.summary ?? "Matching memory entries")}`;
   }
   if (action === "store_memory") {
-    return `Save this information in HANNAH's on-device memory?\n\n${String(args.summary ?? "Requested information").slice(0, 700)}`;
+    return `Save this information in HANNAH's on-device memory?\n\n${String(args.summary ?? args.content ?? "Requested information").slice(0, 700)}`;
   }
   if (action === "delete_credential") {
     return `Remove this saved provider credential from HANNAH on this device?\n\n${String(args.summary ?? "Saved credential")}`;

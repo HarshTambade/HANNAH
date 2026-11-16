@@ -20,7 +20,14 @@ const configuredTokenDigest = configuredTokenIsValid
 // getRequestProviderApiKey in index.js); server-held provider keys, desktop
 // control, TTS, calls, feedback and sync still require the operator token.
 // Paths are relative to the /api or /v1 mount.
-const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage"]);
+const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/a2a"]);
+// Open to everyone: sign-in itself and the database status the app needs before sign-in.
+const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card"]);
+// A signed-in account (session or developer API key) may use the model routes
+// plus its own account and sync routes. Operator-only routes stay closed.
+function accountMayUse(path) {
+  return BYOK_PATHS.has(path) || path === "/sync/memory" || path === "/account" || path.startsWith("/account/");
+}
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 
 function isGroqKey(value) {
@@ -39,7 +46,15 @@ function assertProductionApiToken() {
 }
 
 function requireApiToken(req, res, next) {
-  if (req.path === "/health" || req.path === "/presence") return next();
+  if (PUBLIC_PATHS.has(req.path)) return next();
+  if (res.locals.hannahAccount) {
+    if (accountMayUse(req.path)) return next();
+    return res.status(403).json({ error: "This needs the server operator's access token.", reason: "operator-only" });
+  }
+  if (res.locals.hannahAccountInvalid) {
+    res.setHeader("WWW-Authenticate", "Bearer");
+    return res.status(401).json({ error: res.locals.hannahAccountInvalid, reason: "session-invalid" });
+  }
 
   const authorization = req.get("authorization") || "";
   if (!authorization) {
@@ -133,6 +148,7 @@ function rateLimitSettings() {
 }
 
 module.exports = {
+  accountMayUse,
   assertProductionApiToken,
   BYOK_PATHS,
   createRateLimiter,
