@@ -1,4 +1,5 @@
 import { apiFetch, apiUrl, isLocalDevelopmentHost } from "./api";
+import { CommunitySkills } from "./CommunitySkills";
 import type { HANNAHTool } from "./DeviceTools";
 import type { InferenceMode } from "../types";
 import { resolveInferenceMode, getNetworkStatus } from "./AIService";
@@ -34,6 +35,17 @@ export class AgentApiError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message);
     this.name = "AgentApiError";
+  }
+}
+
+/** Optional daily spending cap set in Settings; the server enforces it. */
+export const DAILY_BUDGET_KEY = "hannah.budget.dailyUsd";
+function dailyBudgetUsd() {
+  try {
+    const value = Number(window.localStorage.getItem(DAILY_BUDGET_KEY));
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
   }
 }
 
@@ -191,6 +203,8 @@ export class LLMRouter {
       ...(marketplaceItemIds.length ? { marketplaceItemIds } : {}),
       ...(personalization ? { personalization } : {}),
       ...(memories.length ? { memories } : {}),
+      ...(dailyBudgetUsd() ? { budget: { dailyUsd: dailyBudgetUsd() } } : {}),
+      ...(CommunitySkills.runtimeSkills().length ? { communitySkills: CommunitySkills.runtimeSkills() } : {}),
       messages,
       tools: tools.map(({ name, description, inputSchema }) => ({ type: "function", function: { name, description, parameters: inputSchema } })),
     };

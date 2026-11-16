@@ -5,6 +5,7 @@ import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { Network } from "@capacitor/network";
 import type { DeviceTool as MobileClawTool } from "capacitor-mobile-claw";
 import { HITLDeniedError, SafetyGuard, type SensitiveAction } from "./SafetyGuard";
+import { ReminderService, resolveDueAt } from "./ReminderService";
 
 export type ToolSchema = {
   type: "object";
@@ -237,6 +238,45 @@ const deviceTools: HANNAHTool[] = [
         batteryPercent: typeof info.batteryLevel === "number" ? Math.round(info.batteryLevel * 100) : null,
         charging: info.isCharging ?? null,
       };
+    },
+  },
+  {
+    name: "create_reminder",
+    // A getter so the model always sees the current local time.
+    get description() {
+      const now = new Date();
+      return `Create a reminder that alerts the user in HANNAH at a set time. Current local time: ${now.toString()} (ISO ${now.toISOString()}). Use in_minutes for relative times ("in 20 minutes"), or due_at as ISO 8601 with the user's UTC offset for a clock time.`;
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "What to remind the user about, in their words." },
+        in_minutes: { type: "number", description: "Minutes from now." },
+        due_at: { type: "string", description: "ISO 8601 date-time with offset, e.g. 2026-11-17T09:00:00+05:30." },
+      },
+      required: ["text"],
+    },
+    execute: async (args) => {
+      const reminder = ReminderService.create(String(args.text ?? ""), resolveDueAt(args));
+      return { created: true, id: reminder.id, text: reminder.text, dueAt: new Date(reminder.dueAt).toString() };
+    },
+  },
+  {
+    name: "list_reminders",
+    description: "List the user's upcoming reminders with their ids and due times.",
+    inputSchema: { type: "object", properties: {} },
+    execute: async () => ({
+      reminders: ReminderService.upcoming().map((item) => ({ id: item.id, text: item.text, dueAt: new Date(item.dueAt).toString() })),
+    }),
+  },
+  {
+    name: "cancel_reminder",
+    description: "Cancel one upcoming reminder by id. Call list_reminders first to find the id.",
+    inputSchema: { type: "object", properties: { id: { type: "string", description: "Reminder id from list_reminders." } }, required: ["id"] },
+    execute: async (args) => {
+      const cancelled = ReminderService.cancel(String(args.id ?? ""));
+      if (!cancelled) throw new Error("No reminder has that id.");
+      return { cancelled: true, text: cancelled.text };
     },
   },
 ];

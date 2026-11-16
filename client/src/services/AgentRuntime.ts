@@ -9,7 +9,8 @@ import { MarketplaceService } from "./MarketplaceService";
 import { DynamicFewShotInjector } from "./DynamicFewShotInjector";
 import { ChaosEngine } from "./ChaosEngine";
 import { toolCircuitBreaker } from "./CircuitBreaker";
-import { HITLDeniedError } from "./SafetyGuard";
+import { GuardianBlockedError, HITLDeniedError } from "./SafetyGuard";
+import { AgentRunLog } from "./AgentRunLog";
 
 const emotionNames = new Set<Emotion>(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 
@@ -135,7 +136,7 @@ function trimConversation(messages: AgentMessage[]) {
   messages.splice(0, start);
 }
 
-export async function runAgentTurn(options: {
+type AgentTurnOptions = {
   mode: InferenceMode;
   model?: string;
   providerId?: string;
@@ -146,7 +147,27 @@ export async function runAgentTurn(options: {
   /** `cause` is the cloud error when this call is a fallback after a failed cloud step. */
   generateLocal: (prompt: string, mode: InferenceMode, cause?: unknown) => Promise<string>;
   onActivity?: (activity: AgentActivity) => void;
-}): Promise<AgentReply> {
+  /** Emergency stop: checked before every model step and every tool. */
+  signal?: AbortSignal;
+};
+
+export const STOPPED_REPLY = "Stopped. HANNAH ran nothing further after you pressed stop; steps that already finished stay done.";
+
+/** Runs one agent turn and records it in the persistent execution log. */
+export async function runAgentTurn(options: AgentTurnOptions): Promise<AgentReply> {
+  const objective = [...options.messages].reverse().find((message) => message.role === "user")?.content ?? "";
+  const runId = AgentRunLog.start({ objective, mode: options.mode, model: options.model });
+  try {
+    const reply = await runAgentLoop(options, runId);
+    AgentRunLog.finish(runId, "succeeded", { model: reply.meta?.model });
+    return reply;
+  } catch (error) {
+    AgentRunLog.finish(runId, options.signal?.aborted ? "stopped" : "failed", { error: error instanceof Error ? error.message : "The run failed." });
+    throw error;
+  }
+}
+
+async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<AgentReply> {
   const policy = getAgentRuntimePolicy();
   const deniedTools = new Set([
     ...policy.toolDenyList,
@@ -174,7 +195,12 @@ export async function runAgentTurn(options: {
   const meta: AgentStepMeta = {};
   const completeTurn = (reply: AgentReply): AgentReply => (Object.keys(meta).length ? { ...reply, meta } : reply);
 
+  const stopped = () => {
+    AgentRunLog.finish(runId, "stopped");
+    return completeTurn({ reply: STOPPED_REPLY, emotion: "neutral" });
+  };
   for (let turn = 0; turn < maxIterations; turn += 1) {
+    if (options.signal?.aborted) return stopped();
     let mode = await LLMRouter.resolveMode(preferredMode, typeof navigator === "undefined" || navigator.onLine);
     if (mode === "native" && !memoryToolsLoaded) {
       memoryToolsLoaded = true;
@@ -231,7 +257,9 @@ export async function runAgentTurn(options: {
       })),
     });
 
+    if (options.signal?.aborted) return stopped();
     for (const call of toolCalls) {
+      if (options.signal?.aborted) return stopped();
       if (deniedTools.has(normalizeToolName(call.name))) {
         throw new Error(`The tool “${call.name}” is denied by HANNAH's runtime policy.`);
       }
@@ -247,10 +275,17 @@ export async function runAgentTurn(options: {
         }
         result = await executeHANNAHTool(tool, call.arguments, { intent: latestUserRequest });
         toolCircuitBreaker.recordSuccess(tool.name);
+        AgentRunLog.step(runId, { tool: tool.name, outcome: "ok" });
       } catch (error) {
-        if (error instanceof HITLDeniedError) return completeTurn({ reply: error.message, emotion: "neutral" });
+        if (error instanceof HITLDeniedError) {
+          const blocked = error instanceof GuardianBlockedError;
+          AgentRunLog.step(runId, { tool: tool.name, outcome: blocked ? "blocked" : "declined", detail: blocked ? error.reason : undefined });
+          AgentRunLog.finish(runId, blocked ? "blocked" : "declined");
+          return completeTurn({ reply: error.message, emotion: "neutral" });
+        }
         toolCircuitBreaker.recordFailure(tool.name);
         result = { error: error instanceof Error ? error.message : "The action failed." };
+        AgentRunLog.step(runId, { tool: tool.name, outcome: "failed", detail: error instanceof Error ? error.message : undefined });
       }
       const resultText = screenOutgoingText(toolOutputText(result));
       options.onActivity?.({ phase: "tool-result", message: resultText });

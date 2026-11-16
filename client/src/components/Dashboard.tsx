@@ -10,6 +10,7 @@ import { TaskSpineService } from "../services/TaskSpineService";
 import { GUARDIAN_EVENT, GuardianAgent } from "../services/GuardianAgent";
 import { apiUrl } from "../services/api";
 import { ChaosEngine, type DegradedState } from "../services/ChaosEngine";
+import { RemindersCard } from "./Reminders";
 
 type DashboardProps = {
   onOpenChat: () => void;
@@ -410,6 +411,8 @@ export default function Dashboard({ onOpenChat, onOpenMemory, onOpenAutomations,
           )}
         </Deck>
       </div>
+
+      <div className="mt-4"><RemindersCard /></div>
 
       <section className="mt-4 grid gap-3 sm:grid-cols-3" aria-label="More">
         {[

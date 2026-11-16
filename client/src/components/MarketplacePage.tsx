@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   ArrowLeft, Bot, Check, Download, Search, ShieldCheck, Sparkles, Trash2,
 } from "lucide-react";
+import CommunitySkillsPanel from "./CommunitySkillsPanel";
 import { MarketplaceService, type MarketplacePackageType, type MarketplaceState } from "../services/MarketplaceService";
 
 type MarketplacePageProps = { onBack: () => void };
@@ -149,6 +150,7 @@ export default function MarketplacePage({ onBack }: MarketplacePageProps) {
         ) : (
           <div className="mt-5 rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-xs text-slate-500">No packages match that search.</div>
         )}
+        <CommunitySkillsPanel />
       </div>
     </main>
   );

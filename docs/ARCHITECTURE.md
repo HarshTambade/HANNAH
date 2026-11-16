@@ -73,15 +73,15 @@ Each milestone ends with the tests from brief §18 passing, docs updated, and th
 | # | Milestone | Brief | Acceptance |
 | --- | --- | --- | --- |
 | **M1 ✅** | Model advisor and catalog | §3 | Hardware fit with KV cache, six budget modes, eight "best for" choices, cost estimates, hybrid pairing, "Use in chat". 14 unit tests and 2 API tests. |
-| M2 | Gateway: streaming and capability negotiation | §2 | Responses stream over SSE. A non-tool model gets prompt-format tools. Normalized error classes. Fallback across providers is shown working in tests. |
-| M3 | Automatic routing and budgets | §3 | Per-message complexity routing (a cheap model for chat, escalation for hard tasks), a per-day budget cap that is enforced, and the user's explicit model always respected. |
+| **M2 ✅** | Gateway: streaming and capability negotiation | §2 | [`server/gateway.js`](../server/gateway.js): SSE streaming (OpenAI-compatible providers; others deliver one delta), prompt-format tools when a model lacks native tool calling or rejects tools, normalized error codes, cross-provider fallback for `hannah-auto`. Tested against a fake provider. |
+| **M3 ✅** | Automatic routing and budgets | §3 | **Auto** model in chat and `hannah-auto` in `/v1` classify each request and pick a tier; a daily cap (server and user) is enforced and downgrades near the limit; a pinned model is never swapped. |
 | M4 | Accounts, database, vault | §§1, 11, 14 | Sign-in, Postgres schema and migrations, encrypted provider keys stored server-side, sessions instead of tab storage. *Needs D8.* |
-| M5 | Persistent tasks and planner | §4 | Plan → execute → verify loop, tasks survive restarts, a visible execution log, emergency stop. |
+| M5 · partial | Persistent tasks and planner | §4 | **Done:** persistent execution log of every run and tool step, with interrupted runs marked; Stop button. **Left:** a plan → execute → verify loop, and resuming a run after a restart. |
 | M6 | Orchestrator and specialist agents | §5 | Research, Coding, Memory and Verification agents with their own models and permissions; parallel steps; Agent Activity view. |
-| M7 | Reminders, calendar, notifications | §8 | Create and fire a reminder on a device channel; one OAuth connector (Google Calendar). |
-| M8 | Developer platform v1 | §9 | `/v1` routes, SSE, OpenAI-compatible `/v1/chat/completions`, API keys per developer, MCP client, webhooks. |
+| M7 · partial | Reminders, calendar, notifications | §8 | **Done:** reminders by chat (tools) or Dashboard, browser notifications and in-app alerts. **Left:** native background notifications and an OAuth calendar connector (needs M4). |
+| M8 · partial | Developer platform v1 | §9 | **Done:** [`server/v1.js`](../server/v1.js) with `/v1/models`, `/v1/chat/completions` (SSE, tools, auto) and `/v1/usage`. **Left:** per-developer API keys and webhooks (need M4), MCP client, A2A, SDKs. |
 | M9 | Voice layer | §7 | Provider-agnostic TTS/STT with one hosted and one local engine, barge-in, voice selection. |
-| M10 | Marketplace v2 | §10 | Manifest schema, signed packages, sandboxed run, permission display, revoke. |
+| M10 · partial | Marketplace v2 | §10 | **Done:** manifest v1 for instruction skills, with validation, integrity hash, injection screening on client and server, a permission and privacy display, install, enable and uninstall. **Left:** publisher signing, a public registry and reviews, and sandboxed executable plugins. |
 
 ## 4. Decisions needed from the product owner
 

@@ -227,8 +227,13 @@ function extractUsage(providerKind, data) {
   };
 }
 
-async function callProviderMeasured({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs }) {
-  const system = `${systemPrompt}${tools?.length ? " When useful, call the provided tools. Never say an action succeeded before the tool result confirms it." : ""}`;
+async function callProviderMeasured({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs, maxTokens, temperature }) {
+  // An empty systemPrompt sends the caller's own messages unchanged (developer API).
+  const system = systemPrompt
+    ? `${systemPrompt}${tools?.length ? " When useful, call the provided tools. Never say an action succeeded before the tool result confirms it." : ""}`
+    : "";
+  const withSystem = (list) => (system ? [{ role: "system", content: system }, ...list] : list);
+  const tokenLimit = Number.isFinite(maxTokens) ? maxTokens : tools?.length ? 1400 : 900;
   let attemptStartedAt = Date.now();
   let firstResponseAt;
   const resetTiming = () => {
@@ -246,16 +251,16 @@ async function callProviderMeasured({ provider, apiKey, model, messages, tools, 
   };
 
   if (provider.kind === "ollama") {
-    const ollamaMessages = [{ role: "system", content: system }, ...messages];
+    const ollamaMessages = withSystem(messages);
     const data = await requestJson(ollamaUrl(provider.baseUrl, "chat"), {
       method: "POST",
       headers: providerHeaders(provider, apiKey),
       body: JSON.stringify({
         model,
         messages: ollamaMessages,
-        ...(tools?.length ? { tools } : { format: "json" }),
+        ...(tools?.length ? { tools } : systemPrompt ? { format: "json" } : {}),
         stream: false,
-        options: { temperature: tools?.length ? 0.4 : 0.7 },
+        options: { temperature: Number.isFinite(temperature) ? temperature : tools?.length ? 0.4 : 0.7, num_predict: tokenLimit },
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -270,7 +275,7 @@ async function callProviderMeasured({ provider, apiKey, model, messages, tools, 
   }
 
   if (provider.kind === "anthropic") {
-    const converted = toAnthropicMessages([{ role: "system", content: system }, ...messages]);
+    const converted = toAnthropicMessages(withSystem(messages));
     const anthropicTools = (tools || []).map((tool, index, all) => ({
       name: tool.function.name,
       description: tool.function.description,
@@ -286,9 +291,10 @@ async function callProviderMeasured({ provider, apiKey, model, messages, tools, 
       },
       body: JSON.stringify({
         model,
-        system: [{ type: "text", text: converted.system, cache_control: { type: "ephemeral" } }],
+        ...(converted.system ? { system: [{ type: "text", text: converted.system, cache_control: { type: "ephemeral" } }] } : {}),
         messages: converted.messages,
-        max_tokens: tools?.length ? 1400 : 900,
+        max_tokens: tokenLimit,
+        ...(Number.isFinite(temperature) ? { temperature } : {}),
         ...(anthropicTools.length ? { tools: anthropicTools } : {}),
       }),
       signal: AbortSignal.timeout(timeoutMs),
@@ -303,10 +309,10 @@ async function callProviderMeasured({ provider, apiKey, model, messages, tools, 
   const url = openAiChatUrl(provider.baseUrl);
   const body = {
     model,
-    messages: [{ role: "system", content: system }, ...messages],
+    messages: withSystem(messages),
     ...(tools?.length ? { tools, tool_choice: "auto" } : {}),
-    temperature: tools?.length ? 0.4 : 0.7,
-    max_completion_tokens: tools?.length ? 1400 : 900,
+    temperature: Number.isFinite(temperature) ? temperature : tools?.length ? 0.4 : 0.7,
+    max_completion_tokens: tokenLimit,
   };
   let data;
   try {
@@ -352,8 +358,9 @@ function isNetworkFailure(error) {
     || ["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EAI_AGAIN", "ETIMEDOUT"].includes(code);
 }
 
-async function requestWithProviderFallback({ provider, apiKey, requestedModel, messages, tools, systemPrompt, timeoutMs }) {
-  const models = modelChain(provider, requestedModel || defaultModelFor(provider));
+async function requestWithProviderFallback({ provider, apiKey, requestedModel, messages, tools, systemPrompt, timeoutMs, maxTokens, temperature, singleModel = false }) {
+  // singleModel: the caller pinned one exact model, so don't silently swap it.
+  const models = singleModel && requestedModel ? [requestedModel] : modelChain(provider, requestedModel || defaultModelFor(provider));
   const trace = createLlmTrace({
     provider,
     requestedModel: requestedModel || models[0] || defaultModelFor(provider),
@@ -369,7 +376,7 @@ async function requestWithProviderFallback({ provider, apiKey, requestedModel, m
     const model = models[index];
     const attemptStartedAt = Date.now();
     try {
-      const result = await callProviderMeasured({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs });
+      const result = await callProviderMeasured({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs, maxTokens, temperature });
       trace.succeed({
         model,
         usage: result.usage,
@@ -399,6 +406,75 @@ async function requestWithProviderFallback({ provider, apiKey, requestedModel, m
   const finalError = lastError || new Error(`No ${provider.label} models are configured.`);
   trace.fail(finalError);
   throw finalError;
+}
+
+/**
+ * Stream one completion. OpenAI-compatible providers stream token deltas over
+ * SSE; other wire protocols fall back to one non-streamed call delivered as a
+ * single delta, so callers always get the same events.
+ */
+async function streamProvider({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs, maxTokens, temperature, onDelta, signal }) {
+  if (provider.kind !== "openai") {
+    const result = await callProviderMeasured({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs, maxTokens, temperature });
+    if (result.message.content) onDelta({ content: result.message.content });
+    return { content: result.message.content, tool_calls: result.message.tool_calls, usage: result.usage, streamed: false };
+  }
+  const system = systemPrompt || "";
+  const body = {
+    model,
+    messages: system ? [{ role: "system", content: system }, ...messages] : messages,
+    ...(tools?.length ? { tools, tool_choice: "auto" } : {}),
+    ...(Number.isFinite(temperature) ? { temperature } : {}),
+    max_tokens: Number.isFinite(maxTokens) ? maxTokens : 1400,
+    stream: true,
+    stream_options: { include_usage: true },
+  };
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const response = await fetch(openAiChatUrl(provider.baseUrl), {
+    method: "POST",
+    headers: { ...providerHeaders(provider, apiKey), Accept: "text/event-stream" },
+    body: JSON.stringify(body),
+    signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+  });
+  if (!response.ok || !response.body) await readProviderJson(response);
+
+  let content = "";
+  let usage = {};
+  const calls = [];
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    let newline;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      let event;
+      try {
+        event = JSON.parse(payload);
+      } catch {
+        continue;
+      }
+      if (event.usage) usage = extractUsage("openai", event);
+      const delta = event.choices?.[0]?.delta;
+      if (!delta) continue;
+      if (typeof delta.content === "string" && delta.content) {
+        content += delta.content;
+        onDelta({ content: delta.content });
+      }
+      for (const part of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+        const index = Number.isInteger(part.index) ? part.index : calls.length;
+        calls[index] = calls[index] || { id: "", type: "function", function: { name: "", arguments: "" } };
+        if (part.id) calls[index].id = part.id;
+        if (part.function?.name) calls[index].function.name += part.function.name;
+        if (part.function?.arguments) calls[index].function.arguments += part.function.arguments;
+      }
+    }
+  }
+  return { content, tool_calls: calls.filter(Boolean), usage, streamed: true };
 }
 
 async function discoverProviderModels(provider, apiKey, timeoutMs) {
@@ -455,5 +531,6 @@ module.exports = {
   providerConfigured,
   requestWithProviderFallback,
   resolveConfiguredProvider,
+  streamProvider,
   validateBaseUrl,
 };

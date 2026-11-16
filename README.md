@@ -77,12 +77,12 @@ The app uses hash routes. Every screen except the landing page, Marketplace and 
 | Screen | Route | What it does |
 | --- | --- | --- |
 | **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog: paste your Groq key (checked with Groq before the app opens). **I have an access token** is optional, for operator-provided models and features. |
-| **Chat** | `#/chat` | Conversation beside the 3D avatar. Choose a model and inference mode, speak or type, rate replies, and approve or decline actions on the in-chat approval cards. |
-| **Dashboard** | `#/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. Empty states show `—` or `0`, never sample numbers. |
+| **Chat** | `#/chat` | Conversation beside the 3D avatar. Pick a model, or **Auto** to let HANNAH route each message by complexity. Speak or type, rate replies, approve or decline actions on the in-chat approval cards, and press **Stop** to halt a running task before its next step. |
+| **Dashboard** | `#/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. Also holds **Reminders**: add, cancel, and allow notifications. Empty states show `—` or `0`, never sample numbers. |
 | **Models** | `#/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
-| **Memory & trust** | `#/memory` | The accountability page: Guardian strictness and its decision log (allowed and blocked, with reasons), saved memories you can edit or delete, personalization examples, the active persona, and installed plugins. |
+| **Memory & trust** | `#/memory` | The accountability page: an **Agent runs** log (every request with each tool step and how it ended, which survives reloads), Guardian strictness and its decision log (allowed and blocked, with reasons), saved memories you can edit or delete, personalization examples, the active persona, and installed plugins. |
 | **Automations** | `#/automations` | Visual workflow designer (React Flow) with trigger, agent-task, tool-action and output nodes. Designs are saved on this device. See [Automations](#automations) for current limits. |
-| **Marketplace** | `#/marketplace` | First-party agents and skills that change how HANNAH replies. Install, activate, enable or remove them at any time. |
+| **Marketplace** | `#/marketplace` | First-party agents and skills that change how HANNAH replies, plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
 | **Integrations** | `#/integrations` | REST and MCP guide with copyable examples, tool limits, server environment and host setup. |
 | **Settings** | `#/settings` | Connection (token, Groq key, disconnect). Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. |
 
@@ -363,6 +363,8 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | `http://localhost:11434`, `qwen3:8b` | Ollama. |
 | `LMSTUDIO_*`, `LLAMACPP_*`, `VLLM_*` | — | Other local OpenAI-compatible runtimes. |
 | `CLOUD_REQUEST_TIMEOUT_MS` | `60000` | Per-model timeout (3–120 s). |
+| `HANNAH_DAILY_BUDGET_USD` | — | Daily spending cap per token or visitor key, estimated from list prices. Users can set a lower cap in Settings. Kept in memory per server process. |
+| `HANNAH_PROVIDER_FALLBACKS` | — | Comma-separated providers to try when `hannah-auto` requests fail with a retryable error, for example `openrouter,together`. Never used for visitor keys or a pinned provider. |
 | `MCP_ENABLED`, `MCP_API_TOKEN`, `HANNAH_API_URL` | `false`, —, `http://127.0.0.1:3001` | Remote MCP endpoint. |
 | `ANTHROPIC_DESKTOP_MODEL` | `claude-sonnet-5-5` | Model for desktop computer use (needs `ANTHROPIC_API_KEY`). |
 | `MITHI_TTS_URL` | — | Optional Mithi text-to-speech service. |
@@ -405,6 +407,7 @@ When offline, HANNAH chooses llama.cpp on mobile and WebLLM on web and desktop.
 | `toggle_setting` | ✅ | For example the flashlight. iOS and Android don't allow apps to toggle Wi-Fi or Bluetooth. |
 | `send_message` | ✅ | Opens an SMS draft; you press Send. |
 | `make_call` | ✅ | Opens the dialer; you press Call. |
+| `create_reminder`, `list_reminders`, `cancel_reminder` | — | On-device reminders; they alert while HANNAH is open. |
 
 The Guardian reviews **every** tool, including the ones that need no approval. Memory writes and deletions and saved-credential removal also need approval. Shell execution, arbitrary file-system access and notification reading are not available.
 
@@ -432,7 +435,16 @@ The catalog is bundled in [`shared/marketplace-catalog.json`](./shared/marketpla
 - **Agents** are specialists, such as a study coach. Install one, then activate it; only one agent is active at a time.
 - **Skills**, such as concise replies, can be combined. Enable the ones you want.
 
-Entries add **prompt guidance only**. They don't add tools, request permissions, download code, or get around the Guardian. Choices are stored on this device. Third-party publishing, remote discovery and package signing are not implemented.
+Entries add **prompt guidance only**. They don't add tools, request permissions, download code, or get around the Guardian. Choices are stored on this device.
+
+**Community skills** install from a manifest (`manifestVersion: 1`, `type: "instruction-skill"`); the format is documented in [`CommunitySkills.ts`](./client/src/services/CommunitySkills.ts). The validator checks:
+
+- every field;
+- that the skill requests no permissions;
+- the optional SHA-256 hash against the instructions;
+- the instructions for prompt-injection text.
+
+The server checks the instructions again and labels them as untrusted guidance. At most three can be on at once. Executable plugins and MCP-server packages are refused until package signing and sandboxed execution exist. Publisher verification, a public registry and reviews aren't built yet.
 
 ---
 
@@ -585,7 +597,7 @@ See [`docs/OPERATIONS_RUNBOOK.md`](./docs/OPERATIONS_RUNBOOK.md) and [`docs/OBSE
 
 There are two ways to authenticate:
 
-- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models`, `/api/providers` and `/api/catalog` only, and the key goes only to Groq's official API.
+- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models`, `/api/providers`, `/api/catalog`, `/v1/chat/completions`, `/v1/models` and `/v1/usage` only, and the key goes only to Groq's official API.
 - **Operator token:** send `Authorization: Bearer <HANNAH_API_TOKEN>`. This works for every route.
 
 `/api/health` is public. Full examples are in [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
@@ -597,6 +609,9 @@ There are two ways to authenticate:
 | `GET /api/providers` | Providers configured on the server. |
 | `GET /api/models?provider=` | Models available for a provider. |
 | `GET /api/catalog` | Every provider's models with tool, vision and context flags and known list prices, for the model advisor. No credentials. |
+| `GET /v1/models` | OpenAI-compatible model list: `hannah-auto` plus `<provider>/<model>` for each usable model. |
+| `POST /v1/chat/completions` | OpenAI-compatible chat completions with `"stream": true` over SSE, tool calls (returned for the caller to run), `hannah-auto` routing, normalized errors and the daily budget. Text content only. |
+| `GET /v1/usage` | Today's estimated spend and budget for this credential. |
 | `POST /api/agent` | One agent step: messages plus JSON-schema tools in; reply, tool calls, emotion, model, provider, latency and usage out. |
 | `POST /api/chat` | Plain chat (user and assistant messages only); returns `{ reply, emotion }`. |
 | `POST /api/tts` | Text plus `en`, `hi` or `mr` → WAV through Mithi. |
@@ -610,7 +625,16 @@ There are two ways to authenticate:
 | `GET /api/presence` | A short status line for the UI. |
 | `POST /mcp` | MCP Streamable HTTP (when enabled; uses `MCP_API_TOKEN`). |
 
-Example:
+Use any OpenAI SDK by pointing it at `/v1`:
+
+```bash
+curl -s http://localhost:3001/v1/chat/completions \
+  -H "X-Groq-API-Key: $GROQ_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"hannah-auto","stream":true,"messages":[{"role":"user","content":"Hello, HANNAH!"}]}'
+```
+
+The app's own chat route:
 
 ```bash
 curl -s http://localhost:3001/api/chat \
@@ -720,6 +744,9 @@ Treat these as design work in progress, not features. In particular, **end-to-en
 **Known gaps:**
 
 - Saved automations don't run yet.
+- Reminders alert only while HANNAH is open; background delivery needs native local notifications.
+- **Stop** takes effect before the next step; a model request already in flight finishes first.
+- Spending budgets live in server memory and reset on restart or across serverless instances.
 - The Marketplace has no third-party listings.
 - iOS needs Apple signing for an installable build.
 - With `VITE_AVATAR_MODEL_URL` unset, the 7.4 MB avatar can stall slow devices on first load.

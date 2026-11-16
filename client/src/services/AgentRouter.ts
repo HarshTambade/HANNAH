@@ -15,7 +15,7 @@ export const defaultAgentProfiles: Record<string, AgentProfile> = {
   default: { name: "default", modelTier: "low-cost cloud", allowedTools: "all", maxIterations: 8, timeoutMs: 30000 },
   chat: { name: "chat", modelTier: "low-cost cloud", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
   code: { name: "code", modelTier: "high-capability cloud", allowedTools: ["list_app_files", "read_app_file", "write_app_file"], maxIterations: 12, timeoutMs: 60000 },
-  system: { name: "system", modelTier: "low-cost cloud", allowedTools: ["get_device_status", "get_battery_status", "open_app", "toggle_setting", "list_app_files", "read_app_file", "write_app_file", "delete_app_file"], maxIterations: 6, timeoutMs: 30000 },
+  system: { name: "system", modelTier: "low-cost cloud", allowedTools: ["get_device_status", "get_battery_status", "open_app", "toggle_setting", "list_app_files", "read_app_file", "write_app_file", "delete_app_file", "create_reminder", "list_reminders", "cancel_reminder"], maxIterations: 6, timeoutMs: 30000 },
   research: { name: "research", modelTier: "high-capability cloud", allowedTools: ["list_app_files", "read_app_file"], maxIterations: 10, timeoutMs: 90000 },
   maintenance: { name: "maintenance", modelTier: "local", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
 };
@@ -55,7 +55,7 @@ export class RouterAgent {
     const text = prompt.toLowerCase();
     if (/code|function|bug|refactor|typescript|python/.test(text)) return "code_generation";
     if (/research|search|compare|analyze|latest/.test(text)) return "research";
-    if (/system|device|battery|file|open app/.test(text)) return "system_operation";
+    if (/system|device|battery|file|open app|remind|reminder|alarm|schedule/.test(text)) return "system_operation";
     if (/maintain|cleanup|optimize|audit/.test(text)) return "maintenance";
     return "quick_chat";
   }

@@ -3,7 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { useBrowserLLM } from "use-browser-llm";
 import {
   ArrowUp, Bookmark, BookmarkCheck, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
-  RotateCcw, Settings2, ShieldAlert, Smartphone, Speaker, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
+  RotateCcw, Settings2, ShieldAlert, Smartphone, Speaker, Square, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
 } from "lucide-react";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
@@ -63,10 +63,11 @@ const modeDetails: Record<InferenceMode, { label: string; description: string; i
 };
 
 function modelLabel(model: string) {
-  if (model === "openai/gpt-oss-120b") return "GPT-OSS 120B · Groq primary";
-  if (model === "openai/gpt-oss-20b") return "GPT-OSS 20B · Groq fallback";
-  if (model === "llama-3.3-70b-versatile") return "Llama 3.3 70B · Groq Enterprise";
-  if (model === "llama-3.1-8b-instant") return "Llama 3.1 8B · Groq Enterprise";
+  if (model === "auto") return "Auto · HANNAH picks per message";
+  if (model === "openai/gpt-oss-120b") return "GPT-OSS 120B";
+  if (model === "openai/gpt-oss-20b") return "GPT-OSS 20B";
+  if (model === "llama-3.3-70b-versatile") return "Llama 3.3 70B";
+  if (model === "llama-3.1-8b-instant") return "Llama 3.1 8B Instant";
   return model;
 }
 
@@ -199,6 +200,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [modelDownloadProgress, setModelDownloadProgress] = useState(0);
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Emergency stop for the running agent turn.
+  const stopRef = useRef<AbortController | null>(null);
   const callLogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const voiceSessionRef = useRef<(() => Promise<void> | void) | null>(null);
@@ -301,7 +304,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         } catch {
           storedModel = null;
         }
-        setCloudModel(models.includes(storedModel || "") ? storedModel! : data.defaultModel || models[0] || "");
+        setCloudModel(storedModel === "auto" || models.includes(storedModel || "") ? storedModel! : data.defaultModel || models[0] || "");
       } catch (error) {
         if (active) {
           setApiStatus("misconfigured");
@@ -452,7 +455,10 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         const response = await runMobileAgentTurn(content, publishActivity);
         result = parseAIResponse(response);
       } else {
+        const controller = new AbortController();
+        stopRef.current = controller;
         result = await runAgentTurn({
+          signal: controller.signal,
           mode: effectiveMode,
           providerId: cloudProviderId,
           model: cloudModel || undefined,
@@ -525,6 +531,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
       }
     } finally {
+      stopRef.current = null;
       setIsLoading(false);
       setAgentActivity(null);
       isSubmittingTurnRef.current = false;
@@ -926,9 +933,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
                 >
                   {cloudModels.length === 0
                     ? <option value="">Waiting for server model settings…</option>
-                    : cloudModels.map((model) => <option key={model} value={model}>{modelLabel(model)}</option>)}
+                    : [<option key="auto" value="auto">Auto: HANNAH picks for each message</option>, ...cloudModels.map((model) => <option key={model} value={model}>{modelLabel(model)}</option>)]}
                 </select>
-                <p className="mt-1.5 text-xs leading-relaxed text-slate-500">Groq is the default. Other providers appear after their server-side credentials are configured. Model names load from the selected provider when its API supports model discovery.</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{cloudModel === "auto" ? "Auto sends quick messages to a fast, light model and harder coding, research or reasoning to a stronger one. The Dashboard shows which models answered." : "Groq is the default. Other providers appear after their server-side credentials are configured. Model names load from the selected provider when its API supports model discovery."}</p>
               </div>
             )}
 
@@ -1274,6 +1281,17 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             maxLength={4000}
             className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-3 py-2.5 text-base leading-relaxed sm:text-sm text-ink outline-none placeholder:text-slate-400"
           />
+          {isLoading && stopRef.current ? (
+            <button
+              type="button"
+              onClick={() => stopRef.current?.abort()}
+              aria-label="Stop HANNAH"
+              title="Stop: HANNAH won't start any more steps"
+              className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink text-white transition hover:bg-slate-700"
+            >
+              <Square size={14} fill="currentColor" />
+            </button>
+          ) : (
           <button
             type="submit"
             disabled={!input.trim() || isLoading || !canSend}
@@ -1282,6 +1300,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           >
             <ArrowUp size={17} strokeWidth={2.2} />
           </button>
+          )}
         </form>
         <p className="mt-1.5 truncate text-center text-[13px] text-slate-500">
           {effectiveMode === "cloud"

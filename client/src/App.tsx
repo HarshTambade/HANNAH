@@ -10,6 +10,7 @@ import AvatarScene, { type AvatarMotion } from "./components/AvatarScene";
 import AppShell, { type AppSection } from "./components/AppShell";
 import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
+import { startReminderScheduler } from "./services/ReminderService";
 import { clearApiSession, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
 import type { Emotion, InferenceMode } from "./types";
 
@@ -61,6 +62,9 @@ export default function App() {
       window.history.pushState(null, "", url);
     }
   }, []);
+
+  // Reminders fire while the app is open, on any screen.
+  useEffect(() => startReminderScheduler(), []);
 
   useEffect(() => {
     const onPop = () => {

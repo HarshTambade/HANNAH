@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Brain, Cpu, LayoutDashboard, MessageSquare, Settings2, Workflow } from "lucide-react";
+import { ReminderToasts } from "./Reminders";
 
 export type AppSection = "conversation" | "companion" | "models" | "accountability" | "automations" | "settings";
 
@@ -53,6 +54,7 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
         </div>
       </header>
       <div className={`relative z-10 ${fill ? "flex min-h-0 flex-1 flex-col" : ""}`}>{children}</div>
+      <ReminderToasts />
     </div>
   );
 }

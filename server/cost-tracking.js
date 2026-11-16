@@ -70,7 +70,7 @@ function tokenUsageMiddleware(req, res, next) {
   const originalJson = res.json.bind(res);
   res.json = function patchedJson(body) {
     const usage = res.locals?.tokenUsage;
-    if (usage && (req.path === "/chat" || req.path === "/agent")) {
+    if (usage && (req.path === "/chat" || req.path === "/agent" || req.path === "/chat/completions")) {
       const record = {
         timestamp: new Date().toISOString(),
         path: req.path,

@@ -22,6 +22,12 @@
       }
     },
     {
+      "source": "/v1/(.*)",
+      "destination": {
+        "service": "server"
+      }
+    },
+    {
       "source": "/api/(.*)",
       "destination": {
         "service": "server"

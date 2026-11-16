@@ -3,12 +3,24 @@ import { Check, ShieldAlert, ShieldCheck } from "lucide-react";
 import { ConfigAuditLog } from "../services/ConfigAuditLog";
 import { PersonaKernel } from "../services/PersonaKernel";
 import { GUARDIAN_EVENT, GuardianAgent, type GuardianLogEntry, type Strictness } from "../services/GuardianAgent";
+import { AGENT_RUNS_EVENT, AgentRunLog, type AgentRun, type RunStatus } from "../services/AgentRunLog";
 import { PluginLoader } from "../services/PluginLoader";
 import type { InstalledPlugin } from "../services/PluginManifest";
 import MemoryPanel from "./MemoryPanel";
 import { PersonalizationEngine } from "../services/PersonalizationEngine";
 import { DynamicFewShotInjector } from "../services/DynamicFewShotInjector";
 import { OnDeviceLoRAService } from "../services/OnDeviceLoRAService";
+
+const runStatus: Record<RunStatus, { label: string; className: string }> = {
+  running: { label: "Running", className: "bg-sky-100 text-sky-800" },
+  succeeded: { label: "Done", className: "bg-emerald-100 text-emerald-800" },
+  failed: { label: "Failed", className: "bg-rose-100 text-rose-800" },
+  stopped: { label: "Stopped by you", className: "bg-slate-200 text-slate-700" },
+  declined: { label: "You declined", className: "bg-amber-100 text-amber-900" },
+  blocked: { label: "Guardian blocked", className: "bg-rose-100 text-rose-800" },
+  interrupted: { label: "Interrupted", className: "bg-slate-200 text-slate-700" },
+};
+const stepLabel = { ok: "ran", failed: "failed", declined: "declined", blocked: "blocked" } as const;
 
 const strictnessHelp: Record<Strictness, string> = {
   permissive: "Blocks known attack patterns only. Every change still needs your approval.",
@@ -44,6 +56,13 @@ export default function AgentAccountabilityDashboard() {
     const refresh = () => setGuardianLog(GuardianAgent.log());
     window.addEventListener(GUARDIAN_EVENT, refresh);
     return () => window.removeEventListener(GUARDIAN_EVENT, refresh);
+  }, []);
+
+  const [runs, setRuns] = useState<AgentRun[]>(() => AgentRunLog.list());
+  useEffect(() => {
+    const refresh = () => setRuns(AgentRunLog.list());
+    window.addEventListener(AGENT_RUNS_EVENT, refresh);
+    return () => window.removeEventListener(AGENT_RUNS_EVENT, refresh);
   }, []);
 
   const blocked = guardianLog.filter((entry) => !entry.allowed).length;
@@ -133,6 +152,29 @@ export default function AgentAccountabilityDashboard() {
               )}
             </div>
           </div>
+        </Panel>
+
+        <Panel title="Agent runs" className="lg:col-span-2" aside={<span className="pill-badge">{runs.length} recent</span>}>
+          {runs.length === 0 ? (
+            <p className="text-sm text-slate-500">No runs yet. Each chat request HANNAH works on appears here with every tool step and how it ended.</p>
+          ) : (
+            <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+              {runs.slice(0, 20).map((run) => (
+                <li key={run.id} className="py-2.5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="min-w-0 flex-1 truncate text-sm text-ink">{run.objective || "Untitled request"}</p>
+                    <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${runStatus[run.status].className}`}>{runStatus[run.status].label}</span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {new Date(run.startedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    {run.model ? ` · ${run.model}` : ""}
+                    {run.steps.length ? ` · ${run.steps.map((step) => `${step.tool.replaceAll("_", " ")} ${stepLabel[step.outcome]}`).join(", ")}` : " · no tools used"}
+                  </p>
+                  {run.error && <p className="mt-0.5 text-xs text-rose-700">{run.error}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
 
         <Panel title="What HANNAH remembers" tone="mint">

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Server, Trash2 } from "lucide-react";
-import { apiUrl, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
+import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Server, Trash2, Wallet } from "lucide-react";
+import { apiFetch, apiUrl, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
+import { DAILY_BUDGET_KEY } from "../services/LLMRouter";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
 import { MemoryService } from "../services/MemoryService";
@@ -46,6 +47,34 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
   // Guests connect with only their Groq key; removing it ends the session.
   const usingAccessToken = Boolean(getApiAccessToken());
   const [notice, setNotice] = useState("");
+  const [budgetInput, setBudgetInput] = useState(() => {
+    try { return window.localStorage.getItem(DAILY_BUDGET_KEY) || ""; } catch { return ""; }
+  });
+  const [usage, setUsage] = useState<{ spentUsd: number; capUsd: number | null; remainingUsd: number | null } | null>(null);
+  const loadUsage = async (cap = budgetInput) => {
+    try {
+      const response = await apiFetch(apiUrl("/v1/usage"), { headers: cap ? { "X-HANNAH-Daily-Budget": cap } : {}, signal: AbortSignal.timeout(5_000) });
+      if (response.ok) setUsage(await response.json());
+    } catch {
+      setUsage(null);
+    }
+  };
+  useEffect(() => { void loadUsage(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveBudget = (event: FormEvent) => {
+    event.preventDefault();
+    const value = budgetInput.trim();
+    const amount = Number(value);
+    if (value && (!Number.isFinite(amount) || amount <= 0 || amount > 10_000)) {
+      setNotice("Enter a daily limit between $0.01 and $10,000, or leave it empty for no limit.");
+      return;
+    }
+    try {
+      if (value) window.localStorage.setItem(DAILY_BUDGET_KEY, String(amount));
+      else window.localStorage.setItem(DAILY_BUDGET_KEY, "");
+    } catch { /* still applies this visit */ }
+    setNotice(value ? `Daily limit set to $${amount.toFixed(2)}. HANNAH stops paid requests once it's reached and prefers lighter models near it.` : "Daily limit removed.");
+    void loadUsage(value);
+  };
   const [chaosEnabled, setChaosEnabled] = useState(ChaosEngine.isEnabled());
   const [degraded, setDegraded] = useState<DegradedState>(ChaosEngine.getDegraded());
 
@@ -155,6 +184,24 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
           {hasGroqKey && <button type="button" onClick={() => { if (!usingAccessToken) { onDisconnect(); return; } setSessionGroqKey(""); onGroqKeyChange(""); setHasGroqKey(false); setNotice("Groq key removed."); }} className="btn-ghost" title={usingAccessToken ? undefined : "Removing your key disconnects this tab"}>Remove</button>}
         </form>
         <button type="button" onClick={onDisconnect} className="btn-outline mt-5 text-rose-600 hover:!border-rose-300 hover:!text-rose-700"><LogOut size={15} /> Disconnect this tab</button>
+      </Section>
+
+      <Section title="Spending" description="An estimate from list prices for the tokens HANNAH used today. Free tiers and unpriced models count as $0. The server enforces the limit for this key or token.">
+        <dl className="space-y-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="flex items-center gap-2 text-slate-500"><Wallet size={15} /> Spent today</dt>
+            <dd className="font-medium text-ink">{usage ? `$${usage.spentUsd.toFixed(4)}${usage.capUsd !== null ? ` of $${usage.capUsd.toFixed(2)}` : ""}` : "—"}</dd>
+          </div>
+        </dl>
+        <form onSubmit={saveBudget} className="mt-4 flex gap-2">
+          <label htmlFor="daily-budget" className="sr-only">Daily spending limit in US dollars</label>
+          <div className="flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-white pl-3 focus-within:border-brand-300">
+            <span className="text-sm text-slate-500">$</span>
+            <input id="daily-budget" inputMode="decimal" value={budgetInput} onChange={(event) => setBudgetInput(event.target.value)} placeholder="No daily limit" className="min-w-0 flex-1 bg-transparent px-2 py-2 text-base text-ink outline-none placeholder:text-slate-400 sm:text-sm" />
+            <span className="pr-3 text-xs text-slate-500">per day</span>
+          </div>
+          <button type="submit" className="btn-outline">Save</button>
+        </form>
       </Section>
 
       <Section title="Your data" description="Stored only in this browser’s local storage. Nothing here is uploaded except the messages and saved memories sent with each chat request.">
