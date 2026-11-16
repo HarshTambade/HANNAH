@@ -30,10 +30,10 @@ import {
 import FeedbackModal from "./FeedbackModal";
 import FirstSessionCoach from "./FirstSessionCoach";
 import TaskPanel from "./TaskPanel";
-import { SideEffectLedger, type SideEffectEntry } from "../services/SideEffectLedger";
 import PricingModal from "./PricingModal";
 import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
+import HITLApprovalCard from "./HITLApprovalCard";
 
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
 const welcomeMessage: ChatMessage = {
@@ -114,7 +114,6 @@ type CloudProviderOption = { id: string; label: string; local: boolean; configur
 
 export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, initialMode = "cloud" }: ChatUIProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage]);
-  const [sideEffects, setSideEffects] = useState<SideEffectEntry[]>(() => SideEffectLedger.list());
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<InferenceMode>(initialMode);
   const [cloudProviders, setCloudProviders] = useState<CloudProviderOption[]>([]);
@@ -166,12 +165,6 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       document.removeEventListener("visibilitychange", handleVisibility);
       trackEvent("session_duration", { seconds: Math.round((Date.now() - startedAt) / 1000) });
     };
-  }, []);
-  useEffect(() => {
-    const refresh = () => setSideEffects(SideEffectLedger.pendingUndoable());
-    refresh();
-    const timer = window.setInterval(refresh, 1000);
-    return () => window.clearInterval(timer);
   }, []);
   const [nativeStatus, setNativeStatus] = useState<OfflineModelStatus>("checking");
   const [isPreparingNative, setIsPreparingNative] = useState(false);
@@ -1017,27 +1010,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             onSuggestion={(suggestion) => setInput(suggestion)}
           />
           <TaskPanel />
-          {sideEffects.length > 0 && (
-            <div className="mx-4 mb-3 rounded-xl border border-amber-100 bg-amber-50 p-3 sm:mx-8 shadow-soft">
-              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-amber-600">Undo available</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {sideEffects.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => {
-                      SideEffectLedger.undo(entry.id);
-                      setSideEffects(SideEffectLedger.pendingUndoable());
-                      void fetch(apiUrl("/api/undo"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: entry.id }) }).catch(() => undefined);
-                    }}
-                    className="inline-flex items-center gap-1 rounded-lg border border-amber-200 px-2 py-1 text-[8px] text-amber-600"
-                  >
-                    Undo {entry.action}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <HITLApprovalCard />
           {messages.map((message, index) => {
             const isUser = message.role === "user";
             const isSystem = message.role === "system";

@@ -560,5 +560,113 @@ textarea {
   min-height: 100vh;
   position: relative;
 }
+
+/* ===== Phase 24: Performance & Accessibility Utilities ===== */
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ping,
+  [animate-ping],
+  .animate-pulse,
+  [animate-pulse] {
+    animation: none !important;
+  }
+  .status-dot {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01s !important;
+    transition-delay: 0s !important;
+  }
+}
+
+/* Glassmorphism optimization - reduced backdrop-filter on mobile and for large areas */
+@media (max-width: 768px) {
+  .chat-glass,
+  .glass-card-strong {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+}
+
+/* High contrast mode support */
+@media (forced-colors: active) {
+  .bento-card {
+    border: 1px solid CanvasText;
+  }
+  .stat-big {
+    color: CanvasText !important;
+  }
+}
+
+/* Focus-visible for keyboard navigation */
+.btn-ghost:focus-visible,
+.btn-outline:focus-visible,
+.btn-primary:focus-visible,
+button:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+}
+
+/* Skip to content link for keyboard users */
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 0.75rem 1rem;
+  z-index: 10000;
+  text-decoration: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  font-weight: 600;
+}
+.skip-to-content:focus {
+  top: 0;
+}
+
+/* ARIA live region styling */
+[aria-live="polite"],
+[aria-live="assertive"] {
+  position: relative;
+}
+
+/* Ensure good contrast on glassmorphic backgrounds */
+.glass-text {
+  color: #0f172a;
+  font-weight: 500;
+}
+
+/* HITL approval card animation */
+.hitl-card-enter {
+  animation: slideInFade 0.3s ease-out forwards;
+}
+@keyframes slideInFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduce scroll-jank on glass containers */
+.no-backdrop {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* High contrast focus rings */
+.focus-ring-2:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
 }
 

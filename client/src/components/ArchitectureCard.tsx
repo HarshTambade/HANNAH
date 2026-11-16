@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Cpu, Brain, Server, Activity } from "lucide-react";
 
 type Node = {
@@ -5,6 +6,34 @@ type Node = {
   sub: string;
   icon: React.ReactNode;
   color: "purple" | "blue" | "mint" | "peach";
+  active?: boolean;
+};
+
+const COLOR_MAP: Record<string, string> = {
+  purple: "border-purple-200 bg-purple-50 text-purple-700",
+  blue: "border-blue-200 bg-blue-50 text-blue-700",
+  mint: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  peach: "border-orange-200 bg-orange-50 text-orange-700",
+};
+
+const getActiveProvider = (): "cloud" | "local" | "offline" => {
+  if (typeof window === "undefined") return "offline";
+  try {
+    const stored = window.localStorage.getItem("shanaya.cloudProvider");
+    const mode = window.localStorage.getItem("shanaya.inferenceMode");
+    if (mode === "webllm" || mode === "native" || mode === "ollama") return "local";
+    if (stored === "groq" || stored === "ollama" || !stored) return "cloud";
+    return "cloud";
+  } catch {
+    return "cloud";
+  }
+};
+
+const ACTIVE_COLORS: Record<string, string> = {
+  purple: "border-purple-400 bg-purple-100 text-purple-800 shadow-[0_0_15px_rgba(139,92,246,0.4)]",
+  blue: "border-blue-400 bg-blue-100 text-blue-800 shadow-[0_0_15px_rgba(59,130,246,0.4)]",
+  mint: "border-emerald-400 bg-emerald-100 text-emerald-800 shadow-[0_0_15px_rgba(16,185,129,0.4)]",
+  peach: "border-orange-400 bg-orange-100 text-orange-800 shadow-[0_0_15px_rgba(253,186,116,0.4)]",
 };
 
 const NODES: Node[] = [
@@ -40,14 +69,19 @@ const NODES: Node[] = [
   },
 ];
 
-const COLOR_MAP: Record<string, string> = {
-  purple: "border-purple-200 bg-purple-50 text-purple-700",
-  blue: "border-blue-200 bg-blue-50 text-blue-700",
-  mint: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  peach: "border-orange-200 bg-orange-50 text-orange-700",
-};
-
 export default function ArchitectureCard() {
+  const [activeProvider, setActiveProvider] = useState<"cloud" | "local" | "offline">("cloud");
+
+  useEffect(() => {
+    setActiveProvider(getActiveProvider());
+    const handler = () => setActiveProvider(getActiveProvider());
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+
+  const isCloudActive = activeProvider === "cloud";
+  const isLocalActive = activeProvider === "local";
+
   return (
     <div className="bento-card span-2-2 relative overflow-hidden">
       {/* Decorative gradient orb behind center node */}
@@ -87,27 +121,41 @@ export default function ArchitectureCard() {
             const radius = 110;
             const x = Math.cos((angle * Math.PI) / 180) * radius;
             const y = Math.sin((angle * Math.PI) / 180) * radius;
-            const colorClass = COLOR_MAP[node.color];
+            const baseColor = COLOR_MAP[node.color];
+            const activeColor = ACTIVE_COLORS[node.color];
+
+            // Determine if this node is active based on provider
+            const isNodeActive = (node.label === "Multi-Agent Router" && isCloudActive) ||
+              (node.label === "Local Inference" && isLocalActive) ||
+              (node.label === "Memory Evolution" && isLocalActive) ||
+              (node.label === "Kernel Senses") || // always active
+              (node.label === "MCP Tools"); // always active
 
             return (
               <div
                 key={i}
-                className="absolute flex flex-col items-center gap-1 transition-transform duration-300 hover:scale-110 group"
+                className={`absolute flex flex-col items-center gap-1 transition-all duration-300 group ${
+                  isNodeActive ? activeColor : baseColor
+                } ${isNodeActive ? "shadow-lg" : "shadow-soft"}`}
                 style={{ left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)` }}
+                role="button"
+                tabIndex={0}
+                aria-label={`${node.label}: ${node.sub}`}
+                aria-pressed={isNodeActive}
               >
-                <div className={`flex items-center justify-center h-10 w-10 rounded-full border ${colorClass} shadow-soft group-hover:border-${node.color}-400 group-hover:bg-white/90`}>
+                <div className="flex items-center justify-center h-10 w-10 rounded-full border ${baseColor} group-hover:border-${node.color}-400 group-hover:bg-white/90">
                   {node.icon}
                 </div>
-                <div className={`mt-2 text-center whitespace-nowrap text-[10px] font-bold ${node.color === "purple" ? "text-purple-700" : node.color === "blue" ? "text-blue-700" : node.color === "mint" ? "text-emerald-700" : "text-orange-700"}`}>
+                <div className={`mt-2 text-center whitespace-nowrap text-[10px] font-bold ${isNodeActive ? "" : "opacity-70"}`}>
                   {node.label}
                 </div>
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-px h-4 bg-slate-200 group-hover:bg-${node.color}-200" />
+                <div className={`absolute -top-8 left-1/2 -translate-x-1/2 w-px h-4 bg-slate-200 group-hover:bg-${node.color}-200`} />
               </div>
             );
           })}
         </div>
 
-        {/* Connection lines from center to nodes (drawn as SVG overlay) */}
+        {/* Connection lines from center to nodes */}
         <svg className="absolute inset-0 pointer-events-none w-full h-full" style={{ overflow: "visible" }}>
           {NODES.map((_node, i) => {
             const angle = (i / NODES.length) * 360;
