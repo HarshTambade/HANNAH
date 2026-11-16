@@ -51,8 +51,11 @@ jobs:
       - name: P0 debt regression check
         run: |
           set -euo pipefail
-          # Fail if any P0 debt regression is detected (for example a HITL bypass).
-          if grep -Rni "HITL bypass\|bypass.*approval\|skip.*confirmation" client/src server scripts backend; then
+          # Fail if code adds a way around Guardian/HITL approval, such as a
+          # skipConfirmation flag, a bypassApproval helper, or a *_BYPASS env switch.
+          # Detection regexes and prompt text that merely mention "bypass" are fine.
+          if grep -RniE --exclude-dir=node_modules 'hitl[_-]?bypass|bypass[_-]?(hitl|approval|confirm)|skip[_-]?(hitl|approval|confirm)|(approval|confirm(ation)?)[_-]?bypass' client/src server scripts backend \
+            || grep -RnE --exclude-dir=node_modules '\b[A-Z][A-Z0-9_]*_BYPASS\b' client/src client/.env.example server scripts backend; then
             echo "P0 debt regression detected" >&2
             exit 1
           fi

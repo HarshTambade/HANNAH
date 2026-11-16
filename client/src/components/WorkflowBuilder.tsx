@@ -95,7 +95,7 @@ function BuilderCanvas() {
   return (
     <main className="relative z-10 mx-auto flex max-w-6xl flex-col px-4 pb-12 pt-6 sm:px-6 sm:pt-8">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Automations</h1><p className="mt-1 text-sm text-slate-500">Sketch a routine as connected steps. Tool actions still ask for your approval.</p></div>
+        <div><h1 className="display-title text-[clamp(2.2rem,5vw,3.5rem)]">Automations</h1><p className="mt-1 text-sm text-slate-500">Sketch a routine as connected steps. Tool actions still ask for your approval.</p></div>
         <div className="flex items-center gap-2"><button className="btn-outline" onClick={() => setShowJson((value) => !value)}><GitBranch size={15} /> {showJson ? "Hide JSON" : "View JSON"}</button><button className="btn-primary" onClick={save}><Save size={15} /> Save workflow</button></div>
       </header>
       <div className="mb-3 flex flex-wrap items-center gap-3"><label className="text-xs font-semibold text-slate-500">Workflow name <input value={name} onChange={(event) => setName(event.target.value)} className="ml-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm text-ink outline-none focus:border-violet-300" /></label><p className="text-[11px] text-slate-500">Connect nodes left to right. Actions that affect your device still require approval.</p></div>

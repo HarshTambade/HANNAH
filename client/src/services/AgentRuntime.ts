@@ -5,7 +5,6 @@ import { memoriesForPrompt } from "./MemoryStore";
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
 import { RouterAgent, selectToolsForProfile, defaultAgentProfiles } from "./AgentRouter";
-// SubscriptionService removed - app is 100% free with BYOK (Bring Your Own Key)
 import { MarketplaceService } from "./MarketplaceService";
 import { DynamicFewShotInjector } from "./DynamicFewShotInjector";
 import { ChaosEngine } from "./ChaosEngine";
@@ -170,6 +169,7 @@ export async function runAgentTurn(options: {
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")
     .map(({ role, content }) => ({ role, content: role === "user" ? screenIncomingPrompt(content) : content }));
   const memories = memoriesForPrompt();
+  const latestUserRequest = [...options.messages].reverse().find((message) => message.role === "user")?.content.slice(0, 500);
   let preferredMode = options.mode;
   const meta: AgentStepMeta = {};
   const completeTurn = (reply: AgentReply): AgentReply => (Object.keys(meta).length ? { ...reply, meta } : reply);
@@ -245,7 +245,7 @@ export async function runAgentTurn(options: {
         if (ChaosEngine.consume("tool-timeout")) {
           throw new Error(`Simulated timeout: ${formatToolName(tool.name)} did not respond. The circuit breaker recorded the failure.`);
         }
-        result = await executeHANNAHTool(tool, call.arguments);
+        result = await executeHANNAHTool(tool, call.arguments, { intent: latestUserRequest });
         toolCircuitBreaker.recordSuccess(tool.name);
       } catch (error) {
         if (error instanceof HITLDeniedError) return completeTurn({ reply: error.message, emotion: "neutral" });

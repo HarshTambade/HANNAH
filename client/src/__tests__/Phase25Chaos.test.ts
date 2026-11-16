@@ -12,7 +12,6 @@ vi.mock("../services/DeviceTools", () => ({
   executeHANNAHTool: async (tool: { execute: (args: Record<string, unknown>) => Promise<unknown> }, args: Record<string, unknown>) => tool.execute(args),
 }));
 vi.mock("../services/MobileAgent", () => ({ getNativeMemoryTools: async () => [] }));
-vi.mock("../services/SubscriptionService", () => ({ SubscriptionService: { assertCanSend: vi.fn(), recordMessage: vi.fn() } }));
 
 import { runAgentTurn } from "../services/AgentRuntime";
 import { ChaosEngine } from "../services/ChaosEngine";

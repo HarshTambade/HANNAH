@@ -45,7 +45,6 @@ test("sends a chat message and renders the returned emotion in the WebGL avatar"
 
   await page.addInitScript(() => {
     window.localStorage.setItem("hannah.onboarding.v1", "complete");
-    window.localStorage.setItem("hannah.subscription.v1", JSON.stringify({ tier: "premium", day: "2026-11-15", used: 0 }));
   });
   await page.goto("/");
   const webglAvailable = await page.evaluate(() => {
@@ -75,7 +74,7 @@ test("sends a chat message and renders the returned emotion in the WebGL avatar"
   await page.getByRole("navigation", { name: "App navigation" }).getByRole("button", { name: "Dashboard" }).click();
   await expect(page.getByRole("heading", { name: "Where you left off" })).toBeVisible();
   await expect(page.getByText("I had a long day. Can we talk?")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Usage" }).getByText("1", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "Overview" }).getByText("1", { exact: true }).first()).toBeVisible();
 
   // History survives a reload because the token is kept for this tab.
   await page.reload();
@@ -91,4 +90,32 @@ test("a rejected access token is reported before entering the app", async ({ pag
   await page.getByRole("button", { name: "Continue to HANNAH" }).click();
   await expect(page.getByRole("alert")).toContainText("access token was not accepted");
   await expect(page.getByRole("textbox", { name: "Message HANNAH" })).toHaveCount(0);
+});
+
+test("a file write waits for in-app approval and declining changes nothing", async ({ page }) => {
+  let agentCalls = 0;
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/providers") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ defaultProvider: "groq", providers: [{ id: "groq", label: "Groq", local: false, configured: true }] }) });
+    if (url.pathname === "/api/models") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ provider: "Groq", defaultModel: "openai/gpt-oss-120b", models: ["openai/gpt-oss-120b"] }) });
+    if (url.pathname === "/api/agent") {
+      agentCalls += 1;
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { content: "", tool_calls: [{ id: "write-1", type: "function", function: { name: "write_app_file", arguments: JSON.stringify({ path: "plan.md", content: "Monday: review" }) } }] } }) });
+    }
+    return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+  });
+  await page.addInitScript((token) => sessionStorage.setItem("hannah.session.apiToken", token), apiToken);
+  await page.goto("/#/chat");
+
+  await page.getByRole("textbox", { name: "Message HANNAH" }).fill("Save my study plan to a file");
+  await page.getByRole("button", { name: "Send message" }).click();
+
+  const approval = page.getByRole("alertdialog", { name: "Write a file" });
+  await expect(approval).toBeVisible();
+  await expect(approval).toContainText("plan.md");
+  await approval.getByRole("button", { name: "Decline" }).click();
+
+  await expect(approval).toHaveCount(0);
+  await expect(page.getByText("Action cancelled. HANNAH did not make any changes.")).toBeVisible();
+  expect(agentCalls).toBe(1);
 });

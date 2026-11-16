@@ -2,18 +2,13 @@ import { createRequire } from "node:module";
 import { describe, expect, it, vi } from "vitest";
 import type { InferenceMode } from "../types";
 
-const { getDeviceTools, getNativeMemoryTools, assertCanSend, recordMessage } = vi.hoisted(() => ({
+const { getDeviceTools, getNativeMemoryTools } = vi.hoisted(() => ({
   getDeviceTools: vi.fn(() => []),
   getNativeMemoryTools: vi.fn(async () => []),
-  assertCanSend: vi.fn(),
-  recordMessage: vi.fn(),
 }));
 
 vi.mock("../services/DeviceTools", () => ({ getDeviceTools }));
 vi.mock("../services/MobileAgent", () => ({ getNativeMemoryTools }));
-vi.mock("../services/SubscriptionService", () => ({
-  SubscriptionService: { assertCanSend, recordMessage },
-}));
 vi.mock("../services/AIService", () => ({
   getNetworkStatus: vi.fn(async () => ({ connected: true })),
   resolveInferenceMode: (preferred: InferenceMode, connected: boolean) => connected ? preferred : "webllm",

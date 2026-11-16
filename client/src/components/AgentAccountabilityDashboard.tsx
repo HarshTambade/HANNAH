@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Check, ShieldAlert, ShieldCheck } from "lucide-react";
 import { ConfigAuditLog } from "../services/ConfigAuditLog";
 import { PersonaKernel } from "../services/PersonaKernel";
-import { GuardianAgent } from "../services/GuardianAgent";
+import { GUARDIAN_EVENT, GuardianAgent, type GuardianLogEntry, type Strictness } from "../services/GuardianAgent";
 import { PluginLoader } from "../services/PluginLoader";
 import type { InstalledPlugin } from "../services/PluginManifest";
 import MemoryPanel from "./MemoryPanel";
@@ -9,13 +10,43 @@ import { PersonalizationEngine } from "../services/PersonalizationEngine";
 import { DynamicFewShotInjector } from "../services/DynamicFewShotInjector";
 import { OnDeviceLoRAService } from "../services/OnDeviceLoRAService";
 
+const strictnessHelp: Record<Strictness, string> = {
+  permissive: "Blocks known attack patterns only. Every change still needs your approval.",
+  balanced: "Also blocks multi-step attempts to get around safety rules across recent actions.",
+  strict: "Also blocks high-risk actions such as deleting or overwriting files before they reach you.",
+};
+
+function Panel({ title, tone = "plain", className = "", aside, children }: { title: string; tone?: "plain" | "lavender" | "sky" | "butter" | "mint"; className?: string; aside?: ReactNode; children: ReactNode }) {
+  return (
+    <section className={`deck-frame ${className}`} aria-label={title}>
+      <div className={`deck-card tone-${tone}`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="font-display text-lg font-medium tracking-tight text-ink">{title}</h2>
+          {aside}
+        </div>
+        <div className="mt-3">{children}</div>
+      </div>
+    </section>
+  );
+}
+
 export default function AgentAccountabilityDashboard() {
   const [strictness, setStrictness] = useState(GuardianAgent.strictness);
+  const [guardianLog, setGuardianLog] = useState<GuardianLogEntry[]>(() => GuardianAgent.log());
+  const [plugins, setPlugins] = useState<InstalledPlugin[]>(() => PluginLoader.list());
   const [exampleCount, setExampleCount] = useState(() => PersonalizationEngine.rated().length);
   const [training, setTraining] = useState(false);
   const [trainingProgress, setTrainingProgress] = useState(0);
   const [trainingStatus, setTrainingStatus] = useState("");
   const styleContext = DynamicFewShotInjector.context();
+
+  useEffect(() => {
+    const refresh = () => setGuardianLog(GuardianAgent.log());
+    window.addEventListener(GUARDIAN_EVENT, refresh);
+    return () => window.removeEventListener(GUARDIAN_EVENT, refresh);
+  }, []);
+
+  const blocked = guardianLog.filter((entry) => !entry.allowed).length;
 
   async function preparePersonalization() {
     setTraining(true);
@@ -48,109 +79,112 @@ export default function AgentAccountabilityDashboard() {
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="bento-kicker">Agent accountability</h2>
-      <div className="bento-title">Trust & transparency</div>
-      <div className="bento-desc mb-6">
-        Inspect what HANNAH retains, represents, and initiates. Every change is audited.
+    <div>
+      <div className="mb-5">
+        <span className="pill-badge"><span className="pill-badge-dot"><Check size={9} strokeWidth={3} /></span>Accountability</span>
+        <h1 className="display-title mt-4 text-[clamp(2.2rem,5vw,3.5rem)]">Trust &amp; transparency</h1>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-slate-600">See what HANNAH remembers, how she adapts to you, and every action her Guardian reviewed.</p>
       </div>
 
-      <section className="bento-card glass-card-strong">
-        <div className="mb-3">
-          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">What the agent retains</h3>
-        </div>
-        <MemoryPanel />
-      </section>
-
-      <section className="bento-card glass-card-strong">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div><h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Personalization & local training</h3><p className="mt-2 max-w-2xl text-xs leading-relaxed text-slate-600">Liked, accepted, and edited responses are kept on this device. HANNAH uses a few high-rated examples to adapt tone and formatting.</p></div>
-          <span className="rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{exampleCount} style examples</span>
-        </div>
-        {styleContext && <p className="mt-3 rounded-xl border border-slate-100 bg-white/60 p-3 text-[13px] text-slate-600">{styleContext.summary}</p>}
-        <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={training} onClick={() => void preparePersonalization()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-xs font-bold text-white shadow-soft transition hover:brightness-105 disabled:opacity-50">{training ? "Preparing locally…" : "Train My HANNAH"}</button><button type="button" onClick={() => { PersonalizationEngine.clear(); setExampleCount(0); setTrainingStatus("Local style examples cleared."); }} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-600">Clear style data</button></div>
-        {training && <div className="mt-4"><div className="mb-1 flex justify-between text-xs text-slate-500"><span>Idle preparation progress</span><span>{trainingProgress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-400 transition-all" style={{ width: `${trainingProgress}%` }} /></div></div>}
-        {trainingStatus && <p role="status" className="mt-3 text-xs leading-relaxed text-slate-500">{trainingStatus}</p>}
-        <p className="mt-3 text-[11px] leading-relaxed text-slate-400">The browser prepares approved examples only. GGUF files are inference artifacts; the included Python scaffold trains a compatible source checkpoint and exports a LoRA adapter.</p>
-      </section>
-
-      <section className="bento-card glass-card-strong">
-        <div className="mb-3">
-          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">What the agent represents</h3>
-          <div className="rounded-xl border border-slate-100 bg-white/50 p-3 mt-2 text-xs leading-relaxed text-slate-600">
-            {PersonaKernel.getPromptBlock()}
-          </div>
-        </div>
-      </section>
-
-      <section className="bento-card glass-card-strong">
-        <div className="mb-3">
-          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Guardian strictness</h3>
-          <select
-            value={strictness}
-            onChange={(e) => {
-              const value = e.target.value as typeof strictness;
-              setStrictness(value);
-              GuardianAgent.setStrictness(value);
-              ConfigAuditLog.record("guardian", { strictness: value });
-            }}
-            className="mt-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 outline-none focus:border-brand-400/60"
-          >
-            <option value="permissive">Permissive</option>
-            <option value="balanced">Balanced</option>
-            <option value="strict">Strict</option>
-          </select>
-        </div>
-      </section>
-
-      <section className="bento-card glass-card-strong">
-        <div className="mb-3">
-          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Configuration audit log</h3>
-          <div className="mt-2 text-xs text-slate-600">
-            {ConfigAuditLog.list().length} changes recorded
-          </div>
-        </div>
-      </section>
-
-      <section className="bento-card glass-card-strong">
-        <div className="mb-3">
-          <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Manage plugins</h3>
-          <div className="mt-2 text-xs text-slate-600">
-            {PluginLoader.list().length} plugins installed
-          </div>
-        </div>
-        <div className="space-y-2 mt-3">
-          {PluginLoader.list().map((plugin: InstalledPlugin) => (
-            <div key={plugin.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2">
-              <div>
-                <span className="text-[11px] font-bold text-ink">{plugin.name}</span>
-                <span className="text-[9px] text-slate-500 ml-2">v{plugin.version}</span>
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+        <Panel title="Guardian" tone="sky" className="lg:col-span-2" aside={<span className="pill-badge"><ShieldCheck size={13} className="text-teal-600" /> {guardianLog.length} reviewed · {blocked} blocked</span>}>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <div>
+              <p className="text-sm leading-relaxed text-slate-700">Every tool call is checked by the Guardian before it runs. Anything that changes your device or data also needs your approval.</p>
+              <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-white/60 p-1" role="radiogroup" aria-label="Guardian strictness">
+                {(["permissive", "balanced", "strict"] as Strictness[]).map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    role="radio"
+                    aria-checked={strictness === level}
+                    onClick={() => {
+                      setStrictness(level);
+                      GuardianAgent.setStrictness(level);
+                      ConfigAuditLog.record("guardian", { strictness: level });
+                    }}
+                    className={`rounded-lg px-2 py-2 text-sm font-medium capitalize transition ${strictness === level ? "bg-ink text-white" : "text-slate-600 hover:bg-white"}`}
+                  >
+                    {level}
+                  </button>
+                ))}
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => { PluginLoader.toggle(plugin.id, !plugin.enabled); }}
-                  className={`rounded-lg px-2 py-1 text-[9px] font-bold transition ${
-                    plugin.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {plugin.enabled ? "Enabled" : "Disabled"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { PluginLoader.uninstall(plugin.id); }}
-                  className="rounded-lg px-2 py-1 text-[9px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition"
-                >
-                  Uninstall
-                </button>
-              </div>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">{strictnessHelp[strictness]}</p>
+              <p className="mt-3 text-xs text-slate-500">{ConfigAuditLog.list().length} configuration change{ConfigAuditLog.list().length === 1 ? "" : "s"} recorded</p>
             </div>
-          ))}
-          {PluginLoader.list().length === 0 && (
-            <p className="text-[10px] text-slate-500">No plugins installed. Visit the Marketplace to discover plugins.</p>
+            <div className="glass-tile max-h-72 overflow-y-auto p-2">
+              {guardianLog.length === 0 ? (
+                <p className="px-3 py-8 text-center text-sm text-slate-600">No tool calls yet. Decisions appear here as soon as HANNAH tries to use a tool.</p>
+              ) : (
+                <ul className="divide-y divide-white/60">
+                  {[...guardianLog].reverse().slice(0, 30).map((entry) => (
+                    <li key={entry.id} className="flex items-start gap-2.5 px-2 py-2">
+                      {entry.allowed ? <ShieldCheck size={15} className="mt-0.5 shrink-0 text-teal-700" /> : <ShieldAlert size={15} className="mt-0.5 shrink-0 text-rose-600" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-baseline justify-between gap-2 text-sm">
+                          <span className="truncate font-medium capitalize text-ink">{entry.tool.replaceAll("_", " ")}</span>
+                          <span className="shrink-0 text-[11px] text-slate-500">{new Date(entry.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        </p>
+                        <p className={`text-xs ${entry.allowed ? "text-slate-600" : "text-rose-700"}`}>{entry.allowed ? "Allowed" : "Blocked"} · risk {entry.score.toFixed(2)} · {entry.strictness}{entry.allowed ? "" : ` — ${entry.reason}`}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="What HANNAH remembers" tone="mint">
+          <MemoryPanel />
+        </Panel>
+
+        <Panel title="Personalization" tone="lavender" aside={<span className="pill-badge">{exampleCount} style example{exampleCount === 1 ? "" : "s"}</span>}>
+          <p className="text-sm leading-relaxed text-slate-700">Replies you like, accept or edit are kept on this device. HANNAH uses a few of the best as examples of the tone and format you prefer.</p>
+          {styleContext && <p className="mt-3 rounded-xl bg-white/60 p-3 text-sm text-slate-700">{styleContext.summary}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button type="button" disabled={training} onClick={() => void preparePersonalization()} className="inline-flex min-h-10 items-center rounded-xl bg-ink px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50">{training ? "Preparing locally…" : "Export training examples"}</button>
+            <button type="button" onClick={() => { PersonalizationEngine.clear(); setExampleCount(0); setTrainingStatus("Local style examples cleared."); }} className="min-h-10 rounded-xl bg-white/70 px-4 text-sm font-semibold text-slate-700 transition hover:bg-white">Clear style data</button>
+          </div>
+          {training && <div className="mt-4"><div className="mb-1 flex justify-between text-xs text-slate-600"><span>Idle preparation</span><span>{trainingProgress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-white/60"><div className="h-full rounded-full bg-[#2a78d6] transition-all" style={{ width: `${trainingProgress}%` }} /></div></div>}
+          {trainingStatus && <p role="status" className="mt-3 text-xs leading-relaxed text-slate-600">{trainingStatus}</p>}
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">This creates a JSONL file of your approved examples. No model weights change in the browser.</p>
+        </Panel>
+
+        <Panel title="Persona" tone="butter">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{PersonaKernel.getPromptBlock()}</p>
+        </Panel>
+
+        <Panel title="Plugins" aside={<span className="pill-badge">{plugins.length} installed</span>}>
+          {plugins.length === 0 ? (
+            <p className="text-sm text-slate-500">No plugins installed. Visit the Marketplace to add one; each is reviewed by the Guardian first.</p>
+          ) : (
+            <ul className="space-y-2">
+              {plugins.map((plugin) => (
+                <li key={plugin.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-ink">{plugin.name}</p>
+                    <p className="text-xs text-slate-500">v{plugin.version}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={plugin.enabled}
+                      aria-label={`${plugin.enabled ? "Disable" : "Enable"} ${plugin.name}`}
+                      onClick={() => { PluginLoader.toggle(plugin.id, !plugin.enabled); setPlugins(PluginLoader.list()); }}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${plugin.enabled ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}
+                    >
+                      {plugin.enabled ? "Enabled" : "Disabled"}
+                    </button>
+                    <button type="button" onClick={() => { PluginLoader.uninstall(plugin.id); setPlugins(PluginLoader.list()); }} className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">Uninstall</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-      </section>
+        </Panel>
+      </div>
     </div>
   );
 }

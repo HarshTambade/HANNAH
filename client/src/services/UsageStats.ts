@@ -72,6 +72,33 @@ export const UsageStats = {
       // Best effort.
     }
   },
+  /** Request counts per calendar day, oldest first. */
+  dailySeries(days = 30, now = Date.now()) {
+    const counts = new Map<string, number>();
+    for (const record of read()) counts.set(dayKey(record.at), (counts.get(dayKey(record.at)) ?? 0) + 1);
+    return Array.from({ length: days }, (_, index) => {
+      const time = now - (days - 1 - index) * 86_400_000;
+      const date = dayKey(time);
+      return { date, label: new Date(time).toLocaleDateString(undefined, { month: "short", day: "numeric" }), count: counts.get(date) ?? 0 };
+    });
+  },
+  /** One row per provider + model that has answered on this device. */
+  byModel() {
+    const groups = new Map<string, TurnRecord[]>();
+    for (const record of read()) {
+      if (!record.ok || (!record.model && !record.provider)) continue;
+      const key = `${record.provider ?? ""}::${record.model ?? ""}`;
+      groups.set(key, [...(groups.get(key) ?? []), record]);
+    }
+    return [...groups.values()].map((records) => ({
+      provider: records[0].provider ?? "—",
+      model: records[0].model ?? "—",
+      replies: records.length,
+      avgLatencyMs: Math.round(records.reduce((sum, record) => sum + record.latencyMs, 0) / records.length),
+      tokens: records.reduce((sum, record) => sum + (record.inputTokens ?? 0) + (record.outputTokens ?? 0), 0),
+      lastAt: Math.max(...records.map((record) => record.at)),
+    })).sort((a, b) => b.replies - a.replies);
+  },
   summary(now = Date.now()): UsageSummary {
     const records = read();
     const succeeded = records.filter((record) => record.ok);

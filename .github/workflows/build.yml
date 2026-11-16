@@ -154,10 +154,9 @@ jobs:
           ELECTRON_RELEASE_REQUESTED: ${{ env.ELECTRON_RELEASE_REQUESTED }}
           ELECTRON_RELEASE_TAG: ${{ env.ELECTRON_RELEASE_TAG }}
         run: node ../scripts/prepare-electron-release.mjs
-      - name: Install NSIS (Windows)
-        if: runner.os == 'Windows'
-        run: choco install nsis --version=3.0.4.1 -y
-      - run: npm ci
+      # cap add generates client/electron without a lockfile, so npm ci cannot run here.
+      # electron-builder downloads its own NSIS; no system install is needed.
+      - run: npm install --no-audit --no-fund
         working-directory: client/electron
       - run: npm audit --audit-level=high
         working-directory: client/electron
@@ -194,7 +193,12 @@ jobs:
           # Do not let electron-builder attempt an automatic Snap Store upload;
           # snapcraft is not installed on the runner and Snap is not required
           # for the release assets staged by this workflow.
-          npm run pack -- --publish never --config.win.target=portable --config.mac.identity=null
+          pack_args=(--publish never --config.win.target=portable)
+          # Skip macOS code signing only for unsigned builds; signed releases keep their identity.
+          if [ "$ELECTRON_RELEASE_REQUESTED" != "true" ]; then
+            pack_args+=(--config.mac.identity=null)
+          fi
+          npm run pack -- "${pack_args[@]}"
       - name: Enforce renderer and installer size targets
         working-directory: client/electron
         run: node ../scripts/check-bundle-size.mjs --strict --package-dir dist

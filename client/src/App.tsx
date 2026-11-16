@@ -129,7 +129,7 @@ export default function App() {
               aria-label="HANNAH avatar"
               data-emotion={emotion}
               data-avatar-motion={avatarMotion}
-              className="relative h-36 overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/65 shadow-soft sm:h-48 lg:h-auto lg:min-h-0"
+              className="tone-lavender relative h-36 overflow-hidden rounded-[1.75rem] border-[6px] border-white/90 shadow-[0_24px_60px_-30px_rgba(38,44,74,0.45)] sm:h-48 lg:h-auto lg:min-h-0"
             >
               <AvatarScene emotion={emotion} onMotionChange={setAvatarMotion} />
             </section>
@@ -145,7 +145,7 @@ export default function App() {
   if (screen === "accountability") {
     return (
       <AppShell {...shellProps}>
-        <div className="mx-auto max-w-4xl px-4 pb-12 pt-6 sm:px-6 sm:pt-8"><AgentAccountabilityDashboard /></div>
+        <div className="mx-auto max-w-6xl px-3 pb-12 pt-5 sm:px-6 sm:pt-8"><AgentAccountabilityDashboard /></div>
       </AppShell>
     );
   }

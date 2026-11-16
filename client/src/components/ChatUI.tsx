@@ -3,13 +3,14 @@ import { Capacitor } from "@capacitor/core";
 import { useBrowserLLM } from "use-browser-llm";
 import {
   ArrowUp, Bookmark, BookmarkCheck, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
-  RotateCcw, Settings2, Smartphone, Speaker, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
+  RotateCcw, Settings2, ShieldAlert, Smartphone, Speaker, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
 } from "lucide-react";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
 import { MemoryService } from "../services/MemoryService";
 import { notifyMemoryChanged } from "../services/MemoryStore";
 import { AgentApiError } from "../services/LLMRouter";
+import { ApprovalCenter, type ApprovalRequest } from "../services/ApprovalCenter";
 import MessageContent from "./MessageContent";
 import type { ChatMessage, Emotion, InferenceMode, SpeechLanguage } from "../types";
 import { useConnectivity } from "../services/connectivity";
@@ -179,6 +180,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     };
   }, []);
   useEffect(() => ChaosEngine.subscribe(() => setDegradedState(ChaosEngine.getDegraded())), []);
+  // While chat is open, HITL confirmations appear as in-chat approval cards.
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  useEffect(() => ApprovalCenter.attachHost(setApprovals), []);
   useEffect(() => {
     // Keep only the real conversation; transient tool/status lines are not history.
     const durable = messages.filter((message) => message.role !== "system");
@@ -367,7 +371,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   useEffect(() => {
     const target = isVirtualCallActive ? callLogRef.current : scrollRef.current;
     target?.scrollTo({ top: target.scrollHeight, behavior: "smooth" });
-  }, [messages, isLoading, error, isVirtualCallActive]);
+  }, [messages, isLoading, error, isVirtualCallActive, approvals.length]);
 
   useEffect(() => {
     if (!isVirtualCallActive || callStartedAt === null) return;
@@ -796,9 +800,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
 
   return (
     <section className={panel
-      ? "relative mx-auto flex h-full min-h-0 w-full max-w-none flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-soft-lg sm:rounded-[26px]"
+      ? "relative mx-auto flex h-full min-h-0 w-full max-w-none flex-col overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/75 shadow-[0_24px_60px_-30px_rgba(38,44,74,0.45)] backdrop-blur-xl"
       : "relative mx-auto flex max-h-[48dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-soft-lg"}>
-      <header className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3 md:px-5 bg-white/80 backdrop-blur-sm">
+      <header className="flex shrink-0 items-center justify-between border-b border-slate-200/70 bg-white/40 px-4 py-3 md:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-600">
             <Bot size={17} />
@@ -1110,6 +1114,23 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             );
           })}
 
+          {approvals.map((request) => (
+            <div key={request.id} role="alertdialog" aria-labelledby={`approval-${request.id}`} className="mx-1 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4 shadow-[0_12px_30px_-20px_rgba(180,83,9,0.5)] sm:mx-9">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-amber-600"><ShieldAlert size={16} /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">HANNAH needs your approval · Guardian checked</p>
+                  <h3 id={`approval-${request.id}`} className="mt-0.5 text-sm font-semibold text-ink">{request.title}</h3>
+                  <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">{request.message}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => ApprovalCenter.respond(request.id, true)} className="rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Approve</button>
+                    <button type="button" onClick={() => ApprovalCenter.respond(request.id, false)} className="rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-800 transition hover:bg-amber-50">Decline</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
           {(isLoading || (effectiveMode === "webllm" && localLLM.status === "loading")) && (
             <div className="flex items-center gap-2 pl-8 text-xs text-slate-500">
               <span className="typing-dot h-1.5 w-1.5 rounded-full bg-violet-300" />
@@ -1190,7 +1211,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         </div>
       )}
 
-      <div className="shrink-0 border-t border-slate-200 p-2.5 md:p-3 bg-white/80 backdrop-blur-sm">
+      <div className="shrink-0 border-t border-slate-200/70 bg-white/40 p-2.5 md:p-3">
         <div className="mx-auto flex max-w-[720px] items-center justify-between gap-2 px-1 pb-2">
           <div className="flex min-w-0 items-center gap-2">
             <select

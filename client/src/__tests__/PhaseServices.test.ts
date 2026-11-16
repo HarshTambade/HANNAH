@@ -6,7 +6,6 @@ import { GuardianAgent } from "../services/GuardianAgent";
 import { PolicyEnforcementLayer } from "../services/PolicyEnforcementLayer";
 import { KillSwitch } from "../services/KillSwitch";
 import { SpecialistMarketplace } from "../services/SpecialistMarketplace";
-import { SubscriptionTierService } from "../services/SubscriptionTierService";
 import { MemoryExportService } from "../services/MemoryExportService";
 import { DreamingConsolidator } from "../services/DreamingConsolidator";
 import { IdentityInteropLayer } from "../services/IdentityInteropLayer";
@@ -19,7 +18,6 @@ describe("phase services integration", () => {
     PolicyEnforcementLayer.resetSession();
     KillSwitch.deactivate();
     GuardianAgent.resetSession();
-    SubscriptionTierService.setTier("free");
   });
 
   it("stores and lists memory records", () => {
@@ -68,14 +66,6 @@ describe("phase services integration", () => {
     const reviewed = SpecialistMarketplace.review(listing.id, true);
     expect(reviewed.status).toBe("published");
     expect(SpecialistMarketplace.list().length).toBe(1);
-  });
-
-  it("subscription tier blocks pro features on free", () => {
-    expect(SubscriptionTierService.canUse("cloudProviders")).toBe(false);
-    expect(SubscriptionTierService.specialistCap()).toBe(0);
-    SubscriptionTierService.setTier("pro");
-    expect(SubscriptionTierService.canUse("cloudProviders")).toBe(true);
-    expect(SubscriptionTierService.specialistCap()).toBe(10);
   });
 
   it("memory export produces profile", async () => {

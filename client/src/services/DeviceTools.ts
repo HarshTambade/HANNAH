@@ -4,7 +4,7 @@ import { Device } from "@capacitor/device";
 import { Directory, Encoding, Filesystem } from "@capacitor/filesystem";
 import { Network } from "@capacitor/network";
 import type { DeviceTool as MobileClawTool } from "capacitor-mobile-claw";
-import { SafetyGuard, type SensitiveAction } from "./SafetyGuard";
+import { HITLDeniedError, SafetyGuard, type SensitiveAction } from "./SafetyGuard";
 
 export type ToolSchema = {
   type: "object";
@@ -256,10 +256,15 @@ export function getDeviceTools() {
   return deviceTools;
 }
 
-export async function executeHANNAHTool(tool: HANNAHTool, args: Record<string, unknown>) {
+/**
+ * The only way HANNAH runs a tool: GuardianAgent reviews every call, then
+ * tools that change something also need the user's explicit confirmation.
+ */
+export async function executeHANNAHTool(tool: HANNAHTool, args: Record<string, unknown>, context: { intent?: string } = {}) {
+  SafetyGuard.screen(tool.name, args, context.intent);
   if (tool.requiresApproval) {
     if (!tool.sensitive) throw new Error(`The approval-required tool "${tool.name}" has no SafetyGuard action configured.`);
-    await SafetyGuard.require(tool.sensitive, args);
+    if (!await SafetyGuard.confirm(tool.sensitive, args)) throw new HITLDeniedError();
   }
   return tool.execute(args);
 }

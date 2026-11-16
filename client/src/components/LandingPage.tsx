@@ -135,12 +135,10 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl h-[4.5rem] items-center justify-between px-5 sm:px-8 lg:px-12">
           <a href="#home" className="flex items-center gap-3" aria-label="HANNAH home">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600">
-              <Sparkles size={17} strokeWidth={1.7} />
-            </span>
+            <span className="logo-ring !h-6 !w-6" aria-hidden="true" />
             <span>
-              <span className="block font-display text-[12px] font-extrabold tracking-[0.2em] text-ink">HANNAH</span>
-              <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.2em] text-slate-500">AI companion</span>
+              <span className="block text-[15px] font-medium text-ink">HANNAH</span>
+              <span className="block text-[11px] text-slate-500">AI companion</span>
             </span>
           </a>
 
@@ -201,9 +199,9 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               HANNAH v1.0.3
             </div>
 
-            <h1 className="font-display text-[clamp(2.6rem,6vw,5.6rem)] font-extrabold leading-[1.02] tracking-[-0.06em] text-ink">
+            <h1 className="display-title text-[clamp(2.6rem,6vw,5.4rem)]">
               An AI companion
-              <span className="mt-1 block text-[clamp(2.6rem,6vw,5.6rem)] font-extrabold leading-[1.02] tracking-[-0.06em] bg-gradient-to-r from-brand-600 via-violet-600 to-amber-500 bg-clip-text pb-2 text-transparent">
+              <span className="mt-1 block text-[clamp(2.6rem,6vw,5.4rem)] bg-gradient-to-r from-brand-600 via-violet-600 to-amber-500 bg-clip-text pb-2 text-transparent">
                 that truly understands.
               </span>
             </h1>
@@ -270,19 +268,19 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               <p className="section-desc">A familiar place to think out loud, ask anything, or simply have someone thoughtful to talk to.</p>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {statCards.map(({ value, label, icon: IconName }) => {
-              const Icon = IconName === "cpu" ? ShieldCheck : IconName === "globe" ? Globe2 : Heart;
-              return (
-                <div key={label} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-soft">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600 mb-4">
-                    <Icon size={17} strokeWidth={1.7} />
+          <div className="deck-frame">
+            <div className="deck-card tone-sky grid gap-3 sm:grid-cols-3">
+              {statCards.map(({ value, label, icon: IconName }) => {
+                const Icon = IconName === "cpu" ? ShieldCheck : IconName === "globe" ? Globe2 : Heart;
+                return (
+                  <div key={label} className="glass-tile p-5">
+                    <Icon size={20} strokeWidth={1.6} className="text-slate-700" />
+                    <div className="metric-value mt-4">{value}</div>
+                    <div className="metric-sub">{label}</div>
                   </div>
-                  <div className="metric-value">{value}</div>
-                  <div className="metric-sub">{label}</div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </section>
 

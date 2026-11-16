@@ -27,10 +27,12 @@ function readCounts(): Counts {
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="bento-card">
-      <h2 className="font-display text-lg font-bold text-ink">{title}</h2>
-      {description && <p className="mt-1 text-sm leading-relaxed text-slate-500">{description}</p>}
-      <div className="mt-4">{children}</div>
+    <section className="deck-frame" aria-label={title}>
+      <div className="deck-card tone-plain">
+        <h2 className="font-display text-lg font-medium tracking-tight text-ink">{title}</h2>
+        {description && <p className="mt-1 text-sm leading-relaxed text-slate-500">{description}</p>}
+        <div className="mt-4">{children}</div>
+      </div>
     </section>
   );
 }
@@ -112,7 +114,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 px-4 pb-12 pt-6 sm:px-6 sm:pt-8">
       <div>
-        <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink">Settings</h1>
+        <h1 className="display-title text-[clamp(2.2rem,5vw,3.5rem)]">Settings</h1>
         <p className="mt-1 text-sm text-slate-500">Connection, keys, and the data HANNAH keeps in this browser.</p>
       </div>
 
