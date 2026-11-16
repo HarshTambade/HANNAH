@@ -161,7 +161,7 @@ jobs:
         working-directory: client/electron
       - run: npm audit --audit-level=high
         working-directory: client/electron
-      - run: npx cap sync @capacitor-community/electron
+      - run: npx cap sync @capawesome/capacitor-electron
         working-directory: client
       - name: Package Electron app
         working-directory: client/electron
@@ -194,7 +194,7 @@ jobs:
           # Do not let electron-builder attempt an automatic Snap Store upload;
           # snapcraft is not installed on the runner and Snap is not required
           # for the release assets staged by this workflow.
-          npm run pack -- --publish never --config.win.target=portable
+          npm run pack -- --publish never --config.win.target=portable --config.mac.identity=null
       - name: Enforce renderer and installer size targets
         working-directory: client/electron
         run: node ../scripts/check-bundle-size.mjs --strict --package-dir dist
