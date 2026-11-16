@@ -100,7 +100,7 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-brand-100 bg-brand-50 text-brand-600">
             <MessageSquarePlus size={18} />
           </span>
-          <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-brand-600">Help Shanaya grow</p>
+          <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-brand-600">Help HANNAH grow</p>
           <h2 id="feedback-title" className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-ink">Send a note.</h2>
           <p className="mt-2 text-[11px] leading-6 text-slate-500">
             Report a rough edge, ask for a feature, or tell us how the conversation felt.
@@ -113,7 +113,7 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
               </span>
               <h3 className="mt-4 font-['Manrope'] text-base font-semibold text-ink">Your note is on its way.</h3>
               <p className="mt-2 text-[11px] leading-6 text-slate-500">
-                Thank you. Feedback is reviewed by the Shanaya team and is never attached to your conversation.
+                Thank you. Feedback is reviewed by the HANNAH team and is never attached to your conversation.
               </p>
               <button
                 type="button"
@@ -155,7 +155,7 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
                 rows={5}
                 maxLength={4000}
                 required
-                placeholder="What happened, or what would make Shanaya better?"
+                placeholder="What happened, or what would make HANNAH better?"
                 className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs leading-6 text-ink outline-none transition placeholder:text-slate-400 focus:border-brand-400/60"
               />
               <div className="mt-1.5 flex items-center justify-between text-[9px] text-slate-500">

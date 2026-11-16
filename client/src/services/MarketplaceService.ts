@@ -19,7 +19,7 @@ export type MarketplaceState = {
   enabledSkillIds: string[];
 };
 
-const STORAGE_KEY = "shanaya.marketplace.v1";
+const STORAGE_KEY = "hannah.marketplace.v1";
 const packages = catalog as unknown as MarketplacePackage[];
 const packageById = new Map(packages.map((item) => [item.id, item]));
 let memoryState: MarketplaceState | null = null;
@@ -75,7 +75,7 @@ export const MarketplaceService = {
   },
 
   install(id: string): MarketplaceState {
-    if (!packageById.has(id)) throw new Error("This package is not in the Shanaya marketplace catalog.");
+    if (!packageById.has(id)) throw new Error("This package is not in the HANNAH marketplace catalog.");
     const state = readState();
     if (state.installedIds.includes(id)) return state;
     return writeState({ ...state, installedIds: [...state.installedIds, id] });

@@ -1,6 +1,6 @@
-# Shanaya API Integration Guide
+# HANNAH API Integration Guide
 
-This guide explains how to run, configure, and integrate with the Shanaya Express API. The API is the server-side boundary for cloud inference, Ollama, agent tool calls, text-to-speech proxying, desktop computer use, Pinecall token exchange, and optional MCP access.
+This guide explains how to run, configure, and integrate with the HANNAH Express API. The API is the server-side boundary for cloud inference, Ollama, agent tool calls, text-to-speech proxying, desktop computer use, Pinecall token exchange, and optional MCP access.
 
 ## Base URL
 
@@ -14,9 +14,9 @@ In production, use the HTTPS API origin or the same-origin `/api` path exposed b
 
 ## Start the API
 
-All /api routes except /api/health require Authorization: Bearer <SHANAYA_API_TOKEN>. Generate a random value with openssl rand -hex 32, configure it only in the server environment, and give it to trusted app users out of band. The browser app asks for the token each page session and keeps it in memory only. Never put it in a Vite client variable. Use HTTPS for remote clients. The public health route remains available without a token.
+All /api routes except /api/health require Authorization: Bearer <HANNAH_API_TOKEN>. Generate a random value with openssl rand -hex 32, configure it only in the server environment, and give it to trusted app users out of band. The browser app asks for the token each page session and keeps it in memory only. Never put it in a Vite client variable. Use HTTPS for remote clients. The public health route remains available without a token.
 
-Default fixed-window limits are 30 chat, 60 agent, and 20 desktop-computer requests per token per 60 seconds. Configure them with SHANAYA_RATE_LIMIT_CHAT_MAX, SHANAYA_RATE_LIMIT_AGENT_MAX, SHANAYA_RATE_LIMIT_DESKTOP_MAX, and SHANAYA_RATE_LIMIT_WINDOW_MS. Counters are process-local; use a shared or upstream limiter across multiple instances.
+Default fixed-window limits are 30 chat, 60 agent, and 20 desktop-computer requests per token per 60 seconds. Configure them with HANNAH_RATE_LIMIT_CHAT_MAX, HANNAH_RATE_LIMIT_AGENT_MAX, HANNAH_RATE_LIMIT_DESKTOP_MAX, and HANNAH_RATE_LIMIT_WINDOW_MS. Counters are process-local; use a shared or upstream limiter across multiple instances.
 
 ```bash
 npm install --prefix server
@@ -38,11 +38,11 @@ Minimum cloud configuration:
 PORT=3001
 HOST=127.0.0.1
 CLIENT_ORIGIN=http://localhost:5173
-SHANAYA_API_TOKEN=replace_with_a_random_value_of_at_least_32_characters
+HANNAH_API_TOKEN=replace_with_a_random_value_of_at_least_32_characters
 GROQ_API_KEY=replace_with_your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
-SHANAYA_DEFAULT_PROVIDER=groq
+HANNAH_DEFAULT_PROVIDER=groq
 ```
 
 Important variables:
@@ -55,7 +55,7 @@ Important variables:
 | `GROQ_API_KEY` | No | Server-side Groq credential. |
 | `GROQ_MODEL` | No | Primary cloud model. |
 | `GROQ_MODEL_FALLBACKS` | No | Comma-separated fallback models. |
-| `SHANAYA_DEFAULT_PROVIDER` | No | Provider ID used by default; defaults to `groq`. |
+| `HANNAH_DEFAULT_PROVIDER` | No | Provider ID used by default; defaults to `groq`. |
 | `<PROVIDER>_API_KEY` | For a hosted provider | Server-side key, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`. |
 | `<PROVIDER>_MODEL` / `<PROVIDER>_MODELS` | No | Preferred model and optional comma-separated fallbacks. |
 | `<PROVIDER>_BASE_URL` | No | Optional OpenAI-compatible endpoint override for a configured provider. |
@@ -134,7 +134,7 @@ The simple conversation endpoint. `messages` must contain 1–40 user or assista
 ```bash
 curl -X POST http://localhost:3001/api/chat \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer YOUR_SHANAYA_API_TOKEN' \
+  -H 'Authorization: Bearer YOUR_HANNAH_API_TOKEN' \
   -d '{
     "mode": "cloud",
     "messages": [
@@ -147,7 +147,7 @@ Successful response:
 
 ```json
 {
-  "reply": "Welcome. I am Shanaya, and I am glad you are here.",
+  "reply": "Welcome. I am HANNAH, and I am glad you are here.",
   "emotion": "happy"
 }
 ```
@@ -205,7 +205,7 @@ Proxies validated text to Mithi and returns `audio/wav`. The supported language 
 ```bash
 curl -X POST http://localhost:3001/api/tts \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer YOUR_SHANAYA_API_TOKEN' \
+  -H 'Authorization: Bearer YOUR_HANNAH_API_TOKEN' \
   -d '{"text":"नमस्ते, मैं शनाया हूँ।","language":"hi-IN"}' \
   --output reply.wav
 ```
@@ -236,7 +236,7 @@ Available only when `MCP_ENABLED=true`. Send:
 Authorization: Bearer <MCP_API_TOKEN>
 ```
 
-The token must be at least 32 characters. The endpoint exposes the `shanaya_chat`, `shanaya_status`, and `shanaya_models` MCP tools. Keep it private and use HTTPS in production.
+The token must be at least 32 characters. The endpoint exposes the `hannah_chat`, `hannah_status`, and `hannah_models` MCP tools. Keep it private and use HTTPS in production.
 
 ## Frontend integration
 
@@ -248,7 +248,7 @@ const response = await fetch("/api/chat", {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
     mode: "cloud",
-    messages: [{ role: "user", content: "Hello, Shanaya!" }],
+    messages: [{ role: "user", content: "Hello, HANNAH!" }],
   }),
 });
 

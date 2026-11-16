@@ -43,7 +43,7 @@ export default function MemoryControls() {
       await setMobileAgentMemoryConsent(!enabled);
       setEnabled(!enabled);
       setStatus(!enabled
-        ? "On-device memory is enabled. Shanaya may save and recall personal facts from future conversations."
+        ? "On-device memory is enabled. HANNAH may save and recall personal facts from future conversations."
         : "Memory is off. Existing entries remain on this device until you delete them.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not update the memory setting.");

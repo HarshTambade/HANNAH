@@ -26,7 +26,7 @@ export async function runDesktopAgentTurn(task: string, onActivity: (message: st
   const messages: Array<{ role: "user" | "assistant"; content: unknown }> = [{ role: "user", content: task }];
   let actionCount = 0;
   for (let turn = 0; turn < 10; turn += 1) {
-    onActivity("Shanaya is examining the desktop…", false);
+    onActivity("HANNAH is examining the desktop…", false);
     const response = await apiFetch(apiUrl("/api/desktop/computer"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },

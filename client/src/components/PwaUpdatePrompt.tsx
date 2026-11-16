@@ -17,7 +17,7 @@ export default function PwaUpdatePrompt() {
   return (
     <div className="fixed bottom-5 left-5 z-40 max-w-sm rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 shadow-soft-lg backdrop-blur-xl">
       <p className="text-sm font-bold text-ink">New version available</p>
-      <p className="mt-1 text-xs text-slate-500">Reload to update Shanaya to the latest version.</p>
+      <p className="mt-1 text-xs text-slate-500">Reload to update HANNAH to the latest version.</p>
       <div className="mt-3 flex gap-2">
         <button
           type="button"

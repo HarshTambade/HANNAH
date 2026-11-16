@@ -1,6 +1,6 @@
 export type ChaosFault = "network-drop" | "tool-timeout" | "corrupted-memory" | "hitl-denial";
 export type DegradedState = { degraded: boolean; reason?: string };
-const ENABLED_KEY = "shanaya.dev.chaos.enabled";
+const ENABLED_KEY = "hannah.dev.chaos.enabled";
 const listeners = new Set<() => void>();
 const armed: ChaosFault[] = [];
 let degraded: DegradedState = { degraded: false };

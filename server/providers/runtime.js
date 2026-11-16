@@ -189,8 +189,8 @@ function providerHeaders(provider, apiKey) {
   const headers = { "Content-Type": "application/json", Accept: "application/json" };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   if (provider.id === "openrouter") {
-    headers["HTTP-Referer"] = process.env.SHANAYA_PUBLIC_URL || "https://projectshanaya.com";
-    headers["X-Title"] = "Shanaya";
+    headers["HTTP-Referer"] = process.env.HANNAH_PUBLIC_URL || "https://projecthannah.com";
+    headers["X-Title"] = "HANNAH";
   }
   return headers;
 }

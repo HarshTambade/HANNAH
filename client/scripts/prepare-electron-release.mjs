@@ -24,9 +24,9 @@ electronPackage.devDependencies = {
   electron: "^45.3.2",
   "electron-updater": "^6.6.2",
 };
-electronPackage.homepage = "https://shanaya.app";
-electronPackage.author = "Shanaya contributors";
-electronPackage.description = appPackage.description || "Shanaya desktop companion";
+electronPackage.homepage = "https://hannah.app";
+electronPackage.author = "HANNAH contributors";
+electronPackage.description = appPackage.description || "HANNAH desktop companion";
 const packScript = electronPackage.scripts?.pack;
 if (typeof packScript !== "string" || !packScript.includes("electron-builder --config electron-builder.config.js") || !packScript.includes("capacitor-electron vendor")) {
   throw new Error("Could not find the generated Capacitor Electron pack script.");

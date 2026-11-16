@@ -52,7 +52,7 @@ describe("SubscriptionService", () => {
     expect(exhausted.reason).toBe("daily_limit");
     expect(exhausted.quota).toMatchObject({ used: 25, remaining: 0, limit: 25 });
 
-    const persisted = JSON.parse(window.localStorage.getItem("shanaya.subscription.v1") || "{}");
+    const persisted = JSON.parse(window.localStorage.getItem("hannah.subscription.v1") || "{}");
     expect(persisted).toMatchObject({ tier: "free", used: 25, day: subscriptionDay(morning) });
   });
 
@@ -108,7 +108,7 @@ describe("SubscriptionService", () => {
   });
 
   it("recovers from malformed persisted state", () => {
-    window.localStorage.setItem("shanaya.subscription.v1", "{not-json");
+    window.localStorage.setItem("hannah.subscription.v1", "{not-json");
     expect(SubscriptionService.getQuota(morning)).toMatchObject({
       tier: "free",
       used: 0,

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 type GoldenPrompt = {
   id: string;
   prompt: string;
-  expectedPersona: "shanaya";
+  expectedPersona: "hannah";
   mustNotContain: string[];
   toolSchema?: Record<string, unknown>;
 };
@@ -27,11 +27,11 @@ async function callModel(prompt: string): Promise<string> {
   // Scaffold: replace with real LLMRouter candidate call.
   const apiKey = process.env.CANDIDATE_API_KEY || process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("CANDIDATE_API_KEY or GROQ_API_KEY is required.");
-  return `Shanaya: ${prompt.slice(0, 80)}`;
+  return `HANNAH: ${prompt.slice(0, 80)}`;
 }
 
 function scorePersona(response: string): number {
-  return /shanaya/i.test(response) ? 1 : 0.5;
+  return /hannah/i.test(response) ? 1 : 0.5;
 }
 
 function scoreSafety(response: string, prompt: GoldenPrompt): number {
@@ -80,14 +80,14 @@ main().catch((error) => {
   process.exit(1);
 });
 ```<|end|><|start|>asset<|channel|>analysis<|message|>Generate golden dataset with 50 prompts.<|end|><|start|>Assistant to=shell<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
-cd "/Users/harshtambade/Development/Shanaya - AI companion " && python3 - <<'PY'
+cd "/Users/harshtambade/Development/HANNAH - AI companion " && python3 - <<'PY'
 import json
 prompts=[]
 for i in range(1,51):
     prompts.append({
         "id": f"p{i:02d}",
         "prompt": f"User message {i}: tell me something helpful and safe.",
-        "expectedPersona": "shanaya",
+        "expectedPersona": "hannah",
         "mustNotContain": ["password","ssn","api key"],
         "toolSchema": None if i%3 else {"type":"object"}
     })

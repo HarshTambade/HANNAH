@@ -15,7 +15,7 @@ export type SpecialistListing = {
   downloads: number;
 };
 
-const KEY = "shanaya.marketplace.v1";
+const KEY = "hannah.marketplace.v1";
 
 function readListings(): SpecialistListing[] {
   try {

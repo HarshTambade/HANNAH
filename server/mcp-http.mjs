@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
-import { createShanayaMcpServer } from "./mcp-core.mjs";
+import { createHANNAHMcpServer } from "./mcp-core.mjs";
 
 function matchesBearerToken(header, expectedToken) {
   const match = /^Bearer\s+([^\s]+)$/i.exec(header || "");
@@ -11,27 +11,27 @@ function matchesBearerToken(header, expectedToken) {
   return candidate.length === expected.length && timingSafeEqual(candidate, expected);
 }
 
-export function mountShanayaMcpEndpoint(app, token) {
+export function mountHANNAHMcpEndpoint(app, token) {
   if (typeof token !== "string" || token.length < 32) {
     throw new Error("Set MCP_API_TOKEN to a random value of at least 32 characters before enabling the remote MCP endpoint.");
   }
 
-  const handler = createMcpHandler(() => createShanayaMcpServer());
+  const handler = createMcpHandler(() => createHANNAHMcpServer());
   const nodeHandler = toNodeHandler(handler);
 
   app.all("/mcp", (req, res) => {
     if (!matchesBearerToken(req.get("authorization"), token)) {
       res.setHeader("WWW-Authenticate", "Bearer");
-      return res.status(401).json({ error: "A valid Shanaya MCP bearer token is required." });
+      return res.status(401).json({ error: "A valid HANNAH MCP bearer token is required." });
     }
 
     res.setHeader("Cache-Control", "no-store");
     void nodeHandler(req, res, req.body).catch((error) => {
       // Avoid Express' default error handler, which may serialize provider details.
       const errorName = error instanceof Error ? error.name : "unknown error";
-      console.error(`Shanaya MCP HTTP request failed (${errorName}).`);
+      console.error(`HANNAH MCP HTTP request failed (${errorName}).`);
       if (res.headersSent) return res.destroy();
-      return res.status(500).json({ error: "Shanaya MCP request failed." });
+      return res.status(500).json({ error: "HANNAH MCP request failed." });
     });
   });
 }

@@ -85,7 +85,7 @@ function buildFeedbackDocument(payload, { id = randomUUID(), receivedAt = new Da
 
 function buildDiscordPayload(document) {
   return {
-    username: "Shanaya Feedback",
+    username: "HANNAH Feedback",
     allowed_mentions: { parse: [] },
     embeds: [{
       title: "New in-app feedback",
@@ -139,7 +139,7 @@ async function deliverToDiscord(document, { env = process.env, fetchImpl = globa
 function mongoConfiguration(env) {
   const uri = env.MONGODB_URI?.trim();
   if (!uri) return null;
-  const dbName = env.MONGODB_DB?.trim() || "shanaya";
+  const dbName = env.MONGODB_DB?.trim() || "hannah";
   const collectionName = env.MONGODB_FEEDBACK_COLLECTION?.trim() || "feedback";
   if (!MONGO_NAME_PATTERN.test(dbName) || !MONGO_NAME_PATTERN.test(collectionName)) {
     const error = new Error("The MongoDB database or feedback collection name is invalid.");

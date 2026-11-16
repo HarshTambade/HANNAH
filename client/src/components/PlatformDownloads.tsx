@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { Download, ExternalLink } from "lucide-react";
 
-const releasesUrl = "https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases";
+const releasesUrl = "https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases";
 const latestAssetUrl = `${releasesUrl}/latest/download`;
 
 const platforms = [
-  { name: "Android", packageType: "APK · GitHub Release", href: import.meta.env.VITE_ANDROID_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/Shanaya-Android.apk` },
+  { name: "Android", packageType: "APK · GitHub Release", href: import.meta.env.VITE_ANDROID_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/HANNAH-Android.apk` },
   { name: "iOS", packageType: "TestFlight / App Store · Apple signing required", href: import.meta.env.VITE_IOS_DOWNLOAD_URL?.trim() || releasesUrl },
-  { name: "macOS", packageType: "DMG · GitHub Release", href: import.meta.env.VITE_MACOS_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/Shanaya-macOS.dmg` },
-  { name: "Windows", packageType: "EXE · GitHub Release", href: import.meta.env.VITE_WINDOWS_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/Shanaya-Windows.exe` },
-  { name: "Linux", packageType: "AppImage · GitHub Release", href: import.meta.env.VITE_LINUX_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/Shanaya-Linux.AppImage` },
+  { name: "macOS", packageType: "DMG · GitHub Release", href: import.meta.env.VITE_MACOS_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/HANNAH-macOS.dmg` },
+  { name: "Windows", packageType: "EXE · GitHub Release", href: import.meta.env.VITE_WINDOWS_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/HANNAH-Windows.exe` },
+  { name: "Linux", packageType: "AppImage · GitHub Release", href: import.meta.env.VITE_LINUX_DOWNLOAD_URL?.trim() || `${latestAssetUrl}/HANNAH-Linux.AppImage` },
 ];
 
 export default function PlatformDownloads() {
@@ -32,7 +32,7 @@ export default function PlatformDownloads() {
         <div
           id="platform-download-menu"
           role="menu"
-          aria-label="Shanaya downloads by platform"
+          aria-label="HANNAH downloads by platform"
           className="absolute right-0 top-[calc(100%+0.6rem)] z-50 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-soft-lg"
         >
           <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Choose your platform</p>

@@ -12,7 +12,7 @@ type TransactionEvent = Parameters<NonNullable<Parameters<typeof Sentry.init>[0]
  * Sentry is initialized only when VITE_SENTRY_DSN is present. `sendDefaultPii`
  * is forced off, Session Replay is never enabled, and every event is scrubbed
  * for provider keys, access tokens, user message fields, and local file paths.
- * Chat content is never attached by Shanaya in the first place; the scrubbers
+ * Chat content is never attached by HANNAH in the first place; the scrubbers
  * are defence in depth for accidental breadcrumbs or error context.
  */
 
@@ -251,11 +251,11 @@ export function initClientTelemetry(): boolean {
     Sentry.init({
       dsn,
       environment: import.meta.env.VITE_SENTRY_ENVIRONMENT?.trim() || import.meta.env.MODE,
-      release: import.meta.env.VITE_SENTRY_RELEASE?.trim() || `shanaya-web@${getAppVersion()}`,
+      release: import.meta.env.VITE_SENTRY_RELEASE?.trim() || `hannah-web@${getAppVersion()}`,
       sendDefaultPii: false,
       maxBreadcrumbs: 20,
       tracesSampleRate: sampleRate(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE, 0.05),
-      initialScope: { tags: { service: "shanaya-web", platform: detectPlatform() } },
+      initialScope: { tags: { service: "hannah-web", platform: detectPlatform() } },
       beforeSend(event) {
         return sanitizeSentryEvent(event);
       },

@@ -33,7 +33,7 @@ test("landing navigation sections and marketplace actions work", async ({ page }
   await expect(page.getByRole("heading", { name: /An AI companion/ })).toBeVisible();
 
   await navigation.getByRole("button", { name: "Integrations" }).click();
-  await expect(page.getByRole("heading", { name: "Bring Shanaya into your workflow." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bring HANNAH into your workflow." })).toBeVisible();
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: /An AI companion/ })).toBeVisible();
 
@@ -60,7 +60,7 @@ test("mobile navigation exposes and opens every section", async ({ page }) => {
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: "Open navigation" }).click();
   await page.getByRole("navigation", { name: "Mobile main navigation" }).getByRole("button", { name: "Integrations" }).click();
-  await expect(page.getByRole("heading", { name: "Bring Shanaya into your workflow." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Bring HANNAH into your workflow." })).toBeVisible();
 });
 
 test("landing scroll keeps the navbar available and About has a built route", async ({ page }) => {
@@ -77,8 +77,8 @@ test("landing scroll keeps the navbar available and About has a built route", as
   await expect.poll(async () => landingScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 
   await page.goto("/about/");
-  await expect(page).toHaveTitle(/About Shanaya/);
-  await expect(page.getByRole("heading", { name: /Meet Shanaya, an AI companion/ })).toBeVisible();
+  await expect(page).toHaveTitle(/About HANNAH/);
+  await expect(page.getByRole("heading", { name: /Meet HANNAH, an AI companion/ })).toBeVisible();
   await page.getByRole("link", { name: "Features" }).click();
   await expect(page.locator("#features")).toBeInViewport();
 });

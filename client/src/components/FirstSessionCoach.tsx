@@ -17,7 +17,7 @@ export default function FirstSessionCoach({ messageCount, onSuggestion }: FirstS
   return (
     <div className="mx-4 mb-3 rounded-xl border border-cyan-100 bg-cyan-50 px-4 py-3 text-[11px] leading-6 text-cyan-700 sm:mx-8 shadow-soft">
       <p className="flex items-center gap-2 font-bold text-cyan-600">
-        <MessageCircleHeart size={14} /> Shanaya is curious about you.
+        <MessageCircleHeart size={14} /> HANNAH is curious about you.
       </p>
       <p className="mt-1 text-[10px] text-cyan-600">
         Try telling her something you did today, or ask her a question.

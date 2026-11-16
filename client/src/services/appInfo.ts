@@ -5,8 +5,8 @@ import { getDesktopBridge } from "./DesktopBridge";
 export type FeedbackPlatform = "iOS" | "Android" | "Web" | "Desktop";
 
 export function getAppVersion(): string {
-  if (typeof __SHANAYA_APP_VERSION__ === "string" && __SHANAYA_APP_VERSION__.trim()) {
-    return __SHANAYA_APP_VERSION__.trim();
+  if (typeof __HANNAH_APP_VERSION__ === "string" && __HANNAH_APP_VERSION__.trim()) {
+    return __HANNAH_APP_VERSION__.trim();
   }
   return import.meta.env.VITE_APP_VERSION?.trim() || "1.0.0";
 }

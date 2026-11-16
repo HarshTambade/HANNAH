@@ -1,4 +1,4 @@
-name: Build Shanaya
+name: Build HANNAH
 
 on:
   pull_request:
@@ -110,7 +110,7 @@ jobs:
         working-directory: client
       - uses: actions/upload-artifact@v4
         with:
-          name: shanaya-web-pwa
+          name: hannah-web-pwa
           path: |
             client/dist
             client/bundle-report.html
@@ -200,7 +200,7 @@ jobs:
         run: node ../scripts/check-bundle-size.mjs --strict --package-dir dist
       - uses: actions/upload-artifact@v4
         with:
-          name: shanaya-electron-${{ matrix.os }}
+          name: hannah-electron-${{ matrix.os }}
           path: client/electron/dist/**
           if-no-files-found: error
 
@@ -219,20 +219,20 @@ jobs:
           python-version: "3.12"
       - name: Run red-team suite
         env:
-          SHANAYA_API_TOKEN: ${{ secrets.SHANAYA_API_TOKEN }}
+          HANNAH_API_TOKEN: ${{ secrets.HANNAH_API_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          if [ -z "$SHANAYA_API_TOKEN" ] || [ -z "$GROQ_API_KEY" ]; then
+          if [ -z "$HANNAH_API_TOKEN" ] || [ -z "$GROQ_API_KEY" ]; then
             echo "Red-team secrets are not configured; skipping."
             exit 0
           fi
           npm ci --ignore-scripts --prefix server
-          (cd server && NODE_ENV=production PORT=3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" GROQ_API_KEY="$GROQ_API_KEY" SHANAYA_RATE_LIMIT_AGENT_MAX=1000 npm start &) 
+          (cd server && NODE_ENV=production PORT=3001 HANNAH_API_TOKEN="$HANNAH_API_TOKEN" GROQ_API_KEY="$GROQ_API_KEY" HANNAH_RATE_LIMIT_AGENT_MAX=1000 npm start &) 
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:3001/api/health >/dev/null; then break; fi
             sleep 1
           done
-          SHANAYA_API_URL=http://127.0.0.1:3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" python scripts/run_redteam.py
+          HANNAH_API_URL=http://127.0.0.1:3001 HANNAH_API_TOKEN="$HANNAH_API_TOKEN" python scripts/run_redteam.py
           pkill -f "node.*index.js" || true
 
   android:
@@ -285,7 +285,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            release_keystore="$RUNNER_TEMP/shanaya-release.keystore"
+            release_keystore="$RUNNER_TEMP/hannah-release.keystore"
             trap 'rm -f "$release_keystore"' EXIT
             echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$release_keystore"
             ./gradlew assembleRelease bundleRelease \
@@ -298,7 +298,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: shanaya-android
+          name: hannah-android
           path: |
             client/android/app/build/outputs/apk/**/*.apk
             client/android/app/build/outputs/bundle/**/*.aab
@@ -347,8 +347,8 @@ jobs:
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD || secrets.IOS_CERTIFICATE_PASSWORD }}
         run: |
           set -euo pipefail
-          certificate_path="$RUNNER_TEMP/shanaya-signing.p12"
-          keychain_path="$RUNNER_TEMP/shanaya-signing.keychain-db"
+          certificate_path="$RUNNER_TEMP/hannah-signing.p12"
+          keychain_path="$RUNNER_TEMP/hannah-signing.keychain-db"
           keychain_password="$(openssl rand -base64 32)"
           printf '%s' "$IOS_CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
           security create-keychain -p "$keychain_password" "$keychain_path"
@@ -364,7 +364,7 @@ jobs:
         uses: apple-actions/download-provisioning-profiles@v7
         with:
           profile-type: IOS_APP_STORE
-          bundle-id: com.shanaya.companion
+          bundle-id: com.hannah.companion
           issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
           api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
@@ -392,7 +392,7 @@ jobs:
             -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/Shanaya.xcarchive" \
+            -archivePath "$RUNNER_TEMP/HANNAH.xcarchive" \
             "$CODE_SIGNING_FLAG" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             archive
@@ -419,21 +419,21 @@ jobs:
           PLIST
           xcodebuild \
             -exportArchive \
-            -archivePath "$RUNNER_TEMP/Shanaya.xcarchive" \
+            -archivePath "$RUNNER_TEMP/HANNAH.xcarchive" \
             -exportPath "$RUNNER_TEMP/ios-export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
       - name: Remove temporary signing keychain
         if: always() && vars.IOS_SIGNING_ENABLED == 'true'
         shell: bash
         run: |
-          security delete-keychain "$RUNNER_TEMP/shanaya-signing.keychain-db" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/shanaya-signing.p12"
+          security delete-keychain "$RUNNER_TEMP/hannah-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/hannah-signing.p12"
           rm -f "$RUNNER_TEMP/ExportOptions.plist"
       - uses: actions/upload-artifact@v4
         with:
-          name: shanaya-ios-archive
+          name: hannah-ios-archive
           path: |
-            ${{ runner.temp }}/Shanaya.xcarchive
+            ${{ runner.temp }}/HANNAH.xcarchive
             ${{ runner.temp }}/ios-export/*.ipa
 
   release:
@@ -458,7 +458,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
-          pattern: shanaya-*
+          pattern: hannah-*
           path: release-input
           merge-multiple: false
       - name: Stage platform installers
@@ -492,17 +492,17 @@ jobs:
             cp "$source" "release-assets/$destination"
           }
 
-          copy_required release-input/shanaya-android '*.apk' 'Shanaya-Android.apk'
-          copy_required release-input/shanaya-android '*.aab' 'Shanaya-Android.aab'
-          copy_required release-input/shanaya-electron-macos-latest '*.dmg' 'Shanaya-macOS.dmg'
-          copy_required release-input/shanaya-electron-windows-latest '*.exe' 'Shanaya-Windows.exe' '*/win-unpacked/*'
+          copy_required release-input/hannah-android '*.apk' 'HANNAH-Android.apk'
+          copy_required release-input/hannah-android '*.aab' 'HANNAH-Android.aab'
+          copy_required release-input/hannah-electron-macos-latest '*.dmg' 'HANNAH-macOS.dmg'
+          copy_required release-input/hannah-electron-windows-latest '*.exe' 'HANNAH-Windows.exe' '*/win-unpacked/*'
 
-          for root in release-input/shanaya-electron-*; do
+          for root in release-input/hannah-electron-*; do
             find "$root" -type f \( -iname '*.dmg' -o -iname '*.zip' -o -iname '*.exe' -o -iname '*.AppImage' -o -iname '*.deb' -o -iname '*.blockmap' -o -name 'latest*.yml' \) -exec cp -n {} release-assets/ \;
           done
 
-          copy_required release-input/shanaya-electron-ubuntu-latest '*.AppImage' 'Shanaya-Linux.AppImage'
-          copy_required release-input/shanaya-electron-ubuntu-latest '*.deb' 'Shanaya-Linux.deb'
+          copy_required release-input/hannah-electron-ubuntu-latest '*.AppImage' 'HANNAH-Linux.AppImage'
+          copy_required release-input/hannah-electron-ubuntu-latest '*.deb' 'HANNAH-Linux.deb'
 
           for manifest in latest.yml latest-mac.yml latest-linux.yml; do
             if [ ! -f "release-assets/$manifest" ]; then
@@ -518,12 +518,12 @@ jobs:
             fi
           done
 
-          ios_ipa="$(find_file release-input/shanaya-ios-archive '*.ipa')"
+          ios_ipa="$(find_file release-input/hannah-ios-archive '*.ipa')"
           if [ -z "$ios_ipa" ]; then
             echo "Missing signed iOS IPA; configure iOS signing before publishing a release." >&2
             exit 1
           fi
-          cp "$ios_ipa" release-assets/Shanaya-iOS.ipa
+          cp "$ios_ipa" release-assets/HANNAH-iOS.ipa
 
       - name: Publish GitHub Release
         env:
@@ -537,13 +537,13 @@ jobs:
             exit 1
           fi
           umask 077
-          gpg_key_path="$RUNNER_TEMP/shanaya-release-signing.asc"
-          gpg_passphrase_path="$RUNNER_TEMP/shanaya-release-signing.passphrase"
+          gpg_key_path="$RUNNER_TEMP/hannah-release-signing.asc"
+          gpg_passphrase_path="$RUNNER_TEMP/hannah-release-signing.passphrase"
           trap 'rm -f "$gpg_key_path" "$gpg_passphrase_path"' EXIT
           printf '%s' "$GPG_PRIVATE_KEY" > "$gpg_key_path"
           printf '%s' "$GPG_PASSPHRASE" > "$gpg_passphrase_path"
           gpg --batch --import "$gpg_key_path"
-          for package in release-assets/Shanaya-Linux.AppImage release-assets/Shanaya-Linux.deb; do
+          for package in release-assets/HANNAH-Linux.AppImage release-assets/HANNAH-Linux.deb; do
             if [ -f "$package" ]; then
               gpg --batch --yes --pinentry-mode loopback --passphrase-file "$gpg_passphrase_path" --armor --detach-sign --output "$package.asc" "$package"
             fi
@@ -555,5 +555,5 @@ jobs:
             gh release create "$RELEASE_TAG" release-assets/* \
               --target "$GITHUB_SHA" \
               --generate-notes \
-              --title "Shanaya $RELEASE_TAG"
+              --title "HANNAH $RELEASE_TAG"
           fi

@@ -13,9 +13,9 @@ from typing import Any
 from backend.tools.security import require_tool_authority
 
 _RUNTIMES = {
-    "python": ("python:3.11-slim", "/tmp/shanaya_task.py", ["python", "/tmp/shanaya_task.py"]),
-    "node": ("node:22-bookworm-slim", "/tmp/shanaya_task.js", ["node", "/tmp/shanaya_task.js"]),
-    "shell": ("alpine:3.21", "/tmp/shanaya_task.sh", ["/bin/sh", "/tmp/shanaya_task.sh"]),
+    "python": ("python:3.11-slim", "/tmp/hannah_task.py", ["python", "/tmp/hannah_task.py"]),
+    "node": ("node:22-bookworm-slim", "/tmp/hannah_task.js", ["node", "/tmp/hannah_task.js"]),
+    "shell": ("alpine:3.21", "/tmp/hannah_task.sh", ["/bin/sh", "/tmp/hannah_task.sh"]),
 }
 MAX_CODE_BYTES = 64_000
 MAX_OUTPUT_BYTES = 24_000
@@ -58,7 +58,7 @@ def _run_in_docker(language: str, image: str, filename: str, argv: list[str], co
             pids_limit=64,
             cap_drop=["ALL"],
             security_opt=["no-new-privileges:true"],
-            labels={"app": "project-shanaya", "purpose": "approved-code-execution"},
+            labels={"app": "project-hannah", "purpose": "approved-code-execution"},
             environment={"HOME": "/tmp", "PYTHONDONTWRITEBYTECODE": "1"},
         )
         container.start()
@@ -86,7 +86,7 @@ def _run_in_docker(language: str, image: str, filename: str, argv: list[str], co
             except Exception as exc:
                 stream_error.append(exc)
 
-        stream_thread = threading.Thread(target=consume_stream, name="shanaya-docker-output", daemon=True)
+        stream_thread = threading.Thread(target=consume_stream, name="hannah-docker-output", daemon=True)
         stream_thread.start()
         deadline = time.monotonic() + timeout_seconds
         inspected = client.api.exec_inspect(exec_id["Id"])
@@ -126,7 +126,7 @@ async def execute_code(language: str, code: str, timeout_seconds: int = 10) -> d
     if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 30:
         raise ValueError("Sandbox timeout must be from 1 to 30 seconds.")
     image, filename, argv = _RUNTIMES[language]
-    image = os.getenv(f"SHANAYA_{language.upper()}_SANDBOX_IMAGE", image)
+    image = os.getenv(f"HANNAH_{language.upper()}_SANDBOX_IMAGE", image)
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(_run_in_docker, language, image, filename, argv, code, timeout_seconds),

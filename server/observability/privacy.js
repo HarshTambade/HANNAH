@@ -3,7 +3,7 @@
 /**
  * Privacy scrubbers shared by the API error tracker.
  *
- * Shanaya never needs prompt text, completion text, provider keys, access
+ * HANNAH never needs prompt text, completion text, provider keys, access
  * tokens, or user file paths in an error report. These helpers intentionally
  * redact by key name, URL component, and known credential shape before Sentry
  * receives an event. They are pure functions so they can be unit tested without
@@ -194,7 +194,7 @@ function scrubFilePath(value) {
 function sanitizeSentryEvent(event) {
   if (!event || typeof event !== "object") return event;
 
-  // Identity is never attached by Shanaya, and Sentry must not infer it.
+  // Identity is never attached by HANNAH, and Sentry must not infer it.
   delete event.user;
   delete event.server_name;
 

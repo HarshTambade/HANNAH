@@ -17,7 +17,7 @@ from openai import AsyncOpenAI
 
 from backend.llm_telemetry import start_llm_trace
 
-logger = logging.getLogger("shanaya.llm")
+logger = logging.getLogger("hannah.llm")
 ALLOWED_EMOTIONS = {"happy", "sad", "cute", "neutral"}
 DEFAULT_GROQ_MODELS = [
     "openai/gpt-oss-120b",

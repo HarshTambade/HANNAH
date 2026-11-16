@@ -109,7 +109,7 @@ function createContentReportHandler({ logPath } = {}) {
     } catch {
       // Never log the report body or a user identifier. The operator alert is
       // the failed write itself, not the content of the report.
-      console.error("Shanaya content report could not be written.");
+      console.error("HANNAH content report could not be written.");
       return res.status(500).json({ error: "The content report could not be saved. Please try again later." });
     }
   };

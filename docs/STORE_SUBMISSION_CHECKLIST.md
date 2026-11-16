@@ -1,6 +1,6 @@
 # Store Submission and Release Checklist
 
-This is the release handoff checklist for Shanaya. Repository configuration is prepared, but a public store release is **not ready** until the owner completes the account, legal, metadata, hardware, and secret items below. Do not publish a store listing with placeholder privacy or support URLs.
+This is the release handoff checklist for HANNAH. Repository configuration is prepared, but a public store release is **not ready** until the owner completes the account, legal, metadata, hardware, and secret items below. Do not publish a store listing with placeholder privacy or support URLs.
 
 ## Universal listing and privacy
 

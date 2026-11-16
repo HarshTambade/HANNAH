@@ -62,7 +62,7 @@ def init_sentry() -> bool:
     except Exception as error:  # Telemetry must never prevent the agent from starting.
         print(f"[observability] Sentry could not initialize ({type(error).__name__}); error tracking is disabled.")
         return False
-    sentry_sdk.set_tag("service", "shanaya-python")
+    sentry_sdk.set_tag("service", "hannah-python")
     _initialized = True
     print("[observability] Sentry error tracking enabled for the Python service.")
     return True

@@ -79,7 +79,7 @@ test("builds a document without message text or identity fields", () => {
 });
 
 test("appends one JSON object per line to the report log", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "shanaya-content-reports-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "hannah-content-reports-"));
   const logPath = path.join(directory, "nested", "content_reports.jsonl");
   try {
     await appendContentReport(buildContentReportDocument(validPayload, { id: "report-a" }), { logPath });
@@ -97,7 +97,7 @@ test("appends one JSON object per line to the report log", async () => {
 });
 
 test("handler returns 202 with a report id and rejects invalid payloads", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "shanaya-content-handler-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "hannah-content-handler-"));
   const logPath = path.join(directory, "content_reports.jsonl");
   try {
     const handler = createContentReportHandler({ logPath });

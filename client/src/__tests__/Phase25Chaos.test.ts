@@ -9,7 +9,7 @@ vi.mock("../services/AIService", () => ({
 }));
 vi.mock("../services/DeviceTools", () => ({
   getDeviceTools: () => [{ name: "lookup_weather", description: "Look up weather", inputSchema: { type: "object", properties: {} }, execute: executeTool }],
-  executeShanayaTool: async (tool: { execute: (args: Record<string, unknown>) => Promise<unknown> }, args: Record<string, unknown>) => tool.execute(args),
+  executeHANNAHTool: async (tool: { execute: (args: Record<string, unknown>) => Promise<unknown> }, args: Record<string, unknown>) => tool.execute(args),
 }));
 vi.mock("../services/MobileAgent", () => ({ getNativeMemoryTools: async () => [] }));
 vi.mock("../services/SubscriptionService", () => ({ SubscriptionService: { assertCanSend: vi.fn(), recordMessage: vi.fn() } }));

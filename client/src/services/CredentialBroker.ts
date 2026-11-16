@@ -1,6 +1,6 @@
 export type CredentialScope = "llm_provider" | "tts" | "sync";
 
-const STORE_KEY = "shanaya.credentials.v1";
+const STORE_KEY = "hannah.credentials.v1";
 
 export const CredentialBroker = {
   store(scope: CredentialScope, value: string) {

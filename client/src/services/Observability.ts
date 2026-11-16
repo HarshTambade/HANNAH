@@ -5,7 +5,7 @@ export type MetricName =
   | "persona_invariant_retention"
   | "sync_conflict_count";
 
-const KEY = "shanaya.metrics.v1";
+const KEY = "hannah.metrics.v1";
 
 export const Observability = {
   record(name: MetricName, value: number) {

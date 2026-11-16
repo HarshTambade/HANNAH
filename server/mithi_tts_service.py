@@ -25,7 +25,7 @@ from mithi_tts import Mithi  # noqa: E402
 
 tts = Mithi(str(model_path), device=os.getenv("MITHI_DEVICE", "cpu"))
 generation_lock = threading.Lock()
-app = FastAPI(title="Shanaya Mithi TTS", docs_url=None, redoc_url=None)
+app = FastAPI(title="HANNAH Mithi TTS", docs_url=None, redoc_url=None)
 
 
 class SynthesisRequest(BaseModel):
@@ -56,6 +56,6 @@ async def synthesize(request: SynthesisRequest):
     return FileResponse(
         output_path,
         media_type="audio/wav",
-        filename="shanaya-charvi.wav",
+        filename="hannah-charvi.wav",
         background=BackgroundTask(Path(output_path).unlink, missing_ok=True),
     )

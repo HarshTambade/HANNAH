@@ -31,7 +31,7 @@ export default function HITLApprovalCard({ onDismiss }: HITLApprovalCardProps = 
         </div>
         <div className="flex-1">
           <h3 id="hitl-title" className="text-xs font-bold uppercase tracking-[0.15em] text-amber-700 mb-1">
-            Shanaya requests approval
+            HANNAH requests approval
           </h3>
           <div className="space-y-2">
             {pending.map((entry) => (

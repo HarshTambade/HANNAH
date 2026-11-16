@@ -1,4 +1,4 @@
-# Shanaya Maintainer Tiers
+# HANNAH Maintainer Tiers
 
 ## Core maintainers
 - Write access to all modules.

@@ -1,4 +1,4 @@
-const KEY = "shanaya.activation.v1";
+const KEY = "hannah.activation.v1";
 
 export const ActivationTracker = {
   state: { messages: 0, toolUsed: false, firstSeen: Date.now(), returnedWithin48h: false },

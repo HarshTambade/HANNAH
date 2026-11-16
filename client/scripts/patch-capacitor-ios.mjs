@@ -40,13 +40,13 @@ function ensureUsageDescriptions() {
     additions.push("    <key>CFBundleLocalizations</key>\n    <array>\n        <string>en</string>\n        <string>hi</string>\n        <string>mr</string>\n    </array>");
   }
   if (!source.includes("<key>NSMicrophoneUsageDescription</key>")) {
-    additions.push("    <key>NSMicrophoneUsageDescription</key>\n    <string>Shanaya uses the microphone so you can speak with your companion. Audio is processed only when you start a voice turn or call.</string>");
+    additions.push("    <key>NSMicrophoneUsageDescription</key>\n    <string>HANNAH uses the microphone so you can speak with your companion. Audio is processed only when you start a voice turn or call.</string>");
   }
   if (!source.includes("<key>NSSpeechRecognitionUsageDescription</key>")) {
-    additions.push("    <key>NSSpeechRecognitionUsageDescription</key>\n    <string>Shanaya uses speech recognition to turn your voice into a message. Depending on your device and settings, recognition may use Apple's servers.</string>");
+    additions.push("    <key>NSSpeechRecognitionUsageDescription</key>\n    <string>HANNAH uses speech recognition to turn your voice into a message. Depending on your device and settings, recognition may use Apple's servers.</string>");
   }
   if (!source.includes("<key>NSLocalNetworkUsageDescription</key>")) {
-    additions.push("    <key>NSLocalNetworkUsageDescription</key>\n    <string>Shanaya connects to Ollama or a local AI model host on your network when you choose local inference. Local network access is not used for cloud AI.</string>");
+    additions.push("    <key>NSLocalNetworkUsageDescription</key>\n    <string>HANNAH connects to Ollama or a local AI model host on your network when you choose local inference. Local network access is not used for cloud AI.</string>");
   }
   if (!additions.length) return;
   const rootDictionaryEnd = source.lastIndexOf("</dict>");

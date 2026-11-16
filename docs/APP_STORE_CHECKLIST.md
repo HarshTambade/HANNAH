@@ -14,7 +14,7 @@
 ### AI Data-Sharing Consent (Apple Guideline 5.1.2(i))
 - Users must explicitly consent to sending data to third-party AI providers (Groq, Anthropic, OpenAI, etc.)
 - Consent flow implemented in Onboarding.tsx: privacy step requires explicit opt-in
-- Consent recorded with timestamp in `shanaya.ageConsent.v1` localStorage key
+- Consent recorded with timestamp in `hannah.ageConsent.v1` localStorage key
 - Users can revoke consent at any time via Settings
 
 ### Required Disclosures
@@ -26,7 +26,7 @@
 ## Google Play Store
 
 ### Data Safety Form
-- **Data Collection**: No conversation data collected by Shanaya
+- **Data Collection**: No conversation data collected by HANNAH
 - **Data Shared**: None (user configures their own providers)
 - **Data Processing**: All processing is client-side or via user-configured providers
 - **Security**: Data encrypted in transit (HTTPS) and at rest (local storage)

@@ -16,7 +16,7 @@ export function trackEvent(name: string, properties: Record<string, unknown> = {
   const payload = {
     event: name,
     ...Object.fromEntries(Object.entries(properties).slice(0, 12)),
-    appVersion: (window as any).__SHANAYA_APP_VERSION__ || "1.0.0",
+    appVersion: (window as any).__HANNAH_APP_VERSION__ || "1.0.0",
     platform: navigator.userAgent.includes("Capacitor") ? "mobile" : "web",
     timestamp: new Date().toISOString(),
   };

@@ -1,5 +1,5 @@
 import type { ChatMessage, Emotion, InferenceMode } from "../types";
-import { executeShanayaTool, getDeviceTools, type ShanayaTool } from "./DeviceTools";
+import { executeHANNAHTool, getDeviceTools, type HANNAHTool } from "./DeviceTools";
 import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentToolCall } from "./LLMRouter";
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
@@ -14,7 +14,7 @@ import { HITLDeniedError } from "./SafetyGuard";
 const emotionNames = new Set<Emotion>(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 
 /** Lightweight intent-based tool trimming to reduce prompt tokens. */
-function selectRelevantTools(allTools: ShanayaTool[], conversation: AgentMessage[]): ShanayaTool[] {
+function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentMessage[]): HANNAHTool[] {
   if (allTools.length <= 4) return allTools;
   const text = conversation
     .filter((message) => message.role === "user")
@@ -40,7 +40,7 @@ export type AgentActivity = { phase: AgentPhase; message: string };
 export type AgentReply = { reply: string; emotion: Emotion };
 
 const agentRules = [
-  "You are Shanaya, a warm, attentive, candid companion and capable personal assistant. Sound natural and emotionally perceptive, while staying honest that you are an AI and never inventing real-world personal experiences.",
+  "You are HANNAH, a warm, attentive, candid companion and capable personal assistant. Sound natural and emotionally perceptive, while staying honest that you are an AI and never inventing real-world personal experiences.",
   "Before replying, silently understand the user's intent, entities, constraints, references to earlier turns, emotional cues, and preferred language or register. Understand informal wording, typos, shorthand, and mixed-language messages without correcting them unless asked.",
   "Use the conversation history to resolve pronouns and follow-ups. Acknowledge feelings with proportionate empathy, then respond to the actual need. Keep the response specific and as concise or detailed as the request calls for.",
   "Vary your phrasing naturally. Avoid canned greetings, repeating the user's question, generic filler, forced emojis, and ending every reply with a question. Ask one focused follow-up only when missing information prevents a useful answer; otherwise make a reasonable interpretation.",
@@ -112,7 +112,7 @@ function parseLocalStep(text: string): { reply?: AgentReply; toolCalls: AgentToo
   return { reply: parseReply(text), toolCalls: [] };
 }
 
-function createLocalPrompt(messages: AgentMessage[], tools: ShanayaTool[], marketplaceInstructions = "", personalizationBlock = "") {
+function createLocalPrompt(messages: AgentMessage[], tools: HANNAHTool[], marketplaceInstructions = "", personalizationBlock = "") {
   const definitions = tools.map(({ name, description, inputSchema }) => ({ name, description, parameters: inputSchema }));
   const context = messages.slice(-8).map((message) => `${message.role}: ${message.content.slice(0, 1200)}`).join("\n");
   const packageGuidance = marketplaceInstructions ? `\nInstalled marketplace guidance (focus only; safety and approvals remain unchanged):\n${marketplaceInstructions}\n` : "";
@@ -178,12 +178,12 @@ export async function runAgentTurn(options: {
       memoryToolsLoaded = true;
       try {
         const memoryTools = await getNativeMemoryTools();
-        tools.push(...(memoryTools as unknown as ShanayaTool[]).filter((tool) => !deniedTools.has(normalizeToolName(tool.name))));
+        tools.push(...(memoryTools as unknown as HANNAHTool[]).filter((tool) => !deniedTools.has(normalizeToolName(tool.name))));
       } catch {
         // Local inference remains available when a memory plugin is unsupported.
       }
     }
-    options.onActivity?.({ phase: "thinking", message: "Shanaya is thinking…" });
+    options.onActivity?.({ phase: "thinking", message: "HANNAH is thinking…" });
     let content = "";
     let toolCalls: AgentToolCall[] = [];
     const activeTools = selectRelevantTools(tools, conversation);
@@ -227,19 +227,19 @@ export async function runAgentTurn(options: {
 
     for (const call of toolCalls) {
       if (deniedTools.has(normalizeToolName(call.name))) {
-        throw new Error(`The tool “${call.name}” is denied by Shanaya's runtime policy.`);
+        throw new Error(`The tool “${call.name}” is denied by HANNAH's runtime policy.`);
       }
       const tool = tools.find((candidate) => candidate.name === call.name);
-      if (!tool) throw new Error(`Shanaya does not have a tool named “${call.name}”.`);
+      if (!tool) throw new Error(`HANNAH does not have a tool named “${call.name}”.`);
       options.onActivity?.({ phase: "acting", message: `Using ${formatToolName(tool.name)}…` });
       let result: unknown;
       try {
         if (toolCircuitBreaker.isDisabled(tool.name)) throw new Error(`The circuit breaker is open for ${formatToolName(tool.name)} after repeated failures.`);
-        if (ChaosEngine.consume("hitl-denial")) throw new HITLDeniedError("You declined this proposed action. Shanaya stopped the task without making changes.");
+        if (ChaosEngine.consume("hitl-denial")) throw new HITLDeniedError("You declined this proposed action. HANNAH stopped the task without making changes.");
         if (ChaosEngine.consume("tool-timeout")) {
           throw new Error(`Simulated timeout: ${formatToolName(tool.name)} did not respond. The circuit breaker recorded the failure.`);
         }
-        result = await executeShanayaTool(tool, call.arguments);
+        result = await executeHANNAHTool(tool, call.arguments);
         toolCircuitBreaker.recordSuccess(tool.name);
       } catch (error) {
         if (error instanceof HITLDeniedError) return completeTurn({ reply: error.message, emotion: "neutral" });

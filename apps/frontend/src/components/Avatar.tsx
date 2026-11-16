@@ -26,7 +26,7 @@ class AvatarLoadBoundary extends Component<{ children: ReactNode }, { failed: bo
 
   render() {
     return this.state.failed
-      ? <Html center><span role="status" className="rounded-xl border border-white/10 bg-slate-950/85 px-4 py-3 text-center text-xs text-slate-200">Shanaya’s 3D model could not load. Check the model asset and refresh.</span></Html>
+      ? <Html center><span role="status" className="rounded-xl border border-white/10 bg-slate-950/85 px-4 py-3 text-center text-xs text-slate-200">HANNAH’s 3D model could not load. Check the model asset and refresh.</span></Html>
       : this.props.children;
   }
 }
@@ -218,7 +218,7 @@ function Model({ emotion }: { emotion: Emotion }) {
         {/* Per-instance geometry/material/texture clones are disposed on unmount. */}
         <primitive object={avatar} dispose={null} />
         <Html position={[0.42, bounds.height * 0.92, 0.12]} center distanceFactor={7} zIndexRange={[10, 0]}>
-          <span aria-label={`Shanaya feels ${emotion}`} className="rounded-full border border-white/15 bg-slate-950/80 px-2 py-1 text-sm shadow-lg backdrop-blur">{emotionIcons[emotion]}</span>
+          <span aria-label={`HANNAH feels ${emotion}`} className="rounded-full border border-white/15 bg-slate-950/80 px-2 py-1 text-sm shadow-lg backdrop-blur">{emotionIcons[emotion]}</span>
         </Html>
       </group>
     </group>
@@ -238,7 +238,7 @@ export default function Avatar({ emotion }: { emotion: Emotion }) {
         <directionalLight position={[3, 5, 4]} intensity={2.5} color="#fff2df" />
         <directionalLight position={[-4, 2, -3]} intensity={1.8} color="#a6a5ff" />
         <AvatarLoadBoundary>
-          <Suspense fallback={<Html center><span className="text-xs text-slate-400">Preparing Shanaya…</span></Html>}>
+          <Suspense fallback={<Html center><span className="text-xs text-slate-400">Preparing HANNAH…</span></Html>}>
             <Model emotion={emotion} />
           </Suspense>
         </AvatarLoadBoundary>

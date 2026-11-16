@@ -74,7 +74,7 @@ function tokenUsageMiddleware(req, res, next) {
         estimatedCostUsd: estimateCost(usage.model, usage.inputTokens, usage.outputTokens),
       };
       appendUsage(record).catch(() => {
-        console.error("Shanaya token usage could not be written.");
+        console.error("HANNAH token usage could not be written.");
       });
     }
     return originalJson(body);

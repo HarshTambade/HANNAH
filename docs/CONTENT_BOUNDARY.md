@@ -1,4 +1,4 @@
-# Shanaya Content Boundary
+# HANNAH Content Boundary
 
 ## Classification key
 - **Allowed:** permitted by default.

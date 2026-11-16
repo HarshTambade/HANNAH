@@ -18,7 +18,7 @@ export type VerificationRequest = {
   completedAt: string | null;
 };
 
-const KEY = "shanaya.physicalVerification.v1";
+const KEY = "hannah.physicalVerification.v1";
 
 function readRequests(): VerificationRequest[] {
   try {

@@ -98,7 +98,7 @@ function createLlmTrace({ provider, requestedModel, operation = "chat", source =
     id: randomUUID(),
     timestamp: iso(startedAt),
     source,
-    name: `shanaya.llm.${safeLabel(operation, 40) || "chat"}`,
+    name: `hannah.llm.${safeLabel(operation, 40) || "chat"}`,
     operation: safeLabel(operation, 40) || "chat",
     provider: {
       id: safeLabel(provider?.id, 64) || "unknown",
@@ -266,7 +266,7 @@ function buildLangfuseBatch(trace) {
             status: trace.status,
             source: trace.source,
           },
-          tags: ["shanaya", trace.provider.id, trace.operation],
+          tags: ["hannah", trace.provider.id, trace.operation],
         },
       },
       {

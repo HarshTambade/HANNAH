@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const apiToken = "e2e-shanaya-token-0123456789-abcdefghijklmnopqrstuv";
+const apiToken = "e2e-hannah-token-0123456789-abcdefghijklmnopqrstuv";
 
 test("sends a chat message and renders the returned emotion in the WebGL avatar", async ({ page }) => {
   const protectedRequestTokens: string[] = [];
@@ -44,8 +44,8 @@ test("sends a chat message and renders the returned emotion in the WebGL avatar"
   });
 
   await page.addInitScript(() => {
-    window.localStorage.setItem("shanaya.onboarding.v1", "complete");
-    window.localStorage.setItem("shanaya.subscription.v1", JSON.stringify({ tier: "premium", day: "2026-11-15", used: 0 }));
+    window.localStorage.setItem("hannah.onboarding.v1", "complete");
+    window.localStorage.setItem("hannah.subscription.v1", JSON.stringify({ tier: "premium", day: "2026-11-15", used: 0 }));
   });
   await page.goto("/");
   const webglAvailable = await page.evaluate(() => {
@@ -55,12 +55,12 @@ test("sends a chat message and renders the returned emotion in the WebGL avatar"
   expect(webglAvailable, "Chromium must provide WebGL for the avatar scene.").toBe(true);
   await expect(page.locator("canvas").first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Talk to Shanaya" }).first().click();
-  await page.getByLabel("Shanaya API access token").fill(apiToken);
-  await page.getByRole("button", { name: "Continue to Shanaya" }).click();
+  await page.getByRole("button", { name: "Talk to HANNAH" }).first().click();
+  await page.getByLabel("HANNAH API access token").fill(apiToken);
+  await page.getByRole("button", { name: "Continue to HANNAH" }).click();
 
-  const avatarRegion = page.getByRole("region", { name: "Shanaya avatar" });
-  const message = page.getByRole("textbox", { name: "Message Shanaya" });
+  const avatarRegion = page.getByRole("region", { name: "HANNAH avatar" });
+  const message = page.getByRole("textbox", { name: "Message HANNAH" });
   await expect(message).toBeVisible();
   await message.fill("I had a long day. Can we talk?");
   await page.getByRole("button", { name: "Send message" }).click();

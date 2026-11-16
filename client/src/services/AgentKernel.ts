@@ -29,7 +29,7 @@ export type IntentTrace = {
   completedAt: string | null;
 };
 
-const STORAGE_KEY = "shanaya.agentkernel.v1";
+const STORAGE_KEY = "hannah.agentkernel.v1";
 
 function readIntents(): IntentTrace[] {
   try {

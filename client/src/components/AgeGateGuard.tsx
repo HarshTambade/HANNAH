@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ShieldAlert } from "lucide-react";
 
-const CONSENT_KEY = "shanaya.ageConsent.v1";
+const CONSENT_KEY = "hannah.ageConsent.v1";
 
 function ageGateEnabled() {
   try {
@@ -52,7 +52,7 @@ export default function AgeGateGuard({ children }: AgeGateGuardProps) {
           </div>
         </div>
         <p className="mt-4 text-[11px] leading-6 text-slate-500">
-          Shanaya is declared as an 18+ app. You must confirm that you are at least 18 years old before using chat or voice features.
+          HANNAH is declared as an 18+ app. You must confirm that you are at least 18 years old before using chat or voice features.
         </p>
         <button
           type="button"

@@ -159,7 +159,7 @@ export function FocusAreaDistribution() {
       <div className="mb-6">
         <div className="bento-kicker">Focus Area Distribution</div>
         <div className="bento-title">Task Breakdown</div>
-        <div className="bento-desc">Shanaya's task classification across all sessions.</div>
+        <div className="bento-desc">HANNAH's task classification across all sessions.</div>
       </div>
       <DonutChart data={counts} />
     </div>

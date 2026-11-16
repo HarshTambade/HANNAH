@@ -25,7 +25,7 @@ export type RailAuditEntry = {
   at: number;
 };
 
-const KEY = "shanaya.typedrails.v1";
+const KEY = "hannah.typedrails.v1";
 
 function readAudit(): RailAuditEntry[] {
   try {

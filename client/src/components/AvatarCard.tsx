@@ -48,7 +48,7 @@ function AvatarCard() {
     <div
       ref={containerRef}
       className="bento-card span-2-2 relative overflow-hidden"
-      aria-label="Shanaya avatar card"
+      aria-label="HANNAH avatar card"
     >
       {/* Gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-cyan-50 to-purple-50/40" />
@@ -61,7 +61,7 @@ function AvatarCard() {
           <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping" />
           <span className="relative inset-0 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]" />
         </span>
-        <span className="text-[11px] font-bold text-ink">Shanaya is active</span>
+        <span className="text-[11px] font-bold text-ink">HANNAH is active</span>
       </div>
 
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[420px]">
@@ -79,7 +79,7 @@ function AvatarCard() {
               </div>
             </div>
             <div className="text-center">
-              <h2 className="font-display font-bold text-2xl text-ink tracking-tight">Shanaya</h2>
+              <h2 className="font-display font-bold text-2xl text-ink tracking-tight">HANNAH</h2>
               <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest">AI Companion · Live</p>
             </div>
           </div>

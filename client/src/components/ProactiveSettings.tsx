@@ -14,7 +14,7 @@ export default function ProactiveSettings() {
         </div>
         <div>
           <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Proactive participation</h3>
-          <div className="text-[10px] text-slate-600">Shanaya may proactively surface relevant information</div>
+          <div className="text-[10px] text-slate-600">HANNAH may proactively surface relevant information</div>
         </div>
       </div>
 
@@ -32,7 +32,7 @@ export default function ProactiveSettings() {
             <span>{paused ? "Paused" : "Active"}</span>
           </div>
           <div className="text-[10px] text-slate-500">
-            When paused, Shanaya will not initiate unsolicited suggestions.
+            When paused, HANNAH will not initiate unsolicited suggestions.
           </div>
         </div>
       </label>

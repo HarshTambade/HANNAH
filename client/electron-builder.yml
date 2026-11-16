@@ -1,5 +1,5 @@
-appId: com.shanaya.companion
-productName: Shanaya
+appId: com.hannah.companion
+productName: HANNAH
 artifactName: "${productName}-${os}-${arch}.${ext}"
 asar: true
 compression: maximum
@@ -19,7 +19,7 @@ files:
 publish:
   - provider: github
     owner: HarshTambade
-    repo: Shanaya---Your-AI-companion-
+    repo: HANNAH---Your-AI-companion-
 win:
   forceCodeSigning: false
   target:
@@ -51,4 +51,4 @@ linux:
     - AppImage
     - deb
   category: Utility
-  maintainer: "Shanaya contributors <support@shanaya.app>"
+  maintainer: "HANNAH contributors <support@hannah.app>"

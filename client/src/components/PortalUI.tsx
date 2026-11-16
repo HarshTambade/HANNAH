@@ -62,7 +62,7 @@ export default function PortalUI({ open, onClose }: PortalUIProps) {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600">
             <Zap size={18} />
           </div>
-          <h2 id="portal-title" className="font-display font-bold text-lg text-ink">Shanaya Portal</h2>
+          <h2 id="portal-title" className="font-display font-bold text-lg text-ink">HANNAH Portal</h2>
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
@@ -93,7 +93,7 @@ export default function PortalUI({ open, onClose }: PortalUIProps) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleExecute(); }}
-              placeholder="What can Shanaya help with?"
+              placeholder="What can HANNAH help with?"
               className="flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-slate-400"
               aria-label="Agent portal input"
               autoFocus

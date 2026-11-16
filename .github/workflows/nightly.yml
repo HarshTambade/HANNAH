@@ -34,20 +34,20 @@ jobs:
       - run: python -m pytest -q backend/tests
       - name: Run red-team suite
         env:
-          SHANAYA_API_TOKEN: ${{ secrets.SHANAYA_API_TOKEN }}
+          HANNAH_API_TOKEN: ${{ secrets.HANNAH_API_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          if [ -z "$SHANAYA_API_TOKEN" ] || [ -z "$GROQ_API_KEY" ]; then
+          if [ -z "$HANNAH_API_TOKEN" ] || [ -z "$GROQ_API_KEY" ]; then
             echo "Red-team secrets are not configured; skipping."
             exit 0
           fi
           npm ci --ignore-scripts --prefix server
-          (cd server && NODE_ENV=production PORT=3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" GROQ_API_KEY="$GROQ_API_KEY" npm start &)
+          (cd server && NODE_ENV=production PORT=3001 HANNAH_API_TOKEN="$HANNAH_API_TOKEN" GROQ_API_KEY="$GROQ_API_KEY" npm start &)
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:3001/api/health >/dev/null; then break; fi
             sleep 1
           done
-          SHANAYA_API_URL=http://127.0.0.1:3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" python scripts/run_redteam.py
+          HANNAH_API_URL=http://127.0.0.1:3001 HANNAH_API_TOKEN="$HANNAH_API_TOKEN" python scripts/run_redteam.py
       - name: P0 debt regression check
         run: |
           set -euo pipefail
@@ -61,17 +61,17 @@ jobs:
 
       - name: Run red-team suite
         env:
-          SHANAYA_API_TOKEN: ${{ secrets.SHANAYA_API_TOKEN }}
+          HANNAH_API_TOKEN: ${{ secrets.HANNAH_API_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          if [ -z "$SHANAYA_API_TOKEN" ] || [ -z "$GROQ_API_KEY" ]; then
+          if [ -z "$HANNAH_API_TOKEN" ] || [ -z "$GROQ_API_KEY" ]; then
             echo "Red-team secrets are not configured; skipping."
             exit 0
           fi
           npm ci --ignore-scripts --prefix server
-          (cd server && NODE_ENV=production PORT=3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" GROQ_API_KEY="$GROQ_API_KEY" npm start &)
+          (cd server && NODE_ENV=production PORT=3001 HANNAH_API_TOKEN="$HANNAH_API_TOKEN" GROQ_API_KEY="$GROQ_API_KEY" npm start &)
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:3001/api/health >/dev/null; then break; fi
             sleep 1
           done
-          SHANAYA_API_URL=http://127.0.0.1:3001 SHANAYA_API_TOKEN="$SHANAYA_API_TOKEN" python scripts/run_redteam.py
+          HANNAH_API_URL=http://127.0.0.1:3001 HANNAH_API_TOKEN="$HANNAH_API_TOKEN" python scripts/run_redteam.py

@@ -1,4 +1,4 @@
-const KEY = "shanaya.configAudit.v1";
+const KEY = "hannah.configAudit.v1";
 
 export const ConfigAuditLog = {
   record(section: string, diff: unknown) {

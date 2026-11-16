@@ -1,6 +1,6 @@
-# Good First Issues for Shanaya
+# Good First Issues for HANNAH
 
-Shanaya welcomes focused, well-scoped contributions. These areas are designed to be approachable without changing core AI behavior.
+HANNAH welcomes focused, well-scoped contributions. These areas are designed to be approachable without changing core AI behavior.
 
 ## Good first issue areas
 - Add a new voice language: implement a speech recognition/playback path and update the `SpeechLanguage` type.

@@ -1,6 +1,6 @@
 export type Modality = "image" | "audio" | "sensor";
 
-const CONSENT_KEY = "shanaya.perception.consent";
+const CONSENT_KEY = "hannah.perception.consent";
 
 export const PerceptionService = {
   consent: {} as Record<Modality, boolean>,
@@ -33,7 +33,7 @@ export const PerceptionService = {
   },
   logItem(item: string) {
     try {
-      const key = "shanaya.perception.log";
+      const key = "hannah.perception.log";
       const parsed = JSON.parse(window.localStorage.getItem(key) || "[]");
       const entries = Array.isArray(parsed) ? parsed : [];
       entries.push({ item, at: Date.now() });

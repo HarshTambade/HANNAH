@@ -10,11 +10,11 @@ from types import SimpleNamespace
 
 import pytest
 
-_test_root = Path(tempfile.mkdtemp(prefix="shanaya-api-tests-"))
-os.environ["SHANAYA_AUDIT_LOG"] = str(_test_root / "import-audit.jsonl")
-os.environ["SHANAYA_WORKSPACE"] = str(_test_root / "workspace")
-os.environ["SHANAYA_HOST"] = "127.0.0.1"
-os.environ["SHANAYA_CORS_ORIGINS"] = "http://localhost"
+_test_root = Path(tempfile.mkdtemp(prefix="hannah-api-tests-"))
+os.environ["HANNAH_AUDIT_LOG"] = str(_test_root / "import-audit.jsonl")
+os.environ["HANNAH_WORKSPACE"] = str(_test_root / "workspace")
+os.environ["HANNAH_HOST"] = "127.0.0.1"
+os.environ["HANNAH_CORS_ORIGINS"] = "http://localhost"
 
 from fastapi.testclient import TestClient
 
@@ -24,7 +24,7 @@ from backend.audit_logger import AuditLogger
 
 @pytest.fixture
 def api_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    monkeypatch.setattr(main, "audit_logger", AuditLogger(tmp_path / "shanaya_audit.jsonl"))
+    monkeypatch.setattr(main, "audit_logger", AuditLogger(tmp_path / "hannah_audit.jsonl"))
     main.pending_approvals.clear()
     main.approval_sockets.clear()
     with TestClient(main.app) as client:

@@ -58,7 +58,7 @@ function createSyncFetchHandler() {
 
 module.exports = { createSyncHandler, createSyncFetchHandler, validateSyncPayload };
 ```<|end|><|start|>asset<|channel|>analysis<|message|>Mount routes in index.js. Need add require and app.post/get. Let's edit.<|end|><|start|>Assistant to=shell<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
-cd "/Users/harshtambade/Development/Shanaya - AI companion " && python3 - <<'PY'
+cd "/Users/harshtambade/Development/HANNAH - AI companion " && python3 - <<'PY'
 p='server/index.js'
 s=open(p).read()
 s=s.replace('const { createContentReportHandler } = require("./content-reports");',

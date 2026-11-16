@@ -6,7 +6,7 @@ import * as z from "zod/v4";
 
 dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), ".env") });
 
-const apiBaseUrl = (process.env.SHANAYA_API_URL || `http://127.0.0.1:${process.env.PORT || "3001"}`)
+const apiBaseUrl = (process.env.HANNAH_API_URL || `http://127.0.0.1:${process.env.PORT || "3001"}`)
   .trim()
   .replace(/\/+$/, "");
 const emotions = ["happy", "sad", "angry", "neutral", "surprised", "thinking"];
@@ -16,7 +16,7 @@ async function requestApi(path, options = {}) {
     ...options,
     headers: {
       Accept: "application/json",
-      ...(process.env.SHANAYA_API_TOKEN ? { Authorization: "Bearer " + process.env.SHANAYA_API_TOKEN.trim() } : {}),
+      ...(process.env.HANNAH_API_TOKEN ? { Authorization: "Bearer " + process.env.HANNAH_API_TOKEN.trim() } : {}),
       ...(options.body ? { "Content-Type": "application/json" } : {}),
       ...options.headers,
     },
@@ -24,38 +24,38 @@ async function requestApi(path, options = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(typeof data.error === "string" ? data.error : `Shanaya API returned HTTP ${response.status}.`);
+    throw new Error(typeof data.error === "string" ? data.error : `HANNAH API returned HTTP ${response.status}.`);
   }
   return data;
 }
 
 function toolError(error) {
   return {
-    content: [{ type: "text", text: error instanceof Error ? error.message : "Shanaya could not complete this request." }],
+    content: [{ type: "text", text: error instanceof Error ? error.message : "HANNAH could not complete this request." }],
     isError: true,
   };
 }
 
-export function createShanayaMcpServer() {
+export function createHANNAHMcpServer() {
   const server = new McpServer({
-    name: "shanaya",
+    name: "hannah",
     version: "1.0.0",
-    instructions: "Shanaya is a conversational AI companion exposed over MCP. Use shanaya_chat for responses, shanaya_status to check service readiness, and shanaya_models to inspect configured models. This MCP server has no access to the host application's files, accounts, or device controls. Do not claim it has performed actions in another application.",
+    instructions: "HANNAH is a conversational AI companion exposed over MCP. Use hannah_chat for responses, hannah_status to check service readiness, and hannah_models to inspect configured models. This MCP server has no access to the host application's files, accounts, or device controls. Do not claim it has performed actions in another application.",
   });
 
   server.registerTool(
-    "shanaya_chat",
+    "hannah_chat",
     {
-      title: "Chat with Shanaya",
-      description: "Send a prompt to Shanaya and receive her reply and emotion. Optional recent user/assistant history can preserve context. This calls the configured AI provider and may incur provider usage.",
+      title: "Chat with HANNAH",
+      description: "Send a prompt to HANNAH and receive her reply and emotion. Optional recent user/assistant history can preserve context. This calls the configured AI provider and may incur provider usage.",
       inputSchema: z.object({
-        prompt: z.string().trim().min(1).max(4000).describe("The message to send to Shanaya."),
+        prompt: z.string().trim().min(1).max(4000).describe("The message to send to HANNAH."),
         history: z.array(z.object({
           role: z.enum(["user", "assistant"]),
           content: z.string().trim().min(1).max(2000),
         })).max(12).optional().describe("Optional recent conversation context. Keep it relevant and omit secrets."),
         mode: z.enum(["cloud", "ollama"]).default("cloud").describe("Use the configured cloud router or the configured Ollama server."),
-        model: z.string().trim().min(1).max(120).optional().describe("Optional model ID already configured on the Shanaya server."),
+        model: z.string().trim().min(1).max(120).optional().describe("Optional model ID already configured on the HANNAH server."),
       }),
       outputSchema: z.object({
         reply: z.string(),
@@ -77,7 +77,7 @@ export function createShanayaMcpServer() {
           reply: typeof answer.reply === "string" ? answer.reply : "",
           emotion: emotions.includes(answer.emotion) ? answer.emotion : "neutral",
         };
-        if (!output.reply) return toolError(new Error("Shanaya returned an empty reply."));
+        if (!output.reply) return toolError(new Error("HANNAH returned an empty reply."));
         return {
           content: [{ type: "text", text: JSON.stringify(output) }],
           structuredContent: output,
@@ -89,10 +89,10 @@ export function createShanayaMcpServer() {
   );
 
   server.registerTool(
-    "shanaya_status",
+    "hannah_status",
     {
-      title: "Check Shanaya status",
-      description: "Check whether the Shanaya API and its configured cloud model are ready. Does not expose API keys.",
+      title: "Check HANNAH status",
+      description: "Check whether the HANNAH API and its configured cloud model are ready. Does not expose API keys.",
       inputSchema: z.object({}),
       outputSchema: z.object({ status: z.string(), provider: z.string(), ready: z.boolean() }),
     },
@@ -112,10 +112,10 @@ export function createShanayaMcpServer() {
   );
 
   server.registerTool(
-    "shanaya_models",
+    "hannah_models",
     {
-      title: "List Shanaya models",
-      description: "List the model IDs configured on the Shanaya server. API keys are never returned.",
+      title: "List HANNAH models",
+      description: "List the model IDs configured on the HANNAH server. API keys are never returned.",
       inputSchema: z.object({}),
       outputSchema: z.object({ provider: z.string(), defaultModel: z.string(), models: z.array(z.string()) }),
     },

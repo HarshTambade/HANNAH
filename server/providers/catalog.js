@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Shanaya provider catalog.
+ * HANNAH provider catalog.
  *
  * Every entry describes how to reach one AI provider or gateway. Groq is the
  * default base provider; every other entry is optional and only becomes active
@@ -375,7 +375,7 @@ function getProvider(id) {
 }
 
 function defaultProviderId() {
-  const configured = (process.env.SHANAYA_DEFAULT_PROVIDER || "").trim().toLowerCase();
+  const configured = (process.env.HANNAH_DEFAULT_PROVIDER || "").trim().toLowerCase();
   return byId.has(configured) ? configured : DEFAULT_PROVIDER_ID;
 }
 

@@ -11,7 +11,7 @@ export type SharedActivitySession = {
   completed: boolean;
 };
 
-const STORAGE_KEY = "shanaya.sharedActivity.v1";
+const STORAGE_KEY = "hannah.sharedActivity.v1";
 const MAX_SESSIONS = 200;
 
 function readSessions(): SharedActivitySession[] {

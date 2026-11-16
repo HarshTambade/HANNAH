@@ -1,10 +1,10 @@
 services:
-  shanaya-backend:
+  hannah-backend:
     build:
       context: .
       dockerfile: Dockerfile
-    image: shanaya-backend:latest
-    container_name: shanaya-backend
+    image: hannah-backend:latest
+    container_name: hannah-backend
     restart: unless-stopped
     ports:
       - "${PORT:-3001}:3001"
@@ -15,7 +15,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3001
     volumes:
-      - shanaya-data:/app/data
+      - hannah-data:/app/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -24,6 +24,6 @@ services:
       start_period: 20s
 
 volumes:
-  shanaya-data:
+  hannah-data:
 ```<|end|><|start|>asset<|channel|>analysis<|message|>Now vercel.json verify. Current vercel.json lacks API proxy and SPA fallback. Need update. The backend is separate; Vercel web deployment should proxy /api to backend URL. Use rewrites. Also SPA fallback. Let's update vercel.json.<|end|><|start|>Assistant to=write<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="path">
-/Users/harshtambade/Development/Shanaya - AI companion /vercel.json
+/Users/harshtambade/Development/HANNAH - AI companion /vercel.json

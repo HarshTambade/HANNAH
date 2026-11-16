@@ -26,8 +26,8 @@ export type GraphQueryResult = {
   path: string[];
 };
 
-const ENTITIES_KEY = "shanaya.pkg.entities.v1";
-const RELATIONSHIPS_KEY = "shanaya.pkg.relationships.v1";
+const ENTITIES_KEY = "hannah.pkg.entities.v1";
+const RELATIONSHIPS_KEY = "hannah.pkg.relationships.v1";
 
 function readEntities(): Entity[] {
   try {
@@ -167,7 +167,7 @@ export const PersonalKnowledgeGraph = {
     let match;
     while ((match = namePattern.exec(text)) !== null) {
       const name = match[1];
-      if (name.length > 2 && !["The", "Shanaya", "I", "A", "An", "He", "She", "It"].includes(name)) {
+      if (name.length > 2 && !["The", "HANNAH", "I", "A", "An", "He", "She", "It"].includes(name)) {
         const entity = this.addEntity("person", name);
         entities.push(entity);
       }

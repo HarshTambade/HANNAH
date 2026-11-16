@@ -1,9 +1,9 @@
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { createShanayaMcpServer } from "./mcp-core.mjs";
+import { createHANNAHMcpServer } from "./mcp-core.mjs";
 
-Promise.resolve().then(() => serveStdio(createShanayaMcpServer)).catch((error) => {
+Promise.resolve().then(() => serveStdio(createHANNAHMcpServer)).catch((error) => {
   // SDK request errors can carry headers/configuration; log only the safe class name.
   const errorName = error instanceof Error ? error.name : "unknown error";
-  console.error(`Shanaya MCP stdio server stopped (${errorName}).`);
+  console.error(`HANNAH MCP stdio server stopped (${errorName}).`);
   process.exitCode = 1;
 });

@@ -1,4 +1,4 @@
-"""Prepare user-approved Shanaya examples for local LoRA fine-tuning.
+"""Prepare user-approved HANNAH examples for local LoRA fine-tuning.
 
 The input is the JSONL export produced by the client. This script never reads
 browser storage or server chat logs. GGUF files are inference artifacts: train
@@ -126,10 +126,10 @@ def train_adapter(dataset_path: Path, base_model: str, output_dir: Path, epochs:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True, help="Client-exported approved examples JSONL")
-    parser.add_argument("--output", type=Path, default=Path("./shanaya-lora-data.jsonl"), help="Validated training JSONL")
+    parser.add_argument("--output", type=Path, default=Path("./hannah-lora-data.jsonl"), help="Validated training JSONL")
     parser.add_argument("--train", action="store_true", help="Run optional LoRA training after preparation")
     parser.add_argument("--base-model", help="Local Hugging Face checkpoint directory (not a GGUF file)")
-    parser.add_argument("--adapter-output", type=Path, default=Path("./shanaya-lora-adapter"))
+    parser.add_argument("--adapter-output", type=Path, default=Path("./hannah-lora-adapter"))
     parser.add_argument("--epochs", type=int, default=1)
     args = parser.parse_args()
     count = prepare_jsonl(args.input, args.output)

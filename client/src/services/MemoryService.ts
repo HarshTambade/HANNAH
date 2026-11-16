@@ -10,7 +10,7 @@ export type MemoryRecord = {
   decay: boolean;
 };
 
-const KEY = "shanaya.memory.v1";
+const KEY = "hannah.memory.v1";
 
 function read(): MemoryRecord[] {
   try {

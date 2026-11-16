@@ -78,7 +78,7 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
               </div>
               <h3 className="font-display font-bold text-lg text-ink mb-2">Your privacy comes first</h3>
               <p className="text-[11px] leading-relaxed text-slate-600 mb-4">
-                Shanaya processes conversations locally whenever possible. Cloud inference only occurs when you explicitly choose a cloud provider. Your API keys stay in memory for this session and are never stored permanently.
+                HANNAH processes conversations locally whenever possible. Cloud inference only occurs when you explicitly choose a cloud provider. Your API keys stay in memory for this session and are never stored permanently.
               </p>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -87,7 +87,7 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
                   onChange={(e) => setAcceptedPrivacy(e.target.checked)}
                   className="rounded border-slate-200 bg-white text-brand-600 focus:ring-brand-500"
                 />
-                <span className="text-sm font-medium text-slate-600">I understand Shanaya is a private, local-first AI companion</span>
+                <span className="text-sm font-medium text-slate-600">I understand HANNAH is a private, local-first AI companion</span>
               </label>
             </>
           )}
@@ -98,16 +98,16 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
               </div>
               <h3 className="font-display font-bold text-lg text-ink mb-2">Connect your AI provider</h3>
               <p className="text-[11px] leading-relaxed text-slate-600 mb-4">
-                Shanaya uses Groq by default for cloud inference. Enter your access token to get started. Local inference (WebLLM/llama.cpp) works without any keys.
+                HANNAH uses Groq by default for cloud inference. Enter your access token to get started. Local inference (WebLLM/llama.cpp) works without any keys.
               </p>
               <div className="space-y-3">
-                <label htmlFor="api-token" className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Shanaya API Access Token</label>
+                <label htmlFor="api-token" className="text-[10px] font-bold uppercase tracking-wider text-slate-500">HANNAH API Access Token</label>
                 <input
                   id="api-token"
                   type="password"
                   value={apiToken}
                   onChange={(e) => setApiToken(e.target.value)}
-                  placeholder="Enter your Shanaya API token"
+                  placeholder="Enter your HANNAH API token"
                   autoComplete="off"
                   className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[11px] text-ink outline-none placeholder:text-slate-400 focus:border-brand-400/60"
                 />
@@ -149,7 +149,7 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
               </div>
               <h3 className="font-display font-bold text-lg text-ink mb-2">Human-in-the-Loop approval</h3>
               <p className="text-[11px] leading-relaxed text-slate-600 mb-4">
-                Shanaya asks for your approval before performing irreversible actions (file deletion, message sending, shell commands). You can always review and undo actions within a 30-second window.
+                HANNAH asks for your approval before performing irreversible actions (file deletion, message sending, shell commands). You can always review and undo actions within a 30-second window.
               </p>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -158,7 +158,7 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
                   onChange={(e) => setAcceptedHITL(e.target.checked)}
                   className="rounded border-slate-200 bg-white text-brand-600 focus:ring-brand-500"
                 />
-                <span className="text-sm font-medium text-slate-600">I understand Shanaya will request approval for sensitive actions</span>
+                <span className="text-sm font-medium text-slate-600">I understand HANNAH will request approval for sensitive actions</span>
               </label>
             </>
           )}
@@ -169,7 +169,7 @@ export default function Onboarding({ onComplete, onSkip }: OnboardingProps) {
               </div>
               <h3 className="font-display font-bold text-lg text-ink mb-2">You're all set!</h3>
               <p className="text-[11px] leading-relaxed text-slate-600 mb-4">
-                Shanaya is ready to assist you. Start chatting to begin your first session.
+                HANNAH is ready to assist you. Start chatting to begin your first session.
               </p>
             </>
           )}

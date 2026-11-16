@@ -16,7 +16,7 @@ import { VoiceService, type SpeechLanguage } from "../services/VoiceService";
 import { generateNativeReply, getNativeModelStatus, prepareNativeModel, supportsNativeLLM, type NativeModelStatus } from "../services/NativeLLM";
 
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
-const welcome = "Hey, I’m Shanaya. It’s lovely to meet you. What’s on your mind?";
+const welcome = "Hey, I’m HANNAH. It’s lovely to meet you. What’s on your mind?";
 type VisibleMessage = { role: "user" | "assistant" | "system"; content: string };
 type PendingTurn = { approvals: Approval[]; messages: ChatMessage[] };
 type LocalWaiter = { resolve: () => void; reject: (error: Error) => void; timeout: number };
@@ -41,7 +41,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
   const [language, setLanguage] = useState<SpeechLanguage>("en-US");
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
-      const saved = window.localStorage.getItem("shanaya.voiceEnabled");
+      const saved = window.localStorage.getItem("hannah.voiceEnabled");
       return saved === null ? true : saved === "true";
     } catch {
       return true;
@@ -66,7 +66,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("shanaya.voiceEnabled", String(voiceEnabled));
+      window.localStorage.setItem("hannah.voiceEnabled", String(voiceEnabled));
     } catch {
       // Keep the voice preference for this session if storage is disabled.
     }
@@ -149,7 +149,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
       if (!mounted) return;
       setCatalog(result);
       const options = flattenModels(result);
-      const saved = window.localStorage.getItem("shanaya.model");
+      const saved = window.localStorage.getItem("hannah.model");
       setSelectedModel(options.some((item) => item.model === saved) ? saved! : result.defaultModel || options[0]?.model || "");
     }).catch(() => {
       if (mounted) setCatalog({ provider: "Groq", defaultModel: "openai/gpt-oss-120b", tiers: { groq: [], secondary: [], local: [] } });
@@ -158,7 +158,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
   }, []);
 
   useEffect(() => {
-    if (selectedModel) window.localStorage.setItem("shanaya.model", selectedModel);
+    if (selectedModel) window.localStorage.setItem("hannah.model", selectedModel);
   }, [selectedModel]);
 
   useEffect(() => {
@@ -186,7 +186,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
       .slice(-10)
       .map(({ role, content }) => ({ role, content }));
     const raw = await localLLM.generate([
-      { role: "system", content: 'You are Shanaya, a warm, attentive, natural-sounding AI companion. Silently infer the user\'s intent, references to earlier turns, emotional cues, and preferred language. Understand informal wording, typos, and mixed-language messages. Use context to answer specifically and empathetically, with natural variation; avoid canned greetings, repetition, filler, forced emojis, and habitual closing questions. Never pretend to be human or invent personal experiences. Reply only as JSON: {"reply":"text","emotion":"happy|sad|cute|neutral"}.' },
+      { role: "system", content: 'You are HANNAH, a warm, attentive, natural-sounding AI companion. Silently infer the user\'s intent, references to earlier turns, emotional cues, and preferred language. Understand informal wording, typos, and mixed-language messages. Use context to answer specifically and empathetically, with natural variation; avoid canned greetings, repetition, filler, forced emojis, and habitual closing questions. Never pretend to be human or invent personal experiences. Reply only as JSON: {"reply":"text","emotion":"happy|sad|cute|neutral"}.' },
       ...promptMessages,
     ]);
     return typeof raw === "string" ? raw : JSON.stringify(raw ?? "");
@@ -205,7 +205,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
     }];
     setHistory(updatedHistory);
     setVisibleMessages((current) => [...current, { role: "assistant", content: result.reply }]);
-    setActivity(result.local ? "Answered with WebLLM on this device." : `${result.provider || "Shanaya"} · ${result.model || ""}`);
+    setActivity(result.local ? "Answered with WebLLM on this device." : `${result.provider || "HANNAH"} · ${result.model || ""}`);
     onEmotionChange(result.emotion);
     if (voiceEnabled) void VoiceService.speak(result.reply, language).catch((voiceError) => {
       setError(voiceError instanceof Error ? voiceError.message : "Voice playback failed.");
@@ -221,7 +221,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
       selectedModel || undefined,
       () => generateLocal(messages),
       isNative ? "llama.cpp" : "WebLLM",
-      isNative ? "shanaya.gguf" : WEBLLM_MODEL,
+      isNative ? "hannah.gguf" : WEBLLM_MODEL,
       approvalChannel.sessionId,
     );
     applyCompletedTurn(result, messages);
@@ -252,17 +252,17 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
     setVisibleMessages((current) => [...current, { role: "user", content: text }]);
     setInput("");
     setError("");
-    setActivity("Shanaya is thinking…");
+    setActivity("HANNAH is thinking…");
     setLoading(true);
     try {
       if (effectiveLocalMode) {
         const parsed = parseStructuredReply(await generateLocal(nextHistory));
-        applyCompletedTurn({ status: "complete", ...parsed, provider: isNative ? "llama.cpp" : "WebLLM", model: isNative ? "shanaya.gguf" : WEBLLM_MODEL, local: true }, nextHistory);
+        applyCompletedTurn({ status: "complete", ...parsed, provider: isNative ? "llama.cpp" : "WebLLM", model: isNative ? "hannah.gguf" : WEBLLM_MODEL, local: true }, nextHistory);
       } else {
         await runCloudTurn(nextHistory);
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Shanaya could not complete the request.");
+      setError(requestError instanceof Error ? requestError.message : "HANNAH could not complete the request.");
       setActivity("");
     } finally {
       setLoading(false);
@@ -292,7 +292,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
         }]);
       }
       setPendingTurn(null);
-      setActivity("Shanaya is continuing…");
+      setActivity("HANNAH is continuing…");
       await runCloudTurn(continuation);
     } catch (approvalError) {
       setError(approvalError instanceof Error ? approvalError.message : "Could not resolve the approval request.");
@@ -327,7 +327,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
     <section className="relative mx-auto flex max-h-[52dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[26px] border border-white/10 bg-[#0b0e17]/80 shadow-[0_18px_70px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-white/[0.07] px-4 py-3">
         <div className="min-w-0">
-          <h1 className="truncate text-sm font-bold text-white">Shanaya</h1>
+          <h1 className="truncate text-sm font-bold text-white">HANNAH</h1>
           <p className="truncate text-[10px] text-slate-400">{!online ? `Offline · ${isNative ? "llama.cpp" : "WebLLM"}` : effectiveLocalMode ? isNative ? "llama.cpp Native" : "WebLLM Local" : `${providerLabel} · cloud fallback router`}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -392,7 +392,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
 
           {pendingTurn && (
             <div className="ml-8 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-3" role="alertdialog" aria-label="Action approval required">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-100"><LockKeyhole size={13} /> Shanaya needs your approval</div>
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-100"><LockKeyhole size={13} /> HANNAH needs your approval</div>
               <ul className="mb-3 space-y-2">
                 {pendingTurn.approvals.map((approval) => (
                   <li key={approval.token} className="rounded-lg bg-black/20 p-2">
@@ -424,7 +424,7 @@ export default function ChatUI({ onEmotionChange }: { onEmotionChange: (emotion:
         <form onSubmit={(event) => void submit(event)} className="mx-auto flex max-w-[580px] items-end gap-2 rounded-2xl border border-white/[0.09] bg-[#111521]/90 p-1.5 focus-within:border-violet-400/40">
           <textarea value={input} onChange={(event) => setInput(event.target.value.slice(0, 4000))} onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(); }
-          }} placeholder={effectiveLocalMode ? "Message Shanaya locally…" : "Message Shanaya…"} aria-label="Message Shanaya" rows={1} maxLength={4000} className="max-h-24 min-h-10 flex-1 resize-none bg-transparent px-3 py-2.5 text-[12px] leading-relaxed text-slate-100 outline-none placeholder:text-slate-500" />
+          }} placeholder={effectiveLocalMode ? "Message HANNAH locally…" : "Message HANNAH…"} aria-label="Message HANNAH" rows={1} maxLength={4000} className="max-h-24 min-h-10 flex-1 resize-none bg-transparent px-3 py-2.5 text-[12px] leading-relaxed text-slate-100 outline-none placeholder:text-slate-500" />
           <button type="submit" disabled={!input.trim() || loading || Boolean(pendingTurn) || (effectiveLocalMode && !localModelReady)} aria-label="Send message" className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white disabled:cursor-not-allowed disabled:opacity-35"><ArrowUp size={17} /></button>
         </form>
       </div>

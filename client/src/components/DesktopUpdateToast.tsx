@@ -5,8 +5,8 @@ export default function DesktopUpdateToast() {
 
   useEffect(() => {
     const handler = () => setVisible(true);
-    window.addEventListener("shanaya:update-available", handler);
-    return () => window.removeEventListener("shanaya:update-available", handler);
+    window.addEventListener("hannah:update-available", handler);
+    return () => window.removeEventListener("hannah:update-available", handler);
   }, []);
 
   if (!visible) return null;

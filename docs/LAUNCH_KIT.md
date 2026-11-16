@@ -1,14 +1,14 @@
-# Shanaya Launch Kit
+# HANNAH Launch Kit
 
 **Launch date:** 15 November 2026<br>
-**Product:** Shanaya — a private, cross-platform AI companion with a living 3D avatar, multilingual voice, and hybrid local/cloud inference.<br>
-**Primary links:** `https://shanaya.app` · Privacy `https://shanaya.app/privacy` · Terms `https://shanaya.app/terms` · Support `https://shanaya.app/support`
+**Product:** HANNAH — a private, cross-platform AI companion with a living 3D avatar, multilingual voice, and hybrid local/cloud inference.<br>
+**Primary links:** `https://hannah.app` · Privacy `https://hannah.app/privacy` · Terms `https://hannah.app/terms` · Support `https://hannah.app/support`
 
 > Replace the placeholder domain and URLs with the production domain before publishing. Verify every claim against the release build. Character counts below were checked against the literal strings in this document.
 
 ## 1. Positioning line (148 characters)
 
-> **Shanaya is a private AI companion with a living 3D avatar, multilingual voice, and a hybrid brain that runs offline or in the cloud when you choose.**
+> **HANNAH is a private AI companion with a living 3D avatar, multilingual voice, and a hybrid brain that runs offline or in the cloud when you choose.**
 
 This is the requested 150-character positioning line. It fits in 148 characters, so it can be used in press materials, Product Hunt copy, social bios, and the website hero.
 
@@ -34,54 +34,54 @@ Do not paste the 148-character positioning line into the App Store subtitle fiel
 The App Store description limit is **4,000 characters**. This version is 3,851 characters including spaces and line breaks.
 
 ```text
-Shanaya is a private AI companion with a living 3D avatar, a warm voice, and a brain that can run on your device or in the cloud—only when you choose.
+HANNAH is a private AI companion with a living 3D avatar, a warm voice, and a brain that can run on your device or in the cloud—only when you choose.
 
-Most AI companions ask you to trade your privacy for personality. Shanaya takes the opposite approach. The app is built around a simple promise: you should always know where your conversation is going, and you should be able to keep it local.
+Most AI companions ask you to trade your privacy for personality. HANNAH takes the opposite approach. The app is built around a simple promise: you should always know where your conversation is going, and you should be able to keep it local.
 
 A COMPANION THAT FEELS PRESENT
-Shanaya appears as a real-time 3D character who reacts to the conversation with expressive motion and emotion. She is not a static chatbot window. She listens, responds, and changes her expression as the mood shifts. The avatar is rendered with Three.js and runs smoothly across phone, desktop, and the web.
+HANNAH appears as a real-time 3D character who reacts to the conversation with expressive motion and emotion. She is not a static chatbot window. She listens, responds, and changes her expression as the mood shifts. The avatar is rendered with Three.js and runs smoothly across phone, desktop, and the web.
 
 TALK, TYPE, OR CALL
-Write a message, speak naturally, or start an in-app virtual call. Shanaya supports English, Hindi, and Marathi voice input and output. Voice is optional: you can use the app entirely by text, and you can turn spoken replies off at any time.
+Write a message, speak naturally, or start an in-app virtual call. HANNAH supports English, Hindi, and Marathi voice input and output. Voice is optional: you can use the app entirely by text, and you can turn spoken replies off at any time.
 
 PRIVATE BY ARCHITECTURE
 - On-device AI: download a compact GGUF model once and keep text conversations on your phone with llama.cpp.
 - WebLLM: run a supported model inside your browser with WebGPU.
 - Local Ollama: connect your own Ollama server for a private local endpoint.
 - Cloud when you want it: Groq is the default cloud provider, with OpenAI, Anthropic, and other OpenAI-compatible providers available when configured.
-- No Shanaya account, no server-side chat history, no advertising SDK, and no sale of your data.
+- No HANNAH account, no server-side chat history, no advertising SDK, and no sale of your data.
 - The active provider is named in the chat, so you are never guessing where a message went.
 
 A CAPABLE ASSISTANT, WITH YOUR PERMISSION
-Shanaya can use device tools to read and write files in her private app storage, check device and battery status, open supported apps, and help with bounded multi-step tasks. Sensitive actions require your confirmation. The optional native agent can use saved memories, and the optional desktop mode can operate a computer through screenshots and confirmed keyboard or mouse actions.
+HANNAH can use device tools to read and write files in her private app storage, check device and battery status, open supported apps, and help with bounded multi-step tasks. Sensitive actions require your confirmation. The optional native agent can use saved memories, and the optional desktop mode can operate a computer through screenshots and confirmed keyboard or mouse actions.
 
 MEMORY YOU CONTROL
-On-device memory is off by default. If you enable it, Shanaya can remember details you choose to save. You can inspect matching memories, delete individual entries, or clear everything from Settings → Privacy and voice. Memories stay in app-private storage.
+On-device memory is off by default. If you enable it, HANNAH can remember details you choose to save. You can inspect matching memories, delete individual entries, or clear everything from Settings → Privacy and voice. Memories stay in app-private storage.
 
 BUILT FOR EVERY SCREEN
-Shanaya runs as a responsive web app, an installable PWA, a native iOS and Android app, and a desktop build. Your companion follows you across screens without requiring an account.
+HANNAH runs as a responsive web app, an installable PWA, a native iOS and Android app, and a desktop build. Your companion follows you across screens without requiring an account.
 
 FREE TO START
 The Free plan includes 25 successful messages per day on local inference modes: WebLLM, the downloaded on-device model, and Ollama. Failed turns do not count. Premium is US$9.99 per month and adds unlimited messages, cloud providers, cloud-backed mobile and desktop agents, and priority Groq routing. Subscriptions are optional; the local experience remains useful without one.
 
 HONEST LIMITATIONS
-AI can be wrong, incomplete, or biased. Shanaya is not a medical, legal, financial, or emergency service. Cloud models require network access and send your prompt to the selected provider. Offline voice support varies by device and platform. Model quality depends on the model and hardware you choose.
+AI can be wrong, incomplete, or biased. HANNAH is not a medical, legal, financial, or emergency service. Cloud models require network access and send your prompt to the selected provider. Offline voice support varies by device and platform. Model quality depends on the model and hardware you choose.
 
 YOUR DATA, YOUR CHOICE
 Read the full privacy policy and terms at the links below. The policy names every third-party AI provider, explains what is sent in each mode, and describes how to delete local data and request deletion of operator-held records.
 
-Shanaya is designed for people who want a companion with warmth and capability without giving up control of their conversations. Choose local when privacy matters most. Choose cloud when you need more capability. Either way, the choice stays visible.
+HANNAH is designed for people who want a companion with warmth and capability without giving up control of their conversations. Choose local when privacy matters most. Choose cloud when you need more capability. Either way, the choice stays visible.
 
-Privacy: https://shanaya.app/privacy
-Terms: https://shanaya.app/terms
-Support: https://shanaya.app/support
+Privacy: https://hannah.app/privacy
+Terms: https://hannah.app/terms
+Support: https://hannah.app/support
 ```
 
 ## 3. App Store promotional text (153 characters)
 
 The promotional text field allows **170 characters** and can be changed without a new review.
 
-> **Meet Shanaya: a private AI companion with a living 3D avatar, Hindi and Marathi voice, and a brain that runs on your device or in the cloud. Your choice.**
+> **Meet HANNAH: a private AI companion with a living 3D avatar, Hindi and Marathi voice, and a brain that runs on your device or in the cloud. Your choice.**
 
 Character count: **153**. Confirm the count after any edit.
 
@@ -101,15 +101,15 @@ Product Hunt allows a short tagline. Keep each under 60 characters.
 
 ### Product Hunt first comment draft
 
-> Hi Product Hunt! I built Shanaya because I wanted an AI companion that felt alive without treating my conversations as the product.
+> Hi Product Hunt! I built HANNAH because I wanted an AI companion that felt alive without treating my conversations as the product.
 >
-> Shanaya has a real-time 3D avatar, voice chat in English, Hindi, and Marathi, and a hybrid architecture. You can run a downloaded model on your phone, use WebLLM in the browser, point her at your own Ollama server, or switch to Groq, OpenAI, or Anthropic when you need more capability. The app names the active provider, so you always know where a message is going.
+> HANNAH has a real-time 3D avatar, voice chat in English, Hindi, and Marathi, and a hybrid architecture. You can run a downloaded model on your phone, use WebLLM in the browser, point her at your own Ollama server, or switch to Groq, OpenAI, or Anthropic when you need more capability. The app names the active provider, so you always know where a message is going.
 >
-> There is no Shanaya account and no server-side chat history. Local memory is opt-in and can be deleted entry by entry. Sensitive device actions require confirmation, and every assistant reply has a “Report” control.
+> There is no HANNAH account and no server-side chat history. Local memory is opt-in and can be deleted entry by entry. Sensitive device actions require confirmation, and every assistant reply has a “Report” control.
 >
 > Free includes 25 successful local messages per day. Premium is $9.99/month for unlimited messages and cloud-backed agents; billing is being connected, so this launch build is explicitly a preview.
 >
-> I would love feedback on the local/cloud switching, the avatar’s presence, and what would make Shanaya feel more natural to talk to. Thank you for trying her.
+> I would love feedback on the local/cloud switching, the avatar’s presence, and what would make HANNAH feel more natural to talk to. Thank you for trying her.
 
 ## 5. Reddit post templates
 
@@ -124,7 +124,7 @@ Use one community’s template at a time. Read each community’s rules, disclos
 ```text
 Hi r/LocalLLaMA,
 
-I’m the builder of Shanaya, a cross-platform AI companion with a 3D avatar and voice chat. The part I think this community will care about is the routing: the same conversation can run through four different inference paths without changing the UI.
+I’m the builder of HANNAH, a cross-platform AI companion with a 3D avatar and voice chat. The part I think this community will care about is the routing: the same conversation can run through four different inference paths without changing the UI.
 
 What is actually running:
 - WebLLM in the browser through WebGPU, using a small Llama instruct model.
@@ -136,7 +136,7 @@ Why hybrid instead of cloud-only:
 - Local modes keep prompts on the device or the user’s own machine.
 - Cloud mode is opt-in and the active provider is named in the chat footer.
 - If cloud fails, the client can fall back to a local path instead of dropping the turn.
-- There is no Shanaya account and no server-side conversation database.
+- There is no HANNAH account and no server-side conversation database.
 
 Things I’m still figuring out:
 - How to make the local/cloud switch legible without adding friction to every message.
@@ -162,7 +162,7 @@ Hi r/artificial,
 
 AI companions usually make the same implicit trade: convenience in exchange for sending everything to a server. I wanted to see whether a companion could feel present while keeping that choice visible.
 
-Shanaya is a cross-platform AI companion with a 3D avatar and multilingual voice. The architecture is deliberately hybrid:
+HANNAH is a cross-platform AI companion with a 3D avatar and multilingual voice. The architecture is deliberately hybrid:
 - On-device model (llama.cpp + GGUF) for text when the user wants privacy or is offline.
 - WebLLM for browser-local inference on supported hardware.
 - Ollama for people who already run local models.
@@ -209,5 +209,5 @@ Disclosure: I’m the builder. Links: [site] · [privacy] · [terms]
 - “JARVIS” as a literal capability claim — it is a cultural reference, not a guarantee.
 - “Kernel-level control” — the optional Linux eBPF monitor is metadata-only kernel sensing, not unrestricted kernel control.
 - “End-to-end encrypted” — the server and provider can read requests to process them.
-- “Trained on your conversations” or “never trained on any data” — describe Shanaya’s own policy precisely and link provider terms.
-- “Medical, therapeutic, legal, or financial advice” — Shanaya is not a licensed professional service.
+- “Trained on your conversations” or “never trained on any data” — describe HANNAH’s own policy precisely and link provider terms.
+- “Medical, therapeutic, legal, or financial advice” — HANNAH is not a licensed professional service.

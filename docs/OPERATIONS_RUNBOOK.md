@@ -1,8 +1,8 @@
-# Shanaya Operations Runbook
+# HANNAH Operations Runbook
 
 **Version:** 1.0<br>
 **Last updated:** 15 November 2026<br>
-**Owner:** Shanaya on-call / platform operator<br>
+**Owner:** HANNAH on-call / platform operator<br>
 **Applies to:** the Express API in `server/`, the React/Capacitor client in `client/`, the optional Python fallback in `backend/`, and the optional eBPF monitor in `ebpf/`
 
 This runbook is the operating procedure for launch and steady-state support. It covers provider health, zero-downtime API-key rotation, Sentry triage, audit-log analysis for rejected HITL tool calls, content-report review, and routine maintenance.
@@ -19,7 +19,7 @@ This runbook is the operating procedure for launch and steady-state support. It 
 | Python fallback | Loopback or private service | `GET /api/health/agent` → `checks.pythonFallback` | Python on-call |
 | Ollama | Operator/user host | `GET /api/health/agent` → `checks.ollama` | Platform on-call |
 | Cloud providers | Groq, OpenAI, Anthropic, others | `/api/models?provider=<id>`, LLM traces, provider status pages | API on-call |
-| HITL audit log | `logs/shanaya_audit.jsonl` | `scripts/audit_monitor.py` exit code | Security on-call |
+| HITL audit log | `logs/hannah_audit.jsonl` | `scripts/audit_monitor.py` exit code | Security on-call |
 | Content reports | `logs/content_reports.jsonl` | Weekly review; write failures in API logs | Trust & safety |
 | Sentry | Browser, Express, FastAPI | Sentry issue stream and alerts | On-call |
 | Billing | Apple/Google/RevenueCat/Stripe | Store dashboards; entitlement checks | Product/finance |
@@ -37,14 +37,14 @@ This runbook is the operating procedure for launch and steady-state support. It 
 
 ## 2. Monitoring LLM provider health
 
-Shanaya has three complementary health signals. Do not rely on a single endpoint.
+HANNAH has three complementary health signals. Do not rely on a single endpoint.
 
 ### 2.1 `/api/health` — API process and primary cloud readiness
 
 This endpoint is **unauthenticated** and intentionally minimal:
 
 ```bash
-curl -fsS https://api.shanaya.app/api/health | jq
+curl -fsS https://api.hannah.app/api/health | jq
 ```
 
 Example:
@@ -77,10 +77,10 @@ Use `/api/models` for a live credential/model check.
 This endpoint is **authenticated** with the deployment bearer token:
 
 ```bash
-export SHANAYA_API_TOKEN='...'   # from the secret manager, never commit it
+export HANNAH_API_TOKEN='...'   # from the secret manager, never commit it
 curl -fsS \
-  -H "Authorization: Bearer $SHANAYA_API_TOKEN" \
-  https://api.shanaya.app/api/health/agent | jq
+  -H "Authorization: Bearer $HANNAH_API_TOKEN" \
+  https://api.hannah.app/api/health/agent | jq
 ```
 
 The route returns HTTP `200` when at least one target is ready and `503` when neither is. The body mirrors the status:
@@ -139,10 +139,10 @@ Use this for Groq, OpenAI, Anthropic, and other configured providers. It perform
 ```bash
 for provider in groq openai anthropic; do
   printf '%-10s ' "$provider"
-  curl -sS -o /tmp/shanaya-models.json -w '%{http_code}\n' \
-    -H "Authorization: Bearer $SHANAYA_API_TOKEN" \
-    "https://api.shanaya.app/api/models?provider=$provider"
-  jq -r '.error // (.provider + " · " + (.models | length | tostring) + " models")' /tmp/shanaya-models.json
+  curl -sS -o /tmp/hannah-models.json -w '%{http_code}\n' \
+    -H "Authorization: Bearer $HANNAH_API_TOKEN" \
+    "https://api.hannah.app/api/models?provider=$provider"
+  jq -r '.error // (.provider + " · " + (.models | length | tostring) + " models")' /tmp/hannah-models.json
 done
 ```
 
@@ -157,15 +157,15 @@ Interpretation:
 | Timeout | Network or provider latency | Check egress, DNS, provider status; P1 |
 | `503` “Configure …” | No credential configured | Expected if provider is not enabled |
 
-**Provider status pages:** subscribe to Groq, OpenAI, Anthropic, and hosting status updates. A provider incident is not automatically a Shanaya incident, but it becomes one when the default provider is unavailable and local fallback is not usable.
+**Provider status pages:** subscribe to Groq, OpenAI, Anthropic, and hosting status updates. A provider incident is not automatically a HANNAH incident, but it becomes one when the default provider is unavailable and local fallback is not usable.
 
 ### 2.4 Synthetic chat canary
 
 Run this every 5–15 minutes from a trusted monitor, or manually during an incident. It sends a harmless prompt and a small token budget. Do not send user data.
 
 ```bash
-curl -fsS -X POST https://api.shanaya.app/api/chat \
-  -H "Authorization: Bearer $SHANAYA_API_TOKEN" \
+curl -fsS -X POST https://api.hannah.app/api/chat \
+  -H "Authorization: Bearer $HANNAH_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"mode":"cloud","messages":[{"role":"user","content":"Reply with OK."}]}' \
   | jq '{reply: .reply, provider: .provider, model: .model}'
@@ -218,8 +218,8 @@ jq -s 'group_by(.provider.id) | map({
 
 Create two monitors:
 
-1. **API process:** `GET https://api.shanaya.app/api/health`, every 60 s, 3 retries, alert on non-200 or `status != "ok"`.
-2. **Local agent:** `GET https://api.shanaya.app/api/health/agent` with `Authorization: Bearer <token>`, every 60 s, 3 retries, alert on 503 or `status == "unavailable"`. Warn on `degraded` for 10 minutes.
+1. **API process:** `GET https://api.hannah.app/api/health`, every 60 s, 3 retries, alert on non-200 or `status != "ok"`.
+2. **Local agent:** `GET https://api.hannah.app/api/health/agent` with `Authorization: Bearer <token>`, every 60 s, 3 retries, alert on 503 or `status == "unavailable"`. Warn on `degraded` for 10 minutes.
 
 Store the monitor’s bearer token in the monitor’s secret store, not in the URL or a public dashboard. Rotate it with the API token.
 
@@ -240,22 +240,22 @@ With a single process and no load balancer, a restart causes a brief gap. Schedu
 
 **Preconditions:** access to the Groq console, the hosting secret manager, the deployment dashboard, and the monitoring dashboard. Have a second operator available for production changes.
 
-1. **Create the new key.** In the Groq console, create a key labeled `shanaya-prod-YYYY-MM-DD-<operator>`. Do not reuse a key from another environment.
+1. **Create the new key.** In the Groq console, create a key labeled `hannah-prod-YYYY-MM-DD-<operator>`. Do not reuse a key from another environment.
 2. **Store it in the secret manager.** Write the new value to the production secret path. Do not paste it into chat, tickets, shell history, CI logs, or a `VITE_*` variable. If you must use a shell, read it from the secret manager into an environment variable and disable history:
    ```bash
    set +o history
-   export GROQ_API_KEY="$(secret-tool lookup service shanaya key groq-prod-next)"
+   export GROQ_API_KEY="$(secret-tool lookup service hannah key groq-prod-next)"
    ```
 3. **Deploy a canary revision.** Set `GROQ_API_KEY` on the new revision only. Keep the old revision on the old key. Do not shift 100% of traffic yet.
 4. **Verify the new revision.** Send the canary to the new revision or use a provider-specific probe:
    ```bash
-   curl -fsS -H "Authorization: Bearer $SHANAYA_API_TOKEN" \
-     "https://canary.api.shanaya.app/api/models?provider=groq" | jq '.provider, (.models | length)'
+   curl -fsS -H "Authorization: Bearer $HANNAH_API_TOKEN" \
+     "https://canary.api.hannah.app/api/models?provider=groq" | jq '.provider, (.models | length)'
    ```
    Then run the synthetic chat canary against the canary host:
    ```bash
-   curl -fsS -X POST https://canary.api.shanaya.app/api/chat \
-     -H "Authorization: Bearer $SHANAYA_API_TOKEN" \
+   curl -fsS -X POST https://canary.api.hannah.app/api/chat \
+     -H "Authorization: Bearer $HANNAH_API_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"mode":"cloud","messages":[{"role":"user","content":"Reply with OK."}]}' | jq '.reply'
    ```
@@ -288,7 +288,7 @@ If a key may have leaked — in a screenshot, log, commit, issue, chat, or publi
 2. **Deploy the replacement** through the canary procedure above.
 3. **Search for exposure:** Git history, CI logs, Sentry events, Discord, issue trackers, build artifacts, and `client/dist`. Do not reproduce the key in the incident channel; use the last four characters or a hash.
 4. **Check provider usage** for unexpected spend, models, or regions. Groq/OpenAI dashboards show usage; export a snapshot before changing anything.
-5. **Rotate adjacent secrets** if the leak could have exposed them: `ANTHROPIC_API_KEY`, `SHANAYA_API_TOKEN`, `PINECALL_TOKEN_URL` credentials, `MCP_API_TOKEN`, `SENTRY_DSN` (not secret, but rotate if abused), and database credentials.
+5. **Rotate adjacent secrets** if the leak could have exposed them: `ANTHROPIC_API_KEY`, `HANNAH_API_TOKEN`, `PINECALL_TOKEN_URL` credentials, `MCP_API_TOKEN`, `SENTRY_DSN` (not secret, but rotate if abused), and database credentials.
 6. **Preserve evidence** and open a P0 security incident. If personal data may have been accessed, follow the legal breach-notification timeline (for example, 72 hours under GDPR where applicable).
 7. **Postmortem within 48 hours.** Add a prevention item: secret scanning, pre-commit hook, CI check, narrower key scope, or removal of the key from the client.
 
@@ -296,10 +296,10 @@ If a key may have leaked — in a screenshot, log, commit, issue, chat, or publi
 
 | Secret | Provider/project | Key ID / label | Created | Last rotated | Owner | Next rotation | Revoked |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `GROQ_API_KEY` | Groq production | `shanaya-prod-2026-11-15` | 2026-11-15 | 2026-11-15 | API on-call | 2027-02-15 | — |
+| `GROQ_API_KEY` | Groq production | `hannah-prod-2026-11-15` | 2026-11-15 | 2026-11-15 | API on-call | 2027-02-15 | — |
 | `OPENAI_API_KEY` | OpenAI production | — | — | — | API on-call | Quarterly | — |
 | `ANTHROPIC_API_KEY` | Anthropic desktop/MobileClaw | — | — | — | API on-call | Quarterly | — |
-| `SHANAYA_API_TOKEN` | Shanaya API | — | — | — | Security | Quarterly or on leak | — |
+| `HANNAH_API_TOKEN` | HANNAH API | — | — | — | Security | Quarterly or on leak | — |
 | `MCP_API_TOKEN` | MCP HTTP | — | — | — | Security | Quarterly | — |
 
 Rotate quarterly, after any operator departure, and immediately after a suspected exposure. Use provider-side key expiration where available.
@@ -342,8 +342,8 @@ When in doubt, escalate up, not down. A P1 with a credible security or data-expo
 
 ```text
 is:unresolved level:error environment:production
-release:shanaya-client@1.0.0
-release:shanaya-server@1.0.0
+release:hannah-client@1.0.0
+release:hannah-server@1.0.0
 event.type:error !message:"Failed to fetch"
 transaction:/api/chat
 transaction:/api/agent
@@ -396,11 +396,11 @@ Create alert rules for:
 
 **Security:** “We identified and contained a security issue affecting [scope]. We have rotated affected credentials and are notifying affected users as required. Do not share credentials or private conversations in public channels.”
 
-## 5. Analyzing `shanaya_audit.jsonl` for rejected HITL tool calls
+## 5. Analyzing `hannah_audit.jsonl` for rejected HITL tool calls
 
 ### 5.1 What the log is
 
-`logs/shanaya_audit.jsonl` is written by the optional Python backend (`backend/audit_logger.py`) for security-sensitive tool actions. It is append-only, hash-chained, owner-only, and redacted. The Node client’s device-tool confirmations are separate and are not written to this file.
+`logs/hannah_audit.jsonl` is written by the optional Python backend (`backend/audit_logger.py`) for security-sensitive tool actions. It is append-only, hash-chained, owner-only, and redacted. The Node client’s device-tool confirmations are separate and are not written to this file.
 
 Each record includes:
 
@@ -415,10 +415,10 @@ The `details` object is redacted by key name (`api_key`, `token`, `password`, `s
 Always verify the chain before drawing conclusions. A modified, truncated, or reordered log invalidates the analysis.
 
 ```bash
-cd /path/to/shanaya
-python3 scripts/audit_monitor.py --all --json > /tmp/shanaya-audit.json
+cd /path/to/hannah
+python3 scripts/audit_monitor.py --all --json > /tmp/hannah-audit.json
 echo "exit=$?"
-jq '.integrity' /tmp/shanaya-audit.json
+jq '.integrity' /tmp/hannah-audit.json
 ```
 
 - Exit `0` and `integrity.ok: true` → safe to analyze.
@@ -433,7 +433,7 @@ python3 scripts/audit_monitor.py --follow --interval 2
 ### 5.3 Top rejected tools (jq)
 
 ```bash
-LOG=logs/shanaya_audit.jsonl
+LOG=logs/hannah_audit.jsonl
 
 # All rejections: tool + reason
 jq -r 'select(.action == "tool_rejected") |
@@ -459,7 +459,7 @@ The monitor reports total proposals and rejection reasons, but not the per-tool 
 import collections
 import json
 
-LOG = "logs/shanaya_audit.jsonl"
+LOG = "logs/hannah_audit.jsonl"
 proposed = collections.Counter()
 rejected = collections.Counter()
 reasons = collections.Counter()
@@ -574,7 +574,7 @@ Write failures return HTTP `500` and log a generic error without the report body
 
 ### Monthly
 
-- [ ] Rotate `SHANAYA_API_TOKEN` and MCP tokens if the policy requires monthly rotation; otherwise confirm quarterly schedule.
+- [ ] Rotate `HANNAH_API_TOKEN` and MCP tokens if the policy requires monthly rotation; otherwise confirm quarterly schedule.
 - [ ] Review Sentry retention and scrubber tests.
 - [ ] Review privacy policy, provider list, and Data Safety mapping against the shipped build.
 - [ ] Test deletion requests end to end.
@@ -592,7 +592,7 @@ Write failures return HTTP `500` and log a generic error without the report body
 
 | Data | Backup | Retention | Notes |
 | --- | --- | --- | --- |
-| `shanaya_audit.jsonl` | Daily encrypted copy to write-once/immutable storage | Per security policy; at least 1 year | Verify chain after restore; never edit the original |
+| `hannah_audit.jsonl` | Daily encrypted copy to write-once/immutable storage | Per security policy; at least 1 year | Verify chain after restore; never edit the original |
 | `content_reports.jsonl` | Daily encrypted copy | 12 months | Metadata only; no reply text |
 | Feedback (Discord/MongoDB) | Provider backup/export | 24 months target | Contains user text; restrict access |
 | Sentry events | Provider retention | 30–90 days typical | Scrubbed; no prompts or keys |

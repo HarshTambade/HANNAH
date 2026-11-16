@@ -6,7 +6,7 @@ import type { InferenceMode } from "../types";
  * IMPORTANT: this service is intentionally client-side only. It is suitable for
  * preview builds and store screenshots, but it is not an entitlement authority.
  * Before charging money, connect RevenueCat, Stripe, or the platform billing
- * APIs and validate entitlements on the Shanaya API. A user can edit local
+ * APIs and validate entitlements on the HANNAH API. A user can edit local
  * storage, so never unlock server-side spend from this file alone.
  */
 
@@ -84,7 +84,7 @@ export const PREMIUM_PLAN: SubscriptionPlan = {
 
 export const SUBSCRIPTION_PLANS: readonly SubscriptionPlan[] = [FREE_PLAN, PREMIUM_PLAN];
 
-const STORAGE_KEY = "shanaya.subscription.v1";
+const STORAGE_KEY = "hannah.subscription.v1";
 const MAX_TRACKED_USAGE = 1_000_000;
 
 type PersistedSubscription = {

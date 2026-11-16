@@ -1,4 +1,4 @@
-# Shanaya Technical Debt Inventory
+# HANNAH Technical Debt Inventory
 
 | ID | Area | Item | Severity | Effort | Owner | Acceptance criterion |
 | --- | --- | --- | --- | --- | --- | --- |

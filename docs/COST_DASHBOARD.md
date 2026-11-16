@@ -1,4 +1,4 @@
-# Shanaya Cost Dashboard Template
+# HANNAH Cost Dashboard Template
 
 ## Cost per completed interaction
 Cost per completed interaction = total estimated USD cost / number of completed user-visible interactions.

@@ -17,7 +17,7 @@ export const CONTENT_REPORT_REASONS: Array<{ id: ContentReportReason; label: str
   { id: "other", label: "Something else", detail: "Another safety or quality concern." },
 ];
 
-const REPORTED_KEY = "shanaya.reportedContent.v1";
+const REPORTED_KEY = "hannah.reportedContent.v1";
 const MAX_REMEMBERED_REPORTS = 250;
 
 function readReportedIds(): string[] {

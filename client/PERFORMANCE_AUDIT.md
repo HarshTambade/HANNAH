@@ -1,8 +1,8 @@
-# Shanaya Performance Audit
+# HANNAH Performance Audit
 
 ## Overview
 
-This document evaluates the rendering performance of Shanaya's Phase 23/24 frontend, which combines React Three Fiber (3D), Recharts (SVG charts), Framer Motion (animations), and glassmorphism (CSS backdrop-filter) simultaneously.
+This document evaluates the rendering performance of HANNAH's Phase 23/24 frontend, which combines React Three Fiber (3D), Recharts (SVG charts), Framer Motion (animations), and glassmorphism (CSS backdrop-filter) simultaneously.
 
 ## Frame Rate Targets
 

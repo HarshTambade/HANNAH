@@ -8,8 +8,8 @@ from typing import Any
 
 import requests
 
-API_URL = os.getenv("SHANAYA_API_URL", "http://127.0.0.1:8000").rstrip("/")
-TOKEN = os.getenv("SHANAYA_API_TOKEN", "").strip()
+API_URL = os.getenv("HANNAH_API_URL", "http://127.0.0.1:8000").rstrip("/")
+TOKEN = os.getenv("HANNAH_API_TOKEN", "").strip()
 POLL_INTERVAL = float(os.getenv("TASK_SPINE_POLL_INTERVAL", "2"))
 
 

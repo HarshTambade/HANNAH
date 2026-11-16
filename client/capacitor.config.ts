@@ -1,12 +1,12 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.shanaya.companion",
-  appName: "Shanaya",
+  appId: "com.hannah.companion",
+  appName: "HANNAH",
   webDir: "dist",
   plugins: {
     LiveUpdate: {
-      appId: "com.shanaya.companion",
+      appId: "com.hannah.companion",
       autoUpdate: true,
       readyTimeout: 10000,
     },

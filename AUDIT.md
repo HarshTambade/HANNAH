@@ -66,5 +66,5 @@
 
 ### Release readiness
 - Tag `v1.0.3` pushed to `origin/main` with production code.
-- Release workflow `Build Shanaya v1.0.3` queued; Electron matrix (macOS, Windows, Linux) will run via CI.
+- Release workflow `Build HANNAH v1.0.3` queued; Electron matrix (macOS, Windows, Linux) will run via CI.
 - Client build and size checks: PASS.

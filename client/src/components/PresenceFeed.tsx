@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch, apiUrl } from "../services/api";
 
-const CACHE_KEY = "shanaya.presence.v1";
+const CACHE_KEY = "hannah.presence.v1";
 
 type PresenceCache = { day: string; status: string; exposedAt: string };
 
@@ -40,7 +40,7 @@ export default function PresenceFeed() {
         }
       })
       .catch(() => {
-        if (active) setStatus("Shanaya is ready when you are.");
+        if (active) setStatus("HANNAH is ready when you are.");
       });
 
     return () => {

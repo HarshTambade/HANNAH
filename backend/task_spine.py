@@ -1,4 +1,4 @@
-"""In-memory task spine for asynchronous Shanaya work."""
+"""In-memory task spine for asynchronous HANNAH work."""
 
 from __future__ import annotations
 

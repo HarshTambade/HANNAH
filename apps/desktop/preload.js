@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("shanayaDesktop", Object.freeze({
+contextBridge.exposeInMainWorld("hannahDesktop", Object.freeze({
   platform: process.platform,
-  confirmAction: (message) => ipcRenderer.invoke("shanaya:confirm", String(message).slice(0, 2000)),
+  confirmAction: (message) => ipcRenderer.invoke("hannah:confirm", String(message).slice(0, 2000)),
 }));

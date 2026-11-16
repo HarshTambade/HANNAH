@@ -36,31 +36,31 @@ function isPythonApiAlreadyRunning() {
 }
 
 function startPythonFallback() {
-  if (process.env.SHANAYA_ENABLE_PYTHON_FALLBACK === "false") return Promise.resolve();
+  if (process.env.HANNAH_ENABLE_PYTHON_FALLBACK === "false") return Promise.resolve();
   return isPythonApiAlreadyRunning().then((alreadyRunning) => {
     // If another local fallback already owns the port, leave it alone.
-    if (alreadyRunning || pythonBackend || process.env.SHANAYA_SKIP_PYTHON_SPAWN === "true") return;
+    if (alreadyRunning || pythonBackend || process.env.HANNAH_SKIP_PYTHON_SPAWN === "true") return;
     const packagedRoot = process.resourcesPath;
     const projectRoot = path.resolve(__dirname, "../..");
     const backendRoot = app.isPackaged ? packagedRoot : projectRoot;
-    const python = process.env.SHANAYA_PYTHON_EXECUTABLE || (process.platform === "win32" ? "python" : "python3");
+    const python = process.env.HANNAH_PYTHON_EXECUTABLE || (process.platform === "win32" ? "python" : "python3");
     const envAllowlist = [
       "PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "COMSPEC", "PATHEXT", "TMP", "TEMP", "LANG",
       "GROQ_API_KEY", "GROQ_MODELS", "OPENAI_API_KEY", "OPENAI_MODELS", "ANTHROPIC_API_KEY", "ANTHROPIC_MODELS",
       "GEMINI_API_KEY", "GEMINI_MODELS", "LLAMA_CPP_MODEL_PATH", "LLAMA_CPP_N_CTX", "LLAMA_CPP_N_THREADS",
       "LOCAL_LLM_BASE_URL", "LOCAL_LLM_MODEL", "LOCAL_LLM_API_KEY", "MITHI_TTS_URL", "MITHI_TTS_API_KEY",
-      "APPROVAL_TTL_SECONDS", "SHANAYA_PYTHON_SANDBOX_IMAGE", "SHANAYA_NODE_SANDBOX_IMAGE", "SHANAYA_SHELL_SANDBOX_IMAGE",
+      "APPROVAL_TTL_SECONDS", "HANNAH_PYTHON_SANDBOX_IMAGE", "HANNAH_NODE_SANDBOX_IMAGE", "HANNAH_SHELL_SANDBOX_IMAGE",
     ];
     const childEnv = Object.fromEntries(envAllowlist
       .filter((name) => process.env[name] !== undefined)
       .map((name) => [name, process.env[name]]));
-    childEnv.SHANAYA_HOST = "127.0.0.1";
-    childEnv.SHANAYA_PORT = "8000";
+    childEnv.HANNAH_HOST = "127.0.0.1";
+    childEnv.HANNAH_PORT = "8000";
     childEnv.NODE_ENV = app.isPackaged ? "production" : (process.env.NODE_ENV || "development");
-    childEnv.SHANAYA_WORKSPACE = path.join(app.getPath("userData"), "workspace");
+    childEnv.HANNAH_WORKSPACE = path.join(app.getPath("userData"), "workspace");
     // Keep the append-only audit chain in the app's private writable data area,
     // not beside packaged read-only application resources.
-    childEnv.SHANAYA_AUDIT_LOG = path.join(app.getPath("userData"), "logs", "shanaya_audit.jsonl");
+    childEnv.HANNAH_AUDIT_LOG = path.join(app.getPath("userData"), "logs", "hannah_audit.jsonl");
 
     try {
       // Fixed module and arguments, shell disabled, and no process APIs exposed to the renderer.
@@ -183,7 +183,7 @@ async function waitForDevServer(url) {
 
 async function createWindow() {
   // Packaged builds always use the bundled frontend; an environment override is dev-only.
-  const devUrl = app.isPackaged ? undefined : (process.env.SHANAYA_DEV_SERVER_URL || "http://localhost:5173");
+  const devUrl = app.isPackaged ? undefined : (process.env.HANNAH_DEV_SERVER_URL || "http://localhost:5173");
   // Validate before making even a health-check request to a developer-supplied URL.
   if (devUrl) parseLocalFrontendUrl(devUrl);
   if (devUrl) await waitForDevServer(devUrl);
@@ -223,7 +223,7 @@ async function createWindow() {
   void mainWindow.loadURL(frontendUrl);
 }
 
-ipcMain.handle("shanaya:confirm", async (event, message) => {
+ipcMain.handle("hannah:confirm", async (event, message) => {
   if (!isTrustedMainFrame(event)) return false;
   if (typeof message !== "string" || message.length > 2000) return false;
   const { response } = await require("electron").dialog.showMessageBox(mainWindow, {
@@ -245,7 +245,7 @@ app.whenReady().then(async () => {
   });
 }).catch((error) => {
   // A missing system Python/dependency must not prevent the desktop shell opening.
-  console.error(`Shanaya desktop window could not start (${error?.code || error?.name || "startup error"}).`);
+  console.error(`HANNAH desktop window could not start (${error?.code || error?.name || "startup error"}).`);
   app.quit();
 });
 

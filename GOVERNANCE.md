@@ -1,8 +1,8 @@
-# Shanaya Agentic Governance
+# HANNAH Agentic Governance
 
 ## Control Plane Overview
 
-Shanaya implements a multi-layered governance control plane that ensures every agent action is auditable, reversible, and subject to human oversight.
+HANNAH implements a multi-layered governance control plane that ensures every agent action is auditable, reversible, and subject to human oversight.
 
 ## Governance Layers
 
@@ -29,7 +29,7 @@ Shanaya implements a multi-layered governance control plane that ensures every a
 - `/api/undo` endpoint allows programmatic undo within the delay window.
 
 ### Layer 5: Audit Trail (Tamper-Evident)
-- Hash-chained audit log (`shanaya_audit.jsonl`).
+- Hash-chained audit log (`hannah_audit.jsonl`).
 - Each record includes: sequence number, timestamp, action, tool, status, details, previous_hash, hash.
 - Chain integrity verified on startup; broken chain prevents appending.
 - Append-only with `O_APPEND` and `O_NOFOLLOW` flags.
@@ -63,7 +63,7 @@ The audit log uses a hash chain where each record's hash depends on the previous
 ### Verification
 ```python
 from backend.audit_logger import AuditLogger
-logger = AuditLogger("logs/shanaya_audit.jsonl")
+logger = AuditLogger("logs/hannah_audit.jsonl")
 # Startup automatically verifies the chain
 # If broken: RuntimeError raised, appending refused
 ```

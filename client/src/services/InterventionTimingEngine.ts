@@ -13,8 +13,8 @@ export type InterventionProposal = {
 
 export type InterventionFeedback = "useful" | "dismissed" | "ignored";
 
-const STORAGE_KEY = "shanaya.intervention.v1";
-const THRESHOLD_KEY = "shanaya.intervention.threshold.v1";
+const STORAGE_KEY = "hannah.intervention.v1";
+const THRESHOLD_KEY = "hannah.intervention.threshold.v1";
 
 function readLog(): InterventionProposal[] {
   try {

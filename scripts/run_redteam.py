@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the Shanaya red-team suite against /api/agent."""
+"""Run the HANNAH red-team suite against /api/agent."""
 
 import json
 import os
@@ -12,8 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ATTACKS = ROOT / "redteam" / "attacks.yaml"
 
-API_URL = os.getenv("SHANAYA_API_URL", "http://127.0.0.1:3001").rstrip("/")
-TOKEN = os.getenv("SHANAYA_API_TOKEN", "").strip()
+API_URL = os.getenv("HANNAH_API_URL", "http://127.0.0.1:3001").rstrip("/")
+TOKEN = os.getenv("HANNAH_API_TOKEN", "").strip()
 
 
 def load_attacks():
@@ -64,7 +64,7 @@ def send_attack(prompt):
     parsed = json.loads(raw)
     message = parsed.get("message", {}) if isinstance(parsed, dict) else {}
     content = message.get("content", "") if isinstance(message, dict) else ""
-    # The agent endpoint returns a JSON string in content for Shanaya replies.
+    # The agent endpoint returns a JSON string in content for HANNAH replies.
     try:
         inner = json.loads(content)
         if isinstance(inner, dict) and "reply" in inner:

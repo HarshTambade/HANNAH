@@ -1,8 +1,8 @@
-# Shanaya Accessibility Report
+# HANNAH Accessibility Report
 
 ## Overview
 
-This document evaluates Shanaya's frontend accessibility compliance with WCAG 2.1 AA standards, covering the Phase 23/24 bento dashboard UI.
+This document evaluates HANNAH's frontend accessibility compliance with WCAG 2.1 AA standards, covering the Phase 23/24 bento dashboard UI.
 
 ## Contrast Ratios
 
@@ -48,14 +48,14 @@ A visually hidden skip link appears at the top of the page on first Tab press, a
 
 | Element | ARIA Attribute | Value |
 |---------|---------------|-------|
-| Avatar card | aria-label | "Shanaya avatar card" |
+| Avatar card | aria-label | "HANNAH avatar card" |
 | Guardian strictness select | aria-label | Implicit via label |
 | HITL Approve button | aria-label | "Approve all pending actions" |
 | HITL Reject button | aria-label | "Reject all pending actions" |
 | Send message button | aria-label | "Send message" |
 | Voice input button | aria-label | "Start voice input" / "Stop voice input" |
 | Mic toggle | aria-label | "Mute microphone" / "Unmute microphone" |
-| Speaker toggle | aria-label | "Mute Shanaya's voice" / "Enable Shanaya's voice" |
+| Speaker toggle | aria-label | "Mute HANNAH's voice" / "Enable HANNAH's voice" |
 | Call end button | aria-label | "End virtual call" |
 | Settings button | aria-label | "Inference and privacy settings" |
 | Feedback button | aria-label | "Send feedback" |
@@ -117,7 +117,7 @@ Users with `prefers-reduced-motion: reduce` will experience:
 
 ## Known Issues
 
-1. **Avatar 3D scene**: The React Three Fiber canvas does not have a meaningful ARIA label beyond "Shanaya avatar card". The 3D model itself is decorative and not interactive.
+1. **Avatar 3D scene**: The React Three Fiber canvas does not have a meaningful ARIA label beyond "HANNAH avatar card". The 3D model itself is decorative and not interactive.
 
 2. **Complex charts**: Recharts SVG charts are not fully accessible to screen readers. The data is also presented in text form below each chart for accessibility.
 

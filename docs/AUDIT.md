@@ -1,4 +1,4 @@
-# Shanaya Codebase Audit
+# HANNAH Codebase Audit
 
 **Audit date:** 2026-11-15
 **Reviewed revision:** b81a527
@@ -10,15 +10,15 @@
 
 After the b81a527 baseline below, M1.5 added Express bearer authentication for every /api route except /api/health, production startup validation, and configurable per-token fixed-window limits on chat, agent, and desktop-computer requests. The primary client collects the bearer from the user in page memory; it is not compiled into the Vite bundle or stored in browser storage. See server/api-security.js:15-40,49-90; server/index.js:114-120; client/src/services/api.ts:1-21; and MILESTONE_1.5.md. The limits are process-local, so multi-instance deployments need a shared or upstream limiter.
 
-Shanaya is an existing multi-surface assistant with a primary React/Capacitor client, an Express provider API, a separate Python agent/backend, native memory and voice dependencies, a small eBPF metadata sensor, and two additional app shells. Several capabilities are real, but the repository does not yet behave as one unified autonomous system.
+HANNAH is an existing multi-surface assistant with a primary React/Capacitor client, an Express provider API, a separate Python agent/backend, native memory and voice dependencies, a small eBPF metadata sensor, and two additional app shells. Several capabilities are real, but the repository does not yet behave as one unified autonomous system.
 
 The primary released path appears to be client/ (web/PWA, Capacitor native apps, and the client-generated Electron package in CI). apps/frontend/ plus apps/desktop/ form a second Python-backed app path with separate routing, approvals, prompts, and desktop packaging. The two paths do not share one agent/tool contract.
 
 Important corrections to assumptions in the brief:
 
 - The Python model-step fallback does not call Express. The primary client calls Express first, then can call Python /api/agent/step directly for an eligible Groq failure (client/src/services/LLMRouter.ts:133-160; backend/main.py:507-548).
-- Shanaya does not have general kernel-level control. ebpf/main.bpf.c:13-23 observes only openat metadata; it does not capture paths or execute actions. The loader is opt-in, Linux-only, and root-gated (ebpf/loader.py:75-105).
-- The server exposes Shanaya as an MCP server, but the client does not consume external MCP servers. The exposed server tools are chat, status, and model listing; they do not control the host (server/mcp-core.mjs:33-38,40-129).
+- HANNAH does not have general kernel-level control. ebpf/main.bpf.c:13-23 observes only openat metadata; it does not capture paths or execute actions. The loader is opt-in, Linux-only, and root-gated (ebpf/loader.py:75-105).
+- The server exposes HANNAH as an MCP server, but the client does not consume external MCP servers. The exposed server tools are chat, status, and model listing; they do not control the host (server/mcp-core.mjs:33-38,40-129).
 - A native LanceDB plugin is declared and included in Android/iOS project wiring, and the installed dependency contains native implementations. The app calls it, but this audit cannot establish that it works on physical devices or in supported release builds.
 - There is no CLI/headless agent, shared policy file, shared tool schema, common permission broker, client/server trace chain, or kernel_trace tool in the tracked source.
 
@@ -98,7 +98,7 @@ This maps tracked paths by file and actual role. Generated resources are grouped
 - server/api-security.test.js — Node built-in integration tests for authentication, the health exemption, rate limits, and production startup validation.
 - server/providers/catalog.js — canonical Node provider list, per-provider model defaults/overrides, default Groq ID, custom-base URL validation.
 - server/providers/runtime.js — request adapters for OpenAI-compatible APIs, Anthropic Messages/tool blocks, and Ollama; model fallback loop; provider model discovery.
-- server/mcp-core.mjs — Shanaya MCP tool definitions and bridge to the Express chat/model APIs. Exposes shanaya_chat, shanaya_status, shanaya_models.
+- server/mcp-core.mjs — HANNAH MCP tool definitions and bridge to the Express chat/model APIs. Exposes hannah_chat, hannah_status, hannah_models.
 - server/mcp-http.mjs — optional bearer-authenticated Streamable HTTP MCP mount; uses equal-length check and timingSafeEqual.
 - server/mcp-stdio.mjs — local stdio MCP server entry point; exposes the same MCP tools.
 - server/mithi_tts_service.py, server/mithi-service-requirements.txt — separate optional FastAPI wrapper for Mithi speech synthesis.
@@ -178,15 +178,15 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 ### 4.4 eBPF — PARTIAL
 
 - The sensor is metadata-only and monitors sys_enter_openat; the fields are PID, UID, flags, process name, not path/content (ebpf/main.bpf.c:4-23).
-- It requires explicit --enable-kernel-senses, Linux, BCC, and root (ebpf/loader.py:75-105). It does not explicitly test CAP_BPF; missing BCC/privilege returns an error without disabling the rest of Shanaya.
+- It requires explicit --enable-kernel-senses, Linux, BCC, and root (ebpf/loader.py:75-105). It does not explicitly test CAP_BPF; missing BCC/privilege returns an error without disabling the rest of HANNAH.
 - Events are forwarded to a loopback-only Python endpoint and kept in a bounded in-memory deque (ebpf/loader.py:21,28-39,47-60; backend/main.py:701-736).
 - There is no registered read-only kernel_trace model tool. The data is not retained across Python process restart. No dedicated privacy document was found that describes exactly what this sensor does and does not collect.
 
 ### 4.5 Memory — PARTIAL
 
 - The primary app initializes LanceDB with auto-recall/auto-capture and adds memory tools to native runs (client/src/services/MobileAgent.ts:24-40,70-73). client/package.json:42, Android Gradle wiring (client/android/capacitor.settings.gradle:41-48), and iOS SPM wiring (client/ios/App/CapApp-SPM/Package.swift:26-27) show a native plugin dependency rather than a JS-only stub.
-- The source requests a database named shanaya-agent-memory; it does not establish a .shanaya/ project workspace or project-specific namespace (client/src/services/MobileAgent.ts:28-33).
-- No session-end summarization/write-back flow is present. The app-level integration does not demonstrate a configured embedding and hybrid/FTS recall workflow; the installed native package's API alone is not proof that Shanaya uses hybrid recall.
+- The source requests a database named hannah-agent-memory; it does not establish a .hannah/ project workspace or project-specific namespace (client/src/services/MobileAgent.ts:28-33).
+- No session-end summarization/write-back flow is present. The app-level integration does not demonstrate a configured embedding and hybrid/FTS recall workflow; the installed native package's API alone is not proof that HANNAH uses hybrid recall.
 - No physical iOS or Android device test was run. Therefore native bridge existence is supported by dependency/project wiring, but “works on iOS + Android app-private storage” remains unverified.
 
 ### 4.6 Voice and avatar — PARTIAL
@@ -199,8 +199,8 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 
 ### 4.7 MCP both directions — PARTIAL
 
-- Shanaya exposes MCP over stdio (server/mcp-stdio.mjs:1-9) and optional HTTP. HTTP requires a 32+ character bearer token and compares equal-length values with timingSafeEqual (server/mcp-http.mjs:6-25).
-- Exposed tools are only chat/status/models (server/mcp-core.mjs:33-129). The primary app's integration screen configures external hosts to connect to Shanaya; no MCP client/remote server tool adapter was found.
+- HANNAH exposes MCP over stdio (server/mcp-stdio.mjs:1-9) and optional HTTP. HTTP requires a 32+ character bearer token and compares equal-length values with timingSafeEqual (server/mcp-http.mjs:6-25).
+- Exposed tools are only chat/status/models (server/mcp-core.mjs:33-129). The primary app's integration screen configures external hosts to connect to HANNAH; no MCP client/remote server tool adapter was found.
 - Vercel rewrites /mcp to the Express service (vercel.json:17-23), but the route is mounted only inside startServer() (server/index.js:456-461), while serverless adapters receive the exported app without calling startServer() (server/index.js:478-487). As written, the Vercel /mcp route is likely absent even when rewrites are active. This needs deployment verification.
 - Status: server-side transport/auth is implemented in source, but outbound MCP and Vercel HTTP MCP are incomplete/unverified.
 
@@ -209,7 +209,7 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 - Primary web/PWA, Capacitor Android/iOS, and client-generated Electron build paths exist (client/package.json:6-20; .github/workflows/build.yml:31-260).
 - apps/frontend and apps/desktop are separate applications with a different Python agent contract. The separate desktop preload only offers confirmation, whereas DesktopAgent expects confirmation, screenshot, and perform methods (apps/desktop/preload.js:3-6; client/src/services/DesktopBridge.ts:3-16). The example preload implements the richer bridge but is not wired as the default shell.
 - Local Python binds only to loopback and does not use bearer-token authentication (backend/main.py:62-78). Express defaults to loopback (server/index.js:29-32) and since M1.5 requires a bearer token on all /api routes except health. CORS remains a browser-origin control, not authentication. The remote MCP route also has its separate bearer token.
-- No shanaya CLI, --yes, policy-file headless mode, or JSON CLI output was found. External MCP client support is missing.
+- No hannah CLI, --yes, policy-file headless mode, or JSON CLI output was found. External MCP client support is missing.
 
 ### 4.9 Quality — PARTIAL
 
@@ -244,7 +244,7 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 
 1. **Which app surface is supported?** Keep both the primary client + client-generated Electron path and the separate apps/frontend + apps/desktop Python path, or standardize on one release surface? Recommendation: make client the supported web/mobile/desktop UI and retain Python only as a separately documented backend/tool runtime unless you need the second UI.
 2. **Should the client-to-Python /api/agent/step fallback remain?** Its specific extra capability is Python's independent provider set and embedded llama.cpp path when the Node request fails. Recommendation: retire it from the main client unless you rely on that Python-only model path; preserve the standalone Python approval-gated agent only if you explicitly need that separate workflow.
-3. **What does “kernel-level” mean for Shanaya?** The supplied brief constrains kernel integration to opt-in, read-only, metadata-only eBPF openat observation and explicitly excludes a loadable kernel module. Confirm that this is the intended boundary for §4.4; host operations should otherwise use allow-listed tools and the permission broker.
+3. **What does “kernel-level” mean for HANNAH?** The supplied brief constrains kernel integration to opt-in, read-only, metadata-only eBPF openat observation and explicitly excludes a loadable kernel module. Confirm that this is the intended boundary for §4.4; host operations should otherwise use allow-listed tools and the permission broker.
 4. **For external MCP servers, where should connections live?** A browser cannot launch stdio processes, so full coverage requires HTTP MCP in web clients and stdio/HTTP adapters in trusted desktop/native runtimes. Recommendation: define server connections and secrets in a local trusted runtime, with returned tools passed through the shared permission broker; should that be the model?
 
 ## 7. Proposed sequence after approval

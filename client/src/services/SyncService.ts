@@ -1,6 +1,6 @@
 export type SyncStatus = { lastSyncAt: string | null; pendingOps: number; encrypted: boolean; connected: boolean };
 
-const KEY = "shanaya.sync.v1";
+const KEY = "hannah.sync.v1";
 
 function readOps() {
   try {

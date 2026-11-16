@@ -1,4 +1,4 @@
-import type { ShanayaTool } from "./DeviceTools";
+import type { HANNAHTool } from "./DeviceTools";
 
 export type AgentProfile = {
   name: string;
@@ -20,7 +20,7 @@ export const defaultAgentProfiles: Record<string, AgentProfile> = {
   maintenance: { name: "maintenance", modelTier: "local", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
 };
 
-export function selectToolsForProfile(profile: AgentProfile, allTools: ShanayaTool[]): ShanayaTool[] {
+export function selectToolsForProfile(profile: AgentProfile, allTools: HANNAHTool[]): HANNAHTool[] {
   if (profile.allowedTools === "all") return allTools;
   const allowed = new Set(profile.allowedTools);
   return allTools.filter((tool) => allowed.has(tool.name));

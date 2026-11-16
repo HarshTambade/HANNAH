@@ -1,7 +1,7 @@
-# Shanaya Governance
+# HANNAH Governance
 
 ## Decision-making body
-Shanaya is governed by a technical steering committee (TSC) of core maintainers. The TSC makes decisions by consensus; unresolved disputes use a simple majority vote.
+HANNAH is governed by a technical steering committee (TSC) of core maintainers. The TSC makes decisions by consensus; unresolved disputes use a simple majority vote.
 
 ## Member selection
 - Core maintainers nominate new TSC members.
@@ -14,6 +14,6 @@ Shanaya is governed by a technical steering committee (TSC) of core maintainers.
 - Security and privacy fixes are prioritized over feature work.
 
 ## Security disclosures
-- Report vulnerabilities to security@shanaya.app.
+- Report vulnerabilities to security@hannah.app.
 - Do not include live credentials, private conversations, or personal data.
 - The TSC coordinates disclosure and patch release.

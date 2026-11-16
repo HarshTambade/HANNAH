@@ -49,7 +49,7 @@ export default function App() {
   }
 
   if (screen === "automations") return <WorkflowBuilder onBack={() => setScreen("companion")} />;
-  if (screen === "conversation") return <main className="relative flex h-[100dvh] min-h-0 flex-col bg-mesh-indigo p-3 sm:p-5"><div className="fixed inset-0 bg-mesh-pastel opacity-50" /><div className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-3 self-start"><ArrowLeft size={16} /> Dashboard</button><div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)]"><section role="region" aria-label="Shanaya avatar" data-emotion={emotion} data-avatar-motion={avatarMotion} className="relative min-h-32 overflow-hidden rounded-[2rem] border border-white/70 bg-white/65 shadow-soft-lg lg:min-h-0"><AvatarScene emotion={emotion} onMotionChange={setAvatarMotion} /></section><div className="min-h-0"><ChatUI onEmotionChange={setEmotion} panel groqApiKey={groqApiKey} initialMode={preferredMode} /></div></div></div></main>;
+  if (screen === "conversation") return <main className="relative flex h-[100dvh] min-h-0 flex-col bg-mesh-indigo p-3 sm:p-5"><div className="fixed inset-0 bg-mesh-pastel opacity-50" /><div className="relative z-10 mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-3 self-start"><ArrowLeft size={16} /> Dashboard</button><div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)]"><section role="region" aria-label="HANNAH avatar" data-emotion={emotion} data-avatar-motion={avatarMotion} className="relative min-h-32 overflow-hidden rounded-[2rem] border border-white/70 bg-white/65 shadow-soft-lg lg:min-h-0"><AvatarScene emotion={emotion} onMotionChange={setAvatarMotion} /></section><div className="min-h-0"><ChatUI onEmotionChange={setEmotion} panel groqApiKey={groqApiKey} initialMode={preferredMode} /></div></div></div></main>;
   if (screen === "accountability") return <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><div className="relative z-10 mx-auto max-w-5xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><AgentAccountabilityDashboard /></div></main>;
   if (screen === "developer") return (
     <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><section className="relative z-10 mx-auto max-w-3xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><div className="bento-card"><div className="bento-kicker">Developer settings</div><h1 className="bento-title mt-2">Resilience controls</h1><p className="bento-desc mt-2">Chaos injection is available only in development and test builds. It can simulate failed network requests, tool timeouts, corrupted memory, and denied approvals.</p><label className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/70 p-4"><span><span className="block text-sm font-bold text-ink">Chaos Mode</span><span className="mt-1 block text-xs text-slate-500">Randomly inject one configured failure at a time.</span></span><input type="checkbox" disabled={!ChaosEngine.available()} checked={chaosEnabled} onChange={(event) => ChaosEngine.setEnabled(event.target.checked)} className="h-5 w-5 accent-violet-600" /></label>{!ChaosEngine.available() && <p className="mt-3 text-xs text-slate-500">This production build does not expose chaos controls.</p>}<div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-sky-900"><Code2 size={16} /> Fallback status</div><p className="mt-2 text-xs text-sky-800">{degraded.degraded ? degraded.reason : "No degraded condition is currently reported."}</p>{degraded.degraded && <button className="mt-3 text-xs font-semibold text-sky-800 underline" onClick={() => ChaosEngine.clearDegraded()}>Clear degraded status</button>}</div></div></section></main>
@@ -80,7 +80,7 @@ export default function App() {
               <Bot size={20} />
             </div>
             <div>
-              <p className="font-display font-bold text-xl text-ink tracking-tight">Shanaya</p>
+              <p className="font-display font-bold text-xl text-ink tracking-tight">HANNAH</p>
               <p className="text-xs text-slate-500 uppercase tracking-wider">AI Companion Dashboard</p>
             </div>
           </div>
@@ -105,7 +105,7 @@ export default function App() {
             <div className="mb-4">
               <div className="bento-kicker">Focus Area Distribution</div>
               <div className="bento-title">Task Breakdown</div>
-              <div className="bento-desc">Shanaya's task classification across all sessions.</div>
+              <div className="bento-desc">HANNAH's task classification across all sessions.</div>
             </div>
             <div className="flex-1 flex items-center justify-center">
               <div className="w-full max-w-[300px]">
@@ -244,7 +244,7 @@ export default function App() {
                   <div className="font-display font-bold text-lg text-ink">Conversation</div>
                   <div className="flex items-center gap-1 text-[11px]">
                     <span className="relative flex h-2 w-2"><span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping" /><span className="relative inset-0 rounded-full bg-emerald-500" /></span>
-                    <span className="font-medium text-slate-600">Shanaya is online</span>
+                    <span className="font-medium text-slate-600">HANNAH is online</span>
                   </div>
                 </div>
               </div>
@@ -258,7 +258,7 @@ export default function App() {
               <div className="max-w-[600px] mx-auto space-y-4">
                 <div className="flex flex-col gap-1">
                   <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-soft max-w-[80%]">
-                    <p className="text-[13px] leading-relaxed text-ink">Hey, I'm Shanaya. It's lovely to meet you. What's on your mind today?</p>
+                    <p className="text-[13px] leading-relaxed text-ink">Hey, I'm HANNAH. It's lovely to meet you. What's on your mind today?</p>
                   </div>
                   <span className="text-[10px] text-slate-400">Just now</span>
                 </div>
@@ -283,7 +283,7 @@ export default function App() {
               </div>
               <div className="flex-1">
                 <div className="flex items-baseline gap-1 text-[11px] font-bold text-amber-700">
-                  <span>Shanaya requests approval</span>
+                  <span>HANNAH requests approval</span>
                   <span className="text-normal font-medium">·</span>
                   <span>run_shell</span>
                 </div>

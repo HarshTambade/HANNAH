@@ -49,7 +49,7 @@ def _safe_value(value: Any, key: str = "", depth: int = 0) -> Any:
 
 class AuditLogger:
     def __init__(self, path: str | Path | None = None) -> None:
-        requested_path = Path(path or os.getenv("SHANAYA_AUDIT_LOG", "logs/shanaya_audit.jsonl")).expanduser()
+        requested_path = Path(path or os.getenv("HANNAH_AUDIT_LOG", "logs/hannah_audit.jsonl")).expanduser()
         if not requested_path.is_absolute():
             requested_path = Path.cwd() / requested_path
         # Resolve the parent only. Resolving the file itself would silently

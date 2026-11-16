@@ -1,4 +1,4 @@
-# Shanaya Sustainability Plan
+# HANNAH Sustainability Plan
 
 ## Maintenance hours per module (estimated monthly)
 - Client core: 20 hours

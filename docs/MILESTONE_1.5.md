@@ -4,7 +4,7 @@
 
 ## Changes
 
-- Added server-only SHANAYA_API_TOKEN validation. Production refuses to load without a non-empty 32–512 character token; development protected routes return 503 when the server token is not configured.
+- Added server-only HANNAH_API_TOKEN validation. Production refuses to load without a non-empty 32–512 character token; development protected routes return 503 when the server token is not configured.
 - Required a Bearer token for every Express /api route except /api/health. The token is SHA-256 hashed and compared with timingSafeEqual. Authentication runs before JSON body parsing.
 - Added configurable fixed-window, per-token limits for chat (30/minute), agent (60/minute), and desktop computer use (20/minute), with Retry-After and RateLimit response headers.
 - Added a landing-page field for users to enter the server token. It is held in page memory for the current session and cleared when returning Home; it is not stored or included in the Vite bundle.

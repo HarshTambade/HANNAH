@@ -10,7 +10,7 @@ export type ITUAgenticIdentity = {
   issuer: string;
 };
 
-export type ShanayaProfile = {
+export type HANNAHProfile = {
   name: string;
   version: string;
   tools: string[];
@@ -20,9 +20,9 @@ export type ShanayaProfile = {
 };
 
 export const IdentityInteropLayer = {
-  toITU(profile: ShanayaProfile, issuer = "shanaya-local"): ITUAgenticIdentity {
+  toITU(profile: HANNAHProfile, issuer = "hannah-local"): ITUAgenticIdentity {
     return {
-      identityId: `shanaya:${crypto.randomUUID()}`,
+      identityId: `hannah:${crypto.randomUUID()}`,
       intent: "User-assistant companion with privacy-first governance",
       capabilities: profile.tools,
       autonomySpectrum: "supervised",
@@ -33,9 +33,9 @@ export const IdentityInteropLayer = {
       issuer,
     };
   },
-  fromITU(identity: ITUAgenticIdentity): ShanayaProfile {
+  fromITU(identity: ITUAgenticIdentity): HANNAHProfile {
     return {
-      name: "Shanaya",
+      name: "HANNAH",
       version: "1.0.3",
       tools: identity.capabilities,
       specialists: identity.delegationChain,
@@ -46,7 +46,7 @@ export const IdentityInteropLayer = {
   present() {
     // Returns the ITU identity for presentation to compliant platforms.
     return this.toITU({
-      name: "Shanaya",
+      name: "HANNAH",
       version: "1.0.3",
       tools: ["memory_query"],
       specialists: [],

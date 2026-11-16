@@ -9,7 +9,7 @@ export type PersonalizationInteraction = {
   at: number;
 };
 
-const STORAGE_KEY = "shanaya.personalization.v1";
+const STORAGE_KEY = "hannah.personalization.v1";
 const MAX_INTERACTIONS = 200;
 const MAX_FIELD_CHARS = 2_000;
 

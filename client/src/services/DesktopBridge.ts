@@ -8,10 +8,10 @@ export type DesktopBridge = {
 
 declare global {
   interface Window {
-    shanayaDesktop?: DesktopBridge;
+    hannahDesktop?: DesktopBridge;
   }
 }
 
 export function getDesktopBridge() {
-  return typeof window === "undefined" ? undefined : window.shanayaDesktop;
+  return typeof window === "undefined" ? undefined : window.hannahDesktop;
 }

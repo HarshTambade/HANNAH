@@ -4,14 +4,14 @@ const { once } = require("node:events");
 const { test, before, after } = require("node:test");
 
 process.env.NODE_ENV = "production";
-process.env.SHANAYA_API_TOKEN = "test-token-for-shanaya-api-access-0123456789";
-process.env.SHANAYA_RATE_LIMIT_CHAT_MAX = "2";
-process.env.SHANAYA_RATE_LIMIT_AGENT_MAX = "1";
-process.env.SHANAYA_RATE_LIMIT_DESKTOP_MAX = "1";
-process.env.SHANAYA_RATE_LIMIT_WINDOW_MS = "60000";
+process.env.HANNAH_API_TOKEN = "test-token-for-hannah-api-access-0123456789";
+process.env.HANNAH_RATE_LIMIT_CHAT_MAX = "2";
+process.env.HANNAH_RATE_LIMIT_AGENT_MAX = "1";
+process.env.HANNAH_RATE_LIMIT_DESKTOP_MAX = "1";
+process.env.HANNAH_RATE_LIMIT_WINDOW_MS = "60000";
 
 const app = require("./index");
-const token = process.env.SHANAYA_API_TOKEN;
+const token = process.env.HANNAH_API_TOKEN;
 let server;
 let baseUrl;
 
@@ -139,9 +139,9 @@ test("production refuses to load without a valid API token", () => {
     const result = spawnSync(process.execPath, ["-e", "require('./index')"], {
       cwd: __dirname,
       encoding: "utf8",
-      env: { ...process.env, NODE_ENV: "production", SHANAYA_API_TOKEN: apiToken },
+      env: { ...process.env, NODE_ENV: "production", HANNAH_API_TOKEN: apiToken },
     });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /SHANAYA_API_TOKEN/);
+    assert.match(result.stderr, /HANNAH_API_TOKEN/);
   }
 });

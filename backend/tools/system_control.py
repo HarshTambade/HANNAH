@@ -29,7 +29,7 @@ def workspace_path(workspace: Path, raw_path: str) -> Path:
         raise ValueError("Provide a non-empty relative workspace path.")
     candidate = (workspace / raw_path).resolve()
     if not candidate.is_relative_to(workspace.resolve()):
-        raise ValueError("Path must stay inside the configured Shanaya workspace.")
+        raise ValueError("Path must stay inside the configured HANNAH workspace.")
     sensitive = False
     for part in candidate.relative_to(workspace.resolve()).parts:
         lowered = part.lower()
@@ -64,7 +64,7 @@ def write_workspace_file(path: str, content: str, workspace: Path) -> dict[str, 
     if not isinstance(content, str) or len(content.encode("utf-8")) > MAX_FILE_BYTES:
         raise ValueError("The write is larger than the 1 MB limit.")
     target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".shanaya-", dir=target.parent)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".hannah-", dir=target.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as stream:

@@ -23,8 +23,8 @@ export type PersonalizationHealth = {
   lastRunAt: string | null;
 };
 
-const VERSIONS_KEY = "shanaya.edgetune.versions.v1";
-const HEALTH_KEY = "shanaya.edgetune.health.v1";
+const VERSIONS_KEY = "hannah.edgetune.versions.v1";
+const HEALTH_KEY = "hannah.edgetune.health.v1";
 
 function readVersions(): AdapterVersion[] {
   try {

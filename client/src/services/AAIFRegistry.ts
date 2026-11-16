@@ -7,8 +7,8 @@ export type AAIFVersionEntry = {
   changes: string[]; // human-readable diff summary
 };
 
-const DOC_KEY = "shanaya.aaif.docs.v1";
-const VERSION_KEY = "shanaya.aaif.versions.v1";
+const DOC_KEY = "hannah.aaif.docs.v1";
+const VERSION_KEY = "hannah.aaif.versions.v1";
 
 function readDocuments(): AAIFDocument[] {
   try {

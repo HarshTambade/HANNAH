@@ -1,15 +1,15 @@
 import type { Plugin } from "vite";
 
-const brandName = "Shanaya";
+const brandName = "HANNAH";
 
 const pages = {
   home: {
-    title: "Shanaya — Your AI Companion | 3D Avatar & Voice Chat",
-    description: "Meet Shanaya, an expressive AI companion for thoughtful conversation, multilingual voice chat, and a living 3D avatar. Bring your own Groq key to begin.",
+    title: "HANNAH — Your AI Companion | 3D Avatar & Voice Chat",
+    description: "Meet HANNAH, an expressive AI companion for thoughtful conversation, multilingual voice chat, and a living 3D avatar. Bring your own Groq key to begin.",
   },
   about: {
-    title: "About Shanaya — AI Companion, Voice Chat & Privacy",
-    description: "Learn about Shanaya’s conversational features, voice and avatar experience, supported AI modes, privacy boundaries, and integrations.",
+    title: "About HANNAH — AI Companion, Voice Chat & Privacy",
+    description: "Learn about HANNAH’s conversational features, voice and avatar experience, supported AI modes, privacy boundaries, and integrations.",
   },
 } as const;
 
@@ -33,35 +33,35 @@ function structuredData(siteOrigin: string, pagePath: string, page: (typeof page
   const canonical = new URL(pagePath, siteOrigin).toString();
   const appUrl = new URL("/", siteOrigin).toString();
   const imageUrl = new URL("/social-card.svg", siteOrigin).toString();
-  const repositoryUrl = "https://github.com/HarshTambade/Shanaya---Your-AI-companion-";
+  const repositoryUrl = "https://github.com/HarshTambade/HANNAH---Your-AI-companion-";
   const faq = [
     {
       "@type": "Question",
-      name: "Does Shanaya work offline?",
+      name: "Does HANNAH work offline?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Shanaya supports optional offline inference with WebLLM in compatible browsers and downloaded GGUF models in supported mobile apps. Initial model downloads require internet access.",
+        text: "HANNAH supports optional offline inference with WebLLM in compatible browsers and downloaded GGUF models in supported mobile apps. Initial model downloads require internet access.",
       },
     },
     {
       "@type": "Question",
-      name: "Can I talk to Shanaya by voice?",
+      name: "Can I talk to HANNAH by voice?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. Shanaya provides multilingual voice input and speech playback where browser or device speech capabilities are available, including English, Hindi, and Marathi options.",
+        text: "Yes. HANNAH provides multilingual voice input and speech playback where browser or device speech capabilities are available, including English, Hindi, and Marathi options.",
       },
     },
     {
       "@type": "Question",
-      name: "Which platforms support Shanaya?",
+      name: "Which platforms support HANNAH?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Shanaya supports the web and PWA, with Capacitor-based Android and iOS builds and an Electron desktop shell for macOS, Windows, and Linux.",
+        text: "HANNAH supports the web and PWA, with Capacitor-based Android and iOS builds and an Electron desktop shell for macOS, Windows, and Linux.",
       },
     },
     {
       "@type": "Question",
-      name: "Do I need a Groq API key to talk to Shanaya?",
+      name: "Do I need a Groq API key to talk to HANNAH?",
       acceptedAnswer: {
         "@type": "Answer",
         text: "The web app asks visitors to provide their own Groq API key before entering the companion. It stays in page memory for the current visit and is sent through the app API only for Groq requests.",
@@ -126,7 +126,7 @@ function structuredData(siteOrigin: string, pagePath: string, page: (typeof page
   return JSON.stringify(graph).replaceAll("<", "\\u003c");
 }
 
-export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
+export function hannahSeoPlugin({ mode }: SeoOptions): Plugin {
   const explicitSiteUrl = process.env.VITE_SITE_URL?.trim() ?? "";
   const vercelProductionDomain = process.env.VERCEL_ENV === "production"
     ? process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ?? ""
@@ -138,7 +138,7 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
   const indexable = isProductionDeployment && Boolean(siteOrigin);
 
   return {
-    name: "shanaya-seo",
+    name: "hannah-seo",
     transformIndexHtml(html, context) {
       const requestPath = context.path.split("?")[0];
       const normalizedPath = requestPath.endsWith("index.html")
@@ -151,8 +151,8 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
       const canonical = indexable ? new URL(pagePath, siteOrigin).toString() : "";
       const tags = [
         `<meta name="robots" content="${indexable ? "index,follow,max-image-preview:large" : "noindex,nofollow"}" />`,
-        `<meta name="author" content="Shanaya" />`,
-        `<meta name="publisher" content="Shanaya" />`,
+        `<meta name="author" content="HANNAH" />`,
+        `<meta name="publisher" content="HANNAH" />`,
         `<meta name="keywords" content="AI companion, AI chatbot, 3D AI avatar, voice AI companion, multilingual AI, offline AI, local AI, WebLLM, private AI assistant" />`,
         `<meta name="referrer" content="strict-origin-when-cross-origin" />`,
         `<meta name="color-scheme" content="light" />`,
@@ -167,7 +167,7 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
         `<meta property="og:image" content="${escapeAttribute(image)}" />`,
         `<meta property="og:image:width" content="1200" />`,
         `<meta property="og:image:height" content="630" />`,
-        `<meta property="og:image:alt" content="Shanaya, a multilingual AI companion with a living 3D avatar" />`,
+        `<meta property="og:image:alt" content="HANNAH, a multilingual AI companion with a living 3D avatar" />`,
         `<meta name="twitter:card" content="summary_large_image" />`,
         `<meta name="twitter:title" content="${escapeAttribute(page.title)}" />`,
         `<meta name="twitter:description" content="${escapeAttribute(page.description)}" />`,
@@ -176,9 +176,9 @@ export function shanayaSeoPlugin({ mode }: SeoOptions): Plugin {
       ].filter(Boolean).join("\n    ");
 
       return html
-        .replace("__SHANAYA_PAGE_TITLE__", escapeAttribute(page.title))
-        .replace("__SHANAYA_PAGE_DESCRIPTION__", escapeAttribute(page.description))
-        .replace("<!-- SHANAYA_SEO_TAGS -->", tags);
+        .replace("__HANNAH_PAGE_TITLE__", escapeAttribute(page.title))
+        .replace("__HANNAH_PAGE_DESCRIPTION__", escapeAttribute(page.description))
+        .replace("<!-- HANNAH_SEO_TAGS -->", tags);
     },
     generateBundle() {
       const robots = [

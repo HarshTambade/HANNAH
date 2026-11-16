@@ -6,26 +6,26 @@ import { VitePWA } from "vite-plugin-pwa";
 import { visualizer } from "rollup-plugin-visualizer";
 import { mobileClawVitePlugin } from "capacitor-mobile-claw/vite-plugin";
 import packageJson from "./package.json";
-import { shanayaSeoPlugin } from "./scripts/seoPlugin";
+import { hannahSeoPlugin } from "./scripts/seoPlugin";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig(({ mode }) => ({
   define: {
     // Exposed through services/appInfo.ts for feedback and error reports.
-    __SHANAYA_APP_VERSION__: JSON.stringify(packageJson.version),
+    __HANNAH_APP_VERSION__: JSON.stringify(packageJson.version),
   },
   plugins: [
     react(),
     mobileClawVitePlugin(),
-    shanayaSeoPlugin({ mode }),
+    hannahSeoPlugin({ mode }),
     VitePWA({
       registerType: "prompt",
       includeAssets: ["icon.svg", "social-card.svg"],
       manifest: {
         id: "/",
-        name: "Shanaya · AI Companion",
-        short_name: "Shanaya",
+        name: "HANNAH · AI Companion",
+        short_name: "HANNAH",
         description: "A multilingual AI companion with a living 3D avatar, voice chat, and optional on-device AI.",
         theme_color: "#f8fafc",
         background_color: "#f8fafc",
@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => ({
           urlPattern: /\/models\/.*\.glb$/,
           handler: "CacheFirst",
           options: {
-            cacheName: "shanaya-avatar-models",
+            cacheName: "hannah-avatar-models",
             expiration: { maxEntries: 2, maxAgeSeconds: 60 * 60 * 24 * 30 },
           },
         }],

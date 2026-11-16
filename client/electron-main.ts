@@ -10,19 +10,19 @@ autoUpdater.autoInstallOnAppQuit = true;
 
 autoUpdater.on("update-available", (info) => {
   for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("shanaya:update-available", info);
+    window.webContents.send("hannah:update-available", info);
   }
 });
 
 app.on("ready", () => {
   if (!app.isPackaged) return;
   void autoUpdater.checkForUpdatesAndNotify().catch(() => {
-    console.error("Shanaya could not check for desktop updates.");
+    console.error("HANNAH could not check for desktop updates.");
   });
 });
 
 // Expose a manual check hook for the renderer if a preload bridge is added later.
-ipcMain.handle("shanaya:check-for-updates", async () => {
+ipcMain.handle("hannah:check-for-updates", async () => {
   if (!app.isPackaged) return { available: false };
   try {
     const result = await autoUpdater.checkForUpdates();

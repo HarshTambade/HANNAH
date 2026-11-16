@@ -1,4 +1,4 @@
-// Copy installShanayaComputerBridge(mainWindow) into the generated Electron main
+// Copy installHANNAHComputerBridge(mainWindow) into the generated Electron main
 // process. Dependencies for that shell: screenshot-desktop, sharp, @nut-tree/nut-js.
 const screenshotDesktop = require("screenshot-desktop");
 const sharp = require("sharp");
@@ -33,18 +33,18 @@ function resolveModifiers(text) {
   return resolveKeys(modifiers.map((part) => aliases[part]).join("+"));
 }
 
-function installShanayaComputerBridge(mainWindow) {
+function installHANNAHComputerBridge(mainWindow) {
   const { dialog, ipcMain } = require("electron");
   let lastImageSize = null;
   const approvals = new Map();
   const allowedActions = new Set(["session", "screenshot", "left_click", "right_click", "middle_click", "double_click", "left_click_drag", "mouse_move", "scroll", "type", "key", "wait"]);
   const assertTrustedFrame = (event) => {
     if (event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) {
-      throw new Error("Desktop controls are available only to the trusted Shanaya window.");
+      throw new Error("Desktop controls are available only to the trusted HANNAH window.");
     }
   };
 
-  ipcMain.handle("shanaya:computer:confirm", async (event, request) => {
+  ipcMain.handle("hannah:computer:confirm", async (event, request) => {
     assertTrustedFrame(event);
     const action = String(request?.action || "");
     const approvalRequest = request?.input && typeof request.input === "object" ? request.input : {};
@@ -55,10 +55,10 @@ function installShanayaComputerBridge(mainWindow) {
       type: "warning",
       title: "Confirm desktop action",
       message: action === "screenshot"
-        ? "Share this desktop screenshot with Shanaya's configured AI provider?"
+        ? "Share this desktop screenshot with HANNAH's configured AI provider?"
         : action === "session"
           ? "Start a desktop agent session? The task and any approved screenshots will be sent to the configured AI provider."
-          : `Allow Shanaya to ${action.replaceAll("_", " ")}? This may activate controls, submit content, change settings, or send data.`,
+          : `Allow HANNAH to ${action.replaceAll("_", " ")}? This may activate controls, submit content, change settings, or send data.`,
       detail: summary,
       buttons: ["Continue", "Cancel"],
       defaultId: 1,
@@ -79,7 +79,7 @@ function installShanayaComputerBridge(mainWindow) {
     }
   };
 
-  ipcMain.handle("shanaya:computer:screenshot", async (event, token) => {
+  ipcMain.handle("hannah:computer:screenshot", async (event, token) => {
     assertTrustedFrame(event);
     consumeApproval(token, "screenshot", {});
     const image = await screenshotDesktop({ format: "png" });
@@ -91,7 +91,7 @@ function installShanayaComputerBridge(mainWindow) {
     return { base64: jpeg.data.toString("base64"), mediaType: "image/jpeg" };
   });
 
-  ipcMain.handle("shanaya:computer:perform", async (event, request) => {
+  ipcMain.handle("hannah:computer:perform", async (event, request) => {
     assertTrustedFrame(event);
     const action = String(request?.action || "");
     const input = request?.input && typeof request.input === "object" ? request.input : {};
@@ -181,10 +181,10 @@ function installShanayaComputerBridge(mainWindow) {
   });
 
   mainWindow.on("closed", () => {
-    ipcMain.removeHandler("shanaya:computer:confirm");
-    ipcMain.removeHandler("shanaya:computer:screenshot");
-    ipcMain.removeHandler("shanaya:computer:perform");
+    ipcMain.removeHandler("hannah:computer:confirm");
+    ipcMain.removeHandler("hannah:computer:screenshot");
+    ipcMain.removeHandler("hannah:computer:perform");
   });
 }
 
-module.exports = { installShanayaComputerBridge };
+module.exports = { installHANNAHComputerBridge };

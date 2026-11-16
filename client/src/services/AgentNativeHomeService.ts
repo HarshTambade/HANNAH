@@ -18,7 +18,7 @@ export type CloudHome = {
   createdAt: number;
 };
 
-const KEY = "shanaya.cloudhome.v1";
+const KEY = "hannah.cloudhome.v1";
 
 function readHome(): CloudHome | null {
   try {

@@ -23,7 +23,7 @@ declare module "@capawesome/capacitor-live-update" {
   };
 }
 
-declare const __SHANAYA_APP_VERSION__: string;
+declare const __HANNAH_APP_VERSION__: string;
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
@@ -31,7 +31,7 @@ interface ImportMetaEnv {
   readonly VITE_PINECALL_AGENT_ID?: string;
   readonly VITE_OFFLINE_MODEL_URL?: string;
   readonly VITE_AVATAR_MODEL_URL?: string;
-  readonly VITE_SHANAYA_ANTHROPIC_MODEL?: string;
+  readonly VITE_HANNAH_ANTHROPIC_MODEL?: string;
   readonly VITE_ANDROID_DOWNLOAD_URL?: string;
   readonly VITE_IOS_DOWNLOAD_URL?: string;
   readonly VITE_MACOS_DOWNLOAD_URL?: string;

@@ -1,4 +1,4 @@
-# Canary Release Process for Shanaya Desktop
+# Canary Release Process for HANNAH Desktop
 
 ## Cohorts
 - 5% of desktop users receive the new build first.

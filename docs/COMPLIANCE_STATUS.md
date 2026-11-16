@@ -1,4 +1,4 @@
-# Shanaya Compliance Status
+# HANNAH Compliance Status
 
 **Last reviewed:** 15 November 2026  
 **Next compliance deadline:** 12 January 2027

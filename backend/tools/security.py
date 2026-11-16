@@ -7,7 +7,7 @@ import json
 from contextlib import contextmanager
 from typing import Any, Iterator
 
-_authority: contextvars.ContextVar[tuple[str, str] | None] = contextvars.ContextVar("shanaya_tool_authority", default=None)
+_authority: contextvars.ContextVar[tuple[str, str] | None] = contextvars.ContextVar("hannah_tool_authority", default=None)
 
 
 def canonical_arguments(arguments: dict[str, Any]) -> str:

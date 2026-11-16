@@ -18,7 +18,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 PROGRAM = Path(__file__).with_name("main.bpf.c")
-SENSES_URL = os.getenv("SHANAYA_SENSES_URL", "http://127.0.0.1:8000/api/senses/events")
+SENSES_URL = os.getenv("HANNAH_SENSES_URL", "http://127.0.0.1:8000/api/senses/events")
 EVENT_QUEUE: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=1024)
 running = True
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -93,7 +93,7 @@ def main() -> int:
         print("The BCC openat monitor requires Linux.", file=sys.stderr)
         return 2
     if not validate_senses_url(SENSES_URL):
-        print("SHANAYA_SENSES_URL must be an HTTP loopback address; event forwarding was stopped.", file=sys.stderr)
+        print("HANNAH_SENSES_URL must be an HTTP loopback address; event forwarding was stopped.", file=sys.stderr)
         return 2
     try:
         from bcc import BPF
@@ -101,7 +101,7 @@ def main() -> int:
         print(f"BCC is unavailable ({type(exc).__name__}); install the OS BCC bindings and kernel headers.", file=sys.stderr)
         return 2
     if not Path("/proc/self/status").exists() or os.geteuid() != 0:
-        print("The eBPF monitor needs root privileges; the rest of Shanaya can run without it.", file=sys.stderr)
+        print("The eBPF monitor needs root privileges; the rest of HANNAH can run without it.", file=sys.stderr)
         return 2
 
     signal.signal(signal.SIGINT, stop)
@@ -146,7 +146,7 @@ def main() -> int:
             print(f"Could not attach the openat event buffer ({type(exc).__name__}).", file=sys.stderr)
             return 2
 
-        worker = threading.Thread(target=forward_events, name="shanaya-event-forwarder", daemon=True)
+        worker = threading.Thread(target=forward_events, name="hannah-event-forwarder", daemon=True)
         worker.start()
         print("Watching syscalls:sys_enter_openat; forwarding event summaries to the local API.", flush=True)
         try:

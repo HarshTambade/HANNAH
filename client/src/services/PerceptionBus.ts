@@ -58,7 +58,7 @@ export interface PerceptionSource {
 }
 
 function consentKey(id: string) {
-  return `shanaya.perception.${id}.consent`;
+  return `hannah.perception.${id}.consent`;
 }
 
 class BaseSource implements PerceptionSource {

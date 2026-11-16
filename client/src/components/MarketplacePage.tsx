@@ -45,16 +45,16 @@ export default function MarketplacePage({ onBack }: MarketplacePageProps) {
           <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 transition hover:text-ink">
             <ArrowLeft size={15} /> Back
           </button>
-          <span className="flex items-center gap-2 font-['Manrope'] text-[11px] font-extrabold tracking-[0.2em] text-ink"><PackageOpen size={16} className="text-violet-600" /> SHANAYA MARKETPLACE</span>
+          <span className="flex items-center gap-2 font-['Manrope'] text-[11px] font-extrabold tracking-[0.2em] text-ink"><PackageOpen size={16} className="text-violet-600" /> HANNAH MARKETPLACE</span>
           <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[9px] text-slate-500">{installedCount} installed</span>
         </div>
       </header>
 
       <div className="relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
         <section className="max-w-3xl">
-          <p className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.22em] text-violet-700"><Sparkles size={13} /> Make Shanaya yours</p>
+          <p className="inline-flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.22em] text-violet-700"><Sparkles size={13} /> Make HANNAH yours</p>
           <h1 className="mt-4 font-['Manrope'] text-4xl font-semibold tracking-[-0.055em] text-ink sm:text-5xl">Agents and skills for the way you work.</h1>
-          <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-500">Add a focused agent or a small conversation skill. Your active choices shape Shanaya’s replies while her safety rules and confirmation requirements stay in force.</p>
+          <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-500">Add a focused agent or a small conversation skill. Your active choices shape HANNAH’s replies while her safety rules and confirmation requirements stay in force.</p>
         </section>
 
         <section className="mt-8 flex flex-col gap-4 rounded-2xl border border-cyan-100 bg-cyan-50 p-4 sm:flex-row sm:items-start sm:p-5">
@@ -90,7 +90,7 @@ export default function MarketplacePage({ onBack }: MarketplacePageProps) {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[9px] text-slate-500 shadow-soft">
-          <span className="inline-flex items-center gap-1.5"><Bot size={12} className="text-violet-600" /> Active agent: <strong className="font-semibold text-ink">{state.activeAgentId ? MarketplaceService.getPackage(state.activeAgentId)?.name : "Shanaya default"}</strong></span>
+          <span className="inline-flex items-center gap-1.5"><Bot size={12} className="text-violet-600" /> Active agent: <strong className="font-semibold text-ink">{state.activeAgentId ? MarketplaceService.getPackage(state.activeAgentId)?.name : "HANNAH default"}</strong></span>
           <span className="inline-flex items-center gap-1.5"><Check size={12} className="text-cyan-600" /> Enabled skills: <strong className="font-semibold text-ink">{state.enabledSkillIds.length}</strong></span>
         </div>
 

@@ -21,7 +21,7 @@ function CrashFallback() {
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-300/20 bg-violet-300/[0.08] text-violet-200">
           <Aperture size={22} strokeWidth={1.7} />
         </span>
-        <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-100/70">Shanaya</p>
+        <p className="mt-5 text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-100/70">HANNAH</p>
         <h1 className="mt-2 font-['Manrope'] text-2xl font-semibold tracking-[-0.04em] text-white">A moment of stillness.</h1>
         <p className="mt-3 text-[11px] leading-6 text-slate-400">
           Something interrupted the interface. Your conversation was never stored on a server. Reload to return, or use
@@ -32,7 +32,7 @@ function CrashFallback() {
           onClick={() => window.location.reload()}
           className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-200 to-violet-300 px-5 text-[11px] font-bold text-[#090d1a] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-100/70"
         >
-          <RotateCcw size={14} /> Reload Shanaya
+          <RotateCcw size={14} /> Reload HANNAH
         </button>
       </section>
     </main>

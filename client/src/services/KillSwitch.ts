@@ -1,4 +1,4 @@
-const KEY = "shanaya.killswitch.v1";
+const KEY = "hannah.killswitch.v1";
 
 export const KillSwitch = {
   active: false,

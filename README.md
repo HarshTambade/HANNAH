@@ -1,30 +1,30 @@
-# Shanaya — Your AI Companion
+# HANNAH — Your AI Companion
 
 <p align="center">
   <strong>A private, multilingual, emotion-aware AI companion with a living 3D avatar.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/actions/workflows/build.yml"><img src="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/actions/workflows/build.yml/badge.svg" alt="Build"></a>
-  <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/issues"><img src="https://img.shields.io/github/issues/HarshTambade/Shanaya---Your-AI-companion-" alt="Issues"></a>
-  <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-source--available-orange" alt="Source-available license"></a>
+  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/actions/workflows/build.yml"><img src="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/issues"><img src="https://img.shields.io/github/issues/HarshTambade/HANNAH---Your-AI-companion-" alt="Issues"></a>
+  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-source--available-orange" alt="Source-available license"></a>
 </p>
 
-Shanaya is a source-available AI companion built for natural conversation across web, mobile, and desktop environments. It combines a responsive React interface, a real-time 3D avatar, emotion-aware responses, multilingual voice interaction, cloud and local inference, offline-capable native AI, governed autonomy, layered long-term memory, end-to-end encrypted cross-device sync, embodied hardware continuity, and agent-to-agent ecosystem interoperability.
+HANNAH is a source-available AI companion built for natural conversation across web, mobile, and desktop environments. It combines a responsive React interface, a real-time 3D avatar, emotion-aware responses, multilingual voice interaction, cloud and local inference, offline-capable native AI, governed autonomy, layered long-term memory, end-to-end encrypted cross-device sync, embodied hardware continuity, and agent-to-agent ecosystem interoperability.
 
-> **Project status:** Active development. [Release v1.0.3](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/tag/v1.0.3) provides Android, macOS, Windows, and Linux packages. An installable iOS IPA still requires Apple signing. The [platform audit](./AUDIT.md) records tested paths, productionized services, and remaining release validation.
+> **Project status:** Active development. [Release v1.0.3](https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/tag/v1.0.3) provides Android, macOS, Windows, and Linux packages. An installable iOS IPA still requires Apple signing. The [platform audit](./AUDIT.md) records tested paths, productionized services, and remaining release validation.
 
 ## Downloads
 
 <p>
-  <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/latest/download/Shanaya-Android.apk"><img alt="Android APK downloads" src="https://img.shields.io/badge/Android-APK-3DDC84?logo=android&logoColor=white"></a>
-  <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases"><img alt="iOS TestFlight and App Store information" src="https://img.shields.io/badge/iOS-TestFlight%20%2F%20App%20Store-111111?logo=apple&logoColor=white"></a>
-  <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/latest/download/Shanaya-macOS.dmg"><img alt="macOS DMG downloads" src="https://img.shields.io/badge/macOS-DMG-555555?logo=apple&logoColor=white"></a>
-  <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/latest/download/Shanaya-Windows.exe"><img alt="Windows installer downloads" src="https://img.shields.io/badge/Windows-EXE-0078D4?logo=windows&logoColor=white"></a>
-  <a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/latest/download/Shanaya-Linux.AppImage"><img alt="Linux AppImage downloads" src="https://img.shields.io/badge/Linux-AppImage-FCC624?logo=linux&logoColor=black"></a>
+  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest/download/HANNAH-Android.apk"><img alt="Android APK downloads" src="https://img.shields.io/badge/Android-APK-3DDC84?logo=android&logoColor=white"></a>
+  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases"><img alt="iOS TestFlight and App Store information" src="https://img.shields.io/badge/iOS-TestFlight%20%2F%20App%20Store-111111?logo=apple&logoColor=white"></a>
+  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest/download/HANNAH-macOS.dmg"><img alt="macOS DMG downloads" src="https://img.shields.io/badge/macOS-DMG-555555?logo=apple&logoColor=white"></a>
+  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest/download/HANNAH-Windows.exe"><img alt="Windows installer downloads" src="https://img.shields.io/badge/Windows-EXE-0078D4?logo=windows&logoColor=white"></a>
+  <a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest/download/HANNAH-Linux.AppImage"><img alt="Linux AppImage downloads" src="https://img.shields.io/badge/Linux-AppImage-FCC624?logo=linux&logoColor=black"></a>
 </p>
 
-The current [GitHub Release](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/releases/latest) includes an Android APK, macOS DMG, Windows EXE, and Linux AppImage. Linux DEB output is optional and appears when the runner produces it. A normal build on `main` uploads temporary [Actions artifacts](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/actions/workflows/build.yml); a `v*` tag or a manual workflow run with release publishing enabled creates a versioned release.
+The current [GitHub Release](https://github.com/HarshTambade/HANNAH---Your-AI-companion-/releases/latest) includes an Android APK, macOS DMG, Windows EXE, and Linux AppImage. Linux DEB output is optional and appears when the runner produces it. A normal build on `main` uploads temporary [Actions artifacts](https://github.com/HarshTambade/HANNAH---Your-AI-companion-/actions/workflows/build.yml); a `v*` tag or a manual workflow run with release publishing enabled creates a versioned release.
 
 **iOS note:** The latest release has no installable IPA because Apple signing is not configured. The release includes an installation note, and the workflow run stores the unsigned Xcode archive as an Actions artifact. Device installation requires a signed IPA distributed through TestFlight or the App Store.
 
@@ -94,22 +94,22 @@ The in-app **Downloads** menu points to these latest release assets by default. 
 
 ## Product principles
 
-Shanaya is designed around a few principles that should guide new features:
+HANNAH is designed around a few principles that should guide new features:
 
 1. **User choice:** users should be able to choose hosted, local, browser, or native inference where their platform supports it.
 2. **Graceful degradation:** unavailable providers, missing hardware, denied permissions, and offline sessions should produce a useful explanation rather than a silent failure.
 3. **Secret separation:** public client configuration belongs in `VITE_*`; server keys and token-issuer credentials stay server-side. A visitor may opt to provide a Groq key for the current page session; the client does not persist it, and the API forwards it only to Groq's official HTTPS endpoint.
 4. **Small, inspectable boundaries:** provider adapters, speech integrations, and native services should remain isolated from the presentation layer.
 5. **Explicit limitations:** model quality, speech availability, data handling, and third-party terms should be documented instead of implied.
-6. **Respectful companion behavior:** Shanaya is software, not a medical, legal, financial, or emergency service. Product copy and integrations should not encourage unsafe reliance.
+6. **Respectful companion behavior:** HANNAH is software, not a medical, legal, financial, or emergency service. Product copy and integrations should not encourage unsafe reliance.
 
 ## Architecture
 
 <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px">
   <div style="flex:1;min-width:200px;background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);border:1px solid #bae6fd;border-radius:16px;padding:20px;box-shadow:0 4px 20px -4px rgba(0,0,0,0.06)">
-    <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0369a1;margin-bottom:10px">Plug-in &nbsp;·&nbsp; Shanaya AI</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0369a1;margin-bottom:10px">Plug-in &nbsp;·&nbsp; HANNAH AI</div>
     <h2 style="font-size:27px;line-height:1.25;margin:0 0 10px 0;color:#0f172a;font-weight:700">A private, governed AI companion</h2>
-    <p style="font-size:13px;line-height:1.6;color:#334155;margin:0">Shanaya runs across web, mobile, and desktop with zero-trust governance, layered memory, E2E-encrypted sync, and embodied hardware continuity.</p>
+    <p style="font-size:13px;line-height:1.6;color:#334155;margin:0">HANNAH runs across web, mobile, and desktop with zero-trust governance, layered memory, E2E-encrypted sync, and embodied hardware continuity.</p>
   </div>
 </div>
 
@@ -151,7 +151,7 @@ Shanaya is designed around a few principles that should guide new features:
 
 ### Runtime layers
 
-Shanaya's request path flows through five clean layers, each with a single responsibility:
+HANNAH's request path flows through five clean layers, each with a single responsibility:
 
 <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:16px;margin-bottom:20px">
   <div style="flex:0 0 auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;min-width:150px">
@@ -250,7 +250,7 @@ flowchart TB
     subgraph MCP["MCP Integration"]
         MCPHTTP["Streamable HTTP MCP<br/>bearer-token protected"]:::mcp
         MCPStdIO["Local stdio process"]:::mcp
-        MCPTools["Shanaya MCP tools"]:::mcp
+        MCPTools["HANNAH MCP tools"]:::mcp
     end
 
     subgraph PAP["Personal Agent Protocol"]
@@ -289,7 +289,7 @@ flowchart TB
     end
 
     subgraph Ecosystem["Ecosystem interoperability"]
-        Interop["AgentInteropService<br/>AIPF · NLIP · ShanayaInteropProfile"]:::eco
+        Interop["AgentInteropService<br/>AIPF · NLIP · HANNAHInteropProfile"]:::eco
         ITU["IdentityInteropLayer<br/>ITU-T X.aiidm identity"]:::eco
         AAIF["AAIF portable agent definitions<br/>version-controlled registry"]:::eco
     end
@@ -347,7 +347,7 @@ The main Android/iOS apps are Capacitor projects under [`client/android`](./clie
 
 ### Governed autonomy and trust
 
-Shanaya enforces zero-trust runtime governance so no action is taken by the agent without an explicit policy decision:
+HANNAH enforces zero-trust runtime governance so no action is taken by the agent without an explicit policy decision:
 
 - **GuardianAgent** evaluates every proposed tool call and proactive action before execution. It assesses semantic intent (not just syntax), detects multi-turn attack patterns, and applies a configurable strictness level (permissive / balanced / strict). The Guardian has final veto authority and logs every decision with its full risk vector to the audit trail.
 - **PolicyEnforcementLayer** is configured at the platform level (not modifiable by the agent) and enforces rate limits, tool allow-lists, and data access boundaries for every action.
@@ -363,7 +363,7 @@ See [`SAFETY_GOVERNANCE.md`](./SAFETY_GOVERNANCE.md), [`SAFETY_MATURITY.md`](./S
 
 ### Layered memory and dreaming
 
-Shanaya maintains three memory layers with distinct retention semantics:
+HANNAH maintains three memory layers with distinct retention semantics:
 
 - **Session memory** — the active conversation context for the current turn.
 - **Consolidated long-term memory** — summarized and indexed past interactions, processed asynchronously by the **MemoryConsolidator** via the Task Spine (never in the request path). Extracts durable facts, detects superseded facts, and updates the memory index.
@@ -389,19 +389,19 @@ See [`SYNC_PRIVACY.md`](./SYNC_PRIVACY.md) for the threat model and self-hosting
 
 ### Embodied and ambient presence
 
-**HardwareBridgeService** pairs Shanaya with external hardware companions (e.g., Raspberry Pi 5-based devices) over a local network using a minimal secure protocol (WebSocket with mutual TLS) for audio streaming (microphone/speaker), vision frames (camera), and basic actuator commands.
+**HardwareBridgeService** pairs HANNAH with external hardware companions (e.g., Raspberry Pi 5-based devices) over a local network using a minimal secure protocol (WebSocket with mutual TLS) for audio streaming (microphone/speaker), vision frames (camera), and basic actuator commands.
 
 **HybridIntelligenceRouter** on the bridge splits time-sensitive tasks (voice activity detection, gesture recognition, local navigation) to the edge device, while conversational reasoning and memory operations go to the cloud or local LLM when offline. It logs the split ratio and latency per task type.
 
 **HardwareSettings.tsx** lets the user pair/unpair devices, view device health (battery, connectivity), and configure which modalities are streamed (audio, video, sensor).
 
-**AmbientPresenceService** treats spatial context (user location, gaze direction, nearby people, active devices) as a first-class input. **PresenceManifestationManager** allows Shanaya to manifest across multiple device surfaces (earbuds, smart display, XR headset, mobile, desktop) while maintaining a single continuous identity, memory, and conversation state, with seamless device handoff. **SpatialContextPanel** shows what spatial data is being processed, lets the user toggle each sensor/modality, and reviews a log of spatial context events.
+**AmbientPresenceService** treats spatial context (user location, gaze direction, nearby people, active devices) as a first-class input. **PresenceManifestationManager** allows HANNAH to manifest across multiple device surfaces (earbuds, smart display, XR headset, mobile, desktop) while maintaining a single continuous identity, memory, and conversation state, with seamless device handoff. **SpatialContextPanel** shows what spatial data is being processed, lets the user toggle each sensor/modality, and reviews a log of spatial context events.
 
 ### Agent marketplace and ecosystem
 
 **SpecialistMarketplace** supports guardian-gated publishing, review, and retirement of specialist agents and persona packs. Listings are prompt guidance only — they do not download executable code, add tools, or request device permissions. Each proposed listing passes through the GuardianAgent for safety review and requires explicit user approval before publication.
 
-**AgentInteropService** exposes Shanaya's core capabilities via the existing MCP server using a ShanayaInteropProfile schema (capabilities, permissions, costs). **RemoteAgentRegistry** discovers and delegates tasks to external specialized agents with transparency (UI shows "Delegating to [Agent Name]" and requires user approval).
+**AgentInteropService** exposes HANNAH's core capabilities via the existing MCP server using a HANNAHInteropProfile schema (capabilities, permissions, costs). **RemoteAgentRegistry** discovers and delegates tasks to external specialized agents with transparency (UI shows "Delegating to [Agent Name]" and requires user approval).
 
 **ToolSynthesisService** / **SpecialistSynthesisService** proposes new specialist agents when the MemoryEvolutionEngine detects a recurring task category no existing specialist handles well. New specialist creation passes through GuardianAgent and requires explicit user approval. The **SpecialistAgentRegistry** tracks lineage, performance, and cost, with a "Retire" option.
 
@@ -409,7 +409,7 @@ See [`SYNC_PRIVACY.md`](./SYNC_PRIVACY.md) for the threat model and self-hosting
 
 **PAPAdapter** implements the Personal Agent Protocol (PAP) v1.0: discovers PAP files at a business's domain (`/.well-known/pap.json`), authenticates via OAuth, requests scoped permissions based on user intent, and executes allowed actions returning results for user confirmation before finalizing. **PAPSettings.tsx** lets the user view and revoke PAP permissions per business and see a log of PAP interactions.
 
-**IdentityInteropLayer** aligns the ATEPProfileGenerator with the ITU-T canonical agentic AI identity data model (X.aiidm), representing Shanaya's intent, capabilities, autonomy spectrum, delegation chain, and governance bindings. See [`ITU_T_IDENTITY_MAPPING.md`](./ITU_T_IDENTITY_MAPPING.md) for the field mapping and forward-compatibility plan.
+**IdentityInteropLayer** aligns the ATEPProfileGenerator with the ITU-T canonical agentic AI identity data model (X.aiidm), representing HANNAH's intent, capabilities, autonomy spectrum, delegation chain, and governance bindings. See [`ITU_T_IDENTITY_MAPPING.md`](./ITU_T_IDENTITY_MAPPING.md) for the field mapping and forward-compatibility plan.
 
 ### Neuro-symbolic reasoning
 
@@ -449,7 +449,7 @@ The `client` service is public at `/`. The server handles `/api/*`; its `/mcp` r
 
 ### Responsibilities by layer
 
-Every /api route except /api/health requires Authorization: Bearer SHANAYA_API_TOKEN. The public client asks trusted users for this token per session; it does not embed the token in its static bundle.
+Every /api route except /api/health requires Authorization: Bearer HANNAH_API_TOKEN. The public client asks trusted users for this token per session; it does not embed the token in its static bundle.
 
 | Layer | Location | Responsibility |
 | --- | --- | --- |
@@ -464,7 +464,7 @@ Every /api route except /api/health requires Authorization: Bearer SHANAYA_API_T
 | Speech services | [`client/src/services/SpeechService.ts`](./client/src/services/SpeechService.ts) and [`client/src/services/VoiceService.ts`](./client/src/services/VoiceService.ts) | Provides speech synthesis and speech recognition integrations. |
 | API boundary | [`server/index.js`](./server/index.js) | Provides health/model, chat/agent, TTS, Pinecall token, and optional desktop computer endpoints; calls configured providers. |
 | Provider catalog and adapters | [`server/providers/catalog.js`](./server/providers/catalog.js) and [`server/providers/runtime.js`](./server/providers/runtime.js) | Defines supported providers, model presets, environment overrides, endpoint normalization, model discovery, and provider-specific request handling. |
-| MCP integration | [`server/mcp-core.mjs`](./server/mcp-core.mjs), [`server/mcp-http.mjs`](./server/mcp-http.mjs), and [`server/mcp-stdio.mjs`](./server/mcp-stdio.mjs) | Exposes Shanaya tools to local stdio clients or token-protected Streamable HTTP clients. |
+| MCP integration | [`server/mcp-core.mjs`](./server/mcp-core.mjs), [`server/mcp-http.mjs`](./server/mcp-http.mjs), and [`server/mcp-stdio.mjs`](./server/mcp-stdio.mjs) | Exposes HANNAH tools to local stdio clients or token-protected Streamable HTTP clients. |
 | Optional Python service | [`backend/main.py`](./backend/main.py) | Provides a localhost model-step fallback and an approval-gated standalone tool flow with audit logging and a Docker sandbox. |
 | Alternate desktop shell | [`apps/desktop`](./apps/desktop) | Runs the separate Python-enabled Electron shell; it is distinct from the Capacitor Electron release packages. |
 | Packaging | [`client/capacitor.config.ts`](./client/capacitor.config.ts) and [`client/vite.config.ts`](./client/vite.config.ts) | Defines native app identity, PWA behavior, caching, and development proxying. |
@@ -487,7 +487,7 @@ Every /api route except /api/health requires Authorization: Bearer SHANAYA_API_T
 | Sync service | [`client/src/services/SyncService.ts`](./client/src/services/SyncService.ts), [`server/sync-relay.js`](./server/sync-relay.js) | CRDT sync of memory, task spine, and side-effect ledger; E2E encrypted before leaving device; opaque relay. |
 | Cloud home | [`client/src/services/AgentNativeHomeService.ts`](./client/src/services/AgentNativeHomeService.ts), [`client/src/services/AppConnectionRegistry.ts`](./client/src/services/AppConnectionRegistry.ts) | Durable always-on execution environment; unified app connection registry (CLI/API/MCP/GUI); region migration. |
 | Hardware bridge | [`client/src/services/HardwareBridgeService.ts`](./client/src/services/HardwareBridgeService.ts) | Mutual-TLS WebSocket pairing with companion hardware; audio, vision, actuator, expression, gesture, interruption commands. |
-| Companion cast | [`client/src/services/CastOrchestrator.ts`](./client/src/services/CastOrchestrator.ts) | Routes messages to solo Shanaya or cast of Research/Coding/Casual companions; spontaneous contribution. |
+| Companion cast | [`client/src/services/CastOrchestrator.ts`](./client/src/services/CastOrchestrator.ts) | Routes messages to solo HANNAH or cast of Research/Coding/Casual companions; spontaneous contribution. |
 | Marketplace | [`client/src/services/SpecialistMarketplace.ts`](./client/src/services/SpecialistMarketplace.ts) | Guardian-gated publish/review/retire of specialist agents and persona packs; revenue-sharing scaffold. |
 | PAP adapter | [`client/src/services/PAPAdapter.ts`](./client/src/services/PAPAdapter.ts) | Discovers `/.well-known/pap.json`, OAuth scoped authentication, allowed-action execution pending user confirmation. |
 | ITU-T identity | [`client/src/services/IdentityInteropLayer.ts`](./client/src/services/IdentityInteropLayer.ts) | Forward-compatible ITU-T X.aiidm agentic identity mapping. |
@@ -507,7 +507,7 @@ Every /api route except /api/health requires Authorization: Bearer SHANAYA_API_T
 
 | Data or credential | Where it goes | Persistence / boundary |
 | --- | --- | --- |
-| Visitor-provided Groq key | Client sends it in `X-Groq-API-Key` to the Express API, which forwards it to Groq over HTTPS. | Held in client memory for the page session; not stored by Shanaya. |
+| Visitor-provided Groq key | Client sends it in `X-Groq-API-Key` to the Express API, which forwards it to Groq over HTTPS. | Held in client memory for the page session; not stored by HANNAH. |
 | Server provider keys | Express process to its configured provider. | Server environment only; never put in `VITE_*` variables. |
 | Native MobileClaw Anthropic credential | Native plugin to Anthropic when the optional native agent is used. | Managed by the native plugin; separate from the Express cloud route. |
 | Chat and agent messages | Chosen local runtime or Express/provider route. | No conversation database is configured by the server; local history behavior depends on the client/runtime. |
@@ -621,7 +621,7 @@ Provider behavior is outside this repository's control. Before production use, r
 
 ## Quick start
 
-The API requires a random 32–512 character SHANAYA_API_TOKEN for every /api route except /api/health. Generate it with openssl rand -hex 32, keep it in the server environment, and share it out of band only with trusted users. The landing page asks users for this token each session; it is held in page memory, never in browser storage or a Vite build variable. Use HTTPS for remote clients.
+The API requires a random 32–512 character HANNAH_API_TOKEN for every /api route except /api/health. Generate it with openssl rand -hex 32, keep it in the server environment, and share it out of band only with trusted users. The landing page asks users for this token each session; it is held in page memory, never in browser storage or a Vite build variable. Use HTTPS for remote clients.
 
 ### Primary client and server
 
@@ -647,7 +647,7 @@ Groq is the default cloud provider. Add a server-side Groq API key to `server/.e
 PORT=3001
 HOST=127.0.0.1
 CLIENT_ORIGIN=http://localhost:5173,capacitor://localhost,http://localhost,https://localhost
-SHANAYA_API_TOKEN=replace_with_a_random_value_of_at_least_32_characters
+HANNAH_API_TOKEN=replace_with_a_random_value_of_at_least_32_characters
 GROQ_API_KEY=your_server_side_groq_api_key
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
@@ -668,7 +668,7 @@ The Vite development proxy makes the default browser setup work without an API U
 
 ```dotenv
 VITE_API_BASE_URL=http://localhost:3001
-VITE_PINECALL_AGENT_ID=shanaya
+VITE_PINECALL_AGENT_ID=hannah
 ```
 
 ### 4. Start development
@@ -709,11 +709,11 @@ python -m pip install -r backend/requirements.txt
 cp .env.example .env
 ```
 
-Set the Python fallback's provider key in the root `.env`, then start all three services with `npm run dev:with-python-fallback`. You can also run `npm run dev:python-fallback` separately. Set `VITE_PYTHON_FALLBACK_URL` in `client/.env` if the Python service is not at `http://127.0.0.1:8000`. This Python router has its own provider configuration and does not replace the Express server's primary Groq configuration. Install `backend/requirements.txt` in the selected Python environment and install the Playwright browser with `python -m playwright install chromium`; Docker must be available to run code. The `apps/desktop` shell starts the Python process by default and can be opted out with `SHANAYA_ENABLE_PYTHON_FALLBACK=false`. Its child uses fixed arguments, a restricted environment, no shell, and no renderer process API.
+Set the Python fallback's provider key in the root `.env`, then start all three services with `npm run dev:with-python-fallback`. You can also run `npm run dev:python-fallback` separately. Set `VITE_PYTHON_FALLBACK_URL` in `client/.env` if the Python service is not at `http://127.0.0.1:8000`. This Python router has its own provider configuration and does not replace the Express server's primary Groq configuration. Install `backend/requirements.txt` in the selected Python environment and install the Playwright browser with `python -m playwright install chromium`; Docker must be available to run code. The `apps/desktop` shell starts the Python process by default and can be opted out with `HANNAH_ENABLE_PYTHON_FALLBACK=false`. Its child uses fixed arguments, a restricted environment, no shell, and no renderer process API.
 
-In the Python agent, every registered tool—including read-only tools—requires explicit approval over its session-bound WebSocket. Proposals, decisions, expirations, and result fingerprints go to `logs/shanaya_audit.jsonl` (or `SHANAYA_AUDIT_LOG`); user payloads and credentials are redacted. The JSONL records form a hash chain that detects edits and truncation. Python tools are workspace-scoped, shell commands are allow-listed, web submissions require approval, and code runs in a network-disabled Docker container. The Python service binds only to localhost because it has no remote-user authentication.
+In the Python agent, every registered tool—including read-only tools—requires explicit approval over its session-bound WebSocket. Proposals, decisions, expirations, and result fingerprints go to `logs/hannah_audit.jsonl` (or `HANNAH_AUDIT_LOG`); user payloads and credentials are redacted. The JSONL records form a hash chain that detects edits and truncation. Python tools are workspace-scoped, shell commands are allow-listed, web submissions require approval, and code runs in a network-disabled Docker container. The Python service binds only to localhost because it has no remote-user authentication.
 
-Kernel sensing is a separate, optional Linux eBPF monitor. It is disabled unless explicitly enabled with `sudo npm run dev:ebpf`; the loader forwards process/syscall metadata to the loopback API and never records file paths. This is not a cross-platform kernel control layer. On every platform, Shanaya uses the operating system APIs and permissions available to the app; it does not grant itself unrestricted system access.
+Kernel sensing is a separate, optional Linux eBPF monitor. It is disabled unless explicitly enabled with `sudo npm run dev:ebpf`; the loader forwards process/syscall metadata to the loopback API and never records file paths. This is not a cross-platform kernel control layer. On every platform, HANNAH uses the operating system APIs and permissions available to the app; it does not grant itself unrestricted system access.
 
 ## Configuration
 
@@ -726,7 +726,7 @@ Kernel sensing is a separate, optional Linux eBPF monitor. It is disabled unless
 | `VITE_PINECALL_AGENT_ID` | Only for Pinecall | Public Pinecall agent slug. |
 | `VITE_OFFLINE_MODEL_URL` | Only for native offline AI | HTTPS URL of a downloadable GGUF model. |
 | `VITE_AVATAR_MODEL_URL` | No | Optional avatar asset path. The default is the compressed `/models/avatar.draco.glb`. |
-| `VITE_SHANAYA_ANTHROPIC_MODEL` | No | Model ID for the optional native MobileClaw agent. |
+| `VITE_HANNAH_ANTHROPIC_MODEL` | No | Model ID for the optional native MobileClaw agent. |
 | `VITE_ANDROID_DOWNLOAD_URL` | No | Optional Android installer or store URL; blank uses the latest GitHub release APK. |
 | `VITE_IOS_DOWNLOAD_URL` | No | Optional App Store/TestFlight URL; blank opens GitHub Releases because the current release has no signed IPA. |
 | `VITE_MACOS_DOWNLOAD_URL` | No | Optional macOS installer URL; blank uses the latest GitHub release DMG. |
@@ -737,19 +737,19 @@ Kernel sensing is a separate, optional Linux eBPF monitor. It is disabled unless
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| SHANAYA_API_TOKEN | Yes in production | — | Random bearer token required by all /api routes except /api/health. Keep it server-side; do not place it in a Vite build variable. |
-| SHANAYA_RATE_LIMIT_WINDOW_MS | No | 60000 | Fixed-window duration shared by the per-token API limits. |
-| SHANAYA_RATE_LIMIT_CHAT_MAX | No | 30 | Chat requests allowed per token per window. |
-| SHANAYA_RATE_LIMIT_AGENT_MAX | No | 60 | Agent requests allowed per token per window. |
-| SHANAYA_RATE_LIMIT_DESKTOP_MAX | No | 20 | Computer-use requests allowed per token per window. |
+| HANNAH_API_TOKEN | Yes in production | — | Random bearer token required by all /api routes except /api/health. Keep it server-side; do not place it in a Vite build variable. |
+| HANNAH_RATE_LIMIT_WINDOW_MS | No | 60000 | Fixed-window duration shared by the per-token API limits. |
+| HANNAH_RATE_LIMIT_CHAT_MAX | No | 30 | Chat requests allowed per token per window. |
+| HANNAH_RATE_LIMIT_AGENT_MAX | No | 60 | Agent requests allowed per token per window. |
+| HANNAH_RATE_LIMIT_DESKTOP_MAX | No | 20 | Computer-use requests allowed per token per window. |
 | `PORT` | No | `3001` | Express API port. |
 | `HOST` | No | `127.0.0.1` | API bind address; `0.0.0.0` enables LAN access. |
 | `CLIENT_ORIGIN` | No | Local origins | Comma-separated CORS allowlist. |
 | `MCP_ENABLED` | No | `false` | Set to `true` to mount the remote `/mcp` Streamable HTTP endpoint. |
 | `MCP_API_TOKEN` | Required when remote MCP is enabled | — | Random bearer token of at least 32 characters. Never place it in client code. |
-| `SHANAYA_API_URL` | No | `http://127.0.0.1:3001` | Shanaya API origin used by the MCP stdio server and tools. |
+| `HANNAH_API_URL` | No | `http://127.0.0.1:3001` | HANNAH API origin used by the MCP stdio server and tools. |
 | `GROQ_API_KEY` | For server-side cloud clients | — | Server-side Groq key. Browser visitors can provide a session-only key in the landing page. |
-| `SHANAYA_DEFAULT_PROVIDER` | No | `groq` | Provider ID used by default. Other configured providers appear in the model provider picker. |
+| `HANNAH_DEFAULT_PROVIDER` | No | `groq` | Provider ID used by default. Other configured providers appear in the model provider picker. |
 | `<PROVIDER>_API_KEY` | For hosted providers | — | Server-side provider credentials, such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY`. |
 | `<PROVIDER>_MODEL(S)` | No | Catalog defaults | Preferred model and optional comma-separated fallbacks for a provider. |
 | `GROQ_API_URL` | No | Groq API base | Optional Groq-compatible endpoint override. |
@@ -798,11 +798,11 @@ When disconnected, the client chooses native llama.cpp on iOS/Android and WebLLM
 
 ## Agent runtime and device tools
 
-Cloud and Ollama modes use an eight-round bounded tool loop so Shanaya can complete longer multi-step tasks. WebLLM and llama.cpp use a JSON tool-request format in the prompt, so the selected local model must follow that format. Tool results appear in the chat as system messages. The router checks network state immediately before each model step.
+Cloud and Ollama modes use an eight-round bounded tool loop so HANNAH can complete longer multi-step tasks. WebLLM and llama.cpp use a JSON tool-request format in the prompt, so the selected local model must follow that format. Tool results appear in the chat as system messages. The router checks network state immediately before each model step.
 
-On iOS and Android, MobileClaw initializes `capacitor-native-agent`, `capacitor-lancedb`, and `capacitor-mobilecron`. Its vector store uses a local hash embedding fallback and stays in the app sandbox. Add an Anthropic API key in Settings to route online turns through MobileClaw; the native plugin stores the key and sends requests directly to Anthropic. Native turns use MobileClaw's skill runner with an explicit tool allowlist, so its general file, code, and Git tools are not exposed to Shanaya's chat. The registered device tools and memory deletion tool retain their own confirmation checks. Without a key, online requests use the server's configured OpenAI-compatible endpoint. Offline turns use the downloaded GGUF model and can call local memory tools.
+On iOS and Android, MobileClaw initializes `capacitor-native-agent`, `capacitor-lancedb`, and `capacitor-mobilecron`. Its vector store uses a local hash embedding fallback and stays in the app sandbox. Add an Anthropic API key in Settings to route online turns through MobileClaw; the native plugin stores the key and sends requests directly to Anthropic. Native turns use MobileClaw's skill runner with an explicit tool allowlist, so its general file, code, and Git tools are not exposed to HANNAH's chat. The registered device tools and memory deletion tool retain their own confirmation checks. Without a key, online requests use the server's configured OpenAI-compatible endpoint. Offline turns use the downloaded GGUF model and can call local memory tools.
 
-The registered device tools include app-private file listing, UTF-8 file reads, confirmed file writes/deletes, `open_app`, `get_device_status`, `get_battery_status`, `toggle_setting`, `send_message`, and `make_call`. File tools are confined to Shanaya's private app storage; cloud-mode reads send file contents to the selected model provider. Shanaya asks before file changes, SMS drafts, calls, flashlight changes, and computer input. SMS and calls open the system composer/dialer; the user taps Send or Call. iOS and Android block third-party Wi-Fi and Bluetooth toggles, so Shanaya explains how to change those in system controls. Notification reading, access to arbitrary device files, and shell execution are not enabled. Device access is limited to APIs and permissions provided by each operating system; the app cannot grant itself unrestricted control.
+The registered device tools include app-private file listing, UTF-8 file reads, confirmed file writes/deletes, `open_app`, `get_device_status`, `get_battery_status`, `toggle_setting`, `send_message`, and `make_call`. File tools are confined to HANNAH's private app storage; cloud-mode reads send file contents to the selected model provider. HANNAH asks before file changes, SMS drafts, calls, flashlight changes, and computer input. SMS and calls open the system composer/dialer; the user taps Send or Call. iOS and Android block third-party Wi-Fi and Bluetooth toggles, so HANNAH explains how to change those in system controls. Notification reading, access to arbitrary device files, and shell execution are not enabled. Device access is limited to APIs and permissions provided by each operating system; the app cannot grant itself unrestricted control.
 
 ## Agent and skill marketplace
 
@@ -812,47 +812,47 @@ The catalog is bundled in `shared/marketplace-catalog.json`. Its entries contrib
 
 ## MCP integration
 
-Shanaya includes a Model Context Protocol server so an MCP-capable host can call her chat service as a tool. It uses the same Express API, Groq-first model routing, and server-side credentials as the app. Install server dependencies with `npm install --prefix server`.
+HANNAH includes a Model Context Protocol server so an MCP-capable host can call her chat service as a tool. It uses the same Express API, Groq-first model routing, and server-side credentials as the app. Install server dependencies with `npm install --prefix server`.
 
 The server exposes these tools:
 
 | MCP tool | Purpose |
 | --- | --- |
-| `shanaya_chat` | Send Shanaya a prompt, optional recent user/assistant history, and optional `cloud` or `ollama` mode. Returns `{ "reply": "…", "emotion": "…" }`. |
-| `shanaya_status` | Check API/provider readiness without revealing credentials. |
-| `shanaya_models` | List configured model IDs and the default model. |
+| `hannah_chat` | Send HANNAH a prompt, optional recent user/assistant history, and optional `cloud` or `ollama` mode. Returns `{ "reply": "…", "emotion": "…" }`. |
+| `hannah_status` | Check API/provider readiness without revealing credentials. |
+| `hannah_models` | List configured model IDs and the default model. |
 
 ### Local desktop and IDE clients (stdio)
 
-Start Shanaya's API with `npm run dev:server`, then add this server entry to the MCP host's configuration. Replace the path with the absolute path to this checkout:
+Start HANNAH's API with `npm run dev:server`, then add this server entry to the MCP host's configuration. Replace the path with the absolute path to this checkout:
 
 ```json
 {
   "mcpServers": {
-    "shanaya": {
+    "hannah": {
       "command": "node",
-      "args": ["/absolute/path/to/Shanaya/server/mcp-stdio.mjs"],
+      "args": ["/absolute/path/to/HANNAH/server/mcp-stdio.mjs"],
       "env": {
-        "SHANAYA_API_URL": "http://127.0.0.1:3001"
+        "HANNAH_API_URL": "http://127.0.0.1:3001"
       }
     }
   }
 }
 ```
 
-The stdio process speaks MCP on standard input/output and calls the running Shanaya API. It exposes chat/status/model tools only; it does not inherit the host app's account credentials or gain access to that app's data.
+The stdio process speaks MCP on standard input/output and calls the running HANNAH API. It exposes chat/status/model tools only; it does not inherit the host app's account credentials or gain access to that app's data.
 
 ### Remote or web clients (Streamable HTTP)
 
-For a deployed server, set `MCP_ENABLED=true` and set `MCP_API_TOKEN` to a unique secret generated with `openssl rand -hex 32`. Set `SHANAYA_API_URL` to the reachable API origin; the `127.0.0.1` default is for local development. Deploy behind HTTPS, and configure the host app to connect to `https://your-domain.example/mcp` with `Authorization: Bearer <your-token>`. Remote hosts must support a custom bearer header; hosts that require OAuth discovery need an OAuth gateway in front of Shanaya. Web-based hosts also need their origin listed in `CLIENT_ORIGIN`. Keep the token in the MCP host's server-side secret configuration; never embed it in browser JavaScript or a `VITE_*` variable. The endpoint rejects requests without a valid token and stays disabled by default.
+For a deployed server, set `MCP_ENABLED=true` and set `MCP_API_TOKEN` to a unique secret generated with `openssl rand -hex 32`. Set `HANNAH_API_URL` to the reachable API origin; the `127.0.0.1` default is for local development. Deploy behind HTTPS, and configure the host app to connect to `https://your-domain.example/mcp` with `Authorization: Bearer <your-token>`. Remote hosts must support a custom bearer header; hosts that require OAuth discovery need an OAuth gateway in front of HANNAH. Web-based hosts also need their origin listed in `CLIENT_ORIGIN`. Keep the token in the MCP host's server-side secret configuration; never embed it in browser JavaScript or a `VITE_*` variable. The endpoint rejects requests without a valid token and stays disabled by default.
 
-Any software can use Shanaya through this interface when it has an MCP client or can implement the MCP Streamable HTTP/stdio protocol. MCP does not automatically connect Shanaya to every app: the other app must expose an MCP server or provide its own integration, and its permissions remain controlled by that app. The current Shanaya MCP server does not expose shell, file, account, messaging, or computer-control tools. Use `CLIENT_ORIGIN` to explicitly allow browser origins; keep remote access on HTTPS.
+Any software can use HANNAH through this interface when it has an MCP client or can implement the MCP Streamable HTTP/stdio protocol. MCP does not automatically connect HANNAH to every app: the other app must expose an MCP server or provide its own integration, and its permissions remain controlled by that app. The current HANNAH MCP server does not expose shell, file, account, messaging, or computer-control tools. Use `CLIENT_ORIGIN` to explicitly allow browser origins; keep remote access on HTTPS.
 
 ## Desktop computer use
 
-The Anthropic computer-toolset endpoint runs on the server. After `cap add @capawesome/capacitor-electron`, copy [`client/electron-agent-preload.example.cjs`](./client/electron-agent-preload.example.cjs) and [`client/electron-agent-main.example.cjs`](./client/electron-agent-main.example.cjs) into `client/electron/`, then merge [`client/electron-agent-config.example.ts`](./client/electron-agent-config.example.ts) into the generated `capacitor.electron.config.ts`. Install the optional driver dependencies with `cd client/electron && npm install screenshot-desktop sharp @nut-tree/nut-js esbuild`, then bundle the preload source: `npx esbuild electron-agent-preload.example.cjs --bundle --platform=node --format=cjs --external:electron --outfile=electron-agent-preload.cjs`. The main process shows a native confirmation and issues a one-use token for every screenshot and computer action; the renderer cannot call the OS driver without that token. The combined preload keeps the Capacitor bridge and exposes only the limited screenshot/action methods. The renderer never receives the Anthropic key. Shanaya asks before each keyboard or mouse action, and the UI explains that screenshots and task text go to the configured Anthropic endpoint.
+The Anthropic computer-toolset endpoint runs on the server. After `cap add @capawesome/capacitor-electron`, copy [`client/electron-agent-preload.example.cjs`](./client/electron-agent-preload.example.cjs) and [`client/electron-agent-main.example.cjs`](./client/electron-agent-main.example.cjs) into `client/electron/`, then merge [`client/electron-agent-config.example.ts`](./client/electron-agent-config.example.ts) into the generated `capacitor.electron.config.ts`. Install the optional driver dependencies with `cd client/electron && npm install screenshot-desktop sharp @nut-tree/nut-js esbuild`, then bundle the preload source: `npx esbuild electron-agent-preload.example.cjs --bundle --platform=node --format=cjs --external:electron --outfile=electron-agent-preload.cjs`. The main process shows a native confirmation and issues a one-use token for every screenshot and computer action; the renderer cannot call the OS driver without that token. The combined preload keeps the Capacitor bridge and exposes only the limited screenshot/action methods. The renderer never receives the Anthropic key. HANNAH asks before each keyboard or mouse action, and the UI explains that screenshots and task text go to the configured Anthropic endpoint.
 
-Desktop browser work uses the visible browser through that same computer bridge. A Tauri shell can expose the same `window.shanayaDesktop` screenshot/action interface; this repository includes the Electron adapter example, not a Tauri Rust driver.
+Desktop browser work uses the visible browser through that same computer bridge. A Tauri shell can expose the same `window.hannahDesktop` screenshot/action interface; this repository includes the Electron adapter example, not a Tauri Rust driver.
 
 ## Voice and calls
 
@@ -864,7 +864,7 @@ Supported language tags are:
 - Hindi: `hi-IN`
 - Marathi: `mr-IN`
 
-Spoken replies are enabled by default and the preference is stored on the device; users can turn voice replies off. The microphone stays off until the user presses **Speak**. Speech recognition availability is platform-dependent. If `MITHI_TTS_URL` is configured, reply text is sent to that service and synthesized with Mithi v1 Flash's Charvi voice in English, Hindi, or Marathi. Otherwise Shanaya uses an installed system voice. Mithi runs in a separate Python service, not inside the Capacitor speech plugin; system speech remains the offline fallback.
+Spoken replies are enabled by default and the preference is stored on the device; users can turn voice replies off. The microphone stays off until the user presses **Speak**. Speech recognition availability is platform-dependent. If `MITHI_TTS_URL` is configured, reply text is sent to that service and synthesized with Mithi v1 Flash's Charvi voice in English, Hindi, or Marathi. Otherwise HANNAH uses an installed system voice. Mithi runs in a separate Python service, not inside the Capacitor speech plugin; system speech remains the offline fallback.
 
 Download the [Oomni/Mithi v1 Flash model](https://huggingface.co/Oomni/mithi-v1-flash) and install its dependencies, including the English spaCy model. Then install this API wrapper and run:
 
@@ -908,8 +908,8 @@ The native application is configured as:
 
 | Setting | Value |
 | --- | --- |
-| App name | `Shanaya` |
-| App ID | `com.shanaya.companion` |
+| App name | `HANNAH` |
+| App ID | `com.hannah.companion` |
 | Web directory | `client/dist` |
 
 The Android and iOS project sources are checked in under `client/android/` and `client/ios/`. Sync the app bundle and native plugins after changing client dependencies:
@@ -945,12 +945,12 @@ The GitHub Actions workflow builds the web, mobile, and Electron targets on pull
 
 | Platform | Release asset | Format and installation notes |
 | --- | --- | --- |
-| Android | `Shanaya-Android.apk` | Latest release. CI uses release signing only when Android signing secrets are configured; otherwise it creates a debug APK. |
+| Android | `HANNAH-Android.apk` | Latest release. CI uses release signing only when Android signing secrets are configured; otherwise it creates a debug APK. |
 | iOS | No IPA; `iOS-Installation.txt` | Apple signing is not configured. The unsigned Xcode archive is a workflow artifact, not a device-installable app. A signed IPA requires Apple credentials and distribution through TestFlight or the App Store. |
-| macOS | `Shanaya-macOS.dmg` | Latest release. Electron installer; signing and notarization depend on Apple credentials. |
-| Windows | `Shanaya-Windows.exe` | Latest release. Electron installer; Authenticode signing depends on configured credentials. |
-| Linux | `Shanaya-Linux.AppImage` | Latest release. A DEB package may also be produced by the Linux runner, but is not included in the current release. |
-| Web/PWA | Actions artifact `shanaya-web-pwa` | Static `dist` bundle from a workflow run. Deploy to HTTPS static hosting or preview with `npm run preview --prefix client`. |
+| macOS | `HANNAH-macOS.dmg` | Latest release. Electron installer; signing and notarization depend on Apple credentials. |
+| Windows | `HANNAH-Windows.exe` | Latest release. Electron installer; Authenticode signing depends on configured credentials. |
+| Linux | `HANNAH-Linux.AppImage` | Latest release. A DEB package may also be produced by the Linux runner, but is not included in the current release. |
+| Web/PWA | Actions artifact `hannah-web-pwa` | Static `dist` bundle from a workflow run. Deploy to HTTPS static hosting or preview with `npm run preview --prefix client`. |
 
 Create and push a version tag to build and publish installers:
 
@@ -959,9 +959,9 @@ git tag v1.0.3
 git push origin v1.0.3
 ```
 
-Alternatively, open **Actions → Build Shanaya → Run workflow**, select the branch to build, enable **Publish the completed platform packages as a GitHub Release**, and enter a new version tag such as `v1.0.3`. The release job creates that tag at the selected workflow commit and attaches the generated packages.
+Alternatively, open **Actions → Build HANNAH → Run workflow**, select the branch to build, enable **Publish the completed platform packages as a GitHub Release**, and enter a new version tag such as `v1.0.3`. The release job creates that tag at the selected workflow commit and attaches the generated packages.
 
-For development builds or the unsigned iOS archive, use the [Actions build page](https://github.com/HarshTambade/Shanaya---Your-AI-companion-/actions/workflows/build.yml) and download artifacts from a successful run.
+For development builds or the unsigned iOS archive, use the [Actions build page](https://github.com/HarshTambade/HANNAH---Your-AI-companion-/actions/workflows/build.yml) and download artifacts from a successful run.
 
 The in-app Downloads menu links to the latest Android and desktop installers on GitHub Releases by default. iOS opens the release notes because an installable IPA requires Apple signing and TestFlight or App Store distribution. Set platform URL variables in `client/.env` to point to store listings or another installer host. Vite embeds these links at build time, so rebuild the client after changing them.
 
@@ -971,7 +971,7 @@ To export a signed iOS IPA, configure the repository variable `IOS_SIGNING_ENABL
 
 The GitHub Actions workflow in [`.github/workflows/build.yml`](./.github/workflows/build.yml) uses Node 24 and builds the client on every pull request, push to `main`, version tag, and manual dispatch.
 
-- **Web/PWA:** installs with lifecycle scripts disabled, generates the Draco avatar, and uploads `shanaya-web-pwa`.
+- **Web/PWA:** installs with lifecycle scripts disabled, generates the Draco avatar, and uploads `hannah-web-pwa`.
 - **Electron:** generates the Capacitor Electron project on Electron 45.3.2, audits the generated dependency tree before packaging, vendors runtime plugins and the `electron-updater` dependency tree, and disables automatic Snap Store publishing. Tagged builds sign Windows and macOS releases, notarize macOS, and publish updater manifests with the installers.
 - **Android:** installs SDK 36, NDK 29, and CMake 3.22.1; syncs the checked-in Gradle project, applies native compatibility patches, and creates signed APK and AAB packages for releases. Ordinary CI builds create a debug APK.
 - **iOS:** patches and syncs the checked-in Xcode project, includes privacy and speech permission metadata, archives it, and exports an IPA for releases after signing is configured.
@@ -1053,7 +1053,7 @@ To deploy:
 2. Use the root directory containing [`vercel.json`](./vercel.json).
 3. Configure client variables such as `VITE_PINECALL_AGENT_ID` and `VITE_API_BASE_URL` only when an external API origin is required. With the configured rewrites, leave `VITE_API_BASE_URL` empty so the browser uses the same-domain `/api` route.
 4. Configure server secrets such as `CLOUD_API_URL`, `CLOUD_API_KEY`, `OLLAMA_BASE_URL`, `PINECALL_TOKEN_URL`, and optional TTS variables in the server service environment. A server-side `GROQ_API_KEY` is optional for web visitors, who supply their own key in the landing page; retain it only for server-side clients such as MCP.
-5. To enable remote MCP, also set `MCP_ENABLED=true`, `MCP_API_TOKEN` to a generated secret, `SHANAYA_API_URL` to the public API origin, and add the MCP host web origin to `CLIENT_ORIGIN`.
+5. To enable remote MCP, also set `MCP_ENABLED=true`, `MCP_API_TOKEN` to a generated secret, `HANNAH_API_URL` to the public API origin, and add the MCP host web origin to `CLIENT_ORIGIN`.
 6. Deploy and verify:
 
    ```bash
@@ -1110,7 +1110,7 @@ Publish `client/dist` to a static host. Configure SPA fallback routing to serve 
 - [ ] Set `CLIENT_ORIGIN` to exact production origins.
 - [ ] Store API keys in the host's secret manager.
 - [ ] Configure provider timeouts, quotas, and billing alerts.
-- [ ] Verify SHANAYA_API_TOKEN is configured and monitor or centrally enforce limits across all production instances.
+- [ ] Verify HANNAH_API_TOKEN is configured and monitor or centrally enforce limits across all production instances.
 - [ ] Add structured logs without recording message content by default.
 - [ ] Confirm CORS, CSP, microphone permissions, and platform privacy declarations.
 - [ ] Confirm the avatar, model, font, and dependency licenses allow the intended distribution.
@@ -1132,7 +1132,7 @@ Returns:
 
 ### `POST /mcp` (optional)
 
-When `MCP_ENABLED=true`, the Express server exposes an MCP Streamable HTTP endpoint at `/mcp`. Each request must include `Authorization: Bearer <MCP_API_TOKEN>`. The endpoint advertises `shanaya_chat`, `shanaya_status`, and `shanaya_models`. It is disabled by default; local stdio clients can instead launch `server/mcp-stdio.mjs`.
+When `MCP_ENABLED=true`, the Express server exposes an MCP Streamable HTTP endpoint at `/mcp`. Each request must include `Authorization: Bearer <MCP_API_TOKEN>`. The endpoint advertises `hannah_chat`, `hannah_status`, and `hannah_models`. It is disabled by default; local stdio clients can instead launch `server/mcp-stdio.mjs`.
 
 ### `POST /api/chat`
 
@@ -1142,7 +1142,7 @@ Request:
 {
   "mode": "cloud",
   "messages": [
-    { "role": "user", "content": "Hello, Shanaya!" }
+    { "role": "user", "content": "Hello, HANNAH!" }
   ]
 }
 ```
@@ -1225,7 +1225,7 @@ Fetches credentials from the configured trusted Pinecall token issuer. It return
 │   ├── providers/
 │   │   ├── catalog.js                # Provider definitions, model presets, and overrides
 │   │   └── runtime.js                # Provider URL resolution and request runtime
-│   ├── mcp-core.mjs                 # Shared MCP tools and Shanaya API bridge
+│   ├── mcp-core.mjs                 # Shared MCP tools and HANNAH API bridge
 │   ├── mcp-http.mjs                 # Authenticated Streamable HTTP transport
 │   ├── mcp-stdio.mjs                # Local MCP stdio transport
 │   ├── mithi_tts_service.py         # Optional Charvi TTS service wrapper
@@ -1403,7 +1403,7 @@ Enable voice replies, select a supported language, confirm the device has a voic
 
 ### Is this a medical or mental-health service?
 
-No. Shanaya is a software project and is not a substitute for emergency services, a licensed clinician, or professional legal, financial, or medical advice. Integrators are responsible for their user-facing disclosures and safety practices.
+No. HANNAH is a software project and is not a substitute for emergency services, a licensed clinician, or professional legal, financial, or medical advice. Integrators are responsible for their user-facing disclosures and safety practices.
 
 ### Can I monetize a fork?
 
@@ -1459,7 +1459,7 @@ Have an idea? Open a feature request with the use case, proposed behavior, and a
 
 ## License
 
-Shanaya is licensed under the [Shanaya Source-Available Non-Commercial License 1.0](./LICENSE). Copyright is attributed to Harsh Tambade and Shanaya contributors.
+HANNAH is licensed under the [HANNAH Source-Available Non-Commercial License 1.0](./LICENSE). Copyright is attributed to Harsh Tambade and HANNAH contributors.
 
 ### Commercial use and monetized forks
 
@@ -1467,10 +1467,10 @@ This license permits non-commercial use, modification, and redistribution with a
 
 Anyone who forks, modifies, hosts, distributes, sells, advertises, or otherwise monetizes the project must obtain a separate written commercial license before monetization. Unless that agreement states otherwise, the commercial license requires **25% of Gross Revenue** attributable to the monetized fork or derivative work.
 
-Commercial users must also preserve attribution to **Harsh Tambade and Shanaya contributors**, provide revenue reports, and comply with the payment and audit provisions in [`LICENSE`](./LICENSE). Unauthorized monetization, non-payment, or attribution removal may result in termination of the license and legal enforcement, subject to applicable law.
+Commercial users must also preserve attribution to **Harsh Tambade and HANNAH contributors**, provide revenue reports, and comply with the payment and audit provisions in [`LICENSE`](./LICENSE). Unauthorized monetization, non-payment, or attribution removal may result in termination of the license and legal enforcement, subject to applicable law.
 
 This is a **source-available license, not an OSI-approved open-source license**. The governing jurisdiction is currently reserved for a separate written commercial agreement. Obtain legal advice before relying on this license for commercial distribution.
 
 ## Acknowledgements
 
-Shanaya is built with open-source technologies including React, Vite, TypeScript, Tailwind CSS, Three.js, React Three Fiber, Capacitor, WebLLM, llama.cpp, Express, Ollama, and Lucide. See the package manifests for the complete dependency list and their respective licenses.
+HANNAH is built with open-source technologies including React, Vite, TypeScript, Tailwind CSS, Three.js, React Three Fiber, Capacitor, WebLLM, llama.cpp, Express, Ollama, and Lucide. See the package manifests for the complete dependency list and their respective licenses.

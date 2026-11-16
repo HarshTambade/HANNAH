@@ -1,5 +1,5 @@
 {
-  "name": "shanaya-ai-companion",
+  "name": "hannah-ai-companion",
   "version": "1.0.3",
   "private": true,
   "workspaces": [
@@ -12,7 +12,7 @@
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
     "build": "cd client && npm install --ignore-scripts && npm run build",
-    "build:agent-frontend": "npm run build --workspace @shanaya/frontend",
+    "build:agent-frontend": "npm run build --workspace @hannah/frontend",
     "models:draco": "npm run models:draco --prefix client",
     "dev:python-fallback": "python3 -m backend.run",
     "dev:with-python-fallback": "concurrently -k -n server,client,python -c magenta,cyan,green \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:python-fallback\"",

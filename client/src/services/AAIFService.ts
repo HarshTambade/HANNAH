@@ -84,22 +84,22 @@ export type AAIFDocument = {
 };
 
 export const AAIFService = {
-  generateDefaultDocument(name = "Shanaya Agent"): AAIFDocument {
+  generateDefaultDocument(name = "HANNAH Agent"): AAIFDocument {
     const now = new Date().toISOString();
     const doc: AAIFDocument = {
       version: "1.0",
       id: crypto.randomUUID(),
       name,
-      description: "Portable agent definition for Shanaya",
-      identity: { name: "Shanaya", role: "AI companion", version: "1.0.3" },
+      description: "Portable agent definition for HANNAH",
+      identity: { name: "HANNAH", role: "AI companion", version: "1.0.3" },
       goal: "Provide helpful, private, governed assistance to the user.",
-      systemInstructions: "You are Shanaya, a privacy-first AI companion. Always prioritize user safety and consent.",
+      systemInstructions: "You are HANNAH, a privacy-first AI companion. Always prioritize user safety and consent.",
       llmProvider: {
         preferred: "groq",
         fallbacks: ["ollama", "webllm"],
         model: "openai/gpt-oss-120b",
       },
-      orchestration: { type: "solo", members: ["Shanaya"], routingRule: "intent-based" },
+      orchestration: { type: "solo", members: ["HANNAH"], routingRule: "intent-based" },
       tools: [],
       memory: { type: "hybrid", maxItems: 500, retentionDays: 90, encrypted: true },
       runtimePolicy: {

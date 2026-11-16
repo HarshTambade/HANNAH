@@ -1,4 +1,4 @@
-const KEY = "shanaya.emotional.v1";
+const KEY = "hannah.emotional.v1";
 
 export const EmotionalStateModel = {
   track(sentiment: number, source: string) {

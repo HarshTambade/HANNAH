@@ -34,9 +34,9 @@ import { ChaosEngine, type DegradedState } from "../services/ChaosEngine";
 
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
 const welcomeMessage: ChatMessage = {
-  id: "shanaya-welcome",
+  id: "hannah-welcome",
   role: "assistant",
-  content: "Hey, I’m Shanaya. It’s lovely to meet you. What’s on your mind?",
+  content: "Hey, I’m HANNAH. It’s lovely to meet you. What’s on your mind?",
 };
 
 function createMessageId() {
@@ -116,7 +116,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [cloudProviders, setCloudProviders] = useState<CloudProviderOption[]>([]);
   const [cloudProviderId, setCloudProviderId] = useState(() => {
     try {
-      return window.localStorage.getItem("shanaya.cloudProvider") || "groq";
+      return window.localStorage.getItem("hannah.cloudProvider") || "groq";
     } catch {
       return "groq";
     }
@@ -129,7 +129,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>("en-US");
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
-      const saved = window.localStorage.getItem("shanaya.voiceEnabled");
+      const saved = window.localStorage.getItem("hannah.voiceEnabled");
       return saved === null ? true : saved === "true";
     } catch {
       return true;
@@ -220,7 +220,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         setApiError("");
         let storedProvider: string | null = null;
         try {
-          storedProvider = window.localStorage.getItem("shanaya.cloudProvider");
+          storedProvider = window.localStorage.getItem("hannah.cloudProvider");
         } catch {
           storedProvider = null;
         }
@@ -265,7 +265,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         setApiStatus(models.length ? "connected" : "misconfigured");
         let storedModel: string | null = null;
         try {
-          storedModel = window.localStorage.getItem(`shanaya.cloudModel:${cloudProviderId}`);
+          storedModel = window.localStorage.getItem(`hannah.cloudModel:${cloudProviderId}`);
         } catch {
           storedModel = null;
         }
@@ -286,7 +286,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   useEffect(() => {
     if (!cloudProviderId) return;
     try {
-      window.localStorage.setItem("shanaya.cloudProvider", cloudProviderId);
+      window.localStorage.setItem("hannah.cloudProvider", cloudProviderId);
     } catch {
       // Provider preference remains available for this session if storage is unavailable.
     }
@@ -295,7 +295,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   useEffect(() => {
     if (!cloudProviderId || !cloudModel) return;
     try {
-      window.localStorage.setItem(`shanaya.cloudModel:${cloudProviderId}`, cloudModel);
+      window.localStorage.setItem(`hannah.cloudModel:${cloudProviderId}`, cloudModel);
     } catch {
       // The server still supplies its default if storage is unavailable.
     }
@@ -303,7 +303,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("shanaya.voiceEnabled", String(voiceEnabled));
+      window.localStorage.setItem("hannah.voiceEnabled", String(voiceEnabled));
     } catch {
       // Voice preference remains available for this session if storage is disabled.
     }
@@ -399,7 +399,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     setInput("");
     setError("");
     setIsLoading(true);
-    setAgentActivity({ phase: "thinking", message: "Shanaya is thinking…" });
+    setAgentActivity({ phase: "thinking", message: "HANNAH is thinking…" });
     if (inputRef.current) inputRef.current.style.height = "auto";
 
     let spokenReply: Promise<void> | null = null;
@@ -463,7 +463,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply }]);
       onEmotionChange(result.emotion);
       if (speakReply) {
-        setVoiceStatus("Shanaya is speaking…");
+        setVoiceStatus("HANNAH is speaking…");
         setIsSpeaking(true);
         spokenReply = SpeechService.speak(result.reply, speechLanguage)
           .then((voiceName) => setVoiceStatus(`Speaking with ${voiceName}`))
@@ -591,7 +591,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         setInput(transcript);
         if (!isFinal) return;
 
-        // Stop the microphone before Shanaya responds so speech recognition
+        // Stop the microphone before HANNAH responds so speech recognition
         // cannot mistake the synthesized reply for the next user turn.
         voiceTurnPendingRef.current = true;
         const activeSession = voiceSessionRef.current;
@@ -755,7 +755,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white ${isOnline && (effectiveMode !== "cloud" || apiStatus === "connected") ? "bg-emerald-500" : "bg-amber-500"}`} />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate font-['Manrope'] text-sm font-bold text-ink">Shanaya</h1>
+            <h1 className="truncate font-['Manrope'] text-sm font-bold text-ink">HANNAH</h1>
             <p className="truncate text-[10px] text-slate-500">
               {!isOnline
                 ? `Offline · ${selectedMode.label}`
@@ -929,7 +929,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
 
             {effectiveMode === "desktop" && (
               <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-                Desktop screenshots and task instructions are sent to the configured Anthropic API. Shanaya asks before each keyboard or mouse action.
+                Desktop screenshots and task instructions are sent to the configured Anthropic API. HANNAH asks before each keyboard or mouse action.
               </div>
             )}
 
@@ -957,7 +957,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
 
       {effectiveMode === "cloud" && apiStatus === "offline" && (
         <div role="alert" className="shrink-0 border-b border-rose-200 bg-rose-50 px-4 py-2 text-[10px] leading-relaxed text-rose-700">
-          Shanaya’s API server is not reachable. From the project root, run <code className="text-rose-800">npm run dev</code> to start the API and client together. The app will retry automatically.
+          HANNAH’s API server is not reachable. From the project root, run <code className="text-rose-800">npm run dev</code> to start the API and client together. The app will retry automatically.
         </div>
       )}
       {effectiveMode === "cloud" && apiStatus === "misconfigured" && (
@@ -986,10 +986,10 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
                     {message.content}
                   </div>
                 </div>
-                {!isUser && message.id && message.id !== "shanaya-welcome" && (
+                {!isUser && message.id && message.id !== "hannah-welcome" && (
                   <div className="flex flex-wrap items-center gap-2 pl-8">
                     <ReportButton messageId={message.id} inferenceMode={effectiveMode} />
-                    {editingMessageId === message.id ? <div className="flex w-full max-w-xl gap-2"><textarea value={editedResponse} onChange={(event) => setEditedResponse(event.target.value)} rows={2} className="min-w-0 flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs text-ink outline-none focus:border-violet-400" aria-label="Edit Shanaya response" /><button type="button" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, editedResponse, feedback: "edited" }); setMessages((current) => current.map((item) => item.id === message.id ? { ...item, content: editedResponse } : item)); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); setEditingMessageId(null); }} className="rounded-lg bg-violet-600 px-3 text-white" aria-label="Save edited response"><Save size={13} /></button></div> : <div className="flex items-center gap-1"><button type="button" title="I like this response" aria-label="Like response" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "liked" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"><ThumbsUp size={13} /></button><button type="button" title="Accept without changes" aria-label="Accept response as-is" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "accepted" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-700"><Check size={13} /></button><button type="button" title="Edit this response" aria-label="Edit response" onClick={() => { setEditingMessageId(message.id!); setEditedResponse(message.content); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-violet-50 hover:text-violet-700"><Pencil size={13} /></button><button type="button" title="This response missed the mark" aria-label="Reject response" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "rejected" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Feedback saved; this response will not be used as a positive example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><ThumbsDown size={13} /></button>{styleFeedback[message.id] && <span role="status" className="text-[9px] text-slate-500">{styleFeedback[message.id]}</span>}</div>}
+                    {editingMessageId === message.id ? <div className="flex w-full max-w-xl gap-2"><textarea value={editedResponse} onChange={(event) => setEditedResponse(event.target.value)} rows={2} className="min-w-0 flex-1 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs text-ink outline-none focus:border-violet-400" aria-label="Edit HANNAH response" /><button type="button" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, editedResponse, feedback: "edited" }); setMessages((current) => current.map((item) => item.id === message.id ? { ...item, content: editedResponse } : item)); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); setEditingMessageId(null); }} className="rounded-lg bg-violet-600 px-3 text-white" aria-label="Save edited response"><Save size={13} /></button></div> : <div className="flex items-center gap-1"><button type="button" title="I like this response" aria-label="Like response" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "liked" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700"><ThumbsUp size={13} /></button><button type="button" title="Accept without changes" aria-label="Accept response as-is" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "accepted" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Saved as a style example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-sky-50 hover:text-sky-700"><Check size={13} /></button><button type="button" title="Edit this response" aria-label="Edit response" onClick={() => { setEditingMessageId(message.id!); setEditedResponse(message.content); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-violet-50 hover:text-violet-700"><Pencil size={13} /></button><button type="button" title="This response missed the mark" aria-label="Reject response" onClick={() => { const prompt = messages.slice(0, index).reverse().find((item) => item.role === "user")?.content || ""; PersonalizationEngine.record({ id: message.id!, prompt, response: message.content, feedback: "rejected" }); setStyleFeedback((current) => ({ ...current, [message.id!]: "Feedback saved; this response will not be used as a positive example" })); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-700"><ThumbsDown size={13} /></button>{styleFeedback[message.id] && <span role="status" className="text-[9px] text-slate-500">{styleFeedback[message.id]}</span>}</div>}
                   </div>
                 )}
               </div>
@@ -1001,7 +1001,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               <span className="typing-dot h-1.5 w-1.5 rounded-full bg-violet-300" />
               {effectiveMode === "webllm" && localLLM.status === "loading"
                 ? `Loading local model · ${Math.round(localLLM.progress * 100)}%`
-                : isLoading ? agentActivity?.message || "Shanaya is thinking…" : ""}
+                : isLoading ? agentActivity?.message || "HANNAH is thinking…" : ""}
             </div>
           )}
 
@@ -1016,7 +1016,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
         <div className="absolute inset-0 z-50 flex flex-col overflow-hidden bg-white px-4 pb-4 pt-5 sm:px-6 sm:pb-5 shadow-soft-lg">
           <div className="flex shrink-0 items-center justify-between">
             <div>
-              <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-violet-700">Shanaya · virtual call</p>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-violet-700">HANNAH · virtual call</p>
               <p className="mt-1 text-[10px] text-slate-500">In-app conversation · no phone network</p>
             </div>
             <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[9px] font-medium text-emerald-700">CONNECTED</span>
@@ -1028,7 +1028,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               <span className="absolute inset-2 rounded-full border border-brand-100" />
               <Bot size={38} strokeWidth={1.35} className="text-violet-700 sm:h-11 sm:w-11" />
             </div>
-            <h2 className="mt-4 font-['Manrope'] text-xl font-semibold text-ink">Shanaya</h2>
+            <h2 className="mt-4 font-['Manrope'] text-xl font-semibold text-ink">HANNAH</h2>
             <p className="mt-1 text-xs text-slate-500">{formatDuration(callDuration)} · {isListening ? "Listening to you" : isLoading ? agentActivity?.message || "Thinking…" : isSpeaking ? "Speaking to you" : isCallMicEnabled ? "Ready to listen" : "Microphone muted"}</p>
           </div>
 
@@ -1041,7 +1041,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               </div>
             ))}
             {messages.filter((message) => message.role === "user" || message.role === "assistant").length <= 1 && (
-              <p className="py-4 text-center text-[11px] text-slate-500">{isCallMicEnabled ? "Your microphone is live. Say hello when you’re ready." : "Unmute the microphone to start talking."} Shanaya will answer out loud.</p>
+              <p className="py-4 text-center text-[11px] text-slate-500">{isCallMicEnabled ? "Your microphone is live. Say hello when you’re ready." : "Unmute the microphone to start talking."} HANNAH will answer out loud.</p>
             )}
             {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] text-rose-700">{error}</p>}
           </div>
@@ -1058,7 +1058,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             <button
               type="button"
               onClick={toggleCallSpeaker}
-              aria-label={isCallSpeakerOn ? "Mute Shanaya's voice" : "Enable Shanaya's voice"}
+              aria-label={isCallSpeakerOn ? "Mute HANNAH's voice" : "Enable HANNAH's voice"}
               className={`flex h-12 w-12 items-center justify-center rounded-full border transition ${isCallSpeakerOn ? "border-slate-200 bg-white text-slate-600 hover:bg-slate-50" : "border-amber-200 bg-amber-50 text-amber-700"}`}
             >
               {isCallSpeakerOn ? <Speaker size={18} /> : <VolumeX size={18} />}
@@ -1072,7 +1072,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               <PhoneOff size={21} />
             </button>
           </div>
-          <p className="mt-3 shrink-0 text-center text-[9px] text-slate-500">{isListening ? "Listening · speak naturally, then pause" : isLoading ? "Shanaya is replying…" : isSpeaking ? "Shanaya is speaking…" : isCallMicEnabled ? "Speak naturally · the microphone stays on between turns" : "Tap the microphone to unmute"}</p>
+          <p className="mt-3 shrink-0 text-center text-[9px] text-slate-500">{isListening ? "Listening · speak naturally, then pause" : isLoading ? "HANNAH is replying…" : isSpeaking ? "HANNAH is speaking…" : isCallMicEnabled ? "Speak naturally · the microphone stays on between turns" : "Tap the microphone to unmute"}</p>
         </div>
       )}
 
@@ -1107,7 +1107,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             type="button"
             onClick={() => void toggleVoiceInput()}
             aria-label={isListening ? "Stop voice input" : "Start voice input"}
-            title={isListening ? "Stop listening" : "Speak to Shanaya"}
+            title={isListening ? "Stop listening" : "Speak to HANNAH"}
             className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-medium transition ${isListening ? "border-rose-200 bg-rose-50 text-rose-700" : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"}`}
           >
             <Mic size={12} /> {isListening ? "Listening" : "Speak"}
@@ -1133,8 +1133,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               event.target.style.height = `${Math.min(event.target.scrollHeight, 96)}px`;
             }}
             onKeyDown={handleKeyDown}
-            placeholder={!isOnline ? "Message Shanaya offline…" : "Message Shanaya…"}
-            aria-label="Message Shanaya"
+            placeholder={!isOnline ? "Message HANNAH offline…" : "Message HANNAH…"}
+            aria-label="Message HANNAH"
             rows={1}
             maxLength={4000}
             className="max-h-24 min-h-10 flex-1 resize-none bg-transparent px-3 py-2.5 text-[12px] leading-relaxed text-ink outline-none placeholder:text-slate-400"

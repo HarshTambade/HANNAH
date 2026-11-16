@@ -43,7 +43,7 @@ function initServerSentry() {
       attachStacktrace: true,
       maxBreadcrumbs: 20,
       tracesSampleRate: sampleRate(process.env.SENTRY_TRACES_SAMPLE_RATE, 0.1),
-      initialScope: { tags: { service: "shanaya-api" } },
+      initialScope: { tags: { service: "hannah-api" } },
       beforeSend(event) {
         return sanitizeSentryEvent(event);
       },

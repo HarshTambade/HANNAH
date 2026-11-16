@@ -18,7 +18,7 @@ export type Task = {
   workflow?: WorkflowSchema;
 };
 
-const STORAGE_KEY = "shanaya.tasks.v1";
+const STORAGE_KEY = "hannah.tasks.v1";
 
 function readTasks(): Task[] {
   try {

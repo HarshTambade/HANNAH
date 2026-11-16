@@ -93,7 +93,7 @@ describe("phase services integration", () => {
 
   it("ITU identity interop round-trips", () => {
     const identity = IdentityInteropLayer.present();
-    expect(identity.identityId.startsWith("shanaya:")).toBe(true);
+    expect(identity.identityId.startsWith("hannah:")).toBe(true);
     const back = IdentityInteropLayer.fromITU(identity);
     expect(back.memoryQuery).toBe(true);
   });

@@ -17,7 +17,7 @@ export type PAPSession = {
   createdAt: number;
 };
 
-const KEY = "shanaya.pap.sessions.v1";
+const KEY = "hannah.pap.sessions.v1";
 
 function readSessions(): PAPSession[] {
   try {
@@ -64,7 +64,7 @@ export const PAPAdapter = {
     if (!profile) throw new Error(`No PAP profile found for ${domain}`);
     const state = crypto.randomUUID();
     const params = new URLSearchParams({
-      client_id: "shanaya-client",
+      client_id: "hannah-client",
       redirect_uri: `${window.location.origin}/pap/callback`,
       scope: scope.join(" "),
       state,

@@ -103,8 +103,8 @@ test("Sentry events lose identity, request bodies, auth headers, and prompt text
             pre_context: ["// private source"],
             post_context: ["// private source"],
           }, {
-            filename: "https://shanaya.example/assets/main.js?token=secret",
-            abs_path: "https://shanaya.example/assets/main.js#x",
+            filename: "https://hannah.example/assets/main.js?token=secret",
+            abs_path: "https://hannah.example/assets/main.js#x",
             lineno: 3,
           }],
         },
@@ -136,8 +136,8 @@ test("Sentry events lose identity, request bodies, auth headers, and prompt text
   for (const key of ["vars", "context_line", "pre_context", "post_context"]) {
     assert.equal(key in clean.exception.values[0].stacktrace.frames[0], false, key);
   }
-  assert.equal(clean.exception.values[0].stacktrace.frames[1].filename, "https://shanaya.example/assets/main.js");
-  assert.equal(clean.exception.values[0].stacktrace.frames[1].abs_path, "https://shanaya.example/assets/main.js");
+  assert.equal(clean.exception.values[0].stacktrace.frames[1].filename, "https://hannah.example/assets/main.js");
+  assert.equal(clean.exception.values[0].stacktrace.frames[1].abs_path, "https://hannah.example/assets/main.js");
 });
 
 test("transaction spans redact descriptions and span data", () => {
@@ -167,7 +167,7 @@ test("transaction spans redact descriptions and span data", () => {
 });
 
 test("LLM traces keep timing, usage, and fallbacks without message content", async () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "shanaya-trace-test-"));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "hannah-trace-test-"));
   const previousLog = process.env.LLM_TRACE_LOG;
   const previousPublicKey = process.env.LANGFUSE_PUBLIC_KEY;
   const previousSecretKey = process.env.LANGFUSE_SECRET_KEY;

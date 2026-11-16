@@ -10,7 +10,7 @@ export type SideEffectEntry = {
   undoableUntil: string;
 };
 
-const STORAGE_KEY = "shanaya.sideEffects.v1";
+const STORAGE_KEY = "hannah.sideEffects.v1";
 const DEFAULT_DELAY = 30;
 
 function readEntries(): SideEffectEntry[] {

@@ -1,1 +1,1 @@
-"""Python agent backend for Project Shanaya."""
+"""Python agent backend for Project HANNAH."""

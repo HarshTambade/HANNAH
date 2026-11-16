@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tail and summarize Shanaya's hash-chained agent audit log.
+"""Tail and summarize HANNAH's hash-chained agent audit log.
 
 The audit log is written by `backend/audit_logger.py`. This monitor verifies the
 SHA-256 chain and reports metadata-only daily totals:
@@ -324,7 +324,7 @@ def _fmt_count(value: int) -> str:
 def format_summary(result: ScanResult, selected_days: list[str], *, show_path: bool = True) -> str:
     lines: list[str] = []
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    header = "Shanaya agent audit summary"
+    header = "HANNAH agent audit summary"
     if len(selected_days) == 1:
         header += f" · {selected_days[0]}"
     lines.append(header)
@@ -392,7 +392,7 @@ def _print_report(result: ScanResult, selected_days: list[str], *, as_json: bool
 
 
 def _resolve_log_path(raw_path: str | None) -> Path:
-    configured = raw_path or os.getenv("SHANAYA_AUDIT_LOG", "").strip() or "logs/shanaya_audit.jsonl"
+    configured = raw_path or os.getenv("HANNAH_AUDIT_LOG", "").strip() or "logs/hannah_audit.jsonl"
     path = Path(configured).expanduser()
     return path if path.is_absolute() else Path.cwd() / path
 
@@ -426,17 +426,17 @@ def _run_follow(path: Path, args: argparse.Namespace, requested_day: str | None)
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Verify and summarize Shanaya's hash-chained agent audit log.",
+        description="Verify and summarize HANNAH's hash-chained agent audit log.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
             "  python3 scripts/audit_monitor.py\n"
             "  python3 scripts/audit_monitor.py --all --json\n"
             "  python3 scripts/audit_monitor.py --follow --interval 2\n"
-            "  SHANAYA_AUDIT_LOG=/var/lib/shanaya/audit.jsonl python3 scripts/audit_monitor.py --date 2026-11-15"
+            "  HANNAH_AUDIT_LOG=/var/lib/hannah/audit.jsonl python3 scripts/audit_monitor.py --date 2026-11-15"
         ),
     )
-    parser.add_argument("--log", help="Path to shanaya_audit.jsonl (default: $SHANAYA_AUDIT_LOG or logs/shanaya_audit.jsonl).")
+    parser.add_argument("--log", help="Path to hannah_audit.jsonl (default: $HANNAH_AUDIT_LOG or logs/hannah_audit.jsonl).")
     parser.add_argument("--date", help="UTC day to summarize, YYYY-MM-DD (default: today).")
     parser.add_argument("--all", action="store_true", help="Summarize every day present in the log.")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")

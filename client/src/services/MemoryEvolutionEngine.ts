@@ -13,13 +13,13 @@ export const MemoryEvolutionEngine = {
       const insight = `Pattern: ${sessionText.slice(0, 120)}`;
       MemoryService.add("long_term", insight, 2);
       const userModel = MemoryService.list("long_term").map((m) => m.content).slice(0, 10).join("\n");
-      window.localStorage.setItem("shanaya.userModel", userModel);
+      window.localStorage.setItem("hannah.userModel", userModel);
       TaskSpineService.update(taskId, { status: "completed", progress: 1, result: { insight } });
     } catch (error) {
       TaskSpineService.update(taskId, { status: "failed", error: error instanceof Error ? error.message : "evolution failed" });
     }
   },
   getUserModel() {
-    return window.localStorage.getItem("shanaya.userModel") || "";
+    return window.localStorage.getItem("hannah.userModel") || "";
   },
 };

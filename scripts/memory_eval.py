@@ -1,4 +1,4 @@
-"""Memory evaluation harness for Shanaya's layered memory."""
+"""Memory evaluation harness for HANNAH's layered memory."""
 
 from __future__ import annotations
 

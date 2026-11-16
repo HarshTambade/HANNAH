@@ -13,16 +13,16 @@ Run `npm run test:chaos --prefix client` for deterministic AgentRuntime fallback
 
 ## Local personalization dataset
 
-`Train My Shanaya` waits for the readiness service to report an idle window, runs `DreamingConsolidator`, and exports only liked, accepted, or edited examples. It prepares training data; it does not update model weights in the browser. To validate/prepare that export:
+`Train My HANNAH` waits for the readiness service to report an idle window, runs `DreamingConsolidator`, and exports only liked, accepted, or edited examples. It prepares training data; it does not update model weights in the browser. To validate/prepare that export:
 
 ```sh
-python backend/on_device_lora.py --input shanaya-personalization.jsonl --output shanaya-lora-data.jsonl
+python backend/on_device_lora.py --input hannah-personalization.jsonl --output hannah-lora-data.jsonl
 ```
 
 Optional adapter training requires locally installed `torch`, `transformers`, and `peft`, plus a local Hugging Face source checkpoint:
 
 ```sh
-python backend/on_device_lora.py --input shanaya-personalization.jsonl --train --base-model ./local-source-checkpoint --adapter-output ./shanaya-lora-adapter
+python backend/on_device_lora.py --input hannah-personalization.jsonl --train --base-model ./local-source-checkpoint --adapter-output ./hannah-lora-adapter
 ```
 
 GGUF is an inference format and cannot be fine-tuned directly by PEFT. Convert or merge a trained adapter into a compatible runtime artifact as a separate, model-specific packaging step. The schema saved by the visual builder is currently a pending Task Spine record; this repository does not provide a background workflow executor yet.

@@ -1,11 +1,11 @@
-export type ShanayaInteropProfile = {
+export type HANNAHInteropProfile = {
   capabilities: string[];
   permissions: string[];
   estimatedCostUsd: number;
 };
 
 export const AgentInteropService = {
-  profile(): ShanayaInteropProfile {
+  profile(): HANNAHInteropProfile {
     return { capabilities: ["chat", "memory", "tasks"], permissions: ["user_approved"], estimatedCostUsd: 0.01 };
   },
   async expose() {

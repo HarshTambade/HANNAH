@@ -11,7 +11,7 @@ export type DreamLogEntry = {
   at: number;
 };
 
-const DREAM_LOG_KEY = "shanaya.dreamlog.v1";
+const DREAM_LOG_KEY = "hannah.dreamlog.v1";
 
 function readDreamLog(): DreamLogEntry[] {
   try {

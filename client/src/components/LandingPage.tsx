@@ -21,7 +21,7 @@ const features = [
     icon: MessageCircle,
     color: "brand",
     title: "A conversation with presence",
-    description: "Talk through an idea, untangle a long day, or follow your curiosity. Shanaya meets you with thoughtful, natural replies.",
+    description: "Talk through an idea, untangle a long day, or follow your curiosity. HANNAH meets you with thoughtful, natural replies.",
   },
   {
     icon: AudioLines,
@@ -58,7 +58,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
     const key = groqApiKey.trim();
     const localDevelopment = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
     if (token.length < 32 || token.length > 512 || /\s/.test(token)) {
-      setKeyError("Enter the API access token provided by your Shanaya server operator (32–512 characters, without spaces).");
+      setKeyError("Enter the API access token provided by your HANNAH server operator (32–512 characters, without spaces).");
       return;
     }
     if ((token || key) && !window.isSecureContext && !localDevelopment) {
@@ -99,12 +99,12 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
 
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-2xl">
         <div className="mx-auto flex max-w-7xl h-[4.5rem] items-center justify-between px-5 sm:px-8 lg:px-12">
-          <a href="#home" className="flex items-center gap-3" aria-label="Shanaya home">
+          <a href="#home" className="flex items-center gap-3" aria-label="HANNAH home">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600">
               <Sparkles size={17} strokeWidth={1.7} />
             </span>
             <span>
-              <span className="block font-display text-[12px] font-extrabold tracking-[0.2em] text-ink">SHANAYA</span>
+              <span className="block font-display text-[12px] font-extrabold tracking-[0.2em] text-ink">HANNAH</span>
               <span className="mt-0.5 block text-[8px] font-medium uppercase tracking-[0.2em] text-slate-500">AI companion</span>
             </span>
           </a>
@@ -134,7 +134,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
             onClick={openKeyDialog}
             className="group inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-[11px] font-bold text-ink transition hover:border-brand-300 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/50"
           >
-            Talk to Shanaya <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
+            Talk to HANNAH <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
           </button>
         </div>
         {mobileNavigationOpen && (
@@ -163,7 +163,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              Shanaya v1.0.3
+              HANNAH v1.0.3
             </div>
 
             <h1 className="font-display text-[clamp(2.6rem,6vw,5.6rem)] font-extrabold leading-[1.02] tracking-[-0.06em] text-ink">
@@ -173,7 +173,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
               </span>
             </h1>
             <p className="mt-6 max-w-[34rem] text-[14px] leading-[1.8] text-slate-600 sm:text-[15px]">
-              Meet Shanaya: a private, governed AI companion for real conversation, voice, and the little things you feel like sharing.
+              Meet HANNAH: a private, governed AI companion for real conversation, voice, and the little things you feel like sharing.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -182,7 +182,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                 onClick={openKeyDialog}
                 className="group inline-flex min-h-[3.5rem] items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-5 text-[12px] font-bold text-white shadow-[0_10px_40px_rgba(14,165,233,0.25)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_48px_rgba(14,165,233,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/70"
               >
-                Talk to Shanaya
+                Talk to HANNAH
                 <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20"><ArrowRight size={14} /></span>
               </button>
               <a href="#experience" className="inline-flex min-h-[3.5rem] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-bold text-ink transition hover:border-brand-300 hover:text-brand-600">
@@ -192,7 +192,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
 
             <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
               <button type="button" onClick={onIntegrations} className="inline-flex items-center gap-2 text-left text-[10px] font-bold text-slate-500 transition hover:text-brand-600">
-                <Cable size={13} /> Connect Shanaya to another app with the API or MCP
+                <Cable size={13} /> Connect HANNAH to another app with the API or MCP
               </button>
               <button type="button" onClick={onMarketplace} className="inline-flex items-center gap-2 text-left text-[10px] font-bold text-slate-500 transition hover:text-violet-600">
                 <PackageOpen size={13} /> Browse agents and skills
@@ -216,7 +216,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                 <AvatarScene emotion="neutral" />
               </div>
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-4 py-4 sm:px-5">
-                <span className="rounded-full border border-white/60 bg-white/85 px-3 py-1.5 font-mono text-[8px] tracking-[0.18em] text-brand-700 backdrop-blur">SHANAYA · LIVE</span>
+                <span className="rounded-full border border-white/60 bg-white/85 px-3 py-1.5 font-mono text-[8px] tracking-[0.18em] text-brand-700 backdrop-blur">HANNAH · LIVE</span>
                 <span className="flex items-center gap-1.5 rounded-full border border-white/60 bg-white/85 px-2.5 py-1.5 text-[8px] text-slate-600 backdrop-blur"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]" /> Ready</span>
               </div>
               <div className="pointer-events-none absolute inset-x-4 bottom-4 flex items-center justify-between gap-2 rounded-xl border border-white/50 bg-white/85 px-3 py-2 text-[9px] text-slate-600 backdrop-blur sm:inset-x-5 sm:bottom-5">
@@ -259,7 +259,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
               <h2 className="section-title">Your space. Your conversation.</h2>
               <p className="section-desc">You decide when to begin and whether to type or use your voice.</p>
               <button type="button" onClick={openKeyDialog} className="group mt-6 inline-flex items-center gap-2 text-[11px] font-bold text-brand-600 transition hover:text-brand-700">
-                Talk to Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-1" />
+                Talk to HANNAH <ArrowRight size={14} className="transition group-hover:translate-x-1" />
               </button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -293,7 +293,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
           <div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12">
             <div className="max-w-2xl">
               <p className="section-kicker">Hybrid AI</p>
-              <h2 className="section-title">Choose where Shanaya thinks.</h2>
+              <h2 className="section-title">Choose where HANNAH thinks.</h2>
               <p className="section-desc">Use a hosted model, a browser model, or a model on your own device or server.</p>
             </div>
             <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -320,7 +320,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
               </div>
               <h2 className="mt-5 font-display text-2xl font-bold tracking-[-0.04em] text-ink sm:text-3xl">Your key stays yours.</h2>
               <p className="mt-3 text-[11px] leading-6 text-slate-600 sm:text-xs">
-                Your Groq key stays in memory for this visit. Shanaya sends it to the configured API server in a request header for cloud turns; it is not saved in browser storage.
+                Your Groq key stays in memory for this visit. HANNAH sends it to the configured API server in a request header for cloud turns; it is not saved in browser storage.
               </p>
             </div>
             <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="inline-flex min-h-[3rem] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white px-4 text-[10px] font-bold text-slate-600 transition hover:border-brand-300 hover:text-ink">
@@ -331,8 +331,8 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
 
         <footer className="border-t border-slate-200">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 text-[9px] text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
-            <span>© {new Date().getFullYear()} Shanaya · A thoughtful AI companion.</span>
-            <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="https://github.com/HarshTambade/Shanaya---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
+            <span>© {new Date().getFullYear()} HANNAH · A thoughtful AI companion.</span>
+            <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
           </div>
         </footer>
       </div>
@@ -345,14 +345,14 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
               <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-ink"><X size={15} /></button>
               <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600"><Sparkles size={17} /></span>
               <p className="mt-7 text-[9px] font-bold uppercase tracking-[0.2em] text-brand-700">Your first step</p>
-              <h2 id="connect-title" className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-ink">Connect with Shanaya.</h2>
-              <p className="mt-4 text-[11px] leading-6 text-slate-600">Enter the access token from your Shanaya server operator. They set it as <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">SHANAYA_API_TOKEN</code> in <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">server/.env</code> (generate with <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">openssl rand -hex 32</code>). It stays in this page's memory for the session.</p>
+              <h2 id="connect-title" className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-ink">Connect with HANNAH.</h2>
+              <p className="mt-4 text-[11px] leading-6 text-slate-600">Enter the access token from your HANNAH server operator. They set it as <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">HANNAH_API_TOKEN</code> in <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">server/.env</code> (generate with <code className="rounded bg-slate-100 px-1 font-mono text-[10px] text-brand-700">openssl rand -hex 32</code>). It stays in this page's memory for the session.</p>
 
               <form className="mt-7" onSubmit={beginConversation}>
-                <label htmlFor="shanaya-api-token" className="mb-2 block text-[10px] font-bold text-slate-700">Shanaya API access token</label>
+                <label htmlFor="hannah-api-token" className="mb-2 block text-[10px] font-bold text-slate-700">HANNAH API access token</label>
                 <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 pr-3 transition focus-within:border-brand-400/60">
                   <input
-                    id="shanaya-api-token"
+                    id="hannah-api-token"
                     type={showApiToken ? "text" : "password"}
                     value={apiToken}
                     onChange={(event) => { setApiToken(event.target.value); setKeyError(""); }}
@@ -364,7 +364,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                     required
                     className="min-w-0 flex-1 bg-transparent px-3 py-3 text-xs text-ink outline-none placeholder:text-slate-400"
                   />
-                  <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide Shanaya access token" : "Show Shanaya access token"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
+                  <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide HANNAH access token" : "Show HANNAH access token"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
                     {showApiToken ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
@@ -389,7 +389,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace }: 
                 {keyError && <p role="alert" className="mt-2 text-[10px] text-rose-400">{keyError}</p>}
                 <p className="mt-4 flex items-start gap-2 text-[9px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-600" /> The access token and optional Groq key stay in this page's memory.</p>
                 <button type="submit" className="group mt-7 flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-[11px] font-bold text-white transition hover:brightness-105">
-                  Continue to Shanaya <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
+                  Continue to HANNAH <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />
                 </button>
                 <p className="mt-5 text-center text-[9px] text-slate-500">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-brand-700 underline decoration-brand-200/30 underline-offset-2 hover:text-brand-800">Create one at Groq</a></p>
               </form>

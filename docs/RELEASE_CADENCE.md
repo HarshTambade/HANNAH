@@ -1,12 +1,12 @@
-# Shanaya Release Cadence
+# HANNAH Release Cadence
 
-Shanaya ships on a monthly cadence. The goal is to turn support, audit, and usage signals into small, reviewed improvements without destabilizing the core companion.
+HANNAH ships on a monthly cadence. The goal is to turn support, audit, and usage signals into small, reviewed improvements without destabilizing the core companion.
 
 ## Monthly timeline
 
 ### Days 1–7: Collect signals
 - Review Sentry P0/P1/P2 issues and crash-free sessions.
-- Review `logs/content_reports.jsonl` and `logs/shanaya_audit.jsonl`.
+- Review `logs/content_reports.jsonl` and `logs/hannah_audit.jsonl`.
 - Run `python3 scripts/bad_case_harvest.py` to collect disliked or rejected interactions.
 - Review provider usage, cost, latency, and fallback rates from `logs/llm_traces.jsonl`.
 - Collect user feedback from Discord/MongoDB and support email.

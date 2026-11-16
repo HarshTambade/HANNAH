@@ -322,7 +322,7 @@ export default function AvatarScene({ emotion, onMotionChange }: { emotion: Emot
       className="relative h-full w-full"
       data-emotion={emotion}
       role="img"
-      aria-label={`Shanaya avatar showing ${emotion} expression`}
+      aria-label={`HANNAH avatar showing ${emotion} expression`}
     >
       <Canvas
         camera={{ position: [0, 1.1, 5.4], fov: 35 }}

@@ -12,7 +12,7 @@ export type ToolSchema = {
   required?: string[];
 };
 
-export type ShanayaTool = {
+export type HANNAHTool = {
   name: string;
   description: string;
   inputSchema: ToolSchema;
@@ -21,10 +21,10 @@ export type ShanayaTool = {
   execute: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
-const deviceTools: ShanayaTool[] = [
+const deviceTools: HANNAHTool[] = [
   {
     name: "list_app_files",
-    description: "List files and directories in Shanaya's private app Documents area. This cannot access other apps or arbitrary device paths.",
+    description: "List files and directories in HANNAH's private app Documents area. This cannot access other apps or arbitrary device paths.",
     inputSchema: {
       type: "object",
       properties: { path: { type: "string", description: "Optional relative folder path; omit to list the app Documents root." } },
@@ -42,12 +42,12 @@ const deviceTools: ShanayaTool[] = [
   },
   {
     name: "read_app_file",
-    description: "Read a UTF-8 text file up to 128 KB from Shanaya's private app Documents area. Cloud-mode file contents are sent to the selected model provider.",
+    description: "Read a UTF-8 text file up to 128 KB from HANNAH's private app Documents area. Cloud-mode file contents are sent to the selected model provider.",
     requiresApproval: true,
     sensitive: "read_file",
     inputSchema: {
       type: "object",
-      properties: { path: { type: "string", description: "Relative path inside Shanaya's app Documents area." } },
+      properties: { path: { type: "string", description: "Relative path inside HANNAH's app Documents area." } },
       required: ["path"],
     },
     execute: async (args) => {
@@ -62,13 +62,13 @@ const deviceTools: ShanayaTool[] = [
   },
   {
     name: "write_app_file",
-    description: "Create or replace a UTF-8 text file up to 1 MB inside Shanaya's private app Documents area. Always requires user confirmation.",
+    description: "Create or replace a UTF-8 text file up to 1 MB inside HANNAH's private app Documents area. Always requires user confirmation.",
     requiresApproval: true,
     sensitive: "write_file",
     inputSchema: {
       type: "object",
       properties: {
-        path: { type: "string", description: "Relative path inside Shanaya's app Documents area." },
+        path: { type: "string", description: "Relative path inside HANNAH's app Documents area." },
         content: { type: "string", description: "Exact UTF-8 text content to write." },
       },
       required: ["path", "content"],
@@ -90,12 +90,12 @@ const deviceTools: ShanayaTool[] = [
   },
   {
     name: "delete_app_file",
-    description: "Delete a file from Shanaya's private app Documents area. Directories and paths outside app storage are not allowed. Always requires user confirmation.",
+    description: "Delete a file from HANNAH's private app Documents area. Directories and paths outside app storage are not allowed. Always requires user confirmation.",
     requiresApproval: true,
     sensitive: "delete_file",
     inputSchema: {
       type: "object",
-      properties: { path: { type: "string", description: "Relative file path inside Shanaya's app Documents area." } },
+      properties: { path: { type: "string", description: "Relative file path inside HANNAH's app Documents area." } },
       required: ["path"],
     },
     execute: async (args) => {
@@ -129,7 +129,7 @@ const deviceTools: ShanayaTool[] = [
       }
       if (app === "settings") {
         await AppLauncher.openUrl({ url: "app-settings:" });
-        return { ok: true, message: "Opened Shanaya's app settings." };
+        return { ok: true, message: "Opened HANNAH's app settings." };
       }
       if (app === "maps") {
         const query = String(args.query ?? "").trim();
@@ -140,7 +140,7 @@ const deviceTools: ShanayaTool[] = [
       if (app === "phone" || app === "messages") {
         throw new Error("Use the confirmed make_call or send_message tool to prepare a phone action.");
       }
-      throw new Error("That app is not in Shanaya's supported app list.");
+      throw new Error("That app is not in HANNAH's supported app list.");
     },
   },
   {
@@ -177,7 +177,7 @@ const deviceTools: ShanayaTool[] = [
       const setting = String(args.setting ?? "");
       const enabled = Boolean(args.enabled);
       if (setting === "wifi" || setting === "bluetooth") {
-        return { ok: false, message: `The operating system does not let Shanaya toggle ${setting} directly. Use Control Center or Quick Settings to turn it ${enabled ? "on" : "off"}.` };
+        return { ok: false, message: `The operating system does not let HANNAH toggle ${setting} directly. Use Control Center or Quick Settings to turn it ${enabled ? "on" : "off"}.` };
       }
       if (setting !== "flashlight") throw new Error("Unsupported setting.");
       if (!Capacitor.isNativePlatform()) throw new Error("Flashlight control requires the iOS or Android app.");
@@ -247,7 +247,7 @@ function safeDocumentPath(value: unknown, allowRoot = false) {
   const path = raw.replaceAll("\\", "/");
   const segments = path.split("/");
   if (!path || path.startsWith("/") || /^[a-zA-Z]:/.test(path) || segments.some((segment) => !segment || segment === "." || segment === ".." || segment.includes("\0"))) {
-    throw new Error("Use a relative path inside Shanaya's app Documents area; parent and absolute paths are blocked.");
+    throw new Error("Use a relative path inside HANNAH's app Documents area; parent and absolute paths are blocked.");
   }
   return segments.join("/");
 }
@@ -256,7 +256,7 @@ export function getDeviceTools() {
   return deviceTools;
 }
 
-export async function executeShanayaTool(tool: ShanayaTool, args: Record<string, unknown>) {
+export async function executeHANNAHTool(tool: HANNAHTool, args: Record<string, unknown>) {
   if (tool.requiresApproval) {
     if (!tool.sensitive) throw new Error(`The approval-required tool "${tool.name}" has no SafetyGuard action configured.`);
     await SafetyGuard.require(tool.sensitive, args);
@@ -270,7 +270,7 @@ export function getMobileClawTools(): MobileClawTool[] {
     description: tool.description,
     inputSchema: tool.inputSchema,
     execute: async (args) => {
-      return executeShanayaTool(tool, args);
+      return executeHANNAHTool(tool, args);
     },
   }));
 }

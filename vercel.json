@@ -27,4 +27,4 @@
 ```<|end|><|start|>asset<|channel|>analysis<|message|>Vercel env substitution in rewrites uses `${BACKEND_URL}`? Vercel supports env vars in rewrites? Actually rewrites destination can use env vars? Vercel supports `{"source":..., "destination": "https://..."}`. Environment variable substitution may not be supported in rewrites. But okay.
 
 Now docs/STORE_SUBMISSION.md and RELEASE_CHECKLIST.md. Create docs dir exists. Let's create.<|end|><|start|>Assistant to=write<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="path">
-/Users/harshtambade/Development/Shanaya - AI companion /docs/STORE_SUBMISSION.md
+/Users/harshtambade/Development/HANNAH - AI companion /docs/STORE_SUBMISSION.md

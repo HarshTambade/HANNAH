@@ -39,7 +39,7 @@ def harvest_feedback():
 
 def harvest_audit_rejections():
     # Reads the hash-chained audit log for user_rejected tool calls.
-    log_path = Path(os.getenv("SHANAYA_AUDIT_LOG", ROOT / "logs" / "shanaya_audit.jsonl"))
+    log_path = Path(os.getenv("HANNAH_AUDIT_LOG", ROOT / "logs" / "hannah_audit.jsonl"))
     if not log_path.exists():
         return []
     harvested = []

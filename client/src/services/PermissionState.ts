@@ -1,4 +1,4 @@
-const STORAGE_KEY = "shanaya.permissions.v1";
+const STORAGE_KEY = "hannah.permissions.v1";
 
 export const PermissionState = {
   revoked: new Set<string>(),

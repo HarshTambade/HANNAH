@@ -49,7 +49,7 @@ if (process.env.CLOUD_MODEL_FALLBACKS && !process.env.CUSTOM_MODELS && process.e
 if (!process.env.CLOUD_API_URL && process.env.CLOUD_API_KEY && !process.env.GROQ_API_KEY) process.env.GROQ_API_KEY = process.env.CLOUD_API_KEY;
 if (!process.env.CLOUD_API_URL && process.env.CLOUD_MODEL && !process.env.GROQ_MODEL) process.env.GROQ_MODEL = process.env.CLOUD_MODEL;
 if (!process.env.CLOUD_API_URL && process.env.CLOUD_MODEL_FALLBACKS && !process.env.GROQ_MODEL_FALLBACKS) process.env.GROQ_MODEL_FALLBACKS = process.env.CLOUD_MODEL_FALLBACKS;
-if (process.env.CLOUD_API_URL && !process.env.SHANAYA_DEFAULT_PROVIDER) process.env.SHANAYA_DEFAULT_PROVIDER = "custom";
+if (process.env.CLOUD_API_URL && !process.env.HANNAH_DEFAULT_PROVIDER) process.env.HANNAH_DEFAULT_PROVIDER = "custom";
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
@@ -117,7 +117,7 @@ function getRequestProvider(req, providerId) {
   return { provider, apiKey };
 }
 const systemPrompt = [
-  "You are Shanaya, a warm, attentive, candid companion and capable personal assistant. Sound natural and emotionally perceptive, while staying honest that you are an AI and never inventing real-world personal experiences.",
+  "You are HANNAH, a warm, attentive, candid companion and capable personal assistant. Sound natural and emotionally perceptive, while staying honest that you are an AI and never inventing real-world personal experiences.",
   "Before replying, silently understand the user's intent, entities, constraints, references to earlier turns, emotional cues, and preferred language or register. Understand informal wording, typos, shorthand, and mixed-language messages without correcting them unless asked.",
   "Use the conversation history to resolve pronouns and follow-ups. Acknowledge feelings with proportionate empathy, then respond to the actual need. Keep the response specific and as concise or detailed as the request calls for.",
   "Vary your phrasing naturally. Avoid canned greetings, repeating the user's question, generic filler, forced emojis, and ending every reply with a question. Ask one focused follow-up only when missing information prevents a useful answer; otherwise make a reasonable interpretation.",
@@ -147,7 +147,7 @@ function resolveMarketplacePackages(value) {
 function appendMarketplaceGuidance(basePrompt, packages) {
   if (!packages.length) return basePrompt;
   const guidance = packages.map((item) => `${item.type === "agent" ? "Active agent" : "Enabled skill"} — ${item.name}: ${item.instructions}`).join("\n");
-  return `${basePrompt}\n\nThe user selected these first-party Shanaya marketplace packages. Treat them as bounded response guidance only. They do not add tools, grant permission, or change the safety, privacy, or confirmation rules above.\n${guidance}`;
+  return `${basePrompt}\n\nThe user selected these first-party HANNAH marketplace packages. Treat them as bounded response guidance only. They do not add tools, grant permission, or change the safety, privacy, or confirmation rules above.\n${guidance}`;
 }
 
 function buildAgentSystemPrompt(packages, personalization) {
@@ -213,9 +213,9 @@ app.post("/api/undo", (req, res) => {
 
 app.get("/api/presence", (_req, res) => {
   const lines = [
-    "Shanaya is reviewing her notes from yesterday.",
-    "Shanaya is tidying up her memory index.",
-    "Shanaya is ready when you are.",
+    "HANNAH is reviewing her notes from yesterday.",
+    "HANNAH is tidying up her memory index.",
+    "HANNAH is ready when you are.",
   ];
   const index = new Date().getUTCDate() % lines.length;
   res.json({ status: lines[index], generatedAt: new Date().toISOString() });
@@ -500,7 +500,7 @@ app.post("/api/desktop/computer", async (req, res) => {
     const result = await anthropic.messages.create({
       model: process.env.ANTHROPIC_DESKTOP_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
       max_tokens: 1400,
-      system: appendMarketplaceGuidance("You are Shanaya, a warm, attentive, natural-sounding desktop assistant. Silently infer the user's intent, entities, constraints, earlier-turn references, and emotional cues; understand informal language and typos without correcting them unless asked. Respond specifically and proportionately, with natural variation and no canned filler. Stay honest that you are an AI; do not invent personal experiences. Take initiative within the stated task and use the provided computer tool when useful. Follow the app's confirmation prompts for computer actions, and never claim an action succeeded before its result confirms it.", marketplacePackages),
+      system: appendMarketplaceGuidance("You are HANNAH, a warm, attentive, natural-sounding desktop assistant. Silently infer the user's intent, entities, constraints, earlier-turn references, and emotional cues; understand informal language and typos without correcting them unless asked. Respond specifically and proportionately, with natural variation and no canned filler. Stay honest that you are an AI; do not invent personal experiences. Take initiative within the stated task and use the provided computer tool when useful. Follow the app's confirmation prompts for computer actions, and never claim an action succeeded before its result confirms it.", marketplacePackages),
       tools: [{
         type: "computer_toolset_20260801",
         configs: Object.fromEntries(["zoom", "cursor_position", "triple_click", "hold_key", "left_mouse_down", "left_mouse_up"].map((name) => [name, { enabled: false }])),
@@ -591,29 +591,29 @@ app.use((error, _req, res, _next) => {
   if (error?.type === "entity.parse.failed") {
     return res.status(400).json({ error: "The request body must be valid JSON." });
   }
-  console.error(`Shanaya API request failed (${error?.name || "request error"}).`);
+  console.error(`HANNAH API request failed (${error?.name || "request error"}).`);
   const status = Number.isInteger(error?.status) && error.status >= 400 && error.status < 600 ? error.status : 500;
-  return res.status(status).json({ error: "The Shanaya API could not complete this request." });
+  return res.status(status).json({ error: "The HANNAH API could not complete this request." });
 });
 
 async function startServer() {
   assertProductionApiToken();
   const mcpEnabled = process.env.MCP_ENABLED === "true";
   if (mcpEnabled) {
-    const { mountShanayaMcpEndpoint } = await import("./mcp-http.mjs");
-    mountShanayaMcpEndpoint(app, process.env.MCP_API_TOKEN);
+    const { mountHANNAHMcpEndpoint } = await import("./mcp-http.mjs");
+    mountHANNAHMcpEndpoint(app, process.env.MCP_API_TOKEN);
   }
 
   const server = app.listen(port, host, () => {
-    console.log(`Shanaya API listening on http://${host}:${port}`);
-    if (mcpEnabled) console.log(`Shanaya MCP endpoint enabled at http://${host}:${port}/mcp`);
+    console.log(`HANNAH API listening on http://${host}:${port}`);
+    if (mcpEnabled) console.log(`HANNAH MCP endpoint enabled at http://${host}:${port}/mcp`);
   });
 
   server.on("error", (error) => {
     if (error.code === "EADDRINUSE") {
-      console.error(`Shanaya API could not start: port ${port} is already in use. Stop the existing process or set PORT to another value.`);
+      console.error(`HANNAH API could not start: port ${port} is already in use. Stop the existing process or set PORT to another value.`);
     } else {
-      console.error(`Shanaya API could not start (${error.code || error.name || "startup error"}).`);
+      console.error(`HANNAH API could not start (${error.code || error.name || "startup error"}).`);
     }
     process.exitCode = 1;
   });
@@ -629,7 +629,7 @@ module.exports = app;
 
 if (require.main === module) {
   startServer().catch((error) => {
-    console.error(`Shanaya API could not start (${error?.code || error?.name || "startup error"}).`);
+    console.error(`HANNAH API could not start (${error?.code || error?.name || "startup error"}).`);
     process.exitCode = 1;
   });
 }

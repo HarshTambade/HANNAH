@@ -89,7 +89,7 @@ never block a chat response.
 Example line (values abbreviated):
 
 ```json
-{"type":"llm_trace","version":1,"id":"…","timestamp":"2026-11-15T10:00:00.000Z","source":"node","name":"shanaya.llm.chat","operation":"chat","provider":{"id":"groq","label":"Groq"},"requestedModel":"llama-3.3-70b-versatile","model":"openai/gpt-oss-120b","status":"success","streaming":false,"latency":{"timeToFirstByteMs":250,"timeToFirstTokenMs":null,"totalMs":900,"streaming":false},"usage":{"promptTokens":100,"completionTokens":20,"totalTokens":120},"attempts":[{"model":"llama-3.3-70b-versatile","errorType":"Error","httpStatus":429,"durationMs":120}],"fallbacks":[{"fromModel":"llama-3.3-70b-versatile","toModel":"openai/gpt-oss-120b","reason":"rate_limited","errorType":"Error","httpStatus":429,"durationMs":120}],"error":null}
+{"type":"llm_trace","version":1,"id":"…","timestamp":"2026-11-15T10:00:00.000Z","source":"node","name":"hannah.llm.chat","operation":"chat","provider":{"id":"groq","label":"Groq"},"requestedModel":"llama-3.3-70b-versatile","model":"openai/gpt-oss-120b","status":"success","streaming":false,"latency":{"timeToFirstByteMs":250,"timeToFirstTokenMs":null,"totalMs":900,"streaming":false},"usage":{"promptTokens":100,"completionTokens":20,"totalTokens":120},"attempts":[{"model":"llama-3.3-70b-versatile","errorType":"Error","httpStatus":429,"durationMs":120}],"fallbacks":[{"fromModel":"llama-3.3-70b-versatile","toModel":"openai/gpt-oss-120b","reason":"rate_limited","errorType":"Error","httpStatus":429,"durationMs":120}],"error":null}
 ```
 
 `logs/` is gitignored. Do not ship these files in a release artifact if the
@@ -99,7 +99,7 @@ metadata but no conversation text.
 ## Audit monitor
 
 `scripts/audit_monitor.py` reads the hash-chained HITL log written by
-`backend/audit_logger.py` (default `logs/shanaya_audit.jsonl`).
+`backend/audit_logger.py` (default `logs/hannah_audit.jsonl`).
 
 ```bash
 python3 scripts/audit_monitor.py                    # today, human-readable
@@ -124,7 +124,7 @@ issue means the audit file was edited, truncated, or written incorrectly.
 ## Agent health
 
 `GET /api/health/agent` is authenticated like other API routes (send
-`Authorization: Bearer <SHANAYA_API_TOKEN>`). It probes two operator-managed
+`Authorization: Bearer <HANNAH_API_TOKEN>`). It probes two operator-managed
 targets in parallel:
 
 - `PYTHON_FALLBACK_URL` → `GET /api/health`, ready when the body reports
@@ -148,7 +148,7 @@ only describes the primary cloud provider.
 The chat header has a feedback button. The modal captures only:
 
 - the user's message and category (`bug`, `idea`, `privacy`, `other`);
-- app version (`__SHANAYA_APP_VERSION__`, injected from `client/package.json`);
+- app version (`__HANNAH_APP_VERSION__`, injected from `client/package.json`);
 - platform (`iOS`, `Android`, `Web`, `Desktop`);
 - coarse inference mode (`Cloud` or `Local`) plus the detailed mode for triage.
 
@@ -161,14 +161,14 @@ Configure at least one delivery channel in `server/.env`:
 ```bash
 FEEDBACK_DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/…
 MONGODB_URI=mongodb+srv://…
-MONGODB_DB=shanaya
+MONGODB_DB=hannah
 MONGODB_FEEDBACK_COLLECTION=feedback
 ```
 
 If both are set, both are attempted; the request succeeds when at least one
 delivers. With neither, `/api/feedback` returns `503`. Discord URLs must be
 HTTPS without embedded credentials. Feedback is rate limited per API token by
-`SHANAYA_RATE_LIMIT_FEEDBACK_MAX` (default 10 per window).
+`HANNAH_RATE_LIMIT_FEEDBACK_MAX` (default 10 per window).
 
 For MongoDB, create a least-privilege user that can only `insert` into the
 feedback collection. The stored document contains `schemaVersion`, `id`,
@@ -177,7 +177,7 @@ feedback collection. The stored document contains `schemaVersion`, `id`,
 
 ## First-run onboarding and mode selection
 
-On first launch, `App.tsx` checks `localStorage["shanaya.onboarding.v1"]` and
+On first launch, `App.tsx` checks `localStorage["hannah.onboarding.v1"]` and
 shows `Onboarding.tsx` before the landing page. The three steps are:
 
 1. **Privacy architecture** — local vs cloud inference, in-memory keys, no
@@ -194,7 +194,7 @@ only; they are never written to `localStorage`.
 
 ## Launch checklist
 
-1. Generate `SHANAYA_API_TOKEN` with `openssl rand -hex 32`; set it in
+1. Generate `HANNAH_API_TOKEN` with `openssl rand -hex 32`; set it in
    `server/.env` and share it with users out of band.
 2. Set `SENTRY_DSN` and `VITE_SENTRY_DSN` for separate API and browser
    projects. Use distinct environments/releases per deployment.

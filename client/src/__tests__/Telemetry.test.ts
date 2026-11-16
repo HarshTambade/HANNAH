@@ -19,7 +19,7 @@ describe("client telemetry scrubbers", () => {
       "Groq gsk_abcdefghijklmnopqrstuvwxyz123456",
       "Anthropic sk-ant-abcdefghijklmnopqrstuvwxyz",
       "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
-      "model at /Users/anya/models/shanaya.gguf",
+      "model at /Users/anya/models/hannah.gguf",
       "windows C:\\Users\\anya\\secrets.txt",
     ].join(" ");
 
@@ -84,8 +84,8 @@ describe("client telemetry scrubbers", () => {
               pre_context: ["// private source"],
               post_context: ["// private source"],
             }, {
-              filename: "https://shanaya.example/assets/main.js?token=secret",
-              abs_path: "https://shanaya.example/assets/main.js#x",
+              filename: "https://hannah.example/assets/main.js?token=secret",
+              abs_path: "https://hannah.example/assets/main.js#x",
               lineno: 3,
             }],
           },
@@ -119,8 +119,8 @@ describe("client telemetry scrubbers", () => {
       expect(key in (frame as unknown as Record<string, unknown>)).toBe(false);
     }
     const bundledFrame = clean.exception?.values?.[0].stacktrace?.frames?.[1] as { filename: string; abs_path: string };
-    expect(bundledFrame.filename).toBe("https://shanaya.example/assets/main.js");
-    expect(bundledFrame.abs_path).toBe("https://shanaya.example/assets/main.js");
+    expect(bundledFrame.filename).toBe("https://hannah.example/assets/main.js");
+    expect(bundledFrame.abs_path).toBe("https://hannah.example/assets/main.js");
   });
 
   it("scrubs transaction span descriptions", () => {

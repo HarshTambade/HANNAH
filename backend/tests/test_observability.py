@@ -18,7 +18,7 @@ from backend.privacy_scrub import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-_SPEC = importlib.util.spec_from_file_location("shanaya_audit_monitor", ROOT / "scripts" / "audit_monitor.py")
+_SPEC = importlib.util.spec_from_file_location("hannah_audit_monitor", ROOT / "scripts" / "audit_monitor.py")
 assert _SPEC and _SPEC.loader
 audit_monitor = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = audit_monitor
@@ -94,7 +94,7 @@ def test_python_scrubbers_remove_credentials_identity_and_paths() -> None:
                             "pre_context": ["# private source"],
                             "post_context": ["# private source"],
                         },
-                        {"filename": "https://shanaya.example/assets/main.js?token=secret", "abs_path": "https://shanaya.example/assets/main.js#x", "lineno": 3},
+                        {"filename": "https://hannah.example/assets/main.js?token=secret", "abs_path": "https://hannah.example/assets/main.js#x", "lineno": 3},
                     ]
                 },
             }]
@@ -127,8 +127,8 @@ def test_python_scrubbers_remove_credentials_identity_and_paths() -> None:
     assert frames[0]["abs_path"] == "<file-path>/main.py"
     for key in ("vars", "context_line", "pre_context", "post_context"):
         assert key not in frames[0], key
-    assert frames[1]["filename"] == "https://shanaya.example/assets/main.js"
-    assert frames[1]["abs_path"] == "https://shanaya.example/assets/main.js"
+    assert frames[1]["filename"] == "https://hannah.example/assets/main.js"
+    assert frames[1]["abs_path"] == "https://hannah.example/assets/main.js"
 
 
 def test_python_transaction_and_header_scrubbing() -> None:
