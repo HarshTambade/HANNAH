@@ -16,7 +16,7 @@ HANNAH (formerly **Shanaya**) is a source-available AI companion for the web, An
 Three rules shape the product:
 
 1. **No monetization.** There are no subscriptions, premium tiers, paywalls or ads in the app.
-2. **Bring your own key (BYOK).** You connect with an access token and, optionally, your own Groq key. Keys are kept for the browser tab session only.
+2. **Bring your own key (BYOK).** Paste your own free Groq key and start talking: no account, no sign-up. An operator access token is optional. Keys are kept for the browser tab session only.
 3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
 > **Status:** active development. The latest published release is [v1.0.2](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/tag/v1.0.2) (still branded Shanaya). `main` contains the HANNAH v2 redesign, which has not been released yet. See [Project status](#project-status) for what is finished and what is experimental.
@@ -76,7 +76,7 @@ The app uses hash routes. Every screen except the landing page, Marketplace and 
 
 | Screen | Route | What it does |
 | --- | --- | --- |
-| **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog, where you enter the server's access token and, optionally, your own Groq key. |
+| **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog: paste your Groq key (checked with Groq before the app opens). **I have an access token** is optional, for operator-provided models and features. |
 | **Chat** | `#/chat` | Conversation beside the 3D avatar. Choose a model and inference mode, speak or type, rate replies, and approve or decline actions on the in-chat approval cards. |
 | **Dashboard** | `#/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. Empty states show `—` or `0`, never sample numbers. |
 | **Memory & trust** | `#/memory` | The accountability page: Guardian strictness and its decision log (allowed and blocked, with reasons), saved memories you can edit or delete, personalization examples, the active persona, and installed plugins. |
@@ -143,7 +143,7 @@ sequenceDiagram
 - **Iteration caps:** 8 tool rounds by default (`VITE_AGENT_MAX_ITERATIONS`), never more than 20.
 - **Circuit breaker:** a tool that fails 3 times in a row is disabled for the session.
 - **Routing profiles** limit which tools a task type can see (see [Agent runtime and tools](#agent-runtime-and-tools)).
-- **Server limits:** bearer-token authentication on every `/api` route except health, plus per-token rate limits.
+- **Server limits:** with only a Groq key, a visitor can reach just the chat routes, and their key is forwarded only to Groq's official API. Server-held keys and every other route need the operator token. Rate limits apply per token and per visitor key.
 
 These checks are defense in depth. They are not a guarantee against every prompt injection, so test your own release build before relying on them.
 
@@ -282,8 +282,8 @@ Minimal `server/.env`:
 PORT=3001
 HOST=127.0.0.1
 CLIENT_ORIGIN=http://localhost:5173
+# Optional: operator access for server-held keys. Visitors can always bring their own Groq key.
 HANNAH_API_TOKEN=<32–512 random characters>
-# Optional: a server-side key. Without it, visitors bring their own Groq key.
 GROQ_API_KEY=
 GROQ_MODEL=openai/gpt-oss-120b
 GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
@@ -306,7 +306,7 @@ npm run dev             # server on :3001 and client on :5173
 curl http://localhost:3001/api/health
 ```
 
-Open `http://localhost:5173`, choose **Talk to HANNAH**, and enter the token from step 2. If the server has no `GROQ_API_KEY`, also paste your own [Groq key](https://console.groq.com/keys).
+Open `http://localhost:5173`, choose **Talk to HANNAH**, and paste your own [Groq key](https://console.groq.com/keys). To use the server's own keys instead, open **I have an access token** and enter the token from step 2.
 
 ### Optional: Python model-step fallback
 
@@ -350,7 +350,7 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HANNAH_API_TOKEN` | — | **Required.** Bearer token for every `/api` route except `/api/health`. |
+| `HANNAH_API_TOKEN` | — | Operator bearer token, needed for server-held provider keys and for TTS, calls, desktop control, feedback and sync. When unset, the server serves bring-your-own-key visitors only. A value that is set must be 32–512 characters. |
 | `HANNAH_RATE_LIMIT_WINDOW_MS` | `60000` | Rate-limit window. |
 | `HANNAH_RATE_LIMIT_{CHAT,AGENT,DESKTOP,FEEDBACK,CONTENT_REPORT}_MAX` | `30`, `60`, `20`, `10`, `10` | Requests per token per window. |
 | `PORT`, `HOST` | `3001`, `127.0.0.1` | Bind address. Use `0.0.0.0` only on a trusted LAN. |
@@ -554,7 +554,7 @@ To release: `git tag vX.Y.Z && git push origin vX.Y.Z`, or run the workflow manu
 ### Vercel (recommended)
 
 1. Import the repository into Vercel; the root [`vercel.json`](./vercel.json) defines the `client` and `server` services.
-2. In the server service, set `HANNAH_API_TOKEN` and optionally `GROQ_API_KEY` or other provider keys. Leave `VITE_API_BASE_URL` empty.
+2. Nothing is required for bring-your-own-key visitors. To offer your own models or voice and desktop features, set `HANNAH_API_TOKEN` and provider keys such as `GROQ_API_KEY` in the server service. Leave `VITE_API_BASE_URL` empty.
 3. Set `VITE_SITE_URL` to your production origin for SEO metadata.
 4. Deploy, then check with `curl https://your-domain/api/health`.
 
@@ -569,7 +569,7 @@ Use `vercel dev` to test both services locally.
 ### Production checklist
 
 - [ ] HTTPS everywhere: client, API, model downloads, token issuers.
-- [ ] A strong `HANNAH_API_TOKEN`, shared out of band with trusted users only.
+- [ ] If you set `HANNAH_API_TOKEN`, make it strong and share it out of band with trusted users only. Without it, the server only forwards visitors' own Groq keys.
 - [ ] `CLIENT_ORIGIN` set to exact production origins.
 - [ ] Keys in the host's secret manager; nothing secret in `VITE_*` or committed files.
 - [ ] Provider quotas, timeouts and billing alerts configured.
@@ -582,7 +582,12 @@ See [`docs/OPERATIONS_RUNBOOK.md`](./docs/OPERATIONS_RUNBOOK.md) and [`docs/OBSE
 
 ## API reference
 
-Every route except `/api/health` requires `Authorization: Bearer <HANNAH_API_TOKEN>`. Full examples are in [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
+There are two ways to authenticate:
+
+- **Your own Groq key:** send `X-Groq-API-Key: gsk_…` with no `Authorization` header. This works for `/api/agent`, `/api/chat`, `/api/models` and `/api/providers` only, and the key goes only to Groq's official API.
+- **Operator token:** send `Authorization: Bearer <HANNAH_API_TOKEN>`. This works for every route.
+
+`/api/health` is public. Full examples are in [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
 
 | Method and route | Purpose |
 | --- | --- |
@@ -723,7 +728,7 @@ The long-term plan is in [`docs/ROADMAP.md`](./docs/ROADMAP.md), and open debt i
 
 ## Troubleshooting and FAQ
 
-**Chat requests fail with 401.** The token is wrong or the server's `HANNAH_API_TOKEN` changed. Open Settings → Connection, disconnect, and connect again.
+**Chat requests fail with 401.** Groq rejected your key, the token is wrong, or the server's `HANNAH_API_TOKEN` changed. Open Settings → Connection, disconnect, and connect again with a valid key or token.
 
 **Chat requests fail but `/api/health` works.** Check that a provider is configured (`ready: true` in health) or that you entered a Groq key. Also check that `CLIENT_ORIGIN` includes your exact origin.
 

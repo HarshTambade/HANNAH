@@ -15,19 +15,53 @@ const configuredTokenDigest = configuredTokenIsValid
   ? createHash("sha256").update(configuredToken).digest()
   : null;
 
+// Bring-your-own-key access: a visitor with only a Groq key may use these routes.
+// Their key is forwarded to Groq's official API and nowhere else (see
+// getRequestProviderApiKey in index.js); server-held provider keys, desktop
+// control, TTS, calls, feedback and sync still require the operator token.
+const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers"]);
+const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
+
+function isGroqKey(value) {
+  return typeof value === "string" && GROQ_KEY_PATTERN.test(value.trim());
+}
+
 function assertProductionApiToken() {
-  if (process.env.NODE_ENV === "production" && !configuredTokenIsValid) {
-    throw new Error("Set HANNAH_API_TOKEN (or the legacy SHANAYA_API_TOKEN) to a random value of at least 32 characters before starting HANNAH in production.");
+  // An unset token is allowed: the server then serves bring-your-own-key
+  // visitors only. A token that is set but too weak is a misconfiguration.
+  if (process.env.NODE_ENV === "production" && configuredToken && !configuredTokenIsValid) {
+    throw new Error("HANNAH_API_TOKEN (or the legacy SHANAYA_API_TOKEN) must be 32–512 characters without line breaks.");
+  }
+  if (process.env.NODE_ENV === "production" && !configuredToken) {
+    console.warn("HANNAH_API_TOKEN is not set: only visitors with their own Groq key can use this server.");
   }
 }
 
 function requireApiToken(req, res, next) {
   if (req.path === "/health" || req.path === "/presence") return next();
+
+  const authorization = req.get("authorization") || "";
+  if (!authorization) {
+    const visitorKey = req.get("x-groq-api-key")?.trim();
+    if (BYOK_PATHS.has(req.path) && isGroqKey(visitorKey)) {
+      res.locals.hannahByok = true;
+      res.locals.hannahApiTokenId = `byok:${createHash("sha256").update(visitorKey).digest("hex")}`;
+      return next();
+    }
+  }
+
   if (!configuredTokenIsValid || !configuredTokenDigest) {
+    if (!authorization) {
+      return res.status(401).json({ error: "Add your Groq API key to use HANNAH.", reason: "byok-required" });
+    }
     return res.status(503).json({ error: "API authentication is not configured on this server." });
   }
 
-  const match = /^Bearer\s+([^\s]+)$/i.exec(req.get("authorization") || "");
+  if (!authorization) {
+    res.setHeader("WWW-Authenticate", "Bearer");
+    return res.status(401).json({ error: "Add your Groq API key or a HANNAH access token.", reason: "credentials-required" });
+  }
+  const match = /^Bearer\s+([^\s]+)$/i.exec(authorization);
   if (!match || match[1].length > MAX_TOKEN_LENGTH) {
     res.setHeader("WWW-Authenticate", "Bearer");
     return res.status(401).json({ error: "A valid HANNAH API bearer token is required." });
@@ -99,7 +133,9 @@ function rateLimitSettings() {
 
 module.exports = {
   assertProductionApiToken,
+  BYOK_PATHS,
   createRateLimiter,
+  isGroqKey,
   rateLimitSettings,
   requireApiToken,
 };

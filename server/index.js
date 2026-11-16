@@ -200,7 +200,8 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", provider: cloudProvider, ready: Boolean((cloudApiKey || configuredDefaultProvider.local) && cloudModels.length) });
+  // guestAccess: visitors can connect with only their own Groq key.
+  res.json({ status: "ok", provider: cloudProvider, ready: Boolean((cloudApiKey || configuredDefaultProvider.local) && cloudModels.length), guestAccess: true });
 });
 
 app.get("/api/health/agent", async (_req, res) => {
@@ -250,6 +251,11 @@ app.get("/api/providers", (_req, res) => {
   const providers = listProviders().map(({ id, label, kind, local, free, docs, requiresKey, configured, defaultModel }) => ({
     id, label, kind, local, free, docs, requiresKey, configured, defaultModel,
   }));
+  if (res.locals.hannahByok) {
+    // A bring-your-own-key visitor can only reach Groq, with their own key.
+    const groq = providers.find((provider) => provider.id === "groq");
+    return res.json({ defaultProvider: "groq", byok: true, providers: groq ? [{ ...groq, configured: true }] : [] });
+  }
   res.json({ defaultProvider: defaultProviderId(), providers });
 });
 
@@ -259,7 +265,10 @@ app.get("/api/models", async (req, res) => {
     : defaultProviderId();
   try {
     const { provider, apiKey } = getRequestProvider(req, providerId);
-    const { models, liveModels } = await discoverProviderModels(provider, apiKey, Math.min(5_000, cloudRequestTimeout));
+    const { models, liveModels, status } = await discoverProviderModels(provider, apiKey, Math.min(5_000, cloudRequestTimeout));
+    if (req.get("x-groq-api-key") && (status === 401 || status === 403)) {
+      return res.status(401).json({ error: "Groq did not accept that API key. Check it at console.groq.com/keys.", reason: "groq-key-rejected" });
+    }
     const configuredModel = defaultModelFor(provider);
     const defaultModel = liveModels.includes(configuredModel) ? configuredModel : liveModels[0] || configuredModel;
     const requestedModels = modelChain(provider, defaultModel);

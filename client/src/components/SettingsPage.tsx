@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Server, Trash2 } from "lucide-react";
-import { apiUrl, getSessionGroqKey, setSessionGroqKey } from "../services/api";
+import { apiUrl, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
 import { MemoryService } from "../services/MemoryService";
@@ -43,6 +43,8 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
   const [groqKey, setGroqKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [hasGroqKey, setHasGroqKey] = useState(() => Boolean(getSessionGroqKey()));
+  // Guests connect with only their Groq key; removing it ends the session.
+  const usingAccessToken = Boolean(getApiAccessToken());
   const [notice, setNotice] = useState("");
   const [chaosEnabled, setChaosEnabled] = useState(ChaosEngine.isEnabled());
   const [degraded, setDegraded] = useState<DegradedState>(ChaosEngine.getDegraded());
@@ -68,7 +70,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
     event.preventDefault();
     const key = groqKey.trim();
     if (!key) return;
-    if (key.length > 512 || /\s/.test(key)) { setNotice("That key doesn’t look valid."); return; }
+    if (!isGroqKey(key)) { setNotice("That doesn’t look like a Groq key. Groq keys start with gsk_ and have no spaces."); return; }
     setSessionGroqKey(key);
     onGroqKeyChange(key);
     setGroqKey("");
@@ -120,7 +122,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
 
       {notice && <p role="status" className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-800">{notice}</p>}
 
-      <Section title="Connection" description="Your access token is kept for this browser tab only and is cleared when you close it.">
+      <Section title="Connection" description="Your key and access token are kept for this browser tab only and cleared when you close it.">
         <dl className="space-y-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <dt className="flex items-center gap-2 text-slate-500"><Server size={15} /> Server</dt>
@@ -130,6 +132,10 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
             <dt className="flex items-center gap-2 text-slate-500"><KeyRound size={15} /> Your Groq key</dt>
             <dd className="font-medium text-ink">{hasGroqKey ? "Saved for this tab" : "Not set (server key used)"}</dd>
           </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="flex items-center gap-2 text-slate-500"><Server size={15} /> Signed in with</dt>
+            <dd className="font-medium text-ink">{usingAccessToken ? "Access token" : "Your Groq key"}</dd>
+          </div>
         </dl>
         <form onSubmit={saveGroqKey} className="mt-4 flex gap-2">
           <div className="flex min-w-0 flex-1 items-center rounded-xl border border-slate-200 bg-white pr-1 focus-within:border-brand-300">
@@ -137,7 +143,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
               type={showKey ? "text" : "password"}
               value={groqKey}
               onChange={(event) => setGroqKey(event.target.value)}
-              placeholder={hasGroqKey ? "Replace your Groq key" : "Paste a gsk_ key (optional)"}
+              placeholder={hasGroqKey ? "Replace your Groq key" : "Paste a gsk_ key"}
               aria-label="Groq API key"
               autoComplete="off"
               spellCheck={false}
@@ -146,7 +152,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
             <button type="button" onClick={() => setShowKey((value) => !value)} aria-label={showKey ? "Hide key" : "Show key"} className="rounded-lg p-2 text-slate-400 hover:text-ink">{showKey ? <EyeOff size={15} /> : <Eye size={15} />}</button>
           </div>
           <button type="submit" disabled={!groqKey.trim()} className="btn-outline disabled:opacity-40">Save</button>
-          {hasGroqKey && <button type="button" onClick={() => { setSessionGroqKey(""); onGroqKeyChange(""); setHasGroqKey(false); setNotice("Groq key removed."); }} className="btn-ghost">Remove</button>}
+          {hasGroqKey && <button type="button" onClick={() => { if (!usingAccessToken) { onDisconnect(); return; } setSessionGroqKey(""); onGroqKeyChange(""); setHasGroqKey(false); setNotice("Groq key removed."); }} className="btn-ghost" title={usingAccessToken ? undefined : "Removing your key disconnects this tab"}>Remove</button>}
         </form>
         <button type="button" onClick={onDisconnect} className="btn-outline mt-5 text-rose-600 hover:!border-rose-300 hover:!text-rose-700"><LogOut size={15} /> Disconnect this tab</button>
       </Section>

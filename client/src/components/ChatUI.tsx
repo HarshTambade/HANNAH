@@ -21,7 +21,7 @@ import {
   resolveInferenceMode,
   type OfflineModelStatus,
 } from "../services/AIService";
-import { apiFetch, apiHeaders, apiUrl, isLocalDevelopmentHost } from "../services/api";
+import { apiFetch, apiHeaders, apiUrl, isLocalDevelopmentHost, isGuestSession } from "../services/api";
 import { SpeechService } from "../services/SpeechService";
 import { VoiceService } from "../services/VoiceService";
 import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
@@ -520,7 +520,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       UsageStats.record({ latencyMs: Math.round(performance.now() - turnStartedAt), ok: false, mode: effectiveMode, voice: transcript !== undefined });
       if (requestError instanceof AgentApiError && requestError.status === 401) {
         setApiStatus("unauthorized");
-        setError("Your access token is no longer accepted. Reconnect with a valid token to keep chatting.");
+        setError(isGuestSession() ? "Groq no longer accepts your key. Reconnect with a valid Groq key to keep chatting." : "Your access token is no longer accepted. Reconnect with a valid token to keep chatting.");
       } else {
         setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
       }
@@ -804,8 +804,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       : "relative mx-auto flex max-h-[48dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-soft-lg"}>
       <header className="flex shrink-0 items-center justify-between border-b border-slate-200/70 bg-white/40 px-4 py-3 md:px-5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-600">
-            <Bot size={17} />
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white">
+            <span className="logo-ring !h-5 !w-5" aria-hidden="true" />
             <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white ${isOnline && (effectiveMode !== "cloud" || apiStatus === "connected") ? "bg-emerald-500" : "bg-amber-500"}`} />
           </div>
           <div className="min-w-0">
@@ -814,7 +814,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
               {!isOnline
                 ? `Offline · ${selectedMode.label}`
                 : effectiveMode === "cloud" && apiStatus === "unauthorized"
-                  ? "Access token not accepted"
+                  ? (isGuestSession() ? "Groq key not accepted" : "Access token not accepted")
                 : effectiveMode === "cloud" && apiStatus === "offline"
                   ? "API server unavailable"
                   : effectiveMode === "cloud" && apiStatus === "misconfigured"
@@ -1013,7 +1013,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
 
       {effectiveMode === "cloud" && apiStatus === "unauthorized" && (
         <div role="alert" className="flex shrink-0 flex-wrap items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2.5 text-xs leading-relaxed text-rose-700">
-          <span className="flex-1">The server did not accept your access token. Reconnect with a valid token to continue.</span>
+          <span className="flex-1">{isGuestSession() ? "Your Groq key was not accepted. Reconnect with a valid key to continue." : "The server did not accept your access token. Reconnect with a valid token to continue."}</span>
           {onSessionExpired && <button type="button" onClick={onSessionExpired} className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 font-semibold text-rose-700 transition hover:bg-rose-100">Reconnect</button>}
         </div>
       )}
@@ -1056,7 +1056,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
             return (
               <div key={key} className="group flex flex-col gap-1">
                 <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-                  {!isUser && <div className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-600"><Bot size={13} /></div>}
+                  {!isUser && <div className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white"><span className="logo-ring !h-4 !w-4" aria-hidden="true" /></div>}
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed text-ink ${isUser ? "whitespace-pre-wrap break-words rounded-br-md border border-brand-100 bg-brand-50" : "rounded-bl-md border border-slate-100 bg-slate-50"}`}>
                     {isUser ? message.content : <MessageContent text={message.content} />}
                   </div>

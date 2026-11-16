@@ -134,16 +134,78 @@ test("agent and desktop routes have independent token rate limits", async () => 
   assert.equal((await desktopRequest()).status, 429);
 });
 
-test("production refuses to load without a valid API token", () => {
-  for (const apiToken of ["", "too-short"]) {
-    const result = spawnSync(process.execPath, ["-e", "require('./index')"], {
-      cwd: __dirname,
-      encoding: "utf8",
-      env: { ...process.env, NODE_ENV: "production", HANNAH_API_TOKEN: apiToken },
+test("production refuses to load with a weak API token", () => {
+  const result = spawnSync(process.execPath, ["-e", "require('./index')"], {
+    cwd: __dirname,
+    encoding: "utf8",
+    env: { ...process.env, NODE_ENV: "production", HANNAH_API_TOKEN: "too-short" },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /HANNAH_API_TOKEN/);
+});
+
+test("production without a token starts in bring-your-own-key mode", () => {
+  const result = spawnSync(process.execPath, ["-e", "require('./index')"], {
+    cwd: __dirname,
+    encoding: "utf8",
+    env: { ...process.env, NODE_ENV: "production", HANNAH_API_TOKEN: "" },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /own Groq key/);
+});
+
+const visitorKey = "gsk_" + "a".repeat(48);
+
+test("a visitor Groq key opens the chat routes and only lists Groq", async () => {
+  const response = await fetch(baseUrl + "/api/providers", { headers: { "X-Groq-API-Key": visitorKey } });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.byok, true);
+  assert.deepEqual(body.providers.map((provider) => provider.id), ["groq"]);
+});
+
+test("a visitor Groq key cannot reach operator-only routes", async () => {
+  const cases = [
+    ["GET", "/api/pinecall/token"],
+    ["POST", "/api/tts"],
+    ["POST", "/api/desktop/computer"],
+    ["POST", "/api/feedback"],
+    ["POST", "/api/report-content"],
+    ["POST", "/api/events"],
+    ["GET", "/api/sync/memory"],
+    ["GET", "/api/health/agent"],
+  ];
+  for (const [method, path] of cases) {
+    const response = await fetch(baseUrl + path, {
+      method,
+      headers: { "X-Groq-API-Key": visitorKey, ...(method === "POST" ? { "Content-Type": "application/json" } : {}) },
+      body: method === "POST" ? "{}" : undefined,
     });
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /HANNAH_API_TOKEN/);
+    assert.equal(response.status, 401, method + " " + path);
   }
+});
+
+test("a visitor Groq key cannot borrow another provider's server key", async () => {
+  const response = await fetch(baseUrl + "/api/models?provider=openai", { headers: { "X-Groq-API-Key": visitorKey } });
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /official Groq API/);
+});
+
+test("a value that is not a Groq key does not authenticate", async () => {
+  for (const key of ["not-a-groq-key-but-long-enough-to-try", "gsk_short", "gsk_" + "a".repeat(30) + " x"]) {
+    const response = await fetch(baseUrl + "/api/providers", { headers: { "X-Groq-API-Key": key } });
+    assert.equal(response.status, 401, key);
+  }
+});
+
+test("visitor keys are rate limited separately from the operator token", async () => {
+  const agentRequest = () => fetch(baseUrl + "/api/agent", {
+    method: "POST",
+    headers: { "X-Groq-API-Key": visitorKey, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  assert.equal((await agentRequest()).status, 400);
+  assert.equal((await agentRequest()).status, 429);
 });
 
 test("production accepts the legacy SHANAYA_API_TOKEN name", () => {

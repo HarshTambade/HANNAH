@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { verifyApiAccess } from "../services/api";
+import { isGroqKey, verifyApiAccess } from "../services/api";
 import {
-  ArrowRight, AudioLines, Cable, Eye, EyeOff, Globe2, Heart, LockKeyhole, Menu, MessageCircle, PackageOpen, ShieldCheck, Sparkles, X,
+  ArrowRight, AudioLines, Cable, Check, Eye, EyeOff, Globe2, Heart, KeyRound, LockKeyhole, Menu, MessageCircle, PackageOpen, ShieldCheck, Sparkles, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
 
@@ -46,7 +46,7 @@ const features = [
     icon: ShieldCheck,
     color: "emerald",
     title: "Governed by design",
-    description: "Zero-trust policy enforcement, guardian review, and a user-facing accountability dashboard keep every action inspectable.",
+    description: "Every action is checked by HANNAH's Guardian and waits for your approval before anything on your device or data changes.",
   },
 ];
 
@@ -80,12 +80,20 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
     const token = apiToken.trim();
     const key = groqApiKey.trim();
     const localDevelopment = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(window.location.hostname);
-    if (token.length < 32 || token.length > 512 || /\s/.test(token)) {
-      setKeyError("Enter the API access token provided by your HANNAH server operator (32–512 characters, without spaces).");
+    if (!token && !key) {
+      setKeyError("Paste your Groq API key to start. It's free to create at console.groq.com/keys.");
       return;
     }
-    if ((token || key) && !window.isSecureContext && !localDevelopment) {
-      setKeyError("For your safety, connect over HTTPS before sending an access token or API key.");
+    if (key && !isGroqKey(key)) {
+      setKeyError("That doesn't look like a Groq key. Groq keys start with gsk_ and have no spaces.");
+      return;
+    }
+    if (token && (token.length < 32 || token.length > 512 || /\s/.test(token))) {
+      setKeyError("An access token is 32–512 characters without spaces. Leave it empty if you're using your own Groq key.");
+      return;
+    }
+    if (!window.isSecureContext && !localDevelopment) {
+      setKeyError("For your safety, connect over HTTPS before sending an API key.");
       return;
     }
     const configuredApiUrl = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -94,7 +102,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
         const apiOrigin = new URL(configuredApiUrl, window.location.href);
         const localApi = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(apiOrigin.hostname);
         if (apiOrigin.protocol !== "https:" && !localApi) {
-          setKeyError("Configure your API server to use HTTPS before sending an access token or API key.");
+          setKeyError("Configure your API server to use HTTPS before sending an API key.");
           return;
         }
       } catch {
@@ -104,7 +112,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
     }
     setVerifying(true);
     setKeyError("");
-    const access = await verifyApiAccess(token);
+    const access = await verifyApiAccess({ token, groqKey: key });
     setVerifying(false);
     if (!access.ok) {
       setKeyError(access.message);
@@ -213,7 +221,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               <button
                 type="button"
                 onClick={openKeyDialog}
-                className="group inline-flex min-h-[3.5rem] items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 px-5 text-[12px] font-bold text-white shadow-[0_10px_40px_rgba(14,165,233,0.25)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_48px_rgba(14,165,233,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/70"
+                className="btn-primary group min-h-[3.5rem] !gap-3 !rounded-2xl !px-6 text-sm transition hover:-translate-y-0.5"
               >
                 Talk to HANNAH
                 <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20"><ArrowRight size={14} /></span>
@@ -331,7 +339,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
             </div>
             <div className="mt-8 grid gap-4 md:grid-cols-3">
               {[
-                { title: "Cloud providers", detail: "Choose a provider configured by your server operator. Cloud requests need an internet connection." },
+                { title: "Cloud with your key", detail: "Use your own free Groq key, or any provider your server operator has configured. Needs an internet connection." },
                 { title: "Browser and local server", detail: "Run WebLLM in a WebGPU browser or connect to an Ollama endpoint you control." },
                 { title: "On-device models", detail: "Prepare a llama.cpp model in the iOS or Android app, then use it offline." },
               ].map((mode) => (
@@ -365,67 +373,75 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
         <footer className="border-t border-slate-200">
           <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-10 text-[11px] text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
             <span>© {new Date().getFullYear()} HANNAH · A thoughtful AI companion.</span>
-            <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="https://github.com/HarshTambade/HANNAH---Your-AI-companion-" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
+            <div className="flex flex-wrap items-center gap-6"><button type="button" onClick={onMarketplace} className="transition hover:text-ink">Marketplace</button><button type="button" onClick={onIntegrations} className="transition hover:text-ink">API &amp; Integrations</button><a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion" target="_blank" rel="noreferrer" className="transition hover:text-ink">Source &amp; project details</a></div>
           </div>
         </footer>
       </div>
 
       {keyDialogOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-ink/45 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setKeyDialogOpen(false); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="connect-title" className="relative my-auto w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-950/20">
-            <div className="pointer-events-none absolute -right-24 -top-32 h-64 w-64 rounded-full bg-brand-100/80 blur-[96px]" />
-            <div className="relative p-6 sm:p-8">
-              <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="absolute right-5 top-5 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-ink"><X size={15} /></button>
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600"><Sparkles size={17} /></span>
-              <p className="mt-7 text-[11px] font-bold uppercase tracking-[0.2em] text-brand-700">Your first step</p>
-              <h2 id="connect-title" className="mt-2 font-display text-2xl font-bold tracking-[-0.04em] text-ink">Connect with HANNAH.</h2>
-              <p className="mt-4 text-[13px] leading-6 text-slate-600">Enter the access token you received from whoever runs this HANNAH server. It is kept for this browser tab only.</p>
-              <details className="mt-2 text-xs text-slate-500"><summary className="cursor-pointer select-none font-medium text-slate-600">I run this server</summary><p className="mt-1.5 leading-5">Set <code className="rounded bg-slate-100 px-1 font-mono text-brand-700">HANNAH_API_TOKEN</code> on the server (generate one with <code className="rounded bg-slate-100 px-1 font-mono text-brand-700">openssl rand -hex 32</code>), redeploy, then paste the same value here.</p></details>
-
-              <form className="mt-7" onSubmit={beginConversation}>
-                <label htmlFor="hannah-api-token" className="mb-2 block text-xs font-bold text-slate-700">HANNAH API access token</label>
-                <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 pr-3 transition focus-within:border-brand-400/60">
-                  <input
-                    id="hannah-api-token"
-                    type={showApiToken ? "text" : "password"}
-                    value={apiToken}
-                    onChange={(event) => { setApiToken(event.target.value); setKeyError(""); }}
-                    placeholder="Paste the token from your server operator"
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    maxLength={512}
-                    required
-                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-base text-ink outline-none placeholder:text-slate-400 sm:text-sm"
-                  />
-                  <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide HANNAH access token" : "Show HANNAH access token"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
-                    {showApiToken ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-ink/40 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget && !verifying) setKeyDialogOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="connect-title" className="deck-frame relative my-auto w-full max-w-md">
+            <div className="deck-card tone-plain !p-0">
+              <div className="tone-sky relative px-6 pb-6 pt-5 sm:px-7">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-sm font-medium text-ink"><span className="logo-ring" aria-hidden="true" /> HANNAH</span>
+                  <button type="button" aria-label="Close" onClick={() => setKeyDialogOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-slate-600 transition hover:bg-white hover:text-ink"><X size={15} /></button>
                 </div>
-                <label htmlFor="groq-key" className="mb-2 block mt-6 text-xs font-bold text-slate-700">Optional Groq API key</label>
-                <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 pr-3 transition focus-within:border-brand-400/60">
+                <span className="pill-badge mt-6"><span className="pill-badge-dot"><Check size={9} strokeWidth={3} /></span>Free · No sign-up</span>
+                <h2 id="connect-title" className="display-title mt-3 text-[2rem]">Connect with HANNAH.</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-700">Paste your own Groq API key and start talking. There's no account and nothing to pay.</p>
+              </div>
+
+              <form className="px-6 pb-6 pt-5 sm:px-7" onSubmit={beginConversation}>
+                <label htmlFor="groq-key" className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><KeyRound size={13} /> Your Groq API key</label>
+                <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 pr-2 transition focus-within:border-sky-400 focus-within:bg-white">
                   <input
                     id="groq-key"
                     type={showApiKey ? "text" : "password"}
                     value={groqApiKey}
                     onChange={(event) => { setGroqApiKey(event.target.value); setKeyError(""); }}
-                    placeholder="Paste your gsk_ key"
+                    placeholder="gsk_…"
                     autoComplete="off"
                     autoCapitalize="none"
                     spellCheck={false}
                     maxLength={512}
-                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-base text-ink outline-none placeholder:text-slate-400 sm:text-sm"
+                    autoFocus
+                    className="min-w-0 flex-1 bg-transparent px-4 py-3 font-mono text-base text-ink outline-none placeholder:font-sans placeholder:text-slate-400 sm:text-sm"
                   />
-                  <button type="button" onClick={() => setShowApiKey((visible) => !visible)} aria-label={showApiKey ? "Hide API key" : "Show API key"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
+                  <button type="button" onClick={() => setShowApiKey((visible) => !visible)} aria-label={showApiKey ? "Hide Groq API key" : "Show Groq API key"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-200 hover:text-ink">
                     {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
-                {keyError && <p role="alert" className="mt-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">{keyError}</p>}
-                <p className="mt-4 flex items-start gap-2 text-[13px] leading-5 text-slate-500"><ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-600" /> Both values are kept only for this browser tab and cleared when you close it.</p>
-                <button type="submit" disabled={verifying} className="group mt-7 flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-[13px] font-bold text-white transition hover:brightness-105 disabled:cursor-wait disabled:opacity-70">
-                  {verifying ? "Checking your token…" : "Continue to HANNAH"} {!verifying && <ArrowRight size={14} className="transition group-hover:translate-x-0.5" />}
+                <p className="mt-2 text-xs text-slate-500">No key yet? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="font-medium text-ink underline decoration-slate-300 underline-offset-2 hover:decoration-ink">Create one free at Groq</a>. It takes about a minute.</p>
+
+                <details className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" open={Boolean(apiToken)}>
+                  <summary className="cursor-pointer select-none text-xs font-semibold text-slate-600">I have an access token</summary>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">Only needed if the person running this server gave you one, for example to use their models, voice or desktop features. Operators set it as <code className="rounded bg-slate-100 px-1 font-mono text-[11px]">HANNAH_API_TOKEN</code>.</p>
+                  <label htmlFor="hannah-api-token" className="sr-only">HANNAH API access token</label>
+                  <div className="mt-3 flex items-center rounded-xl border border-slate-200 bg-slate-50 pr-2 transition focus-within:border-sky-400 focus-within:bg-white">
+                    <input
+                      id="hannah-api-token"
+                      type={showApiToken ? "text" : "password"}
+                      value={apiToken}
+                      onChange={(event) => { setApiToken(event.target.value); setKeyError(""); }}
+                      placeholder="Access token (optional)"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      maxLength={512}
+                      className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-base text-ink outline-none placeholder:text-slate-400 sm:text-sm"
+                    />
+                    <button type="button" onClick={() => setShowApiToken((visible) => !visible)} aria-label={showApiToken ? "Hide HANNAH access token" : "Show HANNAH access token"} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-200 hover:text-ink">
+                      {showApiToken ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </details>
+
+                {keyError && <p role="alert" className="mt-4 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">{keyError}</p>}
+                <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-slate-500"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-teal-600" /> Kept only in this browser tab and cleared when you close it. Your key is sent to Groq through HANNAH's server and never stored.</p>
+                <button type="submit" disabled={verifying} className="btn-primary group mt-5 min-h-[3.25rem] w-full !rounded-2xl text-sm disabled:cursor-wait">
+                  {verifying ? "Checking your key…" : "Continue to HANNAH"} {!verifying && <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />}
                 </button>
-                <p className="mt-5 text-center text-[11px] text-slate-500">Need a Groq key? <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-brand-700 underline decoration-brand-200/30 underline-offset-2 hover:text-brand-800">Create one at Groq</a></p>
               </form>
             </div>
           </section>

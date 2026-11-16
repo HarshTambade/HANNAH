@@ -425,7 +425,7 @@ async function discoverProviderModels(provider, apiKey, timeoutMs) {
         signal: AbortSignal.timeout(timeoutMs),
       });
     }
-    if (!response.ok) return { models: fallback, liveModels: [] };
+    if (!response.ok) return { models: fallback, liveModels: [], status: response.status };
     const data = await response.json().catch(() => ({}));
     const openAiModels = Array.isArray(data.data)
       ? data.data.filter((model) => model && model.active !== false).map((model) => model.id)

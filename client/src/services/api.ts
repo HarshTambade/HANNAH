@@ -47,13 +47,28 @@ export function clearApiSession() {
   setSessionGroqKey("");
 }
 
+const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
+
+/** True for a value shaped like a Groq API key (gsk_…). */
+export function isGroqKey(value: string) {
+  return GROQ_KEY_PATTERN.test(value.trim());
+}
+
+/** Connected either with the operator's access token or with the visitor's own Groq key. */
 export function hasApiSession() {
-  return apiAccessToken.length >= 32;
+  return apiAccessToken.length >= 32 || isGroqKey(groqApiKey);
+}
+
+/** Guest (bring-your-own-key) session: no operator token, only a Groq key. */
+export function isGuestSession() {
+  return !apiAccessToken && isGroqKey(groqApiKey);
 }
 
 export function apiHeaders(init?: HeadersInit) {
   const headers = new Headers(init);
   if (apiAccessToken) headers.set("Authorization", "Bearer " + apiAccessToken);
+  // Guests authenticate with their own Groq key, which the server forwards only to Groq.
+  else if (isGroqKey(groqApiKey) && !headers.has("X-Groq-API-Key")) headers.set("X-Groq-API-Key", groqApiKey);
   return headers;
 }
 
@@ -78,29 +93,47 @@ export type ApiAccessResult =
   | { ok: true }
   | { ok: false; reason: "unauthorized" | "not-configured" | "unreachable" | "error"; message: string };
 
-/** Confirms the server is reachable and accepts this token before the app opens. */
-export async function verifyApiAccess(token: string): Promise<ApiAccessResult> {
+function unreachable(): ApiAccessResult {
+  return {
+    ok: false,
+    reason: "unreachable",
+    message: isLocalDevelopmentHost()
+      ? "Could not reach the HANNAH API. Start it with npm run dev from the project root."
+      : "Could not reach the HANNAH server. Check your connection and try again.",
+  };
+}
+
+/**
+ * Confirms the server accepts these credentials before the app opens.
+ * With a token, the token is checked; with only a Groq key, Groq itself is
+ * asked (through the server) whether it accepts the key.
+ */
+export async function verifyApiAccess({ token = "", groqKey = "" }: { token?: string; groqKey?: string }): Promise<ApiAccessResult> {
+  const trimmedToken = token.trim();
+  const trimmedKey = groqKey.trim();
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (trimmedToken) headers.Authorization = `Bearer ${trimmedToken}`;
+  if (trimmedKey) headers["X-Groq-API-Key"] = trimmedKey;
+  const path = trimmedToken ? "/api/providers" : "/api/models?provider=groq";
+
   let response: Response;
   try {
-    response = await fetch(apiUrl("/api/providers"), {
-      headers: { Accept: "application/json", Authorization: `Bearer ${token.trim()}` },
-      signal: AbortSignal.timeout(10_000),
-    });
+    response = await fetch(apiUrl(path), { headers, signal: AbortSignal.timeout(10_000) });
   } catch {
-    return {
-      ok: false,
-      reason: "unreachable",
-      message: isLocalDevelopmentHost()
-        ? "Could not reach the HANNAH API. Start it with npm run dev from the project root."
-        : "Could not reach the HANNAH server. Check your connection and try again.",
-    };
+    return unreachable();
   }
   if (response.ok) return { ok: true };
+  const body = await response.json().catch(() => ({})) as { reason?: string };
+  if (response.status === 401 && body.reason === "groq-key-rejected") {
+    return { ok: false, reason: "unauthorized", message: "Groq didn't accept that key. Copy it again from console.groq.com/keys and paste the whole value." };
+  }
   if (response.status === 401) {
-    return { ok: false, reason: "unauthorized", message: "That access token was not accepted. Check it with your server operator." };
+    return trimmedToken
+      ? { ok: false, reason: "unauthorized", message: "That access token was not accepted. Check it with your server operator." }
+      : { ok: false, reason: "unauthorized", message: "This HANNAH server only accepts its operator's access token. Open “I have an access token” and enter it, or use a server that allows your own key." };
   }
   if (response.status === 503) {
-    return { ok: false, reason: "not-configured", message: "This server has no access token configured yet. The operator needs to set HANNAH_API_TOKEN." };
+    return { ok: false, reason: "not-configured", message: "This server has no access token configured yet. Connect with your Groq key instead." };
   }
   return { ok: false, reason: "error", message: `The HANNAH server returned an error (HTTP ${response.status}). Try again shortly.` };
 }
