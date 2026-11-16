@@ -11,7 +11,7 @@
     "dev": "concurrently -k -n server,client -c magenta,cyan \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "dev:server": "npm run dev --prefix server",
     "dev:client": "npm run dev --prefix client",
-    "build": "npm run build --prefix client",
+    "build": "cd client && npm install --ignore-scripts && npm run build",
     "build:agent-frontend": "npm run build --workspace @shanaya/frontend",
     "models:draco": "npm run models:draco --prefix client",
     "dev:python-fallback": "python3 -m backend.run",

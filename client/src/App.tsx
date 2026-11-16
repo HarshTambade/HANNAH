@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { House, Bot, MessageSquare, Settings2, ShieldCheck, Activity, ArrowRight, Mic, Paperclip, Workflow, Brain, Code2, ArrowLeft } from "lucide-react";
+import { House, Bot, MessageSquare, Settings2, ShieldCheck, Activity, ArrowRight, Workflow, Brain, Code2, ArrowLeft } from "lucide-react";
 import AvatarCard from "./components/AvatarCard";
 import ArchitectureCard from "./components/ArchitectureCard";
 import DigitalTwinPanel from "./components/DigitalTwinPanel";
@@ -12,8 +12,9 @@ import PortalUI from "./components/PortalUI";
 import WorkflowBuilder from "./components/WorkflowBuilder";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
 import { ChaosEngine, type DegradedState } from "./services/ChaosEngine";
+import ChatUI from "./components/ChatUI";
 
-type Screen = "landing" | "companion" | "integrations" | "marketplace" | "automations" | "accountability" | "developer";
+type Screen = "landing" | "companion" | "conversation" | "integrations" | "marketplace" | "automations" | "accountability" | "developer";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
@@ -37,6 +38,7 @@ export default function App() {
   }
 
   if (screen === "automations") return <WorkflowBuilder onBack={() => setScreen("companion")} />;
+  if (screen === "conversation") return <main className="relative flex h-[100dvh] min-h-0 flex-col bg-mesh-indigo p-3 sm:p-5"><div className="fixed inset-0 bg-mesh-pastel opacity-50" /><div className="relative z-10 mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-3 self-start"><ArrowLeft size={16} /> Dashboard</button><div className="min-h-0 flex-1"><ChatUI onEmotionChange={() => undefined} panel groqApiKey="" initialMode="cloud" /></div></div></main>;
   if (screen === "accountability") return <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><div className="relative z-10 mx-auto max-w-5xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><AgentAccountabilityDashboard /></div></main>;
   if (screen === "developer") return (
     <main className="relative min-h-[100dvh] bg-mesh-indigo px-4 py-6 sm:px-8"><div className="fixed inset-0 bg-mesh-pastel opacity-60" /><section className="relative z-10 mx-auto max-w-3xl"><button type="button" onClick={() => setScreen("companion")} className="btn-ghost mb-5"><ArrowLeft size={16} /> Dashboard</button><div className="bento-card"><div className="bento-kicker">Developer settings</div><h1 className="bento-title mt-2">Resilience controls</h1><p className="bento-desc mt-2">Chaos injection is available only in development and test builds. It can simulate failed network requests, tool timeouts, corrupted memory, and denied approvals.</p><label className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/70 p-4"><span><span className="block text-sm font-bold text-ink">Chaos Mode</span><span className="mt-1 block text-xs text-slate-500">Randomly inject one configured failure at a time.</span></span><input type="checkbox" disabled={!ChaosEngine.available()} checked={chaosEnabled} onChange={(event) => ChaosEngine.setEnabled(event.target.checked)} className="h-5 w-5 accent-violet-600" /></label>{!ChaosEngine.available() && <p className="mt-3 text-xs text-slate-500">This production build does not expose chaos controls.</p>}<div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4"><div className="flex items-center gap-2 text-sm font-semibold text-sky-900"><Code2 size={16} /> Fallback status</div><p className="mt-2 text-xs text-sky-800">{degraded.degraded ? degraded.reason : "No degraded condition is currently reported."}</p>{degraded.degraded && <button className="mt-3 text-xs font-semibold text-sky-800 underline" onClick={() => ChaosEngine.clearDegraded()}>Clear degraded status</button>}</div></div></section></main>
@@ -81,7 +83,7 @@ export default function App() {
 
         {degraded.degraded && <div role="status" className="mb-5 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs text-amber-900 shadow-soft"><span className="h-2 w-2 rounded-full bg-amber-500" /><span><strong>Degraded mode</strong> · {degraded.reason || "Using a fallback model."}</span><button onClick={() => ChaosEngine.clearDegraded()} className="ml-auto text-[10px] font-semibold underline">Dismiss</button></div>}
 
-        <div className="mb-5 flex flex-wrap gap-2"><button className="btn-outline" onClick={() => setScreen("automations")}><Workflow size={15} /> Automations</button><button className="btn-outline" onClick={() => setScreen("accountability")}><Brain size={15} /> Accountability & style</button><button className="btn-ghost" onClick={() => setScreen("integrations")}><Activity size={15} /> Integrations</button></div>
+        <div className="mb-5 flex flex-wrap gap-2"><button className="btn-primary" onClick={() => setScreen("conversation")}><MessageSquare size={15} /> Open chat</button><button className="btn-outline" onClick={() => setScreen("automations")}><Workflow size={15} /> Automations</button><button className="btn-outline" onClick={() => setScreen("accountability")}><Brain size={15} /> Accountability & style</button><button className="btn-ghost" onClick={() => setScreen("integrations")}><Activity size={15} /> Integrations</button></div>
 
         <div className="bento-grid">
           <AvatarCard />
@@ -234,8 +236,8 @@ export default function App() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" className="btn-ghost"><Activity size={16} /></button>
-                <button type="button" className="btn-ghost"><ShieldCheck size={16} /></button>
+                <button type="button" onClick={() => setScreen("integrations")} aria-label="Open integrations" className="btn-ghost"><Activity size={16} /></button>
+                <button type="button" onClick={() => setScreen("accountability")} aria-label="Open accountability dashboard" className="btn-ghost"><ShieldCheck size={16} /></button>
               </div>
             </div>
 
@@ -273,27 +275,12 @@ export default function App() {
                   <span>run_shell</span>
                 </div>
                 <div className="mt-1 text-[11px] text-amber-600">Command: <span className="font-mono text-xs">ls -la /workspace</span></div>
-                <div className="mt-3 flex items-end gap-2">
-                  <button type="button" className="px-4 py-1.5 rounded-xl border border-amber-200 bg-white text-amber-700 font-medium text-xs hover:bg-amber-50 transition">Reject</button>
-                  <button type="button" className="px-4 py-1.5 rounded-xl bg-amber-600 text-white font-medium text-xs hover:bg-amber-700 transition">Approve</button>
-                </div>
+                <div className="mt-3"><button type="button" onClick={() => setScreen("conversation")} className="rounded-xl border border-amber-200 bg-white px-4 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-50">Review approvals in live chat</button></div>
               </div>
             </div>
 
             <div className="border-t border-slate-200 px-6 py-4 bg-white/50 backdrop-blur-sm">
-              <form className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-                <select className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] text-slate-600 outline-none focus:border-brand-400/60" defaultValue="en-US">
-                  <option value="en-US">English</option>
-                  <option value="hi-IN">हिन्दी</option>
-                  <option value="mr-IN">मराठी</option>
-                </select>
-                <button type="button" className="btn-ghost"><Mic size={16} /></button>
-                <button type="button" className="btn-ghost"><Paperclip size={16} /></button>
-                <textarea className="flex-1 resize-none bg-transparent px-3 py-2.5 text-[12px] leading-relaxed text-ink outline-none placeholder:text-slate-400" placeholder="Message Shanaya..." rows={1} maxLength={4000} />
-                <button type="submit" className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-violet-600 text-white shadow-lg shadow-brand-950/30 transition hover:brightness-105">
-                  <ArrowRight size={18} strokeWidth={2.2} />
-                </button>
-              </form>
+              <button type="button" onClick={() => setScreen("conversation")} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-soft transition hover:brightness-105">Open live conversation <ArrowRight size={17} /></button>
               <p className="mt-2 text-center text-[10px] text-slate-500">
                 Groq Cloud · Local inference available · Messages stay on this device
               </p>
