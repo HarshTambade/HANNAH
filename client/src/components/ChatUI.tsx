@@ -36,6 +36,7 @@ import MemoryControls from "./MemoryControls";
 import HITLApprovalCard from "./HITLApprovalCard";
 import { PersonalizationEngine } from "../services/PersonalizationEngine";
 import { CognitiveReadinessEngine } from "../services/CognitiveReadinessEngine";
+import { ChaosEngine, type DegradedState } from "../services/ChaosEngine";
 
 const WEBLLM_MODEL = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
 const welcomeMessage: ChatMessage = {
@@ -158,6 +159,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editedResponse, setEditedResponse] = useState("");
   const [styleFeedback, setStyleFeedback] = useState<Record<string, string>>({});
+  const [degradedState, setDegradedState] = useState<DegradedState>(ChaosEngine.getDegraded());
 
   useEffect(() => {
     trackEvent("chat_opened");
@@ -171,6 +173,7 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       trackEvent("session_duration", { seconds: Math.round((Date.now() - startedAt) / 1000) });
     };
   }, []);
+  useEffect(() => ChaosEngine.subscribe(() => setDegradedState(ChaosEngine.getDegraded())), []);
   const [nativeStatus, setNativeStatus] = useState<OfflineModelStatus>("checking");
   const [isPreparingNative, setIsPreparingNative] = useState(false);
   const [nativeAgentStatus, setNativeAgentStatus] = useState({ available: false, initialized: false, hasApiKey: false });
@@ -991,6 +994,8 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
           </div>
         )}
       </header>
+
+      {degradedState.degraded && <div role="status" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] text-amber-900"><strong>Degraded mode</strong> · {degradedState.reason || "Using a fallback model."}<button type="button" onClick={() => ChaosEngine.clearDegraded()} className="ml-2 underline">Dismiss</button></div>}
 
       {!isOnline && (
         <div className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[10px] font-medium text-amber-800">

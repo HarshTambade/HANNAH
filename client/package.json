@@ -22,6 +22,7 @@
     "cap:run:ios": "npm run build && cap sync ios && npm run cap:patch:ios && cap run ios",
     "cap:run:android": "npm run build && cap sync android && npm run cap:patch:android && cap run android",
     "test": "vitest run",
+    "test:chaos": "vitest run src/__tests__/Phase25Chaos.test.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test --config playwright.config.ts"
   },

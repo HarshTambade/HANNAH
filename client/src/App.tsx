@@ -13,6 +13,7 @@ import WorkflowBuilder from "./components/WorkflowBuilder";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
 import { ChaosEngine, type DegradedState } from "./services/ChaosEngine";
 import ChatUI from "./components/ChatUI";
+import { useDashboardMetrics } from "./hooks/useDashboardMetrics";
 
 type Screen = "landing" | "companion" | "conversation" | "integrations" | "marketplace" | "automations" | "accountability" | "developer";
 
@@ -23,6 +24,7 @@ export default function App() {
   const [integrationReturnScreen, setIntegrationReturnScreen] = useState<"landing" | "companion">("landing");
   const [marketplaceReturnScreen, setMarketplaceReturnScreen] = useState<"landing" | "companion">("landing");
   const [portalOpen, setPortalOpen] = useState(false);
+  const metrics = useDashboardMetrics(3000);
 
   useEffect(() => ChaosEngine.subscribe(() => {
     setChaosEnabled(ChaosEngine.isEnabled());
@@ -61,7 +63,7 @@ export default function App() {
       <div className="fixed inset-0 z-0 soft-grid opacity-40" />
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-8 h-screen overflow-y-auto">
-        <header className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-8">
+        <header className="sticky top-0 z-30 -mx-6 mb-6 flex flex-col justify-between gap-4 border-b border-white/70 bg-white/75 px-6 py-3 backdrop-blur-xl sm:rounded-b-2xl lg:flex-row lg:items-center">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-[1.5rem] border border-brand-100 bg-brand-50 text-brand-600 shadow-soft">
               <Bot size={20} />
@@ -99,17 +101,17 @@ export default function App() {
                 <div className="flex items-center justify-center relative h-64">
                   <svg className="w-full h-full" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="40" stroke="#e2e8f0" strokeWidth="8" fill="none" />
-                    <circle cx="50" cy="50" r="40" stroke="#8B5CF6" strokeWidth="8" fill="none" strokeDasharray="251" strokeDashoffset={63} className="transition-all duration-1000" />
-                    <text x="50" y="54" fontFamily="Manrope" fontSize="20" fontWeight="800" fill="#0f172a" textAnchor="middle">30%</text>
+                    <circle cx="50" cy="50" r="40" stroke="#8B5CF6" strokeWidth="8" fill="none" strokeDasharray="251" strokeDashoffset={251 - (metrics.memory.utilizationPct / 100) * 251} className="transition-all duration-1000" />
+                    <text x="50" y="54" fontFamily="Manrope" fontSize="20" fontWeight="800" fill="#0f172a" textAnchor="middle">{metrics.memory.utilizationPct}%</text>
                   </svg>
                 </div>
                 <div className="mt-4 flex justify-between text-[11px]">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500" />Automation 30%</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Chat 25%</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500" />Session {metrics.memory.episodic}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Long-term {metrics.memory.longTerm}</span>
                 </div>
                 <div className="mt-2 flex justify-between text-[11px]">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" />Code 25%</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />System 20%</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500" />Persona {metrics.memory.persona}</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Total {metrics.memory.total}</span>
                 </div>
               </div>
             </div>
@@ -118,8 +120,8 @@ export default function App() {
           <div className="bento-card span-1-1 flex flex-col h-full">
             <div className="mb-4">
               <div className="bento-kicker">Resolved Tasks</div>
-              <div className="stat-big">14.2K</div>
-              <div className="stat-label mt-1">Tasks in past 7 days</div>
+              <div className="stat-big">{metrics.tasks.total}</div>
+              <div className="stat-label mt-1">{metrics.tasks.completed} completed · {metrics.tasks.pending} pending</div>
             </div>
             <div className="mt-6 flex-1 flex items-end justify-center relative h-40">
               <svg className="w-full h-full" viewBox="0 0 120 120" preserveAspectRatio="none">
@@ -137,15 +139,15 @@ export default function App() {
             <div className="mt-4 grid grid-cols-3 gap-3">
               <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
                 <div className="text-[10px] font-bold uppercase text-slate-500">Success</div>
-                <div className="font-display font-bold text-lg text-ink">99.4%</div>
+                <div className="font-display font-bold text-lg text-ink">{metrics.tasks.successRate}%</div>
               </div>
               <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
                 <div className="text-[10px] font-bold uppercase text-slate-500">Avg Latency</div>
                 <div className="font-display font-bold text-lg text-ink">140ms</div>
               </div>
               <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
-                <div className="text-[10px] font-bold uppercase text-slate-500">Errors</div>
-                <div className="font-display font-bold text-lg text-ink">0</div>
+                <div className="text-[10px] font-bold uppercase text-slate-500">Failed</div>
+                <div className="font-display font-bold text-lg text-ink">{metrics.tasks.failed}</div>
               </div>
             </div>
           </div>
@@ -155,8 +157,8 @@ export default function App() {
           <div className="bento-card span-1-1 flex flex-col h-full">
             <div className="mb-4">
               <div className="bento-kicker">Memory Consolidation</div>
-              <div className="stat-big">68%</div>
-              <div className="stat-label mt-1">Long-term capacity used</div>
+              <div className="stat-big">{metrics.memory.utilizationPct}%</div>
+              <div className="stat-label mt-1">{metrics.memory.longTerm} long-term · {metrics.memory.persona} persona</div>
             </div>
             <div className="mt-6 flex flex-col items-center justify-center relative h-48 w-48 mx-auto">
               <svg className="w-full h-full" viewBox="0 0 100 100">
@@ -185,7 +187,7 @@ export default function App() {
           <div className="bento-card span-1-1 flex flex-col h-full">
             <div className="mb-4">
               <div className="bento-kicker">Token Efficiency</div>
-              <div className="stat-big">$14.20</div>
+              <div className="stat-big">${metrics.tokens.savedEstimate.toFixed(2)}</div>
               <div className="stat-label mt-1">Cloud cost saved this week</div>
             </div>
             <div className="mt-4 flex-1 relative h-32">
@@ -206,11 +208,11 @@ export default function App() {
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
                 <div className="text-[10px] font-bold uppercase text-slate-500">Local</div>
-                <div className="font-display font-bold text-lg text-ink">70%</div>
+                <div className="font-display font-bold text-lg text-ink">{metrics.tokens.utilizationPct}%</div>
               </div>
               <div className="text-center px-3 py-2 rounded-xl border border-slate-100 bg-white">
                 <div className="text-[10px] font-bold uppercase text-slate-500">Cloud</div>
-                <div className="font-display font-bold text-lg text-ink">30%</div>
+                <div className="font-display font-bold text-lg text-ink">{100 - metrics.tokens.utilizationPct}%</div>
               </div>
             </div>
           </div>

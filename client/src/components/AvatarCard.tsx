@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { MemoryService } from "../services/MemoryService";
 
 type StatItem = {
@@ -7,7 +7,7 @@ type StatItem = {
   color: "purple" | "peach" | "blue" | "mint";
 };
 
-export default function AvatarCard() {
+function AvatarCard() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [latency, setLatency] = useState("120ms");
 
@@ -98,3 +98,5 @@ export default function AvatarCard() {
     </div>
   );
 }
+
+export default memo(AvatarCard);

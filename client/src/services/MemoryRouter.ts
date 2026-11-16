@@ -1,4 +1,5 @@
 import { MemoryService } from "./MemoryService";
+import { MemoryResolutionService } from "./MemoryResolutionService";
 
 export type QueryType = "factual" | "associative" | "complex";
 
@@ -13,6 +14,8 @@ export type RetrievalResult = {
   items: Array<{ id: string; content: string; score: number; source: "vector" | "graph" | "hybrid" }>;
   routingDecision: RoutingDecision;
   latencyMs: number;
+  abstained?: boolean;
+  abstentionReason?: string;
 };
 
 const FACTUAL_KEYWORDS = [
@@ -62,7 +65,8 @@ export const MemoryRouter = {
     const decision = this.classify(query);
 
     // Retrieve from MemoryService (unified store backing both graph and vector)
-    const allRecords = MemoryService.list();
+    const resolution = MemoryResolutionService.resolve(MemoryService.list(), (records) => Array.isArray(records) && records.every((record) => typeof record.id === "string" && typeof record.content === "string"));
+    const allRecords = resolution.status === "resolved" ? resolution.value : [];
     const lower = query.toLowerCase();
     const queryWords = lower.split(/\s+/).filter((w) => w.length > 3);
 
@@ -86,7 +90,12 @@ export const MemoryRouter = {
 
     const latencyMs = Date.now() - start;
 
-    const result: RetrievalResult = { items, routingDecision: decision, latencyMs };
+    const result: RetrievalResult = {
+      items,
+      routingDecision: decision,
+      latencyMs,
+      ...(resolution.status === "abstained" ? { abstained: true, abstentionReason: resolution.reason } : {}),
+    };
 
     this.routingLog.push({
       query,

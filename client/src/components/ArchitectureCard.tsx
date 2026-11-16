@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { Cpu, Brain, Server, Activity } from "lucide-react";
 
 type Node = {
@@ -69,7 +69,7 @@ const NODES: Node[] = [
   },
 ];
 
-export default function ArchitectureCard() {
+function ArchitectureCard() {
   const [activeProvider, setActiveProvider] = useState<"cloud" | "local" | "offline">("cloud");
 
   useEffect(() => {
@@ -179,3 +179,5 @@ export default function ArchitectureCard() {
     </div>
   );
 }
+
+export default memo(ArchitectureCard);

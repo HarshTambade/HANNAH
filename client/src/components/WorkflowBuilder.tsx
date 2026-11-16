@@ -52,6 +52,8 @@ function BuilderCanvas({ onBack }: { onBack: () => void }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [name, setName] = useState("Morning brief");
+  const [workflowId] = useState(() => `workflow-${crypto.randomUUID()}`);
+  const [createdAt] = useState(() => new Date().toISOString());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showJson, setShowJson] = useState(false);
   const [notice, setNotice] = useState("");
@@ -72,19 +74,18 @@ function BuilderCanvas({ onBack }: { onBack: () => void }) {
 
   const schema = useMemo<WorkflowSchema>(() => ({
     version: 1,
-    id: "workflow-editor",
+    id: workflowId,
     name: name.trim() || "Untitled workflow",
     nodes: nodes.map((node) => ({ id: node.id, kind: node.data.kind, label: node.data.label, config: node.data.config, position: node.position })),
     edges: edges.map(({ id, source, target, label }) => ({ id, source, target, ...(typeof label === "string" ? { label } : {}) })),
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-  }), [edges, name, nodes]);
+    createdAt, updatedAt: new Date().toISOString(),
+  }), [createdAt, edges, name, nodes, workflowId]);
 
   function save() {
     if (!name.trim()) { setNotice("Give this workflow a name first."); return; }
     if (!nodes.some((node) => node.data.kind === "trigger") || !nodes.some((node) => node.data.kind === "output")) { setNotice("Add at least one trigger and one output."); return; }
     if (!edges.length) { setNotice("Connect the workflow nodes before saving."); return; }
-    const persisted = { ...schema, id: `workflow-${crypto.randomUUID()}` };
-    TaskSpineService.createWorkflow(persisted);
+    TaskSpineService.createWorkflow(schema);
     setNotice("Saved to Task Spine as a pending workflow. A background runner is not configured in this build.");
   }
 

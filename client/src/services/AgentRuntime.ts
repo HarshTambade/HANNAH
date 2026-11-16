@@ -242,7 +242,6 @@ export async function runAgentTurn(options: {
         if (toolCircuitBreaker.isDisabled(tool.name)) throw new Error(`The circuit breaker is open for ${formatToolName(tool.name)} after repeated failures.`);
         if (ChaosEngine.consume("hitl-denial")) throw new HITLDeniedError("You declined this proposed action. Shanaya stopped the task without making changes.");
         if (ChaosEngine.consume("tool-timeout")) {
-          toolCircuitBreaker.recordFailure(tool.name);
           throw new Error(`Simulated timeout: ${formatToolName(tool.name)} did not respond. The circuit breaker recorded the failure.`);
         }
         result = await executeShanayaTool(tool, call.arguments);

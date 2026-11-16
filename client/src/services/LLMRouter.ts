@@ -182,7 +182,9 @@ export class LLMRouter {
       const fallbackBase = import.meta.env.VITE_PYTHON_FALLBACK_URL?.trim().replace(/\/+$/, "") || "http://127.0.0.1:8000";
       try {
         // The Python route may cold-load a local llama.cpp model, so give it a longer budget.
-        return await requestAgentStep(`${fallbackBase}/api/agent/step`, body, 45_000);
+        const fallbackStep = await requestAgentStep(`${fallbackBase}/api/agent/step`, body, 45_000);
+        ChaosEngine.setDegraded("Degraded mode: the local Python agent fallback answered this turn.");
+        return fallbackStep;
       } catch (fallbackError) {
         const primaryMessage = primaryError instanceof Error ? primaryError.message : "The primary Node API failed.";
         const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "The Python fallback API failed.";

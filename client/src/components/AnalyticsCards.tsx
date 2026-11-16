@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { PieChart, Pie, ResponsiveContainer, Cell, Legend } from "recharts";
 
 import { MemoryService, type MemoryLayer } from "../services/MemoryService";
@@ -8,7 +8,7 @@ const COLORS = ["#8B5CF6", "#3B82F6", "#FDBA74", "#10B981"];
 
 /* ===== Memoized sub-components to prevent re-renders ===== */
 
-const DonutChart = React.memo(({ data }: { data: { name: string; value: number; color: string }[] }) => {
+const DonutChart = memo(({ data }: { data: { name: string; value: number; color: string }[] }) => {
   const total = useMemo(() => data.reduce((sum, d) => sum + d.value, 0), [data]);
   return (
     <div className="flex-1 flex items-center justify-center">
@@ -61,7 +61,7 @@ const DonutChart = React.memo(({ data }: { data: { name: string; value: number; 
   );
 });
 
-const MemoryRadial = React.memo(({ pct, episodic, persona }: { pct: number; episodic: number; persona: number }) => {
+const MemoryRadial = memo(({ pct, episodic, persona }: { pct: number; episodic: number; persona: number }) => {
   const circumference = 2 * Math.PI * 42;
   const offset = circumference - (pct / 100) * circumference;
   return (
@@ -110,7 +110,7 @@ const MemoryRadial = React.memo(({ pct, episodic, persona }: { pct: number; epis
   );
 });
 
-const EfficiencyBar = React.memo(({ data }: { data: { name: string; local: number; cloud: number }[] }) => {
+const EfficiencyBar = memo(({ data }: { data: { name: string; local: number; cloud: number }[] }) => {
   return (
     <div className="mt-4 flex-1 relative h-32">
       <svg className="w-full h-full" viewBox="0 0 140 100">
