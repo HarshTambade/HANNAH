@@ -69,6 +69,9 @@ test("a visitor connects with only a Groq key and chats with the WebGL avatar", 
   await expect(page.getByText("I'm glad you reached out.")).toBeVisible();
   await expect(avatarRegion).toHaveAttribute("data-emotion", "happy");
   await expect(avatarRegion).toHaveAttribute("data-avatar-motion", /^(animation|procedural)$/);
+  // She "says" the reply, then settles back to idle.
+  await expect(avatarRegion).toHaveAttribute("data-avatar-activity", /^(speaking|idle)$/);
+  await expect(avatarRegion).toHaveAttribute("data-avatar-activity", "idle");
   // No operator token exists: every request authenticates with the visitor's own key.
   expect(protectedRequests.length).toBeGreaterThan(0);
   expect(protectedRequests.every((request) => request.authorization === "" && request.groqKey === groqKey)).toBe(true);

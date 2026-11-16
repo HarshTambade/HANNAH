@@ -1,18 +1,13 @@
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, useAnimations, useGLTF, useProgress } from "@react-three/drei";
 import { AnimationClip, Box3, BufferGeometry, Group, Material, MathUtils, Mesh, PerspectiveCamera, SkinnedMesh, Texture, Vector3 } from "three";
 import { DRACOLoader, SkeletonUtils } from "three-stdlib";
 import type { Emotion } from "../types";
+import { createAvatarRig, type AvatarActivity, type AvatarRig } from "../services/avatar/AvatarRig";
+import { repairMorphTargets } from "../services/avatar/morphRepair";
 
-const emotionMorphs: Record<Emotion, string[]> = {
-  happy: ["happy", "smile", "joy"],
-  sad: ["sad", "frown", "mouthfrown"],
-  angry: ["angry", "browdown", "mad"],
-  neutral: [],
-  surprised: ["surprise", "wideeyes", "jawopen"],
-  thinking: ["thinking", "ponder", "browinnerup"],
-};
+export type { AvatarActivity } from "../services/avatar/AvatarRig";
 
 const emotionLight: Record<Emotion, string> = {
   happy: "#fbbf24",
@@ -21,15 +16,6 @@ const emotionLight: Record<Emotion, string> = {
   neutral: "#a78bfa",
   surprised: "#fb923c",
   thinking: "#c084fc",
-};
-
-const emotionPose: Record<Emotion, { lean: number; turn: number; tilt: number; bounce: number }> = {
-  happy: { lean: -0.045, turn: 0.14, tilt: -0.04, bounce: 0.13 },
-  sad: { lean: 0.14, turn: -0.08, tilt: 0.06, bounce: -0.07 },
-  angry: { lean: -0.06, turn: 0.05, tilt: -0.09, bounce: 0.02 },
-  neutral: { lean: 0, turn: 0, tilt: 0, bounce: 0 },
-  surprised: { lean: -0.12, turn: 0, tilt: 0, bounce: 0.16 },
-  thinking: { lean: -0.04, turn: -0.22, tilt: 0.08, bounce: 0.015 },
 };
 
 const dracoLoader = new DRACOLoader();
@@ -62,21 +48,6 @@ class AvatarLoadBoundary extends Component<{
   }
 }
 
-function applyEmotionMorph(scene: Group | Mesh, emotion: Emotion) {
-  const aliases = emotionMorphs[emotion];
-  scene.traverse((object) => {
-    const mesh = object as Mesh;
-    const dictionary = mesh.morphTargetDictionary;
-    const influences = mesh.morphTargetInfluences;
-    if (!dictionary || !influences) return;
-
-    influences.fill(0);
-    for (const [name, index] of Object.entries(dictionary)) {
-      if (aliases.some((alias) => name.toLowerCase().includes(alias))) influences[index] = 1;
-    }
-  });
-}
-
 function cloneAvatarResources(scene: Group) {
   // useGLTF caches its scene globally. Give the mounted instance independent
   // GPU resources; cleanup can then dispose these without touching that cache.
@@ -88,9 +59,16 @@ function cloneAvatarResources(scene: Group) {
     if (!(object instanceof Mesh)) return;
     const skeletonTexture = (object as Mesh & { skeleton?: { boneTexture?: Texture } }).skeleton?.boneTexture;
     if (skeletonTexture) skeletonTextures.add(skeletonTexture);
-    const geometry = geometries.get(object.geometry) ?? object.geometry.clone();
-    geometries.set(object.geometry, geometry);
+    let geometry = geometries.get(object.geometry);
+    if (!geometry) {
+      const clone = object.geometry.clone();
+      // Fix blend shapes exported in the wrong units before anything renders them.
+      repairMorphTargets(clone);
+      geometries.set(object.geometry, clone);
+      geometry = clone;
+    }
     object.geometry = geometry;
+    if (object.morphTargetInfluences) object.updateMorphTargets();
 
     const cloneMaterial = (material: Material) => {
       const clone = material.clone();
@@ -158,7 +136,17 @@ function retainCachedAvatarScene(modelUrl: string, scene: Group) {
   };
 }
 
-function Avatar({ emotion, onMotionChange, modelUrl }: { emotion: Emotion; onMotionChange?: (motion: AvatarMotion) => void; modelUrl: string }) {
+type PointerState = { x: number; y: number; at: number } | null;
+
+function Avatar({ emotion, activity, pointer, pokes, reducedMotion, onMotionChange, modelUrl }: {
+  emotion: Emotion;
+  activity: AvatarActivity;
+  pointer: MutableRefObject<PointerState>;
+  pokes: MutableRefObject<number>;
+  reducedMotion: boolean;
+  onMotionChange?: (motion: AvatarMotion) => void;
+  modelUrl: string;
+}) {
   const { scene, animations } = useGLTF(modelUrl, false, false, (loader) => loader.setDRACOLoader(dracoLoader));
   // Keep the render-time clone CPU-only; clone GPU resources in the effect so
   // StrictMode's intentional double render cannot leak discarded resources.
@@ -166,7 +154,8 @@ function Avatar({ emotion, onMotionChange, modelUrl }: { emotion: Emotion; onMot
   const group = useRef<Group>(null);
   const model = useRef<Group>(null);
   const modelScaleInitialized = useRef(false);
-  const emotionPulse = useRef(0);
+  const rig = useRef<AvatarRig | null>(null);
+  const handledPokes = useRef(pokes.current);
   const stableAnimations = useMemo(() => animations.map((animation) => {
     // The GLB's Idle clip animates all three face morph meshes plus the eye,
     // head, and neck tracks. Those keys make the facial features disappear at
@@ -186,13 +175,19 @@ function Avatar({ emotion, onMotionChange, modelUrl }: { emotion: Emotion; onMot
   useEffect(() => retainCachedAvatarScene(modelUrl, scene), [modelUrl, scene]);
 
   useEffect(() => {
-    applyEmotionMorph(avatar, emotion);
-    emotionPulse.current = 0;
-  }, [emotion, avatar]);
-
-  useEffect(() => {
     return cloneAvatarResources(avatar).dispose;
   }, [avatar]);
+
+  // After the resources above are cloned and repaired: expressions, blinking,
+  // talking, gaze, and gestures on top of the idle clip.
+  useEffect(() => {
+    const instance = createAvatarRig(avatar, { greet: !reducedMotion });
+    rig.current = instance;
+    return () => {
+      instance.dispose();
+      if (rig.current === instance) rig.current = null;
+    };
+  }, [avatar, reducedMotion]);
 
   const framing = useMemo(() => {
     // Include deformed skin vertices: the GLB's undeformed geometry bounds are
@@ -224,11 +219,13 @@ function Avatar({ emotion, onMotionChange, modelUrl }: { emotion: Emotion; onMot
   useFrame(({ clock }, delta) => {
     if (!group.current) return;
 
-    // Keep the fallback motion visible even when the GLB has no animation clips.
-    emotionPulse.current += delta;
-    const pulse = Math.exp(-emotionPulse.current * 3.2);
-    const pose = emotionPose[emotion];
     const time = clock.elapsedTime;
+    if (rig.current && pokes.current !== handledPokes.current) {
+      handledPokes.current = pokes.current;
+      rig.current.trigger("giggle");
+    }
+    const recentPointer = pointer.current && performance.now() - pointer.current.at < 4000 ? pointer.current : null;
+    const { bounce } = rig.current?.update(delta, time, { emotion, activity, lookAt: recentPointer, reducedMotion }) ?? { bounce: 0 };
     const avatar = group.current;
     const modelGroup = model.current;
     const perspectiveCamera = camera as PerspectiveCamera;
@@ -245,13 +242,14 @@ function Avatar({ emotion, onMotionChange, modelUrl }: { emotion: Emotion; onMot
     // yaw made this tall model appear to travel across the entire stage.
     avatar.position.x = 0;
     const fittedAvatarHeight = fitScale * framing.sourceHeight;
-    avatar.position.y = 1.1 - fittedAvatarHeight / 2 + Math.sin(time * 1.25) * 0.045 + pose.bounce * pulse;
-    avatar.rotation.x = MathUtils.damp(avatar.rotation.x, pose.lean + Math.sin(time * 0.52) * 0.045, 3.5, delta);
-    const subtleTurn = MathUtils.clamp(pose.turn * 0.2 + Math.sin(time * 0.34) * 0.025, -0.06, 0.06);
-    avatar.rotation.y = MathUtils.damp(avatar.rotation.y, subtleTurn, 2.8, delta);
-    avatar.rotation.z = MathUtils.damp(avatar.rotation.z, pose.tilt + Math.sin(time * 0.68) * 0.045, 3.5, delta);
-    const scale = 1 + (emotion === "surprised" ? 0.035 : 0.012) * pulse;
-    avatar.scale.setScalar(MathUtils.damp(avatar.scale.x, scale, 4, delta));
+    // The rig moves the head, body, and arms; the whole figure only bobs gently
+    // and hops a little when a happy or surprised moment calls for it.
+    const motion = reducedMotion ? 0.3 : 1;
+    const hop = bounce * 0.11 * Math.max(0, Math.sin(time * Math.PI * 2 * 1.3));
+    avatar.position.y = 1.1 - fittedAvatarHeight / 2 + Math.sin(time * 1.25) * 0.03 * motion + hop;
+    avatar.rotation.x = MathUtils.damp(avatar.rotation.x, 0, 3.5, delta);
+    avatar.rotation.y = MathUtils.damp(avatar.rotation.y, Math.sin(time * 0.34) * 0.025 * motion, 2.8, delta);
+    avatar.rotation.z = MathUtils.damp(avatar.rotation.z, 0, 3.5, delta);
 
     if (modelGroup) {
       // The source model has a large off-origin transform. Apply its centering
@@ -312,15 +310,57 @@ function SceneError({ onMotionChange }: { onMotionChange?: (motion: AvatarMotion
   );
 }
 
-export default function AvatarScene({ emotion, onMotionChange }: { emotion: Emotion; onMotionChange?: (motion: AvatarMotion) => void }) {
+function usePrefersReducedMotion() {
+  const query = "(prefers-reduced-motion: reduce)";
+  const [reduced, setReduced] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia(query);
+    const update = () => setReduced(media.matches);
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+  return reduced;
+}
+
+export default function AvatarScene({ emotion, activity = "idle", onMotionChange }: {
+  emotion: Emotion;
+  /** What HANNAH is doing right now: she leans in to listen, thinks with a hand to her cheek, and talks. */
+  activity?: AvatarActivity;
+  onMotionChange?: (motion: AvatarMotion) => void;
+}) {
   const [useUncompressedModel, setUseUncompressedModel] = useState(false);
   const canFallback = !configuredAvatarModelUrl && avatarModelUrl !== uncompressedAvatarModelUrl;
   const modelUrl = useUncompressedModel ? uncompressedAvatarModelUrl : avatarModelUrl;
+  const container = useRef<HTMLDivElement>(null);
+  const pointer = useRef<PointerState>(null);
+  const pokes = useRef(0);
+  const reducedMotion = usePrefersReducedMotion();
+
+  // She follows the pointer with her head and eyes, measured from her face
+  // (about a third of the way down the stage).
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      const box = container.current?.getBoundingClientRect();
+      if (!box || box.width === 0 || box.height === 0) return;
+      const clamp = (value: number) => Math.max(-1, Math.min(1, value));
+      pointer.current = {
+        x: clamp((event.clientX - (box.left + box.width / 2)) / Math.max(box.width, 320)),
+        y: clamp(-(event.clientY - (box.top + box.height * 0.32)) / Math.max(box.height, 320)),
+        at: performance.now(),
+      };
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, []);
 
   return (
     <div
+      ref={container}
       className="relative h-full w-full"
       data-emotion={emotion}
+      data-activity={activity}
+      onPointerDown={() => { pokes.current += 1; }}
       role="img"
       aria-label={`HANNAH avatar showing ${emotion} expression`}
     >
@@ -346,7 +386,7 @@ export default function AvatarScene({ emotion, onMotionChange }: { emotion: Emot
           fallback={<SceneError onMotionChange={onMotionChange} />}
         >
           <Suspense fallback={<SceneLoader />}>
-            <Avatar emotion={emotion} onMotionChange={onMotionChange} modelUrl={modelUrl} />
+            <Avatar emotion={emotion} activity={activity} pointer={pointer} pokes={pokes} reducedMotion={reducedMotion} onMotionChange={onMotionChange} modelUrl={modelUrl} />
           </Suspense>
         </AvatarLoadBoundary>
       </Canvas>

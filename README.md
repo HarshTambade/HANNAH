@@ -198,7 +198,7 @@ flowchart LR
 3. `LLMRouter` resolves the inference mode. Local modes generate on the device; cloud and Ollama modes call `POST /api/agent` with your token, plus your Groq key in the `X-Groq-API-Key` header if you gave one.
 4. The server validates and bounds the request, adds your saved memories to the system prompt, calls the selected provider, and returns the reply, emotion, model, provider, latency and token usage.
 5. A tool call goes through the [safety chain](#the-safety-model-guardian-then-you), then the result is sent back for the next step.
-6. The final reply is rendered as Markdown, spoken if voice is on, and its emotion (`happy`, `sad`, `angry`, `neutral`, `surprised` or `thinking`) drives the avatar. Turn metrics are saved for the Dashboard.
+6. The final reply is rendered as Markdown, spoken if voice is on, and its emotion (`happy`, `sad`, `angry`, `neutral`, `surprised` or `thinking`) drives the avatar's face, pose and gestures. Turn metrics are saved for the Dashboard.
 
 ### Main modules
 
@@ -212,7 +212,7 @@ flowchart LR
 | Local data | [`ChatHistory.ts`](./client/src/services/ChatHistory.ts), [`UsageStats.ts`](./client/src/services/UsageStats.ts), [`MemoryStore.ts`](./client/src/services/MemoryStore.ts), [`PersonalizationEngine.ts`](./client/src/services/PersonalizationEngine.ts) | On-device stores behind the Dashboard and Memory & trust. |
 | Persona and marketplace | [`PersonaKernel.ts`](./client/src/services/PersonaKernel.ts), [`MarketplaceService.ts`](./client/src/services/MarketplaceService.ts), [`PluginLoader.ts`](./client/src/services/PluginLoader.ts) | Persona prompt, agent and skill catalog, plugin state. |
 | Native | [`AIService.ts`](./client/src/services/AIService.ts), [`MobileAgent.ts`](./client/src/services/MobileAgent.ts) | llama.cpp GGUF models and the optional MobileClaw agent. |
-| Avatar and voice | [`AvatarScene.tsx`](./client/src/components/AvatarScene.tsx), [`SpeechService.ts`](./client/src/services/SpeechService.ts), [`VoiceService.ts`](./client/src/services/VoiceService.ts) | GLB avatar, emotion poses, speech in and out. |
+| Avatar and voice | [`AvatarScene.tsx`](./client/src/components/AvatarScene.tsx), [`avatar/`](./client/src/services/avatar/), [`SpeechService.ts`](./client/src/services/SpeechService.ts), [`VoiceService.ts`](./client/src/services/VoiceService.ts) | GLB avatar, facial expressions, body poses and gestures, speech in and out. |
 | API | [`server/index.js`](./server/index.js), [`server/api-security.js`](./server/api-security.js) | Routes, auth, rate limits, provider calls. |
 | Providers | [`server/providers/catalog.js`](./server/providers/catalog.js), [`server/providers/runtime.js`](./server/providers/runtime.js) | Provider presets, model discovery, request adapters. |
 | MCP | [`server/mcp-core.mjs`](./server/mcp-core.mjs), [`mcp-http.mjs`](./server/mcp-http.mjs), [`mcp-stdio.mjs`](./server/mcp-stdio.mjs) | Exposes HANNAH to MCP hosts. |
@@ -611,7 +611,16 @@ The patch scripts ([`patch-capacitor-gradle.mjs`](./client/scripts/patch-capacit
 
 **PWA:** auto-updating service worker. The app shell is precached and the avatar is cached on first use. Run `npm run build:analyzer --prefix client` for a bundle report, and `npm run bundle:size --prefix client -- --strict` to enforce the size budget.
 
-**Avatar:** `npm run models:draco` writes the Draco-compressed `client/public/models/avatar.draco.glb` (7.4 MB → 2.6 MB). Point `VITE_AVATAR_MODEL_URL` at it for faster loads. The avatar is scaled to the viewport, plays an idle animation when the model has one, and ignores emotion morphs it doesn't define.
+**Avatar:** `npm run models:draco` writes the Draco-compressed `client/public/models/avatar.draco.glb` (7.4 MB → 2.6 MB). Point `VITE_AVATAR_MODEL_URL` at it for faster loads. The avatar is scaled to the viewport and plays the model's idle animation, and the [avatar rig](./client/src/services/avatar/AvatarRig.ts) brings her to life on top of it:
+
+| She… | How |
+|---|---|
+| Shows each reply's emotion | Smiles (a fang grin when happy), droops her eyes and head when sad, narrows her eyes and puts her hands on her hips when angry, widens her eyes with an "o" mouth when surprised, and rests a hand on her cheek when thinking. |
+| Reacts when the emotion changes | Waves when she becomes happy, turns away with a "hmph" when angry, jumps when surprised, sighs when sad. She also waves hello when she first appears. |
+| Follows the conversation | Leans in and tilts her head while you speak, takes the thinking pose while a reply is on its way, and moves her mouth, nods and gestures while she talks (also for text replies, for about as long as reading them takes). |
+| Feels alive | Blinks (sometimes twice), breathes, sways, glances around when idle, and follows your pointer with her head and eyes. Tap her and she giggles. |
+
+With *reduce motion* turned on in the operating system, she keeps her expressions but gestures and sway are toned down. The rig works with other rigged GLB files too. It finds face shapes by common blend-shape names (ARKit, VRM, Ready Player Me, or plain `smile` and `blink`) and body bones by common bone names (Mixamo, VRM, humanoid). Anything a model lacks is skipped. The bundled model's blend shapes were exported in the wrong units, which used to make its face disappear. They're repaired on load, and its painted mouth gets a small animated mouth for talking.
 
 ### CI and releases
 

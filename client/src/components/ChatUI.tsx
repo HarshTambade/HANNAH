@@ -25,6 +25,7 @@ import {
 } from "../services/AIService";
 import { apiFetch, apiHeaders, apiUrl, isAccountSession, isLocalDevelopmentHost, isGuestSession } from "../services/api";
 import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
+import type { AvatarActivity } from "../services/avatar/expressions";
 import { clearMobileAgentConversation, getMobileAgentStatus, removeMobileAgentApiKey, runMobileAgentTurn, setMobileAgentApiKey } from "../services/MobileAgent";
 import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuardrails";
 import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent";
@@ -109,6 +110,8 @@ function formatDuration(seconds: number) {
 
 type ChatUIProps = {
   onEmotionChange: (emotion: Emotion) => void;
+  /** What HANNAH is doing, for the avatar: listening, thinking, speaking, or idle. */
+  onActivityChange?: (activity: AvatarActivity) => void;
   panel?: boolean;
   groqApiKey: string;
   initialMode?: InferenceMode;
@@ -124,7 +127,7 @@ function initialMessages(): ChatMessage[] {
 }
 type CloudProviderOption = { id: string; label: string; local: boolean; configured: boolean; defaultModel?: string };
 
-export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, initialMode = "cloud", onSessionExpired }: ChatUIProps) {
+export default function ChatUI({ onEmotionChange, onActivityChange, panel = false, groqApiKey, initialMode = "cloud", onSessionExpired }: ChatUIProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [rememberedIds, setRememberedIds] = useState<Record<string, true>>({});
   const [input, setInput] = useState("");
@@ -164,6 +167,9 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
   const [voiceStatus, setVoiceStatus] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  // With voice off, the avatar still "says" each new reply for about as long as it takes to read aloud.
+  const [isPresentingReply, setIsPresentingReply] = useState(false);
+  const presentTimerRef = useRef<number | null>(null);
   const [isVirtualCallActive, setIsVirtualCallActive] = useState(false);
   const [isCallMicEnabled, setIsCallMicEnabled] = useState(false);
   const [isCallSpeakerOn, setIsCallSpeakerOn] = useState(true);
@@ -386,7 +392,13 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
     const stop = voiceSessionRef.current;
     voiceSessionRef.current = null;
     void stop?.();
+    if (presentTimerRef.current !== null) window.clearTimeout(presentTimerRef.current);
   }, []);
+
+  const avatarActivity: AvatarActivity = isSpeaking || isPresentingReply ? "speaking" : isLoading ? "thinking" : isListening ? "listening" : "idle";
+  useEffect(() => {
+    onActivityChange?.(avatarActivity);
+  }, [avatarActivity, onActivityChange]);
 
   useEffect(() => {
     const target = isVirtualCallActive ? callLogRef.current : scrollRef.current;
@@ -532,6 +544,14 @@ export default function ChatUI({ onEmotionChange, panel = false, groqApiKey, ini
       if (transcript !== undefined) trackEvent("voice_used");
       setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply }]);
       onEmotionChange(result.emotion);
+      if (!speakReply) {
+        if (presentTimerRef.current !== null) window.clearTimeout(presentTimerRef.current);
+        setIsPresentingReply(true);
+        presentTimerRef.current = window.setTimeout(() => {
+          presentTimerRef.current = null;
+          setIsPresentingReply(false);
+        }, Math.min(6000, Math.max(1200, result.reply.length * 45)));
+      }
       if (speakReply) {
         setVoiceStatus("HANNAH is speaking…");
         setIsSpeaking(true);

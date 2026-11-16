@@ -7,7 +7,7 @@ import AgentsPage from "./components/AgentsPage";
 import WorkflowBuilder from "./components/WorkflowBuilder";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
 import ChatUI from "./components/ChatUI";
-import AvatarScene, { type AvatarMotion } from "./components/AvatarScene";
+import AvatarScene, { type AvatarActivity, type AvatarMotion } from "./components/AvatarScene";
 import AppShell, { type AppSection } from "./components/AppShell";
 import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
@@ -53,6 +53,7 @@ export default function App() {
   const [groqApiKey, setGroqApiKey] = useState(getSessionGroqKey);
   const [emotion, setEmotion] = useState<Emotion>("neutral");
   const [avatarMotion, setAvatarMotion] = useState<AvatarMotion>("loading");
+  const [avatarActivity, setAvatarActivity] = useState<AvatarActivity>("idle");
   const [returnScreen, setReturnScreen] = useState<Screen>("landing");
   const preferredMode: InferenceMode = "cloud";
 
@@ -164,12 +165,13 @@ export default function App() {
               aria-label="HANNAH avatar"
               data-emotion={emotion}
               data-avatar-motion={avatarMotion}
+              data-avatar-activity={avatarActivity}
               className="tone-lavender relative h-36 overflow-hidden rounded-[1.75rem] border-[6px] border-white/90 shadow-[0_24px_60px_-30px_rgba(38,44,74,0.45)] sm:h-48 lg:h-auto lg:min-h-0"
             >
-              <AvatarScene emotion={emotion} onMotionChange={setAvatarMotion} />
+              <AvatarScene emotion={emotion} activity={avatarActivity} onMotionChange={setAvatarMotion} />
             </section>
             <div className="min-h-0">
-              <ChatUI onEmotionChange={setEmotion} panel groqApiKey={groqApiKey} initialMode={preferredMode} onSessionExpired={reconnect} />
+              <ChatUI onEmotionChange={setEmotion} onActivityChange={setAvatarActivity} panel groqApiKey={groqApiKey} initialMode={preferredMode} onSessionExpired={reconnect} />
             </div>
           </div>
         </div>
