@@ -93,4 +93,3 @@ for i in range(1,51):
     })
 json.dump(prompts, open("scripts/golden-dataset.json","w"), indent=2)
 print("done")
-PY

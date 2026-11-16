@@ -68,5 +68,4 @@ s=s.replace('app.post("/api/feedback", createFeedbackHandler());',
             'app.post("/api/feedback", createFeedbackHandler());\napp.post("/api/sync/memory", createSyncHandler());\napp.get("/api/sync/memory", createSyncFetchHandler());')
 open(p,'w').write(s)
 print('done')
-PY
 grep -n "cloud-sync\|sync/memory" server/index.js
