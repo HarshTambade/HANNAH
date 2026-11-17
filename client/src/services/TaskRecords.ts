@@ -178,6 +178,29 @@ export const TaskRecords = {
     state.onLost = undefined;
   },
 
+  /**
+   * Create a run that must happen once across your devices (a scheduled
+   * automation): the first device to create it runs it. "exists" means another
+   * device already has it; "unavailable" means the server couldn't be reached,
+   * so the caller decides whether to go ahead on this device alone.
+   */
+  async create(id: string, checkpoint: Checkpoint): Promise<{ outcome: "created" } | { outcome: "exists"; run: RemoteRun | null } | { outcome: "unavailable" }> {
+    if (!this.enabled()) return { outcome: "unavailable" };
+    const state = stateOf(id);
+    try {
+      const { run } = await accountRequest<{ run: RemoteRun }>(path(id), {
+        method: "PUT",
+        body: JSON.stringify({ ...deviceBody(), ...checkpoint, writeId: `w-${crypto.randomUUID()}`, baseVersion: null }),
+      });
+      setVersion(id, run.version);
+      state.lost = false;
+      return { outcome: "created" };
+    } catch (error) {
+      if (isConflict(error)) return { outcome: "exists", run: (error.body?.run as RemoteRun | undefined) ?? null };
+      return { outcome: "unavailable" };
+    }
+  },
+
   /** Save the run's latest state. Only the newest waiting checkpoint is sent. */
   checkpoint(id: string, checkpoint: Checkpoint) {
     const state = stateOf(id);

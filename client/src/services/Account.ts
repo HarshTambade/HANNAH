@@ -14,7 +14,8 @@ export type AuditEvent = { event: string; detail: Record<string, unknown> | null
 export type Webhook = { id: string; url: string; events: string[]; createdAt: number; lastStatus: number | null; lastDeliveryAt: number | null };
 
 export class AccountError extends Error {
-  constructor(message: string, readonly status: number, readonly reason?: string) {
+  /** `body` is the server's JSON error response, for callers that need more than the message (for example the run a 409 is about). */
+  constructor(message: string, readonly status: number, readonly reason?: string, readonly body?: Record<string, unknown>) {
     super(message);
   }
 }
@@ -35,7 +36,7 @@ export async function accountRequest<T>(path: string, init: RequestInit = {}): P
   const body = await response.json().catch(() => ({})) as { error?: string; reason?: string };
   if (!response.ok) {
     if (response.status === 401 && body.reason === "session-invalid") setAccountHint(null);
-    throw new AccountError(typeof body.error === "string" ? body.error : `The server returned HTTP ${response.status}.`, response.status, body.reason);
+    throw new AccountError(typeof body.error === "string" ? body.error : `The server returned HTTP ${response.status}.`, response.status, body.reason, body as Record<string, unknown>);
   }
   return body as T;
 }

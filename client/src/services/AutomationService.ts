@@ -15,6 +15,13 @@
  *
  * Agent tasks use the AI chosen in chat (provider, model, your key) with no
  * tools. Runs and their step results are kept on this device (the latest 50).
+ *
+ * Signed in, automations and schedules sync to your account, and each run is a
+ * durable task run there (TaskRecords): a scheduled slot has one id across
+ * your devices, so whichever open device creates it first runs it and the
+ * others skip it. Every change is a checkpoint, so a run paused for approval,
+ * or cut off when its device closed, can be continued from another device;
+ * and a run can be cancelled from any device.
  */
 import { getSessionGroqKey } from "./api";
 import { DeviceTasks } from "./DeviceTasks";
@@ -22,6 +29,8 @@ import { MemoryService } from "./MemoryService";
 import { notifyMemoryChanged } from "./MemoryStore";
 import { ReminderService, notificationPermission } from "./ReminderService";
 import { TaskSpineService } from "./TaskSpineService";
+import { TaskRecords, type LostReason, type RemoteRun, type RunStatus as RecordStatus } from "./TaskRecords";
+import { thisDevice } from "./DeviceTasks";
 import type { WorkflowNode, WorkflowSchema } from "./WorkflowSchema";
 
 export type Schedule =
@@ -34,7 +43,7 @@ export type OutputChannel = "notify" | "speak" | "log";
 
 export type StepStatus = "pending" | "running" | "waiting-approval" | "done" | "denied" | "failed" | "skipped";
 export type RunStep = { nodeId: string; kind: WorkflowNode["kind"]; label: string; status: StepStatus; output?: string; error?: string; remoteApprovalId?: string };
-export type RunStatus = "running" | "waiting-approval" | "done" | "denied" | "failed";
+export type RunStatus = "running" | "waiting-approval" | "done" | "denied" | "failed" | "cancelled";
 export type AutomationRun = {
   id: string;
   workflowId: string;
@@ -45,9 +54,17 @@ export type AutomationRun = {
   finishedAt?: number;
   steps: RunStep[];
   error?: string;
+  /** Saved to your account, so it can be followed, continued or cancelled from your other devices. */
+  durable?: boolean;
+  /** The device working on it right now, when that's another of yours (from your account; not saved to it). */
+  runningOn?: string;
+  /** The device that last changed it (from your account). */
+  lastDevice?: string;
+  /** The workflow as it was when the run started, kept for runs that came from another device. */
+  workflow?: WorkflowSchema;
 };
 
-export type AutomationState = { workflowId: string; enabled: boolean; nextRunAt: number | null; lastRunAt?: number };
+export type AutomationState = { workflowId: string; enabled: boolean; nextRunAt: number | null; lastRunAt?: number; updatedAt?: number };
 
 export const AUTOMATION_EVENT = "hannah:automations";
 const STATE_KEY = "hannah.automations.v1";
@@ -56,6 +73,8 @@ const MAX_RUNS = 50;
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 const WEEKDAYS = [1, 2, 3, 4, 5];
 const MAX_CONTEXT = 3_000;
+/** How long a durable run waits for its last checkpoint to be confirmed before the next step (offline: don't stall). */
+const CHECKPOINT_WAIT_MS = 3_000;
 
 // ---------- storage ----------
 
@@ -87,6 +106,64 @@ const readRuns = () => readJson<AutomationRun[]>(RUNS_KEY, []).filter((item) => 
 function saveRun(run: AutomationRun) {
   const runs = readRuns().filter((item) => item.id !== run.id);
   writeJson(RUNS_KEY, [run, ...runs].sort((a, b) => b.startedAt - a.startedAt).slice(0, MAX_RUNS));
+  const live = liveRuns.get(run.id);
+  if (live && run.durable) {
+    const { runningOn: _elsewhere, workflow: _snapshot, lastDevice: _device, ...record } = run;
+    void TaskRecords.checkpoint(run.id, { kind: "automation", title: run.name.slice(0, 140) || "Automation", status: recordStatus(run.status), record: { run: record, workflow: live.workflow } });
+  }
+}
+
+/** Runs this device is working on (or holding while they wait for approval). */
+const liveRuns = new Map<string, { workflow: WorkflowSchema; lost?: { message: string; reason: LostReason } }>();
+
+/** The account's status for a run (the brief's task states). */
+export function recordStatus(status: RunStatus): RecordStatus {
+  if (status === "running") return "running";
+  if (status === "waiting-approval") return "waiting-approval";
+  if (status === "failed") return "failed";
+  if (status === "cancelled") return "cancelled";
+  return "completed";
+}
+
+/** One id per scheduled slot across your devices, so a slot runs once. */
+export function slotRunId(workflowId: string, slot: number) {
+  return `auto-${Math.floor(slot)}-${workflowId.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 50)}`;
+}
+
+const RUN_STATUSES = new Set<RunStatus>(["running", "waiting-approval", "done", "denied", "failed", "cancelled"]);
+const STEP_STATUSES = new Set<StepStatus>(["pending", "running", "waiting-approval", "done", "denied", "failed", "skipped"]);
+const text = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : undefined);
+
+/** A run saved by one of your devices, checked before it's used here. */
+export function runFromRecord(value: unknown, id: string): { run: AutomationRun; workflow: WorkflowSchema | null } | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = (value as { run?: Partial<AutomationRun>; workflow?: WorkflowSchema }).run;
+  if (!raw || raw.id !== id || typeof raw.workflowId !== "string" || typeof raw.name !== "string" || !RUN_STATUSES.has(raw.status as RunStatus) || !Array.isArray(raw.steps)) return null;
+  const steps: RunStep[] = [];
+  for (const item of raw.steps.slice(0, 30)) {
+    const step = item as Partial<RunStep>;
+    if (!step || typeof step.nodeId !== "string" || typeof step.label !== "string" || !STEP_STATUSES.has(step.status as StepStatus)) return null;
+    const kind = step.kind === "trigger" || step.kind === "agent-task" || step.kind === "tool-action" || step.kind === "output" ? step.kind : null;
+    if (!kind) return null;
+    steps.push({ nodeId: step.nodeId.slice(0, 80), kind, label: step.label.slice(0, 200), status: step.status as StepStatus, ...(text(step.output, 20_000) !== undefined ? { output: text(step.output, 20_000) } : {}), ...(text(step.error, 2000) !== undefined ? { error: text(step.error, 2000) } : {}), ...(text(step.remoteApprovalId, 80) !== undefined ? { remoteApprovalId: text(step.remoteApprovalId, 80) } : {}) });
+  }
+  const snapshot = (value as { workflow?: WorkflowSchema }).workflow;
+  const workflow = snapshot && typeof snapshot === "object" && typeof snapshot.id === "string" && Array.isArray(snapshot.nodes) && Array.isArray(snapshot.edges) ? snapshot : null;
+  return {
+    run: {
+      id,
+      workflowId: raw.workflowId.slice(0, 80),
+      name: raw.name.slice(0, 140),
+      trigger: raw.trigger === "schedule" || raw.trigger === "catch-up" ? raw.trigger : "manual",
+      status: raw.status as RunStatus,
+      startedAt: Number(raw.startedAt) || Date.now(),
+      ...(Number.isFinite(raw.finishedAt) ? { finishedAt: Number(raw.finishedAt) } : {}),
+      steps,
+      ...(text(raw.error, 2000) !== undefined ? { error: text(raw.error, 2000) } : {}),
+      durable: true,
+    },
+    workflow,
+  };
 }
 
 // ---------- schedules ----------
@@ -317,6 +394,19 @@ async function advance(run: AutomationRun, workflow: WorkflowSchema, deps: Autom
   for (let index = 0; index < run.steps.length; index += 1) {
     const step = run.steps[index];
     if (step.status !== "pending") continue;
+    // Confirm the last checkpoint first, so a cancel or takeover from another device is known here.
+    if (run.durable) await Promise.race([TaskRecords.settled(run.id), new Promise((resolve) => setTimeout(resolve, CHECKPOINT_WAIT_MS))]);
+    // Cancelled, or taken over, from another of your devices: stop before the next step.
+    const lost = liveRuns.get(run.id)?.lost;
+    if (lost) {
+      run.steps.slice(index).forEach((rest) => { if (rest.status === "pending") rest.status = "skipped"; });
+      run.status = "cancelled";
+      run.error = lost.message;
+      run.finishedAt = deps.now();
+      saveRun(run);
+      deps.remote?.report(run);
+      return run;
+    }
     const node = nodes.get(step.nodeId);
     if (!node) { step.status = "skipped"; continue; }
     const context = previousOutput(run, index).slice(0, MAX_CONTEXT);
@@ -329,6 +419,8 @@ async function advance(run: AutomationRun, workflow: WorkflowSchema, deps: Autom
         const task = taskOf(node);
         step.output = await deps.ask(context ? `${task}\n\nResult of the previous step:\n${context}` : task);
         step.status = "done";
+        // A checkpoint per finished step: another device can continue from here.
+        saveRun(run);
       } else if (node.kind === "tool-action") {
         step.status = "waiting-approval";
         step.output = context;
@@ -388,7 +480,7 @@ export const AutomationService = {
   /** Turn a workflow's schedule on or off. Returns the new state. */
   setEnabled(workflow: WorkflowSchema, enabled: boolean, now = Date.now()) {
     const schedule = workflowSchedule(workflow);
-    const next: AutomationState = { ...this.state(workflow.id), enabled: enabled && schedule.type !== "manual", nextRunAt: enabled ? nextRunAt(schedule, now) : null };
+    const next: AutomationState = { ...this.state(workflow.id), enabled: enabled && schedule.type !== "manual", nextRunAt: enabled ? nextRunAt(schedule, now) : null, updatedAt: now };
     writeJson(STATE_KEY, [next, ...readStates().filter((item) => item.workflowId !== workflow.id)]);
     return next;
   },
@@ -405,7 +497,18 @@ export const AutomationService = {
 
   /** Start a run now. Resolves when it finishes, pauses for approval, or fails. */
   async run(workflow: WorkflowSchema, trigger: AutomationRun["trigger"] = "manual", deps: AutomationDeps = defaultDeps) {
-    const run: AutomationRun = { id: crypto.randomUUID(), workflowId: workflow.id, name: workflow.name, trigger, status: "running", startedAt: deps.now(), steps: [] };
+    return (await this.start(workflow, trigger, deps))!;
+  },
+
+  /**
+   * Start a run, as a durable task run in your account when signed in. With a
+   * `slot` (a scheduled time), the run has one id across your devices: the
+   * device that creates it first runs it, and this returns null on the others.
+   */
+  async start(workflow: WorkflowSchema, trigger: AutomationRun["trigger"], deps: AutomationDeps = defaultDeps, slot?: number): Promise<AutomationRun | null> {
+    const durable = TaskRecords.enabled();
+    const id = slot !== undefined && durable ? slotRunId(workflow.id, slot) : `auto-m-${crypto.randomUUID()}`.replace(/[^A-Za-z0-9_-]/g, "");
+    const run: AutomationRun = { id, workflowId: workflow.id, name: workflow.name, trigger, status: "running", startedAt: deps.now(), steps: [], ...(durable ? { durable: true } : {}) };
     try {
       run.steps = planSteps(workflow).map((node) => ({ nodeId: node.id, kind: node.kind, label: node.label, status: "pending" }));
     } catch (error) {
@@ -415,19 +518,158 @@ export const AutomationService = {
       saveRun(run);
       return run;
     }
+    if (durable) {
+      const { runningOn: _elsewhere, workflow: _snapshot, lastDevice: _device, ...record } = run;
+      const created = await TaskRecords.create(id, { kind: "automation", title: run.name.slice(0, 140) || "Automation", status: "running", record: { run: record, workflow } });
+      // Another device already runs this slot (or ran it): nothing to do here.
+      if (created.outcome === "exists") return null;
+      if (created.outcome === "created") {
+        liveRuns.set(id, { workflow });
+        TaskRecords.attach(id, (message, reason) => { const live = liveRuns.get(id); if (live) live.lost = { message, reason }; });
+      } else {
+        // Server unreachable: run on this device only, as when signed out.
+        delete run.durable;
+        liveRuns.set(id, { workflow });
+      }
+    } else {
+      liveRuns.set(id, { workflow });
+    }
     saveRun(run);
     deps.remote?.report(run);
-    return advance(run, workflow, deps);
+    return this.finishTurn(await advance(run, workflow, deps));
+  },
+
+  /** After a turn of work: release the run unless it's waiting for an approval this device will act on. */
+  finishTurn(run: AutomationRun) {
+    if (run.status !== "waiting-approval") {
+      liveRuns.delete(run.id);
+      if (run.durable) TaskRecords.detach(run.id);
+    }
+    return run;
+  },
+
+  isLive(runId: string) {
+    return liveRuns.has(runId);
+  },
+
+  /**
+   * Take over a run from your account on this device: one that was cut off
+   * when its device closed, or is waiting for an approval you'll give here.
+   * Throws when another device is still working on it.
+   */
+  async takeOver(runId: string, deps: AutomationDeps = defaultDeps): Promise<{ run: AutomationRun; workflow: WorkflowSchema }> {
+    const local = readRuns().find((item) => item.id === runId);
+    const remote = await TaskRecords.claim(runId);
+    if (!remote) throw new Error("This run is no longer in your account.");
+    const parsed = runFromRecord(remote.record, runId);
+    const run: AutomationRun = parsed?.run ?? local ?? (() => { throw new Error("This run can't be read."); })();
+    const workflow = findWorkflow(run.workflowId) ?? parsed?.workflow ?? local?.workflow;
+    if (!workflow) throw new Error("The automation this run belongs to isn't on this device yet. Sync your account, then try again.");
+    run.durable = true;
+    delete run.runningOn;
+    for (const step of run.steps) if (step.status === "running") step.status = "pending";
+    if (run.status === "running" || run.status === "waiting-approval") {
+      liveRuns.set(run.id, { workflow });
+      TaskRecords.attach(run.id, (message, reason) => { const live = liveRuns.get(run.id); if (live) live.lost = { message, reason }; });
+    }
+    saveRun(run);
+    deps.remote?.report(run);
+    return { run, workflow };
+  },
+
+  /** Continue a run that was cut off on another device (or this one, before a reload). */
+  async continueRun(runId: string, deps: AutomationDeps = defaultDeps) {
+    const { run, workflow } = await this.takeOver(runId, deps);
+    if (run.status !== "running") return run;
+    return this.finishTurn(await advance(run, workflow, deps));
+  },
+
+  /** Stop a run that another of your devices is working on. It stops before its next step. */
+  async cancelElsewhere(runId: string) {
+    const remote = await TaskRecords.cancel(runId);
+    const runs = readRuns();
+    const index = runs.findIndex((item) => item.id === runId);
+    if (index >= 0) {
+      const parsed = runFromRecord(remote.record, runId);
+      runs[index] = { ...(parsed?.run ?? runs[index]), status: "cancelled", error: runs[index].error || `Cancelled from ${thisDevice().name}.`, finishedAt: Date.now(), lastDevice: remote.lastDevice };
+      writeJson(RUNS_KEY, runs);
+    }
+  },
+
+  /** Bring in runs from your other devices, and which device is working on each. */
+  async syncFromAccount() {
+    if (!TaskRecords.enabled()) return;
+    await TaskRecords.retryPending();
+    const remote = await TaskRecords.list().catch(() => null);
+    if (!remote) return;
+    const runs = readRuns();
+    let changed = false;
+    const apply = (item: RemoteRun, run: AutomationRun, workflow: WorkflowSchema | null): AutomationRun => {
+      const elsewhere = item.lease && item.lease.deviceId !== thisDevice().id ? item.lease.deviceName : undefined;
+      const next: AutomationRun = { ...run, durable: true, lastDevice: item.lastDevice };
+      if (elsewhere) next.runningOn = elsewhere;
+      else delete next.runningOn;
+      if (item.status === "cancelled" && next.status !== "cancelled") {
+        next.status = "cancelled";
+        next.error = next.error || `Cancelled from ${item.lastDevice}.`;
+        next.finishedAt = next.finishedAt ?? item.finishedAt ?? Date.now();
+      }
+      if (workflow && !findWorkflow(next.workflowId)) next.workflow = workflow;
+      else delete next.workflow;
+      return next;
+    };
+    for (const item of remote) {
+      if (item.kind !== "automation") continue;
+      if (liveRuns.has(item.id)) {
+        // Held here (for example waiting for an approval): keep ours, unless another device took it over or finished it.
+        const ours = item.lease?.deviceId === thisDevice().id;
+        const takenOrFinished = (item.lease && !ours) || item.status === "completed" || item.status === "cancelled" || item.status === "failed";
+        if (!takenOrFinished) continue;
+        liveRuns.delete(item.id);
+        TaskRecords.detach(item.id);
+      }
+      const parsed = runFromRecord(item.record, item.id);
+      if (!parsed) continue;
+      const index = runs.findIndex((run) => run.id === item.id);
+      const known = TaskRecords.knownVersion(item.id);
+      if (index < 0 || known === null || item.version > known) {
+        const next = apply(item, parsed.run, parsed.workflow);
+        if (index < 0) runs.push(next);
+        else runs[index] = next;
+        TaskRecords.rememberVersion(item.id, item.version);
+        changed = true;
+        continue;
+      }
+      const refreshed = apply(item, runs[index], parsed.workflow);
+      if (refreshed.runningOn !== runs[index].runningOn || refreshed.status !== runs[index].status) {
+        runs[index] = refreshed;
+        changed = true;
+      }
+    }
+    if (changed) writeJson(RUNS_KEY, runs.sort((a, b) => b.startedAt - a.startedAt).slice(0, MAX_RUNS));
   },
 
   /**
    * Approve or deny the action a run is waiting on, then continue or stop.
    * `fromOtherDevice` is set when the answer came from another signed-in device.
    */
-  async decide(runId: string, approve: boolean, deps: AutomationDeps = defaultDeps, fromOtherDevice = false) {
-    const run = readRuns().find((item) => item.id === runId);
+  async decide(runId: string, approve: boolean, deps: AutomationDeps = defaultDeps, fromOtherDevice = false): Promise<AutomationRun> {
+    let run = readRuns().find((item) => item.id === runId);
     if (!run || run.status !== "waiting-approval") throw new Error("That run isn't waiting for approval.");
-    const workflow = findWorkflow(run.workflowId);
+    let workflow = findWorkflow(run.workflowId);
+    if (run.durable && !liveRuns.has(run.id) && TaskRecords.enabled()) {
+      // A run from another device: take it over here, or, while that device still holds it, send the answer there.
+      try {
+        ({ run, workflow } = await this.takeOver(runId, deps));
+      } catch (error) {
+        const waiting = run.steps.find((step) => step.status === "waiting-approval");
+        if (run.runningOn && waiting?.remoteApprovalId && deps.remote) {
+          deps.remote.answered(waiting.remoteApprovalId, approve);
+          return run;
+        }
+        throw error;
+      }
+    }
     const index = run.steps.findIndex((step) => step.status === "waiting-approval");
     const node = workflow?.nodes.find((item) => item.id === run.steps[index]?.nodeId);
     if (!workflow || !node) {
@@ -435,7 +677,7 @@ export const AutomationService = {
       run.error = "The workflow was deleted or changed, so this run can't continue.";
       run.finishedAt = deps.now();
       saveRun(run);
-      return run;
+      return this.finishTurn(run);
     }
     const step = run.steps[index];
     if (step.remoteApprovalId && !fromOtherDevice) deps.remote?.answered(step.remoteApprovalId, approve);
@@ -446,7 +688,7 @@ export const AutomationService = {
       run.finishedAt = deps.now();
       saveRun(run);
       deps.remote?.report(run);
-      return run;
+      return this.finishTurn(run);
     }
     const text = (step.output || `${run.name}: ${node.label}`).trim();
     try {
@@ -467,11 +709,11 @@ export const AutomationService = {
       run.error = step.error;
       run.finishedAt = deps.now();
       saveRun(run);
-      return run;
+      return this.finishTurn(run);
     }
     run.status = "running";
     saveRun(run);
-    return advance(run, workflow, deps);
+    return this.finishTurn(await advance(run, workflow, deps));
   },
 
   /** Continue runs whose approval was answered on another device. */
@@ -496,6 +738,8 @@ export const AutomationService = {
     let changed = false;
     for (const run of runs) {
       if (run.status !== "running" || now - run.startedAt < 10 * 60_000) continue;
+      // Saved in your account: it can be continued from here or another device instead.
+      if (run.durable && TaskRecords.enabled()) continue;
       for (const step of run.steps) {
         if (step.status === "running") { step.status = "failed"; step.error = "Interrupted."; }
         else if (step.status === "pending") step.status = "skipped";
@@ -521,8 +765,9 @@ export const AutomationService = {
       if (!workflow) { this.forget(state.workflowId); continue; }
       const missedBy = now - state.nextRunAt;
       const schedule = workflowSchedule(workflow);
-      writeJson(STATE_KEY, [{ ...state, lastRunAt: now, nextRunAt: nextRunAt(schedule, now) }, ...readStates().filter((item) => item.workflowId !== state.workflowId)]);
-      started.push(await this.run(workflow, missedBy > 5 * 60_000 ? "catch-up" : "schedule", deps));
+      writeJson(STATE_KEY, [{ ...state, lastRunAt: now, nextRunAt: nextRunAt(schedule, now), updatedAt: now }, ...readStates().filter((item) => item.workflowId !== state.workflowId)]);
+      const run = await this.start(workflow, missedBy > 5 * 60_000 ? "catch-up" : "schedule", deps, state.nextRunAt);
+      if (run) started.push(run);
     }
     return started;
   },
@@ -546,6 +791,7 @@ export function startAutomationRunner() {
       } else {
         await AutomationService.runDue();
       }
+      await AutomationService.syncFromAccount();
     } catch (error) {
       console.warn("[automations] check failed", error);
     } finally {

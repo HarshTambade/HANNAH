@@ -39,7 +39,7 @@ const LEASE_MS = 90_000;
 const MAX_RECORD_CHARS = 200_000;
 const KEEP_MS = 30 * 24 * 60 * 60_000;
 const MAX_ROWS_PER_USER = 100;
-const LIST_LIMIT = 20;
+const LIST_LIMIT = 40;
 
 const clean = (value, max) => String(value ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max);
 const fail = (status, message, reason, extra = {}) => Object.assign(new Error(message), { status, reason, ...extra });

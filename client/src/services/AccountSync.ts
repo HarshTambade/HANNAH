@@ -13,9 +13,11 @@ import { isAccountSession } from "./api";
 
 type Item = Record<string, unknown>;
 type Namespace = {
-  name: "memories" | "reminders" | "communitySkills" | "chatHistory" | "settings";
+  name: "memories" | "reminders" | "communitySkills" | "chatHistory" | "settings" | "automations" | "automationSchedules";
   label: string;
   storageKey?: string;
+  /** Sync only these items of the list; the rest stay on this device. */
+  filter?: (item: Item) => boolean;
   /** settings: the localStorage keys synced as one object. */
   keys?: string[];
   idOf?: (item: Item) => string | undefined;
@@ -31,6 +33,9 @@ export const SYNC_NAMESPACES: Namespace[] = [
   { name: "reminders", label: "Reminders", storageKey: "hannah.reminders.v1", idOf: (item) => item.id as string, stampOf: (item) => stamp(item.firedAt, item.createdAt), event: "hannah:reminders", limit: 200 },
   { name: "communitySkills", label: "Community skills", storageKey: "hannah.communitySkills.v1", idOf: (item) => (item.manifest as Item | undefined)?.id as string, stampOf: (item) => stamp(item.installedAt), event: "hannah:community-skills", limit: 50 },
   { name: "chatHistory", label: "Chat history", storageKey: "hannah.chat.history.v1", idOf: (item) => item.id as string, event: "hannah:chat-history", limit: 200 },
+  // Saved automations and their schedules, so a routine runs on whichever device is open. Plain tasks in the same list stay local.
+  { name: "automations", label: "Automations", storageKey: "hannah.tasks.v1", filter: (item) => item.kind === "workflow", idOf: (item) => item.id as string, stampOf: (item) => stamp(item.updatedAt, item.createdAt), event: "hannah:automations", limit: 100 },
+  { name: "automationSchedules", label: "Automation schedules", storageKey: "hannah.automations.v1", idOf: (item) => item.workflowId as string, stampOf: (item) => stamp(item.updatedAt, item.lastRunAt), event: "hannah:automations" },
   { name: "settings", label: "Preferences", keys: ["hannah.budget.dailyUsd", "hannah.guardian.strictness.v1", "hannah.cloudProvider", "hannah.voiceEnabled", "hannah.voice.settings.v1", "hannah.speechLanguage", "hannah.specialists.v1", "hannah.chat.team", "hannah.routing.v1"], event: "hannah:settings" },
 ];
 
@@ -113,7 +118,8 @@ function readLocal(ns: Namespace): unknown {
     return values;
   }
   const value = readJson<unknown>(ns.storageKey!, []);
-  return Array.isArray(value) ? value : [];
+  const list = Array.isArray(value) ? (value as Item[]) : [];
+  return ns.filter ? list.filter(ns.filter) : list;
 }
 
 function writeLocal(ns: Namespace, value: unknown) {
@@ -127,6 +133,10 @@ function writeLocal(ns: Namespace, value: unknown) {
         // Best effort.
       }
     }
+  } else if (ns.filter) {
+    const current = readJson<unknown>(ns.storageKey!, []);
+    const others = (Array.isArray(current) ? (current as Item[]) : []).filter((item) => !ns.filter!(item));
+    writeJson(ns.storageKey!, [...(value as Item[]), ...others]);
   } else {
     writeJson(ns.storageKey!, value);
   }

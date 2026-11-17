@@ -24,7 +24,7 @@ const scryptAsync = promisify(scrypt);
 const SESSION_COOKIE = "hannah_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SCRYPT = { N: 1 << 15, r: 8, p: 1, keylen: 64 };
-const SYNC_NAMESPACES = new Set(["memories", "reminders", "communitySkills", "chatHistory", "settings"]);
+const SYNC_NAMESPACES = new Set(["memories", "reminders", "communitySkills", "chatHistory", "settings", "automations", "automationSchedules"]);
 const MAX_SYNC_BYTES = 1024 * 1024;
 const EMAIL_PATTERN = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,63}$/;
 

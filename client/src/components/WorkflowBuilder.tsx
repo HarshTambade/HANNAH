@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Bot, Check, Clock3, Pencil, Play, Plus, ShieldCheck, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, Check, Clock3, MonitorSmartphone, Pencil, Play, Plus, ShieldCheck, Sparkles, Square, Trash2, Wrench, X } from "lucide-react";
 import { TaskSpineService } from "../services/TaskSpineService";
 import {
   AUTOMATION_EVENT, AutomationService, describeSchedule, nextRunAt, workflowSchedule,
@@ -10,6 +10,8 @@ import {
   type Draft, type DraftStep, type StepKind,
 } from "../services/AutomationDraft";
 import { notificationPermission, requestNotificationPermission } from "../services/ReminderService";
+import { syncNow } from "../services/AccountSync";
+import { TaskRecords } from "../services/TaskRecords";
 import type { WorkflowSchema } from "../services/WorkflowSchema";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -28,8 +30,9 @@ const statusStyle: Record<AutomationRun["status"], string> = {
   done: "bg-emerald-50 text-emerald-800 border-emerald-200",
   denied: "bg-slate-100 text-slate-700 border-slate-200",
   failed: "bg-rose-50 text-rose-800 border-rose-200",
+  cancelled: "bg-slate-100 text-slate-700 border-slate-200",
 };
-const statusLabel: Record<AutomationRun["status"], string> = { running: "Running", "waiting-approval": "Needs approval", done: "Done", denied: "Denied", failed: "Failed" };
+const statusLabel: Record<AutomationRun["status"], string> = { running: "Running", "waiting-approval": "Needs approval", done: "Done", denied: "Denied", failed: "Failed", cancelled: "Cancelled" };
 const triggerLabel: Record<AutomationRun["trigger"], string> = { manual: "Run by you", schedule: "On schedule", "catch-up": "Missed run, caught up" };
 const stepStatusLabel: Record<string, string> = { pending: "Not run", running: "Running", "waiting-approval": "Waiting for approval", done: "Done", denied: "Denied", failed: "Failed", skipped: "Skipped" };
 
@@ -175,8 +178,17 @@ export default function WorkflowBuilder() {
   useEffect(() => {
     const refresh = () => setVersion((value) => value + 1);
     window.addEventListener(AUTOMATION_EVENT, refresh);
-    return () => window.removeEventListener(AUTOMATION_EVENT, refresh);
+    // Runs from your other signed-in devices, and which device is working on each.
+    const syncRemote = () => { if (document.visibilityState === "visible") void AutomationService.syncFromAccount().then(refresh); };
+    syncRemote();
+    const remoteTimer = window.setInterval(syncRemote, 8000);
+    return () => {
+      window.removeEventListener(AUTOMATION_EVENT, refresh);
+      window.clearInterval(remoteTimer);
+    };
   }, []);
+  /** Signed in: send a saved automation or schedule change to the account now, so other devices get it. */
+  const shareWithDevices = () => { if (TaskRecords.enabled()) void syncNow(); };
   const saved = useMemo(() => AutomationService.workflows(), [version]);
   const runs = useMemo(() => AutomationService.runs(), [version]);
   const pending = runs.filter((run) => run.status === "waiting-approval");
@@ -223,6 +235,7 @@ export default function WorkflowBuilder() {
     if (isNew && schedule.type !== "manual" && notificationPermission() === "default") void requestNotificationPermission();
     const state = isNew && schedule.type !== "manual" ? AutomationService.setEnabled(workflow, true) : AutomationService.reschedule(workflow);
     window.dispatchEvent(new Event(AUTOMATION_EVENT));
+    shareWithDevices();
     setProblem("");
     setDraft(null);
     setNotice(schedule.type === "manual"
@@ -255,6 +268,32 @@ export default function WorkflowBuilder() {
   async function toggleSchedule(workflow: WorkflowSchema, enabled: boolean) {
     if (enabled && notificationPermission() === "default") await requestNotificationPermission();
     AutomationService.setEnabled(workflow, enabled);
+    shareWithDevices();
+  }
+
+  async function continueHere(run: AutomationRun) {
+    setBusy(run.id);
+    try {
+      const result = await AutomationService.continueRun(run.id);
+      setNotice(result.status === "done" ? `“${run.name}” finished.` : result.status === "waiting-approval" ? `“${run.name}” is waiting for your approval above.` : `“${run.name}” stopped: ${result.error}`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function cancelElsewhere(run: AutomationRun) {
+    if (!window.confirm(`Cancel “${run.name}” on ${run.runningOn ?? "your other device"}? It stops before its next step.`)) return;
+    setBusy(run.id);
+    try {
+      await AutomationService.cancelElsewhere(run.id);
+      setNotice(`Cancelled. ${run.runningOn ?? "The other device"} stops before its next step.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
   }
 
   function remove(workflow: WorkflowSchema) {
@@ -277,7 +316,7 @@ export default function WorkflowBuilder() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="display-title text-[clamp(2.2rem,5vw,3.5rem)]">Automations</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Routines that run on a schedule while HANNAH is open in a tab or the desktop app. If one was due while HANNAH was closed, it runs once when you come back. Actions always wait for your approval.</p>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Routines that run on a schedule while HANNAH is open in a tab or the desktop app. If one was due while HANNAH was closed, it runs once when you come back{TaskRecords.enabled() ? ", or on whichever of your signed-in devices is open; each run is saved to your account, so you can approve, continue or cancel it from any of them" : ""}. Actions always wait for your approval.</p>
         </div>
         {!draft && <button type="button" className="btn-primary" onClick={() => open(blankDraft(), false)}><Plus size={15} /> New automation</button>}
       </header>
@@ -291,6 +330,8 @@ export default function WorkflowBuilder() {
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-semibold text-amber-950"><ShieldCheck size={15} /> {run.name} wants to: {step?.label}</p>
                   {step?.output && <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-[13px] leading-5 text-amber-950/80">{step.output}</p>}
+                  {run.runningOn && <p className="mt-1 flex items-center gap-1 text-xs text-amber-900"><MonitorSmartphone size={12} /> Running on {run.runningOn}. Your answer is sent there.</p>}
+                  {!run.runningOn && run.durable && run.lastDevice && !AutomationService.isLive(run.id) && <p className="mt-1 flex items-center gap-1 text-xs text-amber-900"><MonitorSmartphone size={12} /> Started on {run.lastDevice}. Answering here continues it on this device.</p>}
                 </div>
                 <div className="flex shrink-0 gap-2">
                   <button type="button" className="btn-outline" disabled={busy === run.id} onClick={() => void decide(run, false)}><X size={14} /> Deny</button>
@@ -427,6 +468,16 @@ export default function WorkflowBuilder() {
                       <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusStyle[run.status]}`}>{statusLabel[run.status]}</span>
                     </summary>
                     {run.error && <p className="mt-2 text-xs text-rose-800">{run.error}</p>}
+                    {run.runningOn && (
+                      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-sky-800"><MonitorSmartphone size={12} /> Running on {run.runningOn}
+                        <button type="button" className="btn-outline !py-1 text-xs text-rose-700" disabled={busy === run.id} onClick={() => void cancelElsewhere(run)}><Square size={11} /> Cancel on {run.runningOn}</button>
+                      </p>
+                    )}
+                    {run.status === "running" && run.durable && !run.runningOn && !AutomationService.isLive(run.id) && (
+                      <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-700"><MonitorSmartphone size={12} /> Cut off{run.lastDevice ? ` on ${run.lastDevice}` : ""} before it finished.
+                        <button type="button" className="btn-outline !py-1 text-xs" disabled={busy === run.id} onClick={() => void continueHere(run)}><Play size={11} /> Continue here</button>
+                      </p>
+                    )}
                     {result && <p className="mt-2 whitespace-pre-wrap text-[13px] leading-5 text-slate-700">{result}</p>}
                     <ol className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-xs text-slate-600">
                       {run.steps.map((step) => <li key={step.nodeId} className="flex justify-between gap-3"><span className="truncate">{step.label}</span><span className="shrink-0 font-medium">{stepStatusLabel[step.status] ?? step.status}</span></li>)}
