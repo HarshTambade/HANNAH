@@ -7,6 +7,7 @@ import { AGENT_RUNS_EVENT, AgentRunLog, type AgentRun, type RunStatus } from "..
 import { PluginLoader } from "../services/PluginLoader";
 import type { InstalledPlugin } from "../services/PluginManifest";
 import MemoryPanel from "./MemoryPanel";
+import KnowledgePanel from "./KnowledgePanel";
 import { PersonalizationEngine } from "../services/PersonalizationEngine";
 import { DynamicFewShotInjector } from "../services/DynamicFewShotInjector";
 import { OnDeviceLoRAService } from "../services/OnDeviceLoRAService";
@@ -179,6 +180,10 @@ export default function AgentAccountabilityDashboard() {
 
         <Panel title="What HANNAH remembers" tone="mint">
           <MemoryPanel />
+        </Panel>
+
+        <Panel title="Knowledge" tone="sky">
+          <KnowledgePanel />
         </Panel>
 
         <Panel title="Personalization" tone="lavender" aside={<span className="pill-badge">{exampleCount} style example{exampleCount === 1 ? "" : "s"}</span>}>

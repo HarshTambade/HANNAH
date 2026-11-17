@@ -408,3 +408,70 @@ test("a backup restores what was deleted, and diagnostics record a crash with th
   await page.goto("/memory");
   await expect(page.getByRole("list", { name: "Memories" }).getByRole("listitem").first()).toContainText("I live in Pune");
 });
+
+test("knowledge: pasted text is indexed and searchable with a citation", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.addInitScript(() => localStorage.setItem("hannah.onboarding.v1", "complete"));
+  await page.goto("/memory");
+  const panel = page.getByRole("region", { name: "Knowledge" });
+  await expect(panel.getByText("Nothing added yet.")).toBeVisible();
+  await panel.getByLabel("Title").fill("Trip notes");
+  await panel.getByLabel("Text to add to knowledge").fill("The train back is 19:15 from Pune Junction. Riya joins us for lunch at 13:30 on FC Road.");
+  await panel.getByRole("button", { name: "Add text" }).click();
+  await expect(panel.getByRole("status")).toContainText("“Trip notes” added");
+  await expect(panel.getByRole("list", { name: "Knowledge documents" })).toContainText("Trip notes");
+  await panel.getByLabel("Search knowledge").fill("train from Pune");
+  await panel.getByRole("button", { name: "Search" }).click();
+  await expect(panel.getByRole("list", { name: "Search results" })).toContainText("[Trip notes §1]");
+  // It's on this device only, under one key.
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("hannah.knowledge")))).toEqual(["hannah.knowledge.v1"]);
+  await panel.getByRole("button", { name: "Remove Trip notes" }).click();
+  await expect(panel.getByText("Nothing added yet.")).toBeVisible();
+});
+
+test("the setup check reports the server, the model and storage with no problems", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.addInitScript(() => localStorage.setItem("hannah.onboarding.v1", "complete"));
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Check my setup" }).click();
+  const results = page.getByRole("list", { name: "Setup check results" });
+  await expect(results.getByRole("listitem").filter({ hasText: "HANNAH server" })).toContainText(/OK.*Reachable in \d+ ms, default provider Groq/);
+  await expect(results.getByRole("listitem").filter({ hasText: "AI model" })).toContainText("Your own key with groq");
+  await expect(results.getByRole("listitem").filter({ hasText: "Desktop app" })).toContainText("Not used");
+  await expect(page.getByRole("status").filter({ hasText: /No problems/ })).toBeVisible();
+});
+
+test("the daily briefing settings find a place for the weather and keep it", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.addInitScript(() => localStorage.setItem("hannah.onboarding.v1", "complete"));
+  const lookups: string[] = [];
+  await page.route("https://geocoding-api.open-meteo.com/**", (route) => {
+    lookups.push(route.request().url());
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ results: [{ name: "Pune", admin1: "Maharashtra", country: "India", latitude: 18.52, longitude: 73.86 }] }) });
+  });
+  await page.goto("/settings");
+  const section = page.getByRole("region", { name: "Daily briefing" });
+  await expect(section.getByRole("checkbox", { name: /^Weather/ })).not.toBeChecked();
+  await section.getByRole("checkbox", { name: /^Weather/ }).check();
+  await section.getByLabel("City or town").fill("Pune");
+  await section.getByRole("button", { name: "Find" }).click();
+  await section.getByRole("button", { name: "Pune, Maharashtra, India" }).click();
+  await expect(section).toContainText("Pune, Maharashtra, India");
+  expect(lookups).toHaveLength(1);
+  expect(lookups[0]).toContain("name=Pune");
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Daily briefing" })).toContainText("Pune, Maharashtra, India");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("hannah.briefing.v1") || "{}"))).toMatchObject({ sections: { weather: true, news: false }, location: { name: "Pune, Maharashtra, India", latitude: 18.52 } });
+});
+
+test("the Morning briefing template opens with a Daily briefing step and saves", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.goto("/automations");
+  await page.getByRole("button", { name: /^Morning briefing/ }).click();
+  const editor = page.getByRole("region", { name: "New automation" });
+  await expect(editor.getByLabel("Name")).toHaveValue("Morning briefing");
+  await expect(editor.getByRole("listitem", { name: "Step 1: Daily briefing" })).toContainText("Settings → Daily briefing");
+  await expect(editor.getByRole("listitem", { name: "Step 2: Output" }).getByRole("combobox")).toHaveValue("speak");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Saved automations" })).toContainText("Every day at 07:30 · 2 steps");
+});

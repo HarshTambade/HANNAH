@@ -144,7 +144,7 @@ export function runFromRecord(value: unknown, id: string): { run: AutomationRun;
   for (const item of raw.steps.slice(0, 30)) {
     const step = item as Partial<RunStep>;
     if (!step || typeof step.nodeId !== "string" || typeof step.label !== "string" || !STEP_STATUSES.has(step.status as StepStatus)) return null;
-    const kind = step.kind === "trigger" || step.kind === "agent-task" || step.kind === "tool-action" || step.kind === "output" ? step.kind : null;
+    const kind = step.kind === "trigger" || step.kind === "agent-task" || step.kind === "briefing" || step.kind === "tool-action" || step.kind === "output" ? step.kind : null;
     if (!kind) return null;
     steps.push({ nodeId: step.nodeId.slice(0, 80), kind, label: step.label.slice(0, 200), status: step.status as StepStatus, ...(text(step.output, 20_000) !== undefined ? { output: text(step.output, 20_000) } : {}), ...(text(step.error, 2000) !== undefined ? { error: text(step.error, 2000) } : {}), ...(text(step.remoteApprovalId, 80) !== undefined ? { remoteApprovalId: text(step.remoteApprovalId, 80) } : {}) });
   }
@@ -267,6 +267,8 @@ const taskOf = (node: WorkflowNode) => (typeof node.config.task === "string" && 
 
 export type AutomationDeps = {
   ask: (prompt: string) => Promise<string>;
+  /** The daily briefing's collected data as an agent task (see Briefing.ts). Defaults to collecting it for real. */
+  briefing?: () => Promise<string>;
   notify: (title: string, body: string) => void;
   speak: (text: string) => Promise<void>;
   saveMemory: (text: string, automation?: string) => void;
@@ -352,8 +354,14 @@ async function speakText(text: string) {
   await SpeechService.speak(text.slice(0, 1_500), "en-US");
 }
 
+async function briefingPrompt() {
+  const { Briefing } = await import("./Briefing");
+  return Briefing.prompt(await Briefing.collect());
+}
+
 export const defaultDeps: AutomationDeps = {
   ask: askHannah,
+  briefing: briefingPrompt,
   notify: showNotification,
   speak: speakText,
   saveMemory: (text, automation) => {
@@ -421,6 +429,14 @@ async function advance(run: AutomationRun, workflow: WorkflowSchema, deps: Autom
         step.output = await deps.ask(context ? `${task}\n\nResult of the previous step:\n${context}` : task);
         step.status = "done";
         // A checkpoint per finished step: another device can continue from here.
+        saveRun(run);
+      } else if (node.kind === "briefing") {
+        // Collect today's calendar, reminders, mail, weather and news, then let the AI narrate them.
+        step.status = "running";
+        saveRun(run);
+        const prompt = await (deps.briefing ?? briefingPrompt)();
+        step.output = await deps.ask(prompt);
+        step.status = "done";
         saveRun(run);
       } else if (node.kind === "tool-action") {
         step.status = "waiting-approval";

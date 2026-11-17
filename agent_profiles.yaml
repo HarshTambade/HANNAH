@@ -29,7 +29,7 @@ system:
 research:
   name: research
   modelTier: high-capability cloud
-  allowedTools: [list_app_files, read_app_file]
+  allowedTools: [knowledge_search, knowledge_documents, list_app_files, read_app_file]
   maxIterations: 10
   timeoutMs: 90000
 

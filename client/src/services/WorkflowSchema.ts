@@ -1,4 +1,4 @@
-export type WorkflowNodeKind = "trigger" | "agent-task" | "tool-action" | "output";
+export type WorkflowNodeKind = "trigger" | "agent-task" | "briefing" | "tool-action" | "output";
 export type WorkflowNode = { id: string; kind: WorkflowNodeKind; label: string; config: Record<string, unknown>; position: { x: number; y: number } };
 export type WorkflowEdge = { id: string; source: string; target: string; label?: string };
 export type WorkflowSchema = { version: 1; id: string; name: string; nodes: WorkflowNode[]; edges: WorkflowEdge[]; createdAt: string; updatedAt: string };

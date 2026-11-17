@@ -9,9 +9,10 @@
 import { describeSchedule, outputChannelOf, parseSchedule, planSteps, toolActionOf, type OutputChannel, type Schedule, type ToolAction } from "./AutomationService";
 import type { WorkflowNode, WorkflowSchema } from "./WorkflowSchema";
 
-export type StepKind = "agent-task" | "tool-action" | "output";
+export type StepKind = "agent-task" | "briefing" | "tool-action" | "output";
 export type DraftStep =
   | { id: string; kind: "agent-task"; task: string }
+  | { id: string; kind: "briefing" }
   | { id: string; kind: "tool-action"; action: ToolAction; minutes: number }
   | { id: string; kind: "output"; channel: OutputChannel };
 export type Draft = { id: string; name: string; createdAt: string; schedule: Schedule; steps: DraftStep[] };
@@ -25,6 +26,7 @@ const newId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 
 export function newStep(kind: StepKind): DraftStep {
   if (kind === "agent-task") return { id: newId("agent"), kind, task: "" };
+  if (kind === "briefing") return { id: newId("briefing"), kind };
   if (kind === "tool-action") return { id: newId("action"), kind, action: "save-memory", minutes: 60 };
   return { id: newId("output"), kind, channel: "notify" };
 }
@@ -32,12 +34,14 @@ export function newStep(kind: StepKind): DraftStep {
 /** A short name for a step, used on the saved node and in run history. */
 export function stepLabel(step: DraftStep) {
   if (step.kind === "agent-task") return step.task.trim().split("\n")[0].slice(0, 80) || "Ask HANNAH";
+  if (step.kind === "briefing") return "Daily briefing";
   if (step.kind === "tool-action") return toolLabels[step.action];
   return outputLabels[step.channel];
 }
 
 function stepFromNode(node: WorkflowNode): DraftStep | null {
   if (node.kind === "agent-task") return { id: node.id, kind: "agent-task", task: typeof node.config.task === "string" ? node.config.task : node.label };
+  if (node.kind === "briefing") return { id: node.id, kind: "briefing" };
   if (node.kind === "tool-action") {
     const minutes = typeof node.config.minutes === "number" && node.config.minutes > 0 ? node.config.minutes : 60;
     return { id: node.id, kind: "tool-action", action: toolActionOf(node), minutes };
@@ -77,7 +81,7 @@ export function workflowFromDraft(draft: Draft, now = new Date()): WorkflowSchem
       id: step.id,
       kind: step.kind,
       label: stepLabel(step),
-      config: step.kind === "agent-task" ? { task: step.task.trim() } : step.kind === "tool-action" ? { action: step.action, ...(step.action === "create-reminder" ? { minutes: step.minutes } : {}) } : { channel: step.channel },
+      config: step.kind === "agent-task" ? { task: step.task.trim() } : step.kind === "briefing" ? {} : step.kind === "tool-action" ? { action: step.action, ...(step.action === "create-reminder" ? { minutes: step.minutes } : {}) } : { channel: step.channel },
       position: { x: (index + 1) * 280, y: 0 },
     })),
   ];
@@ -117,10 +121,19 @@ const template = (name: string, schedule: Schedule, steps: StepSpec[]): (() => D
   name,
   createdAt: new Date().toISOString(),
   schedule,
-  steps: steps.map((step) => ({ ...step, id: newId(step.kind === "agent-task" ? "agent" : step.kind === "tool-action" ? "action" : "output") }) as DraftStep),
+  steps: steps.map((step) => ({ ...step, id: newId(step.kind === "agent-task" ? "agent" : step.kind === "briefing" ? "briefing" : step.kind === "tool-action" ? "action" : "output") }) as DraftStep),
 });
 
 export const TEMPLATES: Template[] = [
+  {
+    id: "morning-briefing",
+    name: "Morning briefing",
+    summary: "Every day at 07:30 · today's calendar, reminders, mail, weather and news, spoken aloud.",
+    build: template("Morning briefing", { type: "daily", time: "07:30", days: ALL_DAYS }, [
+      { kind: "briefing" },
+      { kind: "output", channel: "speak" },
+    ]),
+  },
   {
     id: "morning-plan",
     name: "Morning plan",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, Bot, Check, Clock3, MonitorSmartphone, Pencil, Play, Plus, ShieldCheck, Sparkles, Square, Trash2, Wrench, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Bot, Check, Clock3, MonitorSmartphone, Pencil, Play, Plus, ShieldCheck, Sparkles, Square, Sunrise, Trash2, Wrench, X } from "lucide-react";
 import { TaskSpineService } from "../services/TaskSpineService";
 import {
   AUTOMATION_EVENT, AutomationService, describeSchedule, nextRunAt, workflowSchedule,
@@ -20,6 +20,7 @@ const fieldClass = "mt-1 w-full rounded-xl border border-slate-200 bg-white px-3
 
 const stepInfo: Record<StepKind, { label: string; hint: string; tone: string; Icon: typeof Clock3 }> = {
   "agent-task": { label: "Ask HANNAH", hint: "Your AI does a task. It gets the previous step's result.", tone: "border-violet-200 bg-violet-50 text-violet-900", Icon: Sparkles },
+  briefing: { label: "Daily briefing", hint: "Today's calendar, reminders, mail, weather and news, narrated by your AI.", tone: "border-amber-200 bg-amber-50 text-amber-900", Icon: Sunrise },
   "tool-action": { label: "Action", hint: "Changes your data, so it waits for your approval.", tone: "border-sky-200 bg-sky-50 text-sky-900", Icon: Wrench },
   output: { label: "Output", hint: "How you get the result.", tone: "border-emerald-200 bg-emerald-50 text-emerald-900", Icon: Bot },
 };
@@ -135,6 +136,9 @@ function StepEditor({ step, index, count, onChange, onMove, onRemove }: {
           <label className="block text-xs font-semibold text-slate-700">What should HANNAH do?
             <textarea rows={3} maxLength={1500} className={fieldClass} placeholder="For example: Plan my day in three short bullet points." value={step.task} onChange={(event) => onChange({ ...step, task: event.target.value })} />
           </label>
+        )}
+        {step.kind === "briefing" && (
+          <p className="text-xs text-slate-600">Uses the sections and the place chosen in Settings → Daily briefing. The spoken-style summary goes to the next step.</p>
         )}
         {step.kind === "tool-action" && (
           <div className="grid gap-3 sm:grid-cols-2">

@@ -73,6 +73,17 @@ describe("running automations", () => {
     vi.stubGlobal("crypto", { randomUUID: () => Math.random().toString(36).slice(2) });
   });
 
+  it("runs a daily briefing step: collects the data, has the AI narrate it, and passes the narration on", async () => {
+    const flow = workflow([node("t", "trigger", "Daily"), node("b", "briefing", "Daily briefing"), node("o", "output", "Speak", { channel: "speak" })], [["t", "b"], ["b", "o"]]);
+    const spoken: string[] = [];
+    const { deps: value, calls } = deps({ briefing: async () => "PROMPT with today's data", speak: async (text) => { spoken.push(text); } });
+    const run = await AutomationService.run(flow, "manual", value);
+    expect(run.status).toBe("done");
+    expect(calls.ask).toEqual(["PROMPT with today's data"]);
+    expect(run.steps.map((step) => [step.kind, step.status])).toEqual([["trigger", "done"], ["briefing", "done"], ["output", "done"]]);
+    expect(spoken).toEqual(["answer 1"]);
+  });
+
   it("passes each step's result to the next and notifies at the end", async () => {
     const flow = workflow([node("t", "trigger", "Daily", { schedule: "0 8 * * *" }), node("a", "agent-task", "List three priorities"), node("b", "agent-task", "Make it shorter"), node("o", "output", "Notify", { channel: "notify" })], [["t", "a"], ["a", "b"], ["b", "o"]]);
     const { deps: d, calls } = deps();

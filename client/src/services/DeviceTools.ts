@@ -11,6 +11,8 @@ import { CATEGORY_LABELS, SOURCE_LABELS } from "./MemoryModel";
 import { notifyMemoryChanged } from "./MemoryStore";
 import { getDesktopFileTools } from "./DesktopFiles";
 import { getConnectionTools } from "./Connections";
+import { getKnowledgeTools } from "./Knowledge";
+import { getBriefingTools } from "./Briefing";
 
 export type ToolSchema = {
   type: "object";
@@ -338,7 +340,7 @@ export function setExternalTools(tools: HANNAHTool[]) {
 export function getDeviceTools() {
   const desktop = getDesktopFileTools();
   const connections = getConnectionTools();
-  return desktop.length || connections.length || externalTools.length ? [...deviceTools, ...desktop, ...connections, ...externalTools] : deviceTools;
+  return [...deviceTools, ...getKnowledgeTools(), ...getBriefingTools(), ...desktop, ...connections, ...externalTools];
 }
 
 /**

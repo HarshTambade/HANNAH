@@ -48,6 +48,9 @@ A stable release needs no class-5 cell in a row that the release notes advertise
 | Calendar and email (Google, Microsoft) | ✅ T (sign-in flow with mocked providers; server tests with fake Google and Graph) | 🟡 D (sign-in opens the system browser) | 🟡 D (sign-in opens the system browser) | 🟡 D (system browser) | 🟡 D (system browser) | 🟡 D (system browser) |
 | Desktop computer use | ❌ | ❌ | ❌ | 🟡 D (only in a self-built desktop app with the bridge, plus the server's Anthropic key) | 🟡 D | 🟡 D |
 | Memory and local storage | ✅ T | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
+| Knowledge (indexed documents with citations) | ✅ T (browser test: paste, search, citation, remove) | ✅ D (add files, paste) | ✅ D (add files, paste) | ✅ D (plus indexing a shared folder's text files) | ✅ D (same) | ✅ D (same) |
+| Daily briefing (step, chat tool, settings, preview) | ✅ T (browser test: weather place lookup kept across reloads; unit tests for every section) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
+| Setup check | ✅ T (browser test: server, model, storage verdicts) | ✅ D (microphone permission can't be read ahead of time on iOS: reported as not checked) | ✅ D | ✅ D (adds tray and shortcut) | ✅ D (same) | ✅ D (same) |
 | Background work | 🚫 browser: only while open | 🚫 iOS: no background agents; notifications only | 🟡 D (notifications; no foreground service yet) | 🟡 while running | 🟡 while running | 🟡 while running |
 | Permission prompts | ✅ T (browser) | ✅ D (microphone, speech, local network strings) | ✅ D (microphone, notifications) | ✅ D (microphone, local network) | ✅ D | ✅ D |
 | App updates | ✅ T (PWA update prompt) | 🚫 App Store or TestFlight | 🟡 live web updates (Capawesome); APK updates are manual | ✅ D (auto-update from GitHub Releases; Stable or Beta channel, check on demand, update history; the channel and history were driven in the real app on macOS) | ✅ D (auto-update with the NSIS installer; same channels) | 🟡 D (AppImage auto-updates; `.deb` doesn't) |

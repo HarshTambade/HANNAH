@@ -22,19 +22,20 @@ export const BACKUP_FORMAT = "hannah-backup";
 export const BACKUP_VERSION = 1;
 const PBKDF2_ITERATIONS = 310_000;
 
-export type SectionId = "conversation" | "memories" | "reminders" | "automations" | "agents" | "skills" | "personalization" | "settings" | "providers";
+export type SectionId = "conversation" | "memories" | "knowledge" | "reminders" | "automations" | "agents" | "skills" | "personalization" | "settings" | "providers";
 export type Section = { id: SectionId; label: string; what: string; keys: string[]; prefixes?: string[]; event?: string[] };
 
 /** What a backup carries, by section. Everything else on the device is left out. */
 export const SECTIONS: Section[] = [
   { id: "conversation", label: "Conversation", what: "your chat history", keys: ["hannah.chat.history.v1"], event: ["hannah:chat-history"] },
   { id: "memories", label: "Memories", what: "what HANNAH remembers and your memory settings", keys: ["hannah.memory.v1", "hannah.memory.settings.v1", "hannah.memoryConsent.v1"], event: ["hannah:memory", "hannah:memory-settings"] },
+  { id: "knowledge", label: "Knowledge", what: "documents you added for HANNAH to search", keys: ["hannah.knowledge.v1"], event: ["hannah:knowledge"] },
   { id: "reminders", label: "Reminders", what: "upcoming and past reminders", keys: ["hannah.reminders.v1"], event: ["hannah:reminders"] },
   { id: "automations", label: "Automations", what: "saved automations, their schedules and run history", keys: ["hannah.tasks.v1", "hannah.automations.v1", "hannah.automation-runs.v1"], event: ["hannah:automations"] },
   { id: "agents", label: "Agents", what: "specialist settings and team run history", keys: ["hannah.specialists.v1", "hannah.teamRuns.v1", "hannah.agentRuns.v1", "hannah.guardian.strictness.v1", "hannah.guardian.log.v1"], event: ["hannah:specialists", "hannah:team-runs"] },
   { id: "skills", label: "Skills and plugins", what: "installed community skills and marketplace choices", keys: ["hannah.communitySkills.v1", "hannah.marketplace.v1", "hannah.plugins.v1"], event: ["hannah:community-skills"] },
   { id: "personalization", label: "Personalization", what: "style examples and what HANNAH has learned about how you like replies", keys: ["hannah.personalization.v1", "hannah.userModel"], event: ["hannah:settings"] },
-  { id: "settings", label: "Preferences", what: "routing, budget, voice, language, wake word, hardware and other settings", keys: ["hannah.routing.v1", "hannah.budget.dailyUsd", "hannah.chat.mode", "hannah.chat.team", "hannah.voice.settings.v1", "hannah.voiceEnabled", "hannah.speechLanguage", "hannah.wakeWord.enabled", "hannah.hardware.v1", "hannah.deviceTasks.enabled", "hannah.onboarding.v1", "hannah.ageConsent.v1", "hannah.advisor.needs.v1", "hannah.permissions.v1"], event: ["hannah:settings", "hannah:routing-changed"] },
+  { id: "settings", label: "Preferences", what: "routing, budget, voice, language, wake word, hardware and other settings", keys: ["hannah.routing.v1", "hannah.budget.dailyUsd", "hannah.chat.mode", "hannah.chat.team", "hannah.voice.settings.v1", "hannah.voiceEnabled", "hannah.speechLanguage", "hannah.wakeWord.enabled", "hannah.briefing.v1", "hannah.hardware.v1", "hannah.deviceTasks.enabled", "hannah.onboarding.v1", "hannah.ageConsent.v1", "hannah.advisor.needs.v1", "hannah.permissions.v1"], event: ["hannah:settings", "hannah:routing-changed"] },
   { id: "providers", label: "Providers and models", what: "which provider and models you chose (never the keys themselves)", keys: ["hannah.cloudProvider", "hannah.ollamaModel"], prefixes: ["hannah.cloudModel:", "hannah.cloudModel.chosen:"], event: ["hannah:settings"] },
 ];
 

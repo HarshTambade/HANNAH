@@ -2,6 +2,14 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
+## Unreleased
+
+### New
+
+- **Daily briefing.** Say "good morning" in chat, use the new **Daily briefing** automation step (the **Morning briefing** template runs it at 07:30 and speaks it), or press **Preview today's briefing** in Settings → Daily briefing. HANNAH collects today's calendar and the newest mail (once an account is connected), reminders due today, the routines she remembers and, if you turn them on, the weather (Open-Meteo, for a place you choose by name) and the Hacker News front page, then has your AI narrate them in a short spoken style. Mail and headlines are marked as other people's content; sensitive memories are left out; weather and news are off by default and send nothing about you.
+- **Knowledge.** Memory & trust → Knowledge: add text files or paste text (in the desktop app, index a shared folder's text files), and HANNAH answers questions from them with citations such as `[Trip notes §3]`, through the new `knowledge_search` and `knowledge_documents` tools (also given to the Research specialist). Passages are ranked with BM25 in any script, kept on this device within a 2 MB budget, included in backups, and never synced. PDFs and Office files aren't read yet.
+- **Setup check.** Settings → Setup check runs one pass over the server, your AI model (including Ollama through the server), account, calendar and email, voice, microphone, notifications, storage, the desktop app's tray and shortcut, the briefing's place and recent errors, with a verdict and a fix for each.
+
 ## 1.4.0 — 2026-11-17
 
 ### New

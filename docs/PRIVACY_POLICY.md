@@ -29,6 +29,8 @@ HANNAH is operated by the HANNAH project operator. For privacy requests, contact
 | Desktop screenshots and task text | Only in the desktop computer-use feature, after you confirm the session | The configured Anthropic API | No screenshot archive is created by HANNAH. |
 | Saved memories (web, desktop and app chat) | When you add one, tap Remember this, or approve a save | This device's storage, and your account if you sync. With each message, only memories related to it (plus up to three preferences) go to the selected provider; memories marked sensitive go only to Ollama or Auto in Private routing | Until you delete them. Passwords, keys, card and ID numbers are never stored. Memory can be switched off entirely. |
 | Saved memories (MobileClaw) | Only if you enable on-device memory and approve a memory action | App-private LanceDB storage on iOS/Android; relevant memories may be sent with a MobileClaw request | Stored locally until you delete the memory or clear app data. |
+| Knowledge documents | When you add a file, paste text, or index a shared folder on Memory & trust → Knowledge | This device's storage only; a passage is sent to the selected provider only when the AI calls the knowledge search tool for your question | Until you remove the document. Included in backups you make; never synced to your account. |
+| Daily briefing | When you ask for a briefing, preview it, or an automation runs the Daily briefing step | The collected lines (calendar, mail, reminders, routines, weather, news) go to the selected provider as one request. Weather (off by default) sends the coordinates of a place you typed to Open-Meteo; news (off by default) requests the Hacker News front page from Algolia. Neither request carries anything about you. | Not stored beyond the automation's run history on your device. |
 | Feedback you submit | When you use the feedback form | A private Discord webhook and/or a MongoDB collection configured by the operator | Yes, until the operator deletes it. The feedback form does not send your chat transcript. |
 | AI content reports | When you tap “Report” on an assistant reply | A metadata-only JSONL audit file on the HANNAH server | Yes: message ID, reason, app version, platform, inference mode, timestamp, and report ID. No reply text. |
 | Crash logs and diagnostics | Automatically, only when the operator enables Sentry | Sentry | Sentry retains events under the operator’s Sentry plan. HANNAH’s scrubbers remove chat text, credentials, headers, and local paths before upload. |
@@ -36,7 +38,7 @@ HANNAH is operated by the HANNAH project operator. For privacy requests, contact
 | API access token | When a deployment requires a HANNAH API bearer token | The HANNAH API server for validation | The token is held in page memory for the session and is not written to browser storage by HANNAH. |
 | Server metadata | For every API request | The hosting provider and application logs | Method, path, status, latency, and timestamp. HANNAH does not log request bodies, chat text, IP addresses, or Authorization values. |
 
-HANNAH does not collect precise or approximate location, contacts, calendar events, SMS or call logs, health data, fitness data, browsing history, installed-app lists, or advertising identifiers. HANNAH does not request photo-library access.
+HANNAH does not collect precise or approximate location (the briefing's weather uses a place you type, not your device's location), contacts, SMS or call logs, health data, fitness data, browsing history, installed-app lists, or advertising identifiers. Calendar events and mail are read only after you connect Google or Microsoft and only when you ask or a briefing runs. HANNAH does not request photo-library access.
 
 ## 3. Third-party AI providers and Apple Guideline 5.1.2(i) disclosure
 
@@ -85,6 +87,7 @@ HANNAH keeps the active conversation in React state for the current page or app 
 | --- | --- | --- |
 | Active conversation | Until you start a new conversation, close the session, or uninstall the app | Tap “New conversation” or close the app |
 | Saved memories (opt-in) | Until you delete them | Settings → Privacy and voice → memory controls; or clear app data |
+| Knowledge documents | Until you remove them | Memory & trust → Knowledge → Remove; or clear app data |
 | Downloaded on-device model | Until you remove the app or its model data | Uninstall the app or clear its storage |
 | WebLLM model cache | Browser-managed | Clear site data in the browser |
 | Feedback | Until the operator resolves and deletes it; target maximum 24 months | Email privacy@hannah.app with the approximate date, category, and platform |

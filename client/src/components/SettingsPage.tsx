@@ -10,6 +10,8 @@ import DesktopAccessPanel from "./DesktopAccessPanel";
 import DesktopAppPanel from "./DesktopAppPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import WakeWordSetting from "./WakeWordSetting";
+import BriefingSettings from "./BriefingSettings";
+import SetupCheckPanel from "./SetupCheckPanel";
 import { desktopFilesAvailable } from "../services/DesktopFiles";
 import { DAILY_BUDGET_KEY } from "../services/LLMRouter";
 import { ChatHistory } from "../services/ChatHistory";
@@ -270,6 +272,10 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
         <WakeWordSetting />
       </Section>
 
+      <Section title="Daily briefing" description="One short spoken summary of the day: today's calendar, reminders due, the newest mail, your routines, and (if you turn them on) the weather and the news. Say “good morning” in chat, add the Daily briefing step to an automation, or preview it here.">
+        <BriefingSettings />
+      </Section>
+
       {desktopFilesAvailable() && (
         <Section title="Desktop access" description="Folders on this computer HANNAH may work in, and the commands she may run there. The desktop app enforces these rules itself, outside the AI model.">
           <DesktopAccessPanel />
@@ -361,6 +367,10 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
             </div>
           )}
         </div>
+      </Section>
+
+      <Section title="Setup check" description="One pass over what HANNAH needs on this device: the server, your AI model, account, calendar and email, voice, microphone, notifications, storage, the desktop app and recent errors. Nothing is changed.">
+        <SetupCheckPanel />
       </Section>
 
       <Section title="Diagnostics" description="What went wrong on this device: crashes, errors, freezes, failed connections, agent and automation failures. Keys, tokens and file paths are removed before anything is recorded. An export holds these entries, the app version and platform; never your conversation, memories, keys or account.">

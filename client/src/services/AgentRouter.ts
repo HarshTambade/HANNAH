@@ -16,7 +16,7 @@ export const defaultAgentProfiles: Record<string, AgentProfile> = {
   chat: { name: "chat", modelTier: "low-cost cloud", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
   code: { name: "code", modelTier: "high-capability cloud", allowedTools: ["list_app_files", "read_app_file", "write_app_file"], maxIterations: 12, timeoutMs: 60000 },
   system: { name: "system", modelTier: "low-cost cloud", allowedTools: ["get_device_status", "get_battery_status", "open_app", "toggle_setting", "list_app_files", "read_app_file", "write_app_file", "delete_app_file", "create_reminder", "list_reminders", "cancel_reminder", "search_memories", "save_memory"], maxIterations: 6, timeoutMs: 30000 },
-  research: { name: "research", modelTier: "high-capability cloud", allowedTools: ["list_app_files", "read_app_file"], maxIterations: 10, timeoutMs: 90000 },
+  research: { name: "research", modelTier: "high-capability cloud", allowedTools: ["knowledge_search", "knowledge_documents", "list_app_files", "read_app_file"], maxIterations: 10, timeoutMs: 90000 },
   maintenance: { name: "maintenance", modelTier: "local", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
 };
 
