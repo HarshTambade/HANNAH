@@ -17,6 +17,18 @@ Status for **HANNAH 1.4.0**, reviewed 2026-11-17. Every claim below says how it 
 
 **Legend:** ✅ works · 🟡 partly (see note) · ❌ not available · 🚫 blocked by the operating system or missing credentials. A verification tag follows each mark: **T** = tested in this release (automated browser tests or a manual run), **B** = built only, not run on that OS, **D** = by design from the code, not yet run on a device.
 
+Each cell maps to one of the five readiness classes a release is judged by:
+
+| Class | In this matrix |
+| --- | --- |
+| 1 · Implemented and verified | ✅ T |
+| 2 · Implemented but partially verified | ✅ B, ✅ D, 🟡 T, 🟡 B, 🟡 D |
+| 3 · Unsupported by the platform | 🚫 with an operating-system reason, or ❌ where the platform can't offer it |
+| 4 · Blocked by external requirements | 🚫 signing, store or credential reasons |
+| 5 · Not implemented | ❌ (not yet) |
+
+A stable release needs no class-5 cell in a row that the release notes advertise, and every class-4 cell named under "Credentials needed" below.
+
 | Capability | Web | iOS | Android | macOS | Windows | Linux |
 | --- | --- | --- | --- | --- | --- | --- |
 | Install and start | ✅ T | 🚫 signing | ✅ B (sideload APK) | ✅ B (Control-click → Open first time) | ✅ B (SmartScreen warning) | ✅ B |
@@ -38,7 +50,10 @@ Status for **HANNAH 1.4.0**, reviewed 2026-11-17. Every claim below says how it 
 | Memory and local storage | ✅ T | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Background work | 🚫 browser: only while open | 🚫 iOS: no background agents; notifications only | 🟡 D (notifications; no foreground service yet) | 🟡 while running | 🟡 while running | 🟡 while running |
 | Permission prompts | ✅ T (browser) | ✅ D (microphone, speech, local network strings) | ✅ D (microphone, notifications) | ✅ D (microphone, local network) | ✅ D | ✅ D |
-| App updates | ✅ T (PWA update prompt) | 🚫 App Store or TestFlight | 🟡 live web updates (Capawesome); APK updates are manual | ✅ D (auto-update from GitHub Releases, staged at 10%) | ✅ D (auto-update with the NSIS installer) | 🟡 D (AppImage auto-updates; `.deb` doesn't) |
+| App updates | ✅ T (PWA update prompt) | 🚫 App Store or TestFlight | 🟡 live web updates (Capawesome); APK updates are manual | ✅ D (auto-update from GitHub Releases; Stable or Beta channel, check on demand, update history; the channel and history were driven in the real app on macOS) | ✅ D (auto-update with the NSIS installer; same channels) | 🟡 D (AppImage auto-updates; `.deb` doesn't) |
+| Tray or menu bar, Ctrl/⌘+Shift+H, `hannah://` links | ❌ (browser) | ❌ (not yet: no URL scheme in the iOS app) | ❌ (not yet) | ✅ T (driven in the real app: tray present, shortcut registered, `hannah://settings` opened Settings, unknown links ignored) | ✅ B | ✅ B |
+| Backup and restore, diagnostics, text size | ✅ T (browser tests: back up, delete, restore; crash recorded and redacted; larger text without horizontal scroll) | ✅ D | ✅ D | ✅ D (desktop app builds from the same code) | ✅ D | ✅ D |
+| Accessibility (axe, WCAG 2.1 AA) | ✅ T (eight screens at desktop and phone widths, no serious or critical findings) | ✅ D (same screens in the app's web view) | ✅ D | ✅ D | ✅ D | ✅ D |
 | Error and offline states | ✅ T | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 
 ## What was actually run for 1.3.0

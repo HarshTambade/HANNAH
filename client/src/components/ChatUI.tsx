@@ -1378,8 +1378,8 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                 setVoiceEnabled((enabled) => !enabled);
                 setVoiceStatus(voiceEnabled ? "Voice replies off" : "Voice replies on · offline device voice preferred");
               }}
-              aria-label={voiceEnabled ? "Turn voice replies off" : "Turn voice replies on"}
-              className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition ${voiceEnabled ? "border-brand-100 bg-brand-50 text-brand-600" : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50"}`}
+              aria-label={voiceEnabled ? "Voice replies: turn off" : "Voice replies: turn on"}
+              className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs transition ${voiceEnabled ? "border-brand-100 bg-brand-50 text-brand-700" : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               {voiceEnabled ? <Speaker size={12} /> : <VolumeX size={12} />}
               <span>Voice</span>
@@ -1403,7 +1403,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
           <button
             type="button"
             onClick={() => void toggleVoiceInput()}
-            aria-label={isListening ? "Stop voice input" : "Start voice input"}
+            aria-label={isListening ? "Listening: stop voice input" : "Speak: start voice input"}
             title={isListening ? "Stop listening" : "Speak to HANNAH"}
             className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${isListening ? "border-rose-200 bg-rose-50 text-rose-700" : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"}`}
           >
@@ -1414,7 +1414,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
             onClick={() => void startVirtualCall()}
             disabled={isLoading}
             title="Start an in-app virtual voice call"
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-600 transition hover:bg-emerald-100/80 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100/80 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Phone size={12} /> Call
           </button>

@@ -2,10 +2,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Search, Server, Stethoscope, Trash2, Upload, Wallet } from "lucide-react";
 import { createBackup, preview as backupPreview, readBackup, restoreBackup, BackupError, type Backup, type RestoreMode } from "../services/Backup";
 import { Diagnostics, DIAGNOSTICS_EVENT, type DiagnosticLevel } from "../services/Diagnostics";
+import { applyTextSize, readTextSize, type TextSize } from "../services/appearance";
 import { apiFetch, apiUrl, getAccountHint, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
 import AccountPanel from "./AccountPanel";
 import VoiceSettingsPanel from "./VoiceSettingsPanel";
 import DesktopAccessPanel from "./DesktopAccessPanel";
+import DesktopAppPanel from "./DesktopAppPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import WakeWordSetting from "./WakeWordSetting";
 import { desktopFilesAvailable } from "../services/DesktopFiles";
@@ -172,6 +174,13 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
     window.setTimeout(() => window.location.reload(), 1200);
   };
 
+  // Appearance
+  const [textSize, setTextSize] = useState<TextSize>(readTextSize);
+  const changeTextSize = (size: TextSize) => {
+    setTextSize(size);
+    applyTextSize(size);
+  };
+
   // Diagnostics
   const [diagnosticQuery, setDiagnosticQuery] = useState("");
   const [diagnosticLevel, setDiagnosticLevel] = useState<DiagnosticLevel | "all">("all");
@@ -282,6 +291,19 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
           </div>
           <button type="submit" className="btn-outline">Save</button>
         </form>
+      </Section>
+
+      <DesktopAppPanel />
+
+      <Section title="Appearance" description="Text size applies to every screen on this device. Motion already follows your system's reduced-motion setting.">
+        <label className="flex items-center justify-between gap-4 text-sm">
+          <span className="font-medium text-ink">Text size</span>
+          <select value={textSize} onChange={(event) => changeTextSize(event.target.value as TextSize)} aria-label="Text size" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-ink">
+            <option value="default">Default</option>
+            <option value="large">Large (112%)</option>
+            <option value="larger">Larger (125%)</option>
+          </select>
+        </label>
       </Section>
 
       <Section title="Your data" description={usingAccount ? "Kept in this browser and synced to your account. Clearing here also clears it on your other devices at the next sync." : "Stored only in this browser’s local storage. Nothing here is uploaded except the messages and saved memories sent with each chat request."}>

@@ -80,8 +80,9 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
                 href={pathForScreen(id, base)}
                 onClick={(event) => handleLink(event, () => onNavigate(id))}
                 aria-current={selected ? "page" : undefined}
-                aria-label={label}
-                className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-0.5 text-[10px] font-medium transition ${selected ? "text-brand-600" : "text-slate-500 active:text-ink"}`}
+                // The accessible name keeps the short visible text, so screen readers and the label agree.
+                aria-label={shortLabel === label ? undefined : `${shortLabel} (${label})`}
+                className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-0.5 text-[10px] font-medium transition ${selected ? "text-brand-700" : "text-slate-600 active:text-ink"}`}
               >
                 <Icon size={20} strokeWidth={selected ? 2.4 : 2} aria-hidden="true" />
                 <span className="max-w-full truncate">{shortLabel}</span>

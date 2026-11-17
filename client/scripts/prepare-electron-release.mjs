@@ -28,10 +28,12 @@ electronPackage.homepage = "https://hannah.app";
 electronPackage.author = "HANNAH contributors";
 electronPackage.description = appPackage.description || "HANNAH desktop companion";
 const packScript = electronPackage.scripts?.pack;
-if (typeof packScript !== "string" || !packScript.includes("electron-builder --config electron-builder.config.js") || !packScript.includes("capacitor-electron vendor")) {
+const alreadyPrepared = typeof packScript === "string" && packScript.includes("electron-builder --config electron-builder.yml") && packScript.includes("vendor-electron-dependencies.mjs");
+if (!alreadyPrepared && (typeof packScript !== "string" || !packScript.includes("electron-builder --config electron-builder.config.js") || !packScript.includes("capacitor-electron vendor"))) {
   throw new Error("Could not find the generated Capacitor Electron pack script.");
 }
-electronPackage.scripts.pack = packScript.replace(
+// Re-runnable: a folder prepared earlier (local development) keeps its rewritten pack script.
+electronPackage.scripts.pack = alreadyPrepared ? packScript : packScript.replace(
   "electron-builder --config electron-builder.config.js",
   "electron-builder --config electron-builder.yml",
 ).replace(
@@ -46,6 +48,10 @@ copyFileSync(resolve(clientRoot, "electron-config.ts"), resolve(electronRoot, "c
 // HANNAH's splash window instead of the generated plain-text one.
 mkdirSync(resolve(electronRoot, "assets"), { recursive: true });
 copyFileSync(resolve(clientRoot, "electron-splash.html"), resolve(electronRoot, "assets", "splash.html"));
+// Tray icons (client/electron-assets, rendered from public/icon-512.png; the template image is for the macOS menu bar).
+for (const name of ["tray-16.png", "tray-32.png", "trayTemplate.png", "trayTemplate@2x.png"]) {
+  copyFileSync(resolve(clientRoot, "electron-assets", name), resolve(electronRoot, "assets", name));
+}
 const signingAvailable = Boolean(process.env.CSC_LINK || process.env.WIN_CSC_LINK);
 let builderConfig = readFileSync(resolve(clientRoot, "electron-builder.yml"), "utf8");
 builderConfig = builderConfig.replace(/^  notarize: false$/m, `  notarize: ${releaseRequested && signingAvailable ? "true" : "false"}`);

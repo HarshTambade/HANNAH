@@ -14,6 +14,14 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Text size (Settings → Appearance). Sizes in rem follow the root; a few fixed display sizes don't. */
+html[data-text-size="large"] {
+  font-size: 112.5%;
+}
+html[data-text-size="larger"] {
+  font-size: 125%;
+}
+
 * {
   box-sizing: border-box;
 }

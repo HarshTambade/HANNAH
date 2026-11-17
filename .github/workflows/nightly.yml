@@ -19,6 +19,8 @@ jobs:
             package-lock.json
             client/package-lock.json
             server/package-lock.json
+      - run: node scripts/scan-secrets.mjs
+      - run: node scripts/check-native-permissions.mjs
       - run: npm ci --ignore-scripts
       - run: npm ci --ignore-scripts
         working-directory: client

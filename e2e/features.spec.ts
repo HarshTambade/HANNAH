@@ -297,7 +297,7 @@ test("an automation is built step by step, runs, and can be edited and deleted",
 test("a template opens ready to save", async ({ page }) => {
   await connectAsGuest(page);
   await page.goto("/automations");
-  await page.getByRole("button", { name: "Use the Friday review template" }).click();
+  await page.getByRole("button", { name: /^Friday review/ }).click();
   const editor = page.getByRole("region", { name: "New automation" });
   await expect(editor.getByLabel("Name")).toHaveValue("Friday review");
   await expect(editor.getByRole("button", { name: "Friday" })).toHaveAttribute("aria-pressed", "true");

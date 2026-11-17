@@ -295,7 +295,7 @@ export default function ModelsPage({ onOpenChat }: { onOpenChat?: () => void } =
         <section className="deck-frame mt-4" aria-label="Comparison">
           <div className="deck-card tone-plain">
             <h2 className="font-display text-lg font-medium tracking-tight text-ink">At a glance</h2>
-            <div className="mt-3 overflow-x-auto">
+            <div className="mt-3 overflow-x-auto" role="region" aria-label="Model comparison table" tabIndex={0}>
               <table className="w-full min-w-[640px] text-left text-sm">
                 <thead className="text-xs text-slate-500">
                   <tr>{["Model", "Quality", "Speed", "Cost", "Privacy"].map((heading) => <th key={heading} scope="col" className="pb-2 pr-4 font-medium">{heading}</th>)}</tr>

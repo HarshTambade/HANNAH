@@ -444,7 +444,7 @@ export default function WorkflowBuilder() {
         <ul className="mt-3 grid gap-2 sm:grid-cols-2">
           {TEMPLATES.map((item) => (
             <li key={item.id}>
-              <button type="button" onClick={() => open(item.build(), false)} className="flex h-full w-full flex-col items-start rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-violet-300 hover:shadow-sm" aria-label={`Use the ${item.name} template`}>
+              <button type="button" onClick={() => open(item.build(), false)} className="flex h-full w-full flex-col items-start rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-violet-300 hover:shadow-sm" title={`Use the ${item.name} template`}>
                 <span className="text-sm font-semibold text-ink">{item.name}</span>
                 <span className="mt-1 text-xs leading-5 text-slate-600">{item.summary}</span>
               </button>

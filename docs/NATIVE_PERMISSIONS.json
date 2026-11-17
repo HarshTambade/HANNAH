@@ -1,0 +1,14 @@
+{
+  "_about": "Every permission the Android and iOS apps declare, with why HANNAH needs it. scripts/check-native-permissions.mjs fails CI when a manifest declares something that isn't here.",
+  "android": {
+    "android.permission.RECORD_AUDIO": "Voice turns, calls and the on-device 'Hey HANNAH' wake word. Asked when you first use voice.",
+    "android.permission.MODIFY_AUDIO_SETTINGS": "Route call audio to the speaker or earpiece and apply echo cancellation during a voice session.",
+    "android.permission.INTERNET": "Reach the HANNAH server, your chosen AI provider, and Ollama or a local model host on your network."
+  },
+  "ios": {
+    "NSMicrophoneUsageDescription": "Voice turns and calls.",
+    "NSSpeechRecognitionUsageDescription": "Turning your voice into a message with the device's recognizer.",
+    "NSLocalNetworkUsageDescription": "Connecting to Ollama or a local model host on your network when you choose local inference."
+  },
+  "iosBackgroundModes": {}
+}

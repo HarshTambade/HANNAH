@@ -148,7 +148,7 @@ function DotMatrix({ days }: { days: Array<{ date: string; label: string; count:
   const total = days.reduce((sum, day) => sum + day.count, 0);
   return (
     <div className="relative">
-      <div className="flex items-end gap-[3px] sm:gap-1" role="img" aria-label={`Messages per day over the last ${days.length} days, ${total} in total`}>
+      <div className="flex items-end gap-[3px] sm:gap-1" role="group" aria-label={`Messages per day over the last ${days.length} days, ${total} in total`}>
         {days.map((day, index) => {
           const filled = day.count ? Math.max(1, Math.round((day.count / max) * rows)) : 0;
           return (
@@ -389,7 +389,7 @@ export default function Dashboard({ onOpenChat, onOpenMemory, onOpenAutomations,
           <p className="mt-6 text-sm font-medium text-white">Model performance</p>
           <p className="text-xs text-white/70">Every provider and model that has answered in this browser</p>
           {snapshot.models.length ? (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 overflow-x-auto" role="region" aria-label="Model performance table" tabIndex={0}>
               <table className="w-full min-w-[520px] text-left text-sm">
                 <thead className="text-xs text-white/70">
                   <tr><th className="py-2 pr-4 font-medium">Provider</th><th className="py-2 pr-4 font-medium">Model</th><th className="py-2 pr-4 text-right font-medium">Replies</th><th className="py-2 pr-4 text-right font-medium">Avg response</th><th className="py-2 pr-4 text-right font-medium">Tokens</th><th className="py-2 text-right font-medium">Last used</th></tr>

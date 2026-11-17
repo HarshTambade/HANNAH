@@ -82,11 +82,11 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
 
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur-2xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-5 sm:px-8 lg:px-12">
-          <a href="#home" onClick={(event) => scrollToSection(event, "home")} className="flex items-center gap-2.5" aria-label="HANNAH home">
+          <a href="#home" onClick={(event) => scrollToSection(event, "home")} className="flex items-center gap-2.5">
             <span className="logo-ring !h-6 !w-6" aria-hidden="true" />
             <span className="text-[15px] font-semibold tracking-tight text-ink">HANNAH</span>
             <span className="hidden rounded-full border border-slate-200 bg-white px-2 py-0.5 font-mono text-[10px] text-slate-500 sm:inline">v{APP_VERSION}</span>
-          </a>
+          <span className="sr-only"> home</span></a>
 
           <nav className="hidden items-center gap-7 md:flex" aria-label="Main navigation">
             {sections.map(([label, id]) => (
@@ -134,7 +134,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
         <section id="home" tabIndex={-1} className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-16 pt-10 outline-none sm:px-8 sm:pt-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24">
           <div className="max-w-[40rem]">
             <a href={RELEASE_NOTES_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-200 hover:text-ink">
-              <span className="font-semibold text-brand-600">New in {APP_VERSION}</span>
+              <span className="font-semibold text-brand-700">New in {APP_VERSION}</span>
               <span className="h-3 w-px bg-slate-200" aria-hidden="true" />
               Smart model routing, agent team, voice <ArrowRight size={12} />
             </a>

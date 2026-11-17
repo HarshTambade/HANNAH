@@ -113,7 +113,7 @@ test("a signed-out visitor who opens a screen lands there after connecting", asy
 test("the landing page shows the app version and working download links", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Your Personal AI.");
-  await expect(page.getByRole("link", { name: "HANNAH home" })).toContainText(`v${appVersion}`);
+  await expect(page.getByRole("link", { name: /HANNAH.*home/ })).toContainText(`v${appVersion}`);
   await expect(page.getByRole("heading", { name: `HANNAH ${appVersion} for every device.` })).toBeVisible();
   const download = page.locator("#download");
   await expect(download.getByRole("link", { name: "Installer (64-bit)" })).toHaveAttribute("href", /\/download\/windows$/);

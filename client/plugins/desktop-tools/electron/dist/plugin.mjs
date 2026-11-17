@@ -51,6 +51,25 @@ for (const method of BRIDGED_METHODS) {
   };
 }
 
-HannahDesktopImpl.__capacitorElectronPlugin = { name: "HannahDesktop", methods: [...BRIDGED_METHODS] };
+// The desktop app itself (main.ts): update channel, update checks, tray and shortcut state.
+const main = () => globalThis.__hannahMain ?? null;
+HannahDesktopImpl.prototype.desktopInfo = async function desktopInfo() {
+  const api = main();
+  if (!api) throw new Error("The desktop app isn't available.");
+  return api.desktopInfo();
+};
+HannahDesktopImpl.prototype.setUpdateChannel = async function setUpdateChannel(options) {
+  const api = main();
+  if (!api) throw new Error("The desktop app isn't available.");
+  return api.setUpdateChannel(options?.channel);
+};
+HannahDesktopImpl.prototype.checkForUpdates = async function checkForUpdates() {
+  const api = main();
+  if (!api) throw new Error("The desktop app isn't available.");
+  return api.checkForUpdates();
+};
+const DESKTOP_METHODS = ["desktopInfo", "setUpdateChannel", "checkForUpdates"];
+
+HannahDesktopImpl.__capacitorElectronPlugin = { name: "HannahDesktop", methods: [...BRIDGED_METHODS, ...DESKTOP_METHODS] };
 
 export { HannahDesktopImpl as HannahDesktop };

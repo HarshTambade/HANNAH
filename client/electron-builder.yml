@@ -16,6 +16,10 @@ files:
   - "!**/*.d.ts"
   - from: vendor/node_modules
     to: node_modules
+# hannah:// links open the installed app on a screen (hannah://chat, hannah://settings …).
+protocols:
+  - name: HANNAH
+    schemes: [hannah]
 publish:
   - provider: github
     owner: HarshTambade

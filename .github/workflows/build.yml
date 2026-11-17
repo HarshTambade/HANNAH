@@ -52,6 +52,10 @@ jobs:
           else
             node scripts/check-versions.mjs
           fi
+      - name: Secret scan (tracked files)
+        run: node scripts/scan-secrets.mjs
+      - name: Native permission audit (Android manifest, iOS Info.plist)
+        run: node scripts/check-native-permissions.mjs
       - run: npm ci --ignore-scripts
       - run: npm audit --audit-level=high
       - run: npm ci --ignore-scripts
@@ -61,6 +65,19 @@ jobs:
       - run: npm ci --ignore-scripts
         working-directory: server
       - run: npm audit --prefix server --audit-level=high
+      - name: Licence check (production dependencies of root, client and server)
+        run: node scripts/check-licenses.mjs
+      - name: Software bill of materials (CycloneDX, production dependencies)
+        run: |
+          # The two units that ship: the web/app bundle and the API server. (The root package is a workspace wrapper.)
+          mkdir -p sbom
+          npm sbom --sbom-format cyclonedx --omit dev --package-lock-only --prefix client > sbom/hannah-client.cdx.json
+          npm sbom --sbom-format cyclonedx --omit dev --package-lock-only --prefix server > sbom/hannah-server.cdx.json
+          node -e 'for (const f of ["client","server"]) { const b = require(`./sbom/hannah-${f}.cdx.json`); console.log(`${f}: ${b.components.length} components`); }'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hannah-sbom
+          path: sbom
       - run: npm test
         working-directory: client
       - name: Server tests (API, accounts on SQLite and Postgres, routing)
@@ -506,6 +523,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Build provenance attestations for every published package (verify with `gh attestation verify`).
+      id-token: write
+      attestations: write
     env:
       RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag }}
     steps:
@@ -527,6 +547,10 @@ jobs:
           merge-multiple: false
       - name: Stage platform installers
         run: bash scripts/stage-release-assets.sh release-input release/assets
+      - name: Add the software bill of materials to the release
+        run: |
+          cp release-input/hannah-sbom/*.cdx.json release/assets/
+          (cd release/assets && sha256sum *.cdx.json >> SHA256SUMS)
       - name: Sign Linux packages with GPG (when a release key is configured)
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -554,6 +578,12 @@ jobs:
         run: |
           node scripts/release-notes.mjs "$RELEASE_TAG" release/SIGNING_STATUS > release/notes.md
           cat release/notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Inspect the packages before anything is published
+        run: bash scripts/inspect-release-assets.sh release/assets release/notes.md
+      - name: Attest build provenance for every package
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/assets/*
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

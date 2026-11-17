@@ -30,7 +30,26 @@ export interface HannahDesktopPlugin {
   runCommand(options: { folderId: string; path?: string; command: string }): Promise<CommandResult>;
   forgetCommand(options: { folderId: string; command: string }): Promise<{ allowedCommands: AllowedCommand[] }>;
   recentActivity(): Promise<{ activity: DesktopActivity[] }>;
+  /** The desktop app itself: version, update channel and checks, tray, shortcut, hannah:// links. */
+  desktopInfo(): Promise<DesktopInfo>;
+  setUpdateChannel(options: { channel: UpdateChannel }): Promise<DesktopInfo>;
+  checkForUpdates(): Promise<{ available: boolean; version?: string; outcome: string }>;
 }
+
+export type UpdateChannel = "stable" | "beta";
+export type DesktopInfo = {
+  version: string;
+  packaged: boolean;
+  platform: string;
+  channel: UpdateChannel;
+  /** The updater accepts pre-releases (the beta channel). */
+  prerelease: boolean;
+  lastUpdateCheck: { at: number; outcome: string; version?: string } | null;
+  updateHistory: Array<{ version: string; at: number }>;
+  shortcut: { accelerator: string; registered: boolean };
+  tray: boolean;
+  deepLinks: { scheme: string; screens: string[]; registered: boolean };
+};
 
 // No web implementation on purpose: on custom platforms such as Electron,
 // Capacitor prefers a web implementation over the native bridge, which would
