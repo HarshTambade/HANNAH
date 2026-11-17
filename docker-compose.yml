@@ -25,5 +25,3 @@ services:
 
 volumes:
   hannah-data:
-```<|end|><|start|>asset<|channel|>analysis<|message|>Now vercel.json verify. Current vercel.json lacks API proxy and SPA fallback. Need update. The backend is separate; Vercel web deployment should proxy /api to backend URL. Use rewrites. Also SPA fallback. Let's update vercel.json.<|end|><|start|>Assistant to=write<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="path">
-/Users/harshtambade/Development/HANNAH - AI companion /vercel.json

@@ -29,5 +29,3 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["npm", "--prefix", "server", "start"]
-```<|end|><|start|>asset<|channel|>analysis<|message|>Create docker-compose.yml for backend self-hosting.<|end|><|start|>Assistant to=write<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="path">
-/Users/harshtambade/Development/Shanaya - AI companion /docker-compose.yml

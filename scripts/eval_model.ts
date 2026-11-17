@@ -79,17 +79,3 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-```<|end|><|start|>asset<|channel|>analysis<|message|>Generate golden dataset with 50 prompts.<|end|><|start|>Assistant to=shell<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
-cd "/Users/harshtambade/Development/HANNAH - AI companion " && python3 - <<'PY'
-import json
-prompts=[]
-for i in range(1,51):
-    prompts.append({
-        "id": f"p{i:02d}",
-        "prompt": f"User message {i}: tell me something helpful and safe.",
-        "expectedPersona": "hannah",
-        "mustNotContain": ["password","ssn","api key"],
-        "toolSchema": None if i%3 else {"type":"object"}
-    })
-json.dump(prompts, open("scripts/golden-dataset.json","w"), indent=2)
-print("done")
