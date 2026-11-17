@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Server, Trash2, Wallet } from "lucide-react";
+import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Search, Server, Stethoscope, Trash2, Upload, Wallet } from "lucide-react";
+import { createBackup, preview as backupPreview, readBackup, restoreBackup, BackupError, type Backup, type RestoreMode } from "../services/Backup";
+import { Diagnostics, DIAGNOSTICS_EVENT, type DiagnosticLevel } from "../services/Diagnostics";
 import { apiFetch, apiUrl, getAccountHint, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
 import AccountPanel from "./AccountPanel";
 import VoiceSettingsPanel from "./VoiceSettingsPanel";
@@ -114,24 +116,74 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
     setNotice("Groq key saved for this browser tab.");
   };
 
-  const exportData = () => {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      app: "HANNAH",
-      version: getAppVersion(),
-      conversation: ChatHistory.load(),
-      memories: MemoryService.list(),
-      styleFeedback: PersonalizationEngine.list(),
-      usage: UsageStats.list(),
-    };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+  const download = (name: string, text: string) => {
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `hannah-data-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = name;
     anchor.click();
     URL.revokeObjectURL(url);
-    setNotice("Your data was exported as a JSON file.");
   };
+
+  // Backup and restore
+  const [backupPassphrase, setBackupPassphrase] = useState("");
+  const [restoreFile, setRestoreFile] = useState<{ name: string; text: string } | null>(null);
+  const [restorePassphrase, setRestorePassphrase] = useState("");
+  const [restoreMode, setRestoreMode] = useState<RestoreMode>("merge");
+  const [restoreBackupData, setRestoreBackupData] = useState<Backup | null>(null);
+  const [restoreProblem, setRestoreProblem] = useState("");
+  const [restoring, setRestoring] = useState(false);
+  const backupContents = backupPreview().filter((section) => section.items > 0);
+
+  const downloadBackup = async () => {
+    const text = await createBackup({ passphrase: backupPassphrase });
+    download(`hannah-backup-${new Date().toISOString().slice(0, 10)}${backupPassphrase.trim() ? ".encrypted" : ""}.json`, text);
+    setNotice(backupPassphrase.trim() ? "Backup downloaded, encrypted with your passphrase. Keep the passphrase: without it the file can't be opened." : "Backup downloaded. It holds no keys or sign-in, so it's safe to keep, but it isn't encrypted.");
+    setBackupPassphrase("");
+  };
+
+  const chooseRestoreFile = async (file: File | undefined) => {
+    setRestoreBackupData(null);
+    setRestoreProblem("");
+    setRestorePassphrase("");
+    if (!file) { setRestoreFile(null); return; }
+    const text = await file.text();
+    setRestoreFile({ name: file.name, text });
+    await openRestoreFile(text, "");
+  };
+
+  const openRestoreFile = async (text: string, passphrase: string) => {
+    try {
+      setRestoreBackupData(await readBackup(text, passphrase));
+      setRestoreProblem("");
+    } catch (error) {
+      setRestoreBackupData(null);
+      setRestoreProblem(error instanceof BackupError ? error.message : "This file can't be read.");
+    }
+  };
+
+  const runRestore = () => {
+    if (!restoreBackupData) return;
+    if (restoreMode === "replace" && !window.confirm("Replace the data on this device with the backup? Anything here that isn't in the backup is removed from the sections it contains.")) return;
+    setRestoring(true);
+    const written = restoreBackup(restoreBackupData, { mode: restoreMode });
+    setCounts(readCounts());
+    setNotice(`Restored ${written.length} section${written.length === 1 ? "" : "s"} from ${restoreFile?.name ?? "the backup"}. Reloading so every screen picks it up…`);
+    window.setTimeout(() => window.location.reload(), 1200);
+  };
+
+  // Diagnostics
+  const [diagnosticQuery, setDiagnosticQuery] = useState("");
+  const [diagnosticLevel, setDiagnosticLevel] = useState<DiagnosticLevel | "all">("all");
+  const [diagnosticVersion, setDiagnosticVersion] = useState(0);
+  useEffect(() => {
+    const refresh = () => setDiagnosticVersion((value) => value + 1);
+    window.addEventListener(DIAGNOSTICS_EVENT, refresh);
+    return () => window.removeEventListener(DIAGNOSTICS_EVENT, refresh);
+  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const diagnosticEntries = diagnosticVersion >= 0 ? Diagnostics.list({ query: diagnosticQuery, level: diagnosticLevel }) : [];
+  const diagnosticCounts = Diagnostics.counts();
 
   const clearAll = () => {
     if (!window.confirm("Delete your conversation, memories, style feedback and usage stats from this browser? This can’t be undone.")) return;
@@ -245,9 +297,82 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
           ))}
         </ul>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={exportData} className="btn-outline"><Download size={15} /> Export my data</button>
           <button type="button" onClick={clearAll} className="btn-ghost text-rose-600"><Trash2 size={15} /> Delete everything</button>
         </div>
+      </Section>
+
+      <Section title="Backup and restore" description="One file with your conversation, memories, reminders, automations, agent settings, skills, personalization and preferences, and which providers and models you chose. Never your keys, access token, sign-in or device identity: after restoring on another device, sign in there again.">
+        <p className="text-xs text-slate-500">{backupContents.length ? `Includes: ${backupContents.map((section) => `${section.label} (${section.items.toLocaleString()})`).join(", ")}.` : "There's nothing to back up yet."}</p>
+        <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void downloadBackup(); }}>
+          <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-slate-600">
+            Passphrase (optional, encrypts the file)
+            <input type="password" value={backupPassphrase} onChange={(event) => setBackupPassphrase(event.target.value)} autoComplete="new-password" placeholder="Leave empty for a readable file" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-brand-300" />
+          </label>
+          <button type="submit" disabled={!backupContents.length} className="btn-outline disabled:opacity-40"><Download size={15} /> Download backup</button>
+        </form>
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <label className="block text-xs font-medium text-slate-600">
+            Restore from a backup file
+            <input type="file" accept=".json,application/json" onChange={(event) => void chooseRestoreFile(event.target.files?.[0])} className="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-xl file:border file:border-slate-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink" />
+          </label>
+          {restoreProblem && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+              <p>{restoreProblem}</p>
+              {restoreFile && /passphrase/i.test(restoreProblem) && (
+                <form className="mt-2 flex gap-2" onSubmit={(event) => { event.preventDefault(); void openRestoreFile(restoreFile.text, restorePassphrase); }}>
+                  <input type="password" value={restorePassphrase} onChange={(event) => setRestorePassphrase(event.target.value)} aria-label="Backup passphrase" autoComplete="off" className="min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 py-1.5 text-sm text-ink outline-none" />
+                  <button type="submit" className="btn-outline !py-1.5 text-xs">Open</button>
+                </form>
+              )}
+            </div>
+          )}
+          {restoreBackupData && (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm" aria-label="Backup contents">
+              <p className="font-medium text-ink">Backup from HANNAH {restoreBackupData.manifest.app} on {restoreBackupData.manifest.platform}{restoreBackupData.manifest.createdAt ? `, ${new Date(restoreBackupData.manifest.createdAt).toLocaleString()}` : ""}{restoreBackupData.manifest.encrypted ? " · encrypted" : ""}</p>
+              <ul className="mt-1 text-xs text-slate-600">{restoreBackupData.manifest.sections.map((section) => <li key={section.id}>{section.label}: {section.items.toLocaleString()}</li>)}</ul>
+              <fieldset className="mt-3 flex flex-wrap gap-3 text-xs text-slate-700">
+                <legend className="sr-only">How to restore</legend>
+                <label className="flex items-center gap-1.5"><input type="radio" name="restore-mode" checked={restoreMode === "merge"} onChange={() => setRestoreMode("merge")} /> Merge: add what's missing, keep the newer copy of the rest</label>
+                <label className="flex items-center gap-1.5"><input type="radio" name="restore-mode" checked={restoreMode === "replace"} onChange={() => setRestoreMode("replace")} /> Replace: make this device match the backup</label>
+              </fieldset>
+              <button type="button" disabled={restoring} onClick={runRestore} className="btn-primary mt-3 disabled:opacity-40"><Upload size={15} /> {restoring ? "Restoring…" : "Restore"}</button>
+            </div>
+          )}
+        </div>
+      </Section>
+
+      <Section title="Diagnostics" description="What went wrong on this device: crashes, errors, freezes, failed connections, agent and automation failures. Keys, tokens and file paths are removed before anything is recorded. An export holds these entries, the app version and platform; never your conversation, memories, keys or account.">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5">
+            <Search size={14} className="text-slate-400" />
+            <input value={diagnosticQuery} onChange={(event) => setDiagnosticQuery(event.target.value)} placeholder="Search diagnostics" aria-label="Search diagnostics" className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none" />
+          </label>
+          <select value={diagnosticLevel} onChange={(event) => setDiagnosticLevel(event.target.value as DiagnosticLevel | "all")} aria-label="Level" className="rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-sm text-ink">
+            <option value="all">All levels</option>
+            <option value="error">Errors ({diagnosticCounts.error})</option>
+            <option value="warn">Warnings ({diagnosticCounts.warn})</option>
+            <option value="info">Info ({diagnosticCounts.info})</option>
+          </select>
+          <button type="button" onClick={() => { download(`hannah-diagnostics-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(Diagnostics.report(), null, 2)); setNotice("Diagnostic report downloaded."); }} className="btn-outline !py-1.5 text-xs"><Stethoscope size={13} /> Export diagnostics</button>
+          <button type="button" disabled={!diagnosticCounts.error && !diagnosticCounts.warn && !diagnosticCounts.info} onClick={() => { Diagnostics.clear(); setNotice("Diagnostics cleared."); }} className="btn-ghost !py-1.5 text-xs text-rose-600 disabled:opacity-30"><Trash2 size={13} /> Clear</button>
+        </div>
+        {diagnosticEntries.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">{diagnosticQuery || diagnosticLevel !== "all" ? "Nothing matches." : "Nothing recorded. That's good."}</p>
+        ) : (
+          <ul className="mt-3 max-h-80 space-y-1.5 overflow-y-auto" aria-label="Diagnostic entries">
+            {diagnosticEntries.slice(0, 100).map((entry) => (
+              <li key={entry.id} className="rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs">
+                <p className="flex flex-wrap items-center gap-2 text-slate-500">
+                  <span className={`rounded-md px-1.5 py-0.5 font-semibold uppercase tracking-wide ${entry.level === "error" ? "bg-rose-50 text-rose-700" : entry.level === "warn" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}>{entry.level}</span>
+                  <span className="font-medium text-slate-700">{entry.source}</span>
+                  <time dateTime={new Date(entry.at).toISOString()}>{new Date(entry.at).toLocaleString()}</time>
+                </p>
+                <p className="mt-1 break-words text-sm text-ink">{entry.message}</p>
+                {entry.detail && <details className="mt-1 text-slate-500"><summary className="cursor-pointer">Details</summary><pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px]">{entry.detail}</pre></details>}
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
 
       {ChaosEngine.available() && (

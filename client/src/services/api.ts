@@ -1,4 +1,5 @@
 import { IS_WEBSITE, SITE_URL } from "../config/site";
+import { Diagnostics } from "./Diagnostics";
 
 /**
  * Where the HANNAH API lives. The website calls its own domain (on Vercel the
@@ -152,8 +153,27 @@ export function apiUrl(path: string) {
   return apiBaseUrl ? `${apiBaseUrl}${normalizedPath}` : normalizedPath;
 }
 
-export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  return fetch(input, { ...init, headers: apiHeaders(init.headers) });
+/** The request's path for a diagnostic entry: never its query string or body. */
+function describeRequest(input: RequestInfo | URL) {
+  try {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    return new URL(url, typeof window === "undefined" ? "http://localhost" : window.location.origin).pathname;
+  } catch {
+    return "the server";
+  }
+}
+
+export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  try {
+    const response = await fetch(input, { ...init, headers: apiHeaders(init.headers) });
+    if (response.status >= 500) Diagnostics.log("warn", "network", `The server answered ${response.status} for ${describeRequest(input)}.`);
+    return response;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+    Diagnostics.log(timedOut ? "warn" : "error", "network", timedOut ? `${describeRequest(input)} didn't answer in time.` : `Couldn't reach ${describeRequest(input)}.`);
+    throw error;
+  }
 }
 
 export function isLocalDevelopmentHost() {

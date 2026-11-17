@@ -27,6 +27,23 @@ Each phase is marked against its acceptance criteria (brief §20), not by whethe
 
 **Order of the next increments** (each depends only on finished work): Phase 5 desktop runtime as a separate process → Phase 8 native wake word on Android → Phase 10 natural-language workflow builder → Phase 7 semantic retrieval (embeddings; needs Phase 2 embeddings).
 
+### Commercial readiness requirements (additional brief, 2026-11-17)
+
+| Area | Status | What exists | What's left |
+| --- | --- | --- | --- |
+| 1 · Updates and releases | **Partial** | GitHub Releases from CI with checksums, GPG for Linux when a key exists, release notes with each package's signing status; desktop auto-update from Releases (staged); PWA update prompt; Android live web updates. | Release channels (stable, beta, dev) with a channel setting; a "what's new" screen; update history; signature checks on the desktop updater before install (needs the signing credentials first). |
+| 2 · Health and diagnostics | **Mostly** | `Diagnostics.ts`: crashes, uncaught errors, a start that didn't finish, freezes, failed connections, agent, automation and sync failures, redacted; Settings → Diagnostics with search, levels, export; feedback attaches a report with consent. | Native plugin failures on Android and iOS; CPU and battery; a server-side view of health for operators (`/api/health` exists). |
+| 3 · Backup, restore, migration | **Done** | `Backup.ts`: nine sections, credentials never included, SHA-256 checksum, optional AES-256-GCM with PBKDF2, format version check, merge or replace. 7 unit tests and a browser test that backs up, deletes, restores. | Scheduled backups to a folder (desktop); restoring to the account in one step. |
+| 4 · Accessibility and i18n | **Partial** | Accessible names and roles throughout (the browser tests select by role), reduced motion, responsive layouts, English, Hindi and Marathi voice. | Automated axe checks in CI; a font-size setting; a dark theme; locale-aware dates and numbers; interface translations. |
+| 5 · OS integration | **Partial** | Native notifications (Android, iOS), desktop menu with shortcuts, system browser for links, native file access through the HannahDesktop plugin. | Tray or menu-bar item, global shortcut for "talk to HANNAH", `hannah://` deep links, share sheet, drag-and-drop, file associations. |
+| 6 · Security and supply chain | **Partial** | `npm audit` at high level in CI for root, client and server; HTTPS-only providers; red-team suite; secrets never in `VITE_*`. | SBOM, secret scanning, build provenance (attestations), license check, signed artifacts on every platform. |
+| 7 · Performance | **Partial** | Bundle budget in CI (3.38 of 5 MiB), long-task and heap warnings in Diagnostics. | Cold-start, memory and voice-latency budgets per platform, measured in CI. |
+| 8 · Onboarding | **Partial** | Privacy, credentials and approval steps; apps open on a welcome screen. | OS-aware steps: capabilities, permissions, local models, voice, memory destination. |
+| 9 · Feedback and support | **Done (this increment)** | In-app feedback with category, version and platform; optional diagnostic report with consent; server keeps an allow-listed shape only. | A support page with the FAQ and the diagnostics guide. |
+| 10 · Release gates and compatibility | **Mostly** | CI release job waits for every test and build; version consistency check; `docs/PLATFORM_SUPPORT.md` feature matrix with tested, built and blocked marks. | Map the matrix to the five classes the brief names; add the signature check and artifact inspection gates. |
+
+**Order of the next readiness increments:** 6 (SBOM, secret scan, provenance in CI) → 4 (axe in the browser tests, font size, dark theme) → 1 (release channels) → 5 (tray, global shortcut, deep links) → 10 (compatibility classes).
+
 ## 1. Where HANNAH is today (first brief)
 
 | Brief area | Status | What exists | Main gaps |

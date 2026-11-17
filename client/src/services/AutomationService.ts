@@ -31,6 +31,7 @@ import { ReminderService, notificationPermission } from "./ReminderService";
 import { TaskSpineService } from "./TaskSpineService";
 import { TaskRecords, type LostReason, type RemoteRun, type RunStatus as RecordStatus } from "./TaskRecords";
 import { thisDevice } from "./DeviceTasks";
+import { Diagnostics } from "./Diagnostics";
 import type { WorkflowNode, WorkflowSchema } from "./WorkflowSchema";
 
 export type Schedule =
@@ -448,6 +449,7 @@ async function advance(run: AutomationRun, workflow: WorkflowSchema, deps: Autom
       run.finishedAt = deps.now();
       saveRun(run);
       deps.remote?.report(run);
+      Diagnostics.log("error", "automation", `“${run.name}” failed at “${step.label}”: ${step.error}`);
       return run;
     }
   }

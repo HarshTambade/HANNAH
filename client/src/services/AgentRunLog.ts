@@ -8,6 +8,8 @@
  * tool arguments, file contents or replies.
  */
 
+import { Diagnostics } from "./Diagnostics";
+
 export type RunStatus = "running" | "succeeded" | "failed" | "stopped" | "declined" | "blocked" | "interrupted";
 export type StepOutcome = "ok" | "failed" | "declined" | "blocked";
 export type RunStep = { at: number; tool: string; outcome: StepOutcome; detail?: string };
@@ -91,6 +93,7 @@ export const AgentRunLog = {
   },
   finish(id: string, status: Exclude<RunStatus, "running">, details: { model?: string; error?: string } = {}) {
     update(id, (run) => (run.status !== "running" ? run : { ...run, status, finishedAt: Date.now(), model: details.model ?? run.model, error: details.error?.slice(0, 200) }));
+    if (status === "failed") Diagnostics.log("error", "agent", `An agent run failed${details.model ? ` (${details.model})` : ""}: ${details.error || "no reason given"}`);
   },
   clear() {
     write([]);

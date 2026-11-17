@@ -1,6 +1,7 @@
 import type { InferenceMode } from "../types";
 import { apiFetch, apiUrl } from "./api";
 import { coarseInferenceMode, detectPlatform, getAppVersion } from "./appInfo";
+import type { DiagnosticReport } from "./Diagnostics";
 
 export type FeedbackCategory = "bug" | "idea" | "privacy" | "other";
 
@@ -8,13 +9,15 @@ export type FeedbackSubmission = {
   message: string;
   category: FeedbackCategory;
   inferenceMode: InferenceMode;
+  /** A diagnostic report, only when the user chose to attach one. */
+  diagnostics?: DiagnosticReport;
 };
 
 /**
  * Submit only what the feedback schema needs. No IP, account identifier,
  * conversation transcript, device model, or User-Agent is sent from here.
  */
-export async function submitFeedback({ message, category, inferenceMode }: FeedbackSubmission) {
+export async function submitFeedback({ message, category, inferenceMode, diagnostics }: FeedbackSubmission) {
   const response = await apiFetch(apiUrl("/api/feedback"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -25,6 +28,7 @@ export async function submitFeedback({ message, category, inferenceMode }: Feedb
       platform: detectPlatform(),
       inferenceMode: coarseInferenceMode(inferenceMode),
       modeDetail: inferenceMode,
+      ...(diagnostics ? { diagnostics } : {}),
     }),
   });
   const data = await response.json().catch(() => ({}));

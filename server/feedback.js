@@ -18,6 +18,9 @@ const PLATFORMS = new Set(["iOS", "Android", "Web", "Desktop"]);
 const INFERENCE_MODES = new Set(["Cloud", "Local"]);
 const CATEGORIES = new Set(["bug", "idea", "privacy", "other"]);
 const MODE_DETAIL_PATTERN = /^[a-z][a-z0-9_-]{0,39}$/;
+const MAX_DIAGNOSTIC_ENTRIES = 100;
+const DIAGNOSTIC_LEVELS = new Set(["info", "warn", "error"]);
+const DIAGNOSTIC_SOURCE_PATTERN = /^[a-z]{1,20}$/;
 const MONGO_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,120}$/;
 
 const mongoClients = new Map();
@@ -54,6 +57,14 @@ function validateFeedbackPayload(body) {
     return { ok: false, error: "Inference mode detail is invalid." };
   }
 
+  // A diagnostic report the user chose to attach: only the allow-listed shape
+  // is kept, so a report can't carry conversation text or keys even by mistake.
+  let diagnostics = null;
+  if (body.diagnostics !== undefined && body.diagnostics !== null) {
+    diagnostics = cleanDiagnostics(body.diagnostics);
+    if (!diagnostics) return { ok: false, error: "The attached diagnostic report is invalid." };
+  }
+
   return {
     ok: true,
     value: {
@@ -63,7 +74,34 @@ function validateFeedbackPayload(body) {
       inferenceMode,
       ...(modeDetail ? { modeDetail } : {}),
       category,
+      ...(diagnostics ? { diagnostics } : {}),
     },
+  };
+}
+
+function cleanDiagnostics(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || raw.format !== "hannah-diagnostics") return null;
+  const entries = Array.isArray(raw.entries) ? raw.entries.slice(-MAX_DIAGNOSTIC_ENTRIES) : [];
+  const kept = [];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") return null;
+    const level = cleanString(entry.level, 10);
+    const source = cleanString(entry.source, 20);
+    if (!DIAGNOSTIC_LEVELS.has(level) || !DIAGNOSTIC_SOURCE_PATTERN.test(source)) return null;
+    const at = Number(entry.at);
+    kept.push({ at: Number.isFinite(at) ? at : 0, level, source, message: cleanString(entry.message, 300), ...(entry.detail ? { detail: cleanString(entry.detail, 1200) } : {}) });
+  }
+  const memory = raw.memory && typeof raw.memory === "object" && Number.isFinite(raw.memory.usedMB) ? { usedMB: Number(raw.memory.usedMB), limitMB: Number(raw.memory.limitMB) || 0 } : null;
+  const storage = raw.storage && typeof raw.storage === "object" ? { keys: Number(raw.storage.keys) || 0, approxKB: Number(raw.storage.approxKB) || 0 } : null;
+  return {
+    createdAt: cleanString(raw.createdAt, 40),
+    app: cleanString(raw.app, MAX_APP_VERSION_LENGTH),
+    platform: cleanString(raw.platform, 20),
+    userAgent: cleanString(raw.userAgent, 300),
+    online: raw.online !== false,
+    ...(memory ? { memory } : {}),
+    ...(storage ? { storage } : {}),
+    entries: kept,
   };
 }
 
@@ -79,8 +117,19 @@ function buildFeedbackDocument(payload, { id = randomUUID(), receivedAt = new Da
     inferenceMode: payload.inferenceMode,
     ...(payload.modeDetail ? { modeDetail: payload.modeDetail } : {}),
     category: payload.category,
+    ...(payload.diagnostics ? { diagnostics: payload.diagnostics } : {}),
     source: "in-app",
   };
+}
+
+/** The attached report's most useful lines, for a chat embed. */
+function summarizeDiagnostics(diagnostics) {
+  const errors = diagnostics.entries.filter((entry) => entry.level === "error").slice(-3);
+  const lines = [
+    `${diagnostics.entries.length} entries · ${diagnostics.userAgent ? diagnostics.userAgent.slice(0, 80) : "no user agent"}${diagnostics.memory ? ` · ${diagnostics.memory.usedMB} MB heap` : ""}`,
+    ...errors.map((entry) => `[${entry.source}] ${entry.message}`),
+  ];
+  return lines.join("\n").slice(0, 1024);
 }
 
 function buildDiscordPayload(document) {
@@ -98,6 +147,7 @@ function buildDiscordPayload(document) {
         { name: "Platform", value: document.platform, inline: true },
         { name: "Inference", value: `${document.inferenceMode}${document.modeDetail ? ` (${document.modeDetail})` : ""}`, inline: true },
         { name: "Category", value: document.category, inline: true },
+        ...(document.diagnostics ? [{ name: "Diagnostics (attached by the user)", value: summarizeDiagnostics(document.diagnostics), inline: false }] : []),
       ],
     }],
   };

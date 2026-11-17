@@ -16,6 +16,7 @@ HANNAH is operated by the HANNAH project operator. For privacy requests, contact
 - **We do not sell your data** and we do not use it for advertising, cross-app tracking, or training HANNAH’s own models.
 - **Cloud AI is third-party processing.** When you use cloud mode, your messages and relevant context are sent through the HANNAH API to the configured provider, such as Groq, OpenAI, or Anthropic. Those providers process the data under their own terms and privacy policies.
 - **Voice and desktop features are optional.** Microphone, speech recognition, local network access, files, and desktop screenshots are used only when you invoke the feature and grant the operating-system permission.
+- **Backups and diagnostics are yours.** A backup file (Settings → Backup and restore) holds your data and choices, never your keys, access token, sign-in or device identity; you choose whether to encrypt it with a passphrase. A diagnostic report (Settings → Diagnostics) holds error entries with keys, tokens and file paths removed, plus the app version and platform; it is attached to feedback only when you tick the box.
 - **You can delete local data in the app.** Start a new conversation to clear the active chat, use the memory controls to delete saved memories, or uninstall the app to remove its private storage.
 
 ## 2. What HANNAH processes

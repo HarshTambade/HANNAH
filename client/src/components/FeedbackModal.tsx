@@ -7,6 +7,7 @@ import {
 import type { InferenceMode } from "../types";
 import { coarseInferenceMode, detectPlatform, getAppVersion } from "../services/appInfo";
 import { submitFeedback, type FeedbackCategory } from "../services/feedback";
+import { Diagnostics } from "../services/Diagnostics";
 
 type FeedbackModalProps = {
   open: boolean;
@@ -26,6 +27,7 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
   const [category, setCategory] = useState<FeedbackCategory>("bug");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState("");
+  const [attachDiagnostics, setAttachDiagnostics] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const statusRef = useRef(status);
   const onCloseRef = useRef(onClose);
@@ -61,7 +63,7 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
     setStatus("sending");
     setError("");
     try {
-      await submitFeedback({ message, category, inferenceMode });
+      await submitFeedback({ message, category, inferenceMode, ...(attachDiagnostics ? { diagnostics: Diagnostics.report() } : {}) });
       setStatus("sent");
       setMessage("");
     } catch (submissionError) {
@@ -172,6 +174,10 @@ export default function FeedbackModal({ open, onClose, inferenceMode }: Feedback
                   <ShieldCheck size={12} className="mt-0.5 shrink-0 text-emerald-600" />
                   No IP address, account, device identifier, or chat history is attached.
                 </p>
+                <label className="mt-2 flex items-start gap-2 border-t border-slate-100 pt-2 text-[11px] leading-5 text-slate-600">
+                  <input type="checkbox" checked={attachDiagnostics} onChange={(event) => setAttachDiagnostics(event.target.checked)} className="mt-1 h-4 w-4 accent-violet-600" />
+                  <span>Also attach a diagnostic report: recent errors ({Diagnostics.counts().error}), freezes and failed connections, with keys and file paths already removed. Never your conversation, memories, keys or account. You can read it first under Settings → Diagnostics.</span>
+                </label>
               </div>
 
               {error && (

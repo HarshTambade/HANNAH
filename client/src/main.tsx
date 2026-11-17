@@ -6,6 +6,7 @@ import App from "./App";
 import AgeGateGuard from "./components/AgeGateGuard";
 import "./index.css";
 import { initClientTelemetry } from "./services/telemetry";
+import { Diagnostics } from "./services/Diagnostics";
 import { initAnalytics } from "./services/analytics";
 import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import DesktopUpdateToast from "./components/DesktopUpdateToast";
@@ -13,6 +14,8 @@ import DesktopUpdateToast from "./components/DesktopUpdateToast";
 // A DSN-less build is a no-op; the error boundary still protects the app.
 initClientTelemetry();
 initAnalytics();
+// Crashes, uncaught errors, freezes and a start that didn't finish, kept on this device for Settings → Diagnostics.
+Diagnostics.install();
 
 function CrashFallback() {
   return (
@@ -41,7 +44,7 @@ function CrashFallback() {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <Sentry.ErrorBoundary fallback={<CrashFallback />} showDialog={false}>
+    <Sentry.ErrorBoundary fallback={<CrashFallback />} showDialog={false} onError={(error) => Diagnostics.error("crash", error, "The interface crashed")}>
       <AgeGateGuard>
         <App />
         <PwaUpdatePrompt />

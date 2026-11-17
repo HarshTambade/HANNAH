@@ -361,3 +361,50 @@ test("the memory center records sources, refuses secrets, and chat sends only re
   await expect.poll(() => sentMemories.length).toBe(2);
   expect(sentMemories.at(-1)).toEqual([]);
 });
+
+test("a backup restores what was deleted, and diagnostics record a crash with the key removed", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.addInitScript(() => window.localStorage.setItem("hannah.onboarding.v1", "complete"));
+  await page.goto("/memory");
+  await page.getByLabel("Add something for HANNAH to remember").fill("I live in Pune");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Memories" }).getByRole("listitem")).toHaveCount(1);
+
+  // A crash in the page: recorded, with the key it mentioned removed.
+  await page.evaluate(() => { window.setTimeout(() => { throw new Error("E2E boom with gsk_abcdefghijklmnopqrstuvwxyz0123"); }, 0); });
+  // Recorded before we leave the page (the throw is asynchronous).
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("hannah.diagnostics.v1") ?? "")).toContain("E2E boom");
+
+  await page.goto("/settings");
+  const backupSection = page.getByRole("region", { name: "Backup and restore" });
+  await expect(backupSection).toContainText("Memories (1)");
+  const [download] = await Promise.all([page.waitForEvent("download"), backupSection.getByRole("button", { name: "Download backup" }).click()]);
+  const backupPath = await download.path();
+  const backupText = (await import("node:fs")).readFileSync(backupPath!, "utf8");
+  expect(backupText).toContain("I live in Pune");
+  expect(backupText).not.toContain(groqKey);
+  expect(backupText).not.toContain("hannah.session");
+
+  const diagnostics = page.getByRole("region", { name: "Diagnostics" });
+  const entries = diagnostics.getByRole("list", { name: "Diagnostic entries" }).getByRole("listitem");
+  await expect(entries.filter({ hasText: "E2E boom" })).toHaveCount(1);
+  await expect(entries.filter({ hasText: "E2E boom" })).toContainText("<redacted>");
+  await expect(entries.filter({ hasText: "E2E boom" })).not.toContainText("gsk_abcdefghij");
+  const [report] = await Promise.all([page.waitForEvent("download"), diagnostics.getByRole("button", { name: "Export diagnostics" }).click()]);
+  const reportText = (await import("node:fs")).readFileSync((await report.path())!, "utf8");
+  expect(reportText).toContain("E2E boom");
+  expect(reportText).not.toContain("gsk_abcdefghij");
+  expect(reportText).not.toContain("I live in Pune");
+
+  // Delete everything, then restore from the file.
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: "Delete everything" }).click();
+  await expect(page.getByRole("region", { name: "Your data" })).toContainText("0 items");
+  await backupSection.locator('input[type="file"]').setInputFiles(backupPath!);
+  await expect(backupSection.getByLabel("Backup contents")).toContainText("Memories: 1");
+  await backupSection.getByRole("button", { name: "Restore", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: /^Restored/ })).toBeVisible();
+  await page.waitForURL(/\/settings/);
+  await page.goto("/memory");
+  await expect(page.getByRole("list", { name: "Memories" }).getByRole("listitem").first()).toContainText("I live in Pune");
+});

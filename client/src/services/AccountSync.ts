@@ -10,6 +10,7 @@
  */
 import { Account, AccountError } from "./Account";
 import { isAccountSession } from "./api";
+import { Diagnostics } from "./Diagnostics";
 
 type Item = Record<string, unknown>;
 type Namespace = {
@@ -191,6 +192,7 @@ export function syncNow(): Promise<SyncStatus> {
       status = { at: Date.now(), ok: true, message: "Synced", counts };
     } catch (error) {
       status = { at: Date.now(), ok: false, message: error instanceof Error ? error.message : "Sync failed." };
+      Diagnostics.log("warn", "sync", `Account sync failed: ${status.message}`);
     }
     writeJson(SYNC_STATUS_KEY, status);
     try {

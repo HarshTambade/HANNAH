@@ -13,6 +13,7 @@ import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
 import { REMINDER_FIRED_EVENT, startReminderScheduler, type Reminder } from "./services/ReminderService";
 import { startAutomationRunner } from "./services/AutomationService";
+import { Diagnostics } from "./services/Diagnostics";
 import { startDeviceTaskSync } from "./services/DeviceTasks";
 import { startWakeWord, WAKE_EVENT } from "./services/WakeWord";
 import { startNativeReminders } from "./services/NativeReminders";
@@ -89,6 +90,8 @@ export default function App() {
   // Reminders fire while the app is open, on any screen.
   useEffect(() => startReminderScheduler(), []);
   useEffect(() => startAutomationRunner(), []);
+  // This start finished: the first screen is on. (Settings → Diagnostics reports starts that didn't.)
+  useEffect(() => { Diagnostics.markReady(); }, []);
   // Tasks and approvals from your other signed-in devices.
   useEffect(() => startDeviceTaskSync(), []);
   // "Hey HANNAH" (if turned on): listen on this device and open a voice turn in chat.
