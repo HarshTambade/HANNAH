@@ -23,6 +23,8 @@ import { refreshMcpTools } from "./services/McpTools";
 import type { Emotion, InferenceMode } from "./types";
 import NotFoundPage from "./components/NotFoundPage";
 import { legacyHashRedirect, pathForScreen, ROUTE_TITLES, screenForLocation, type AppScreen, type Screen } from "./routes";
+import AppWelcome from "./components/AppWelcome";
+import { IS_WEBSITE } from "./config/site";
 
 const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "settings"]);
 const base = import.meta.env.BASE_URL;
@@ -37,10 +39,20 @@ export default function App() {
     const redirect = legacyHashRedirect(window.location, base);
     if (redirect) window.history.replaceState(null, "", redirect);
     const initial = currentScreen();
+    // The apps open straight on chat when they're already connected.
+    if (!IS_WEBSITE && initial === "landing" && hasApiSession()) return "conversation";
     return appSections.has(initial) && !hasApiSession() ? "landing" : initial;
   });
   const screenRef = useRef(screen);
   screenRef.current = screen;
+  // The apps may open on chat from "/"; keep the address in step with the screen.
+  useEffect(() => {
+    if (screen !== "not-found" && currentScreen() !== screen && screen === "conversation") {
+      window.history.replaceState(null, "", `${pathForScreen(screen, base)}${window.location.search}`);
+    }
+    // Only on the first render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [connectRequested, setConnectRequested] = useState(() => appSections.has(currentScreen()) && !hasApiSession());
   // Where a signed-out visitor was going; they land there after connecting.
   const [pendingScreen, setPendingScreen] = useState<AppScreen | null>(() => {
@@ -147,6 +159,21 @@ export default function App() {
 
   if (screen === "not-found") return <NotFoundPage onHome={() => navigate("landing")} onChat={() => navigate("conversation")} />;
 
+  if (screen === "landing" && !IS_WEBSITE) {
+    // The apps start on their own welcome screen, not the website's landing page.
+    return (
+      <AppWelcome
+        onStart={({ apiToken, groqApiKey: providerKey }) => {
+          setApiAccessToken(apiToken);
+          setSessionGroqKey(providerKey);
+          setGroqApiKey(providerKey);
+          navigate(pendingScreen ?? "conversation");
+          setPendingScreen(null);
+        }}
+      />
+    );
+  }
+
   if (screen === "landing") {
     return (
       <LandingPage
@@ -167,7 +194,8 @@ export default function App() {
     );
   }
 
-  const shellProps = { active: screen as AppSection, onNavigate: navigate, onHome: () => navigate("landing") };
+  // In the apps "home" is the Dashboard; on the website it's the landing page.
+  const shellProps = { active: screen as AppSection, onNavigate: navigate, onHome: () => navigate(IS_WEBSITE ? "landing" : "companion") };
 
   if (screen === "conversation") {
     return (

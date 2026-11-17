@@ -50,3 +50,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </Sentry.ErrorBoundary>
   </React.StrictMode>,
 );
+
+// The apps' splash (index.html) fades out once HANNAH has drawn its first
+// screen, after at least a moment so it doesn't flash.
+const bootSplash = document.getElementById("boot-splash");
+if (bootSplash) {
+  const hide = () => {
+    bootSplash.classList.add("boot-splash-done");
+    window.setTimeout(() => bootSplash.remove(), 400);
+  };
+  requestAnimationFrame(() => window.setTimeout(hide, Math.max(0, 700 - performance.now())));
+}

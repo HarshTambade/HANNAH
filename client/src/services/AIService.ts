@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { FileTransfer } from "@capacitor/file-transfer";
 import { Network } from "@capacitor/network";
-import { initLlama, releaseAllLlama } from "llama-cpp-capacitor";
+import type { initLlama } from "llama-cpp-capacitor";
 import type { ChatMessage, InferenceMode } from "../types";
 
 export type OfflineModelStatus = "available" | "downloadable" | "notready" | "unavailable" | "checking";
@@ -125,7 +125,10 @@ async function getLlamaContext() {
     llamaInitialization = (async () => {
       if (!(await modelExists())) throw new Error("The on-device model is not ready. Prepare offline AI while online first.");
       const model = await getModelPath();
-      const context = await initLlama({
+      // Loaded only on Android and iOS: the library talks to its native plugin
+      // as soon as it's imported, which fails (uncaught) on the web and desktop.
+      const { initLlama: startLlama } = await import("llama-cpp-capacitor");
+      const context = await startLlama({
         model,
         n_ctx: 2048,
         n_threads: Math.max(2, Math.min(6, navigator.hardwareConcurrency || 4)),
@@ -157,7 +160,10 @@ export async function generateOfflineReply(messages: ChatMessage[]) {
 }
 
 export async function releaseOfflineModel() {
+  const wasLoaded = Boolean(llamaContext || llamaInitialization);
   llamaContext = undefined;
   llamaInitialization = undefined;
+  if (!supportsNativeLlama() || !wasLoaded) return;
+  const { releaseAllLlama } = await import("llama-cpp-capacitor");
   await releaseAllLlama();
 }

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const clientRoot = resolve(import.meta.dirname, "..");
@@ -43,6 +43,9 @@ writeFileSync(electronPackagePath, `${JSON.stringify(electronPackage, null, 2)}\
 copyFileSync(resolve(clientRoot, "electron-main.ts"), resolve(electronRoot, "main.ts"));
 // HANNAH's window size, minimum size and background colour.
 copyFileSync(resolve(clientRoot, "electron-config.ts"), resolve(electronRoot, "capacitor.electron.config.ts"));
+// HANNAH's splash window instead of the generated plain-text one.
+mkdirSync(resolve(electronRoot, "assets"), { recursive: true });
+copyFileSync(resolve(clientRoot, "electron-splash.html"), resolve(electronRoot, "assets", "splash.html"));
 const signingAvailable = Boolean(process.env.CSC_LINK || process.env.WIN_CSC_LINK);
 let builderConfig = readFileSync(resolve(clientRoot, "electron-builder.yml"), "utf8");
 builderConfig = builderConfig.replace(/^  notarize: false$/m, `  notarize: ${releaseRequested && signingAvailable ? "true" : "false"}`);

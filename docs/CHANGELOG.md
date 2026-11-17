@@ -14,11 +14,15 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Improved
 
+- **Apps open like apps.** The desktop, Android and iOS apps show a HANNAH splash screen (Android 12+ system splash, iOS launch screen, desktop splash window, then the same splash while the app starts) and open on their own welcome-and-connect screen instead of the website's landing page. Once connected they open straight on chat, and they remember your key in the app's private storage until you disconnect, instead of asking again on every launch.
 - **Search and sharing.** The home, Integrations and Marketplace pages are rendered to HTML at build time, so search engines and link previews get the real headings and text; Integrations and Marketplace are now indexed too. Every public page has its own title, description and canonical address on hannah.eliteforums.in, a PNG social card (SVG cards don't show on most social sites), schema.org data (app, organization, FAQ matching the visible FAQ, breadcrumbs), a sitemap, robots.txt and an `llms.txt` summary for AI search tools. Footer and menu links to Marketplace and Integrations are real links. Four new FAQ answers (what HANNAH is, which models it works with, hands-free use, its license). PNG app icons for iOS and Android home screens.
 - **App tour on the website.** The screenshots section is now a tour of five real screens (Chat, Models, Automations, Agents, Integrations) in a browser frame with the screen's address and what it does.
 
 ### Fixed
 
+- **The desktop, Android and iOS apps couldn't connect.** The server only accepted browser requests from the origins in `CLIENT_ORIGIN`, which in production listed just the website, so every request from the apps was blocked and entering a key failed. The apps' own origins are now always allowed.
+- **The app could fall to its crash screen after connecting.** Leaving the landing page unmounted the 3D avatar while its loading overlay was still inside the scene, React failed to remove it, and the app showed "A moment of stillness". The avatar's loading and error overlays are now ordinary page elements.
+- The on-device model library tried to reach its native plugin on every start, which failed (uncaught) on the web and desktop. It now loads only on Android and iOS when it's used.
 - **Download buttons pointed at the old domain** (shanaya.eliteforums.in), as did every other request from the website, because the website build carried an old `VITE_API_BASE_URL`. On Vercel the website now always calls its own domain, download buttons are links on the same site, and the desktop and mobile apps use https://hannah.eliteforums.in unless a build sets another server. The server also accepts the desktop app's origin by default.
 - The desktop app's launch check in CI gave up after 60 seconds, but CI's macOS machines take about two minutes to start an unsigned app. It now waits up to four minutes there (the app itself starts in seconds).
 - Links that open a new window in the desktop app now open in the system browser.

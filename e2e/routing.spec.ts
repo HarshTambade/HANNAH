@@ -160,3 +160,11 @@ test("public pages arrive as real HTML, readable without running JavaScript", as
   // App screens stay out of search results.
   expect(await (await request.get("/chat/")).text()).toContain('content="noindex,follow"');
 });
+
+test("the apps' boot splash never shows on the website", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("html")).not.toHaveClass(/native-app/);
+  // main.tsx removes it once the app has drawn.
+  await expect(page.locator("#boot-splash")).toHaveCount(0);
+  await expect(page.getByText("One companion. Every kind of intelligence.")).toBeVisible();
+});

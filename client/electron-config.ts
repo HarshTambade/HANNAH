@@ -32,8 +32,10 @@ export default defineConfig({
     // Below this the desktop layout would switch to the phone tab bar.
     minWidth: 900,
     minHeight: 620,
-    // Matches the app background, so the window never flashes while loading.
-    backgroundColor: "#eef0f4",
+    // Matches the splash, so the window never flashes while loading.
+    backgroundColor: "#0c0e14",
   },
+  // HANNAH's splash (electron-splash.html), shown while the app starts.
+  splashScreen: { path: "assets/splash.html", width: 440, height: 300, backgroundColor: "#0c0e14", minimumDurationMs: 900 },
   csp: { policy },
 });

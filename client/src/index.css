@@ -779,3 +779,9 @@ button:focus-visible {
     radial-gradient(ellipse at 95% 30%, rgba(146, 184, 218, 0.28), transparent 40%),
     #eef0f4;
 }
+
+/* The apps' welcome screen: the same dark backdrop as the splash. */
+.app-welcome {
+  background: radial-gradient(60% 45% at 50% 18%, #1c2140 0%, #0c0e14 72%);
+  color: #fff;
+}

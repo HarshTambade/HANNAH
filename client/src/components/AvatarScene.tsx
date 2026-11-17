@@ -1,6 +1,6 @@
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, useAnimations, useGLTF, useProgress } from "@react-three/drei";
+import { useAnimations, useGLTF, useProgress } from "@react-three/drei";
 import { AnimationClip, Box3, BufferGeometry, Group, Material, MathUtils, Mesh, PerspectiveCamera, SkinnedMesh, Texture, Vector3 } from "three";
 import { DRACOLoader, SkeletonUtils } from "three-stdlib";
 import type { Emotion } from "../types";
@@ -284,29 +284,52 @@ function Avatar({ emotion, activity, pointer, pokes, reducedMotion, onMotionChan
   );
 }
 
-function SceneLoader() {
+// The loading and error overlays are ordinary page elements drawn over the
+// canvas, not drei <Html> inside the scene. <Html> runs its own React root in a
+// container the canvas owns; when the avatar unmounted (leaving the landing
+// page for chat) the canvas removed that container first, React then failed to
+// remove the overlay, and the whole app fell back to its crash screen.
+
+/** Mounted inside the scene while the model loads (the Suspense fallback). */
+function LoadingSignal({ onChange }: { onChange: (loading: boolean) => void }) {
+  useEffect(() => {
+    onChange(true);
+    return () => onChange(false);
+  }, [onChange]);
+  return null;
+}
+
+/** Mounted inside the scene when the model failed to load. */
+function ErrorSignal({ onFailed, onMotionChange }: { onFailed: () => void; onMotionChange?: (motion: AvatarMotion) => void }) {
+  useEffect(() => {
+    onFailed();
+    onMotionChange?.("error");
+  }, [onFailed, onMotionChange]);
+  return null;
+}
+
+function LoadingOverlay() {
   const { progress } = useProgress();
   return (
-    <Html center>
+    <div className="pointer-events-none absolute inset-0 grid place-items-center" role="status" aria-live="polite">
       <div className="w-44 text-center">
         <div className="mx-auto mb-3 h-1 w-36 overflow-hidden rounded-full bg-white/10">
           <div className="h-full rounded-full bg-violet-400 transition-all" style={{ width: `${progress}%` }} />
         </div>
         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400">Preparing your space · {Math.round(progress)}%</p>
       </div>
-    </Html>
+    </div>
   );
 }
 
-function SceneError({ onMotionChange }: { onMotionChange?: (motion: AvatarMotion) => void }) {
-  useEffect(() => onMotionChange?.("error"), [onMotionChange]);
+function ErrorOverlay() {
   return (
-    <Html center>
+    <div className="pointer-events-none absolute inset-0 grid place-items-center" role="alert">
       <div className="w-64 rounded-xl border border-rose-300/15 bg-[#0c101b]/90 px-4 py-3 text-center shadow-xl">
         <p className="text-xs font-semibold text-slate-200">Avatar could not be displayed</p>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-400">Refresh the page to try loading the model again.</p>
       </div>
-    </Html>
+    </div>
   );
 }
 
@@ -336,6 +359,13 @@ export default function AvatarScene({ emotion, activity = "idle", onMotionChange
   const pointer = useRef<PointerState>(null);
   const pokes = useRef(0);
   const reducedMotion = usePrefersReducedMotion();
+  // Shown only while the scene is waiting for the model (a cached model may never wait).
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const markFailed = useCallback(() => setFailed(true), []);
+  const retrying = canFallback && !useUncompressedModel;
+  // Trying the uncompressed model after the compressed one failed starts over.
+  useEffect(() => { setFailed(false); }, [modelUrl]);
 
   // She follows the pointer with her head and eyes, measured from her face
   // (about a third of the way down the stage).
@@ -383,13 +413,14 @@ export default function AvatarScene({ emotion, activity = "idle", onMotionChange
         <AvatarLoadBoundary
           key={modelUrl}
           onError={canFallback && !useUncompressedModel ? () => setUseUncompressedModel(true) : undefined}
-          fallback={<SceneError onMotionChange={onMotionChange} />}
+          fallback={<ErrorSignal onFailed={markFailed} onMotionChange={onMotionChange} />}
         >
-          <Suspense fallback={<SceneLoader />}>
+          <Suspense fallback={<LoadingSignal onChange={setLoading} />}>
             <Avatar emotion={emotion} activity={activity} pointer={pointer} pokes={pokes} reducedMotion={reducedMotion} onMotionChange={onMotionChange} modelUrl={modelUrl} />
           </Suspense>
         </AvatarLoadBoundary>
       </Canvas>
+      {failed && !retrying ? <ErrorOverlay /> : loading ? <LoadingOverlay /> : null}
     </div>
   );
 }

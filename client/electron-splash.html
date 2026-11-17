@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HANNAH</title>
+    <!-- The desktop app's splash window (copied to client/electron/assets/splash.html by scripts/prepare-electron-release.mjs). -->
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+      body { display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(70% 60% at 50% 42%, #1c2140 0%, #0c0e14 75%); color: #fff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-app-region: drag; }
+      svg { width: 84px; height: 84px; animation: breathe 1.8s ease-in-out infinite; }
+      .name { margin-top: 20px; padding-left: 0.32em; font-size: 19px; font-weight: 600; letter-spacing: 0.32em; }
+      .tagline { margin-top: 6px; font-size: 12px; color: #94a3b8; }
+      @keyframes breathe { 50% { transform: scale(0.94); opacity: 0.82; } }
+      @media (prefers-reduced-motion: reduce) { svg { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="bs-a" gradientUnits="userSpaceOnUse" x1="256" y1="106" x2="406" y2="256"><stop offset="0" stop-color="#4f8ff0"/><stop offset="1" stop-color="#8be3f2"/></linearGradient><linearGradient id="bs-b" gradientUnits="userSpaceOnUse" x1="406" y1="256" x2="256" y2="406"><stop offset="0" stop-color="#8be3f2"/><stop offset="1" stop-color="#f7e27a"/></linearGradient><linearGradient id="bs-c" gradientUnits="userSpaceOnUse" x1="256" y1="406" x2="106" y2="256"><stop offset="0" stop-color="#f7e27a"/><stop offset="1" stop-color="#f4a9c0"/></linearGradient><linearGradient id="bs-d" gradientUnits="userSpaceOnUse" x1="106" y1="256" x2="256" y2="106"><stop offset="0" stop-color="#f4a9c0"/><stop offset="1" stop-color="#4f8ff0"/></linearGradient></defs><g fill="none" stroke-width="78"><path d="M256 106a150 150 0 0 1 150 150" stroke="url(#bs-a)"/><path d="M406 256a150 150 0 0 1-150 150" stroke="url(#bs-b)"/><path d="M256 406a150 150 0 0 1-150-150" stroke="url(#bs-c)"/><path d="M106 256a150 150 0 0 1 150-150" stroke="url(#bs-d)"/></g></svg>
+    <div class="name">HANNAH</div>
+    <div class="tagline">Your Personal AI</div>
+  </body>
+</html>

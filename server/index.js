@@ -69,11 +69,17 @@ if (process.env.CLOUD_API_URL && !process.env.HANNAH_DEFAULT_PROVIDER) process.e
 const app = express();
 const port = Number(process.env.PORT) || 3001;
 const host = process.env.HOST?.trim() || "127.0.0.1";
-// capacitor://localhost (iOS), https://localhost (Android) and capacitor-electron://localhost (desktop app).
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:5173,capacitor://localhost,http://localhost,https://localhost,capacitor-electron://localhost")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+// HANNAH's own apps call this server from fixed origins: capacitor://localhost
+// (iOS), https://localhost and http://localhost (Android) and
+// capacitor-electron://localhost (desktop). They're always allowed, on top of
+// CLIENT_ORIGIN, so setting CLIENT_ORIGIN for the website can't lock the apps
+// out. Set HANNAH_ALLOW_APP_ORIGINS=false to serve the website only.
+const APP_ORIGINS = ["capacitor://localhost", "https://localhost", "http://localhost", "capacitor-electron://localhost"];
+const allowAppOrigins = String(process.env.HANNAH_ALLOW_APP_ORIGINS ?? "true").trim().toLowerCase() !== "false";
+const allowedOrigins = [...new Set([
+  ...(process.env.CLIENT_ORIGIN || "http://localhost:5173").split(",").map((origin) => origin.trim()).filter(Boolean),
+  ...(allowAppOrigins ? APP_ORIGINS : []),
+])];
 const localDevelopmentHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 const corsOrigin = (origin, callback) => {
   if (!origin || allowedOrigins.includes(origin)) return callback(null, true);

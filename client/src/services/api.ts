@@ -14,11 +14,18 @@ export function apiBase() {
 const TOKEN_KEY = "hannah.session.apiToken";
 const GROQ_KEY = "hannah.session.groqKey";
 
-// Credentials live in sessionStorage: they survive a page refresh but are
-// cleared when this browser tab closes and are never shared with other tabs.
+// On the website, credentials live in sessionStorage: they survive a page
+// refresh but are cleared when the tab closes and aren't shared with other
+// tabs. The desktop and mobile apps have no tabs; there they live in the app's
+// own private storage, so you don't have to connect again on every launch, and
+// Disconnect (or signing out) clears them.
+function credentialStore() {
+  return IS_WEBSITE ? window.sessionStorage : window.localStorage;
+}
+
 function readSession(key: string) {
   try {
-    return window.sessionStorage.getItem(key) || "";
+    return credentialStore().getItem(key) || "";
   } catch {
     return "";
   }
@@ -26,8 +33,8 @@ function readSession(key: string) {
 
 function writeSession(key: string, value: string) {
   try {
-    if (value) window.sessionStorage.setItem(key, value);
-    else window.sessionStorage.removeItem(key);
+    if (value) credentialStore().setItem(key, value);
+    else credentialStore().removeItem(key);
   } catch {
     // Private browsing can block storage; the value still lives in memory.
   }
