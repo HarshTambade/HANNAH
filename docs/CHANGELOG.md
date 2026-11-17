@@ -2,7 +2,7 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
-## 1.4.0 — Unreleased
+## 1.4.0 — 2026-11-17
 
 ### New
 
