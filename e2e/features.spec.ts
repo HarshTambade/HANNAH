@@ -222,33 +222,87 @@ test("an automation runs, waits for approval before acting, and records the resu
   await approval.getByRole("button", { name: "Approve" }).click();
   await expect(approval).toBeHidden();
   const history = page.getByRole("list", { name: "Automation runs" });
-  await expect(history.getByText("Done", { exact: true })).toBeVisible();
+  await expect(history.locator("summary").getByText("Done", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("hannah.memory.v1") ?? "")).toContain("Ship the release");
 
   // Turning the schedule on shows when it runs next.
   await page.getByRole("checkbox", { name: "Run on schedule" }).check();
-  await expect(page.getByText(/Weekdays at 08:00 · next /)).toBeVisible();
+  await expect(page.getByText(/Weekdays at 08:00 · 3 steps · next /)).toBeVisible();
 });
 
-test("a new automation built on the canvas starts on its schedule and shows its result in the app", async ({ page }) => {
+test("an automation is built step by step, runs, and can be edited and deleted", async ({ page }) => {
   await connectAsGuest(page);
-  await page.route("**/api/agent", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { content: JSON.stringify({ reply: "Focus: finish the release notes.", emotion: "happy" }), tool_calls: [] } }) }));
+  const prompts: string[] = [];
+  await page.route("**/api/agent", async (route) => {
+    prompts.push(JSON.parse(route.request().postData() || "{}").messages?.[0]?.content ?? "");
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { content: JSON.stringify({ reply: "Try a lentil soup with a side salad.", emotion: "happy" }), tool_calls: [] } }) });
+  });
   await page.goto("/automations");
+  await expect(page.getByRole("list", { name: "Saved automations" })).toHaveCount(0);
 
-  // A step that isn't connected to the trigger would never run, so saving says which one.
-  await page.getByRole("button", { name: /Agent task/ }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Summarize my day" })).toContainText("never run");
-  await page.getByRole("button", { name: "Remove step" }).click();
+  await page.getByRole("button", { name: "New automation" }).click();
+  const editor = page.getByRole("region", { name: "New automation" });
+  // Saving says what's missing, one thing at a time.
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor.getByRole("alert")).toHaveText("Give this automation a name.");
+  await editor.getByLabel("Name").fill("Lunch idea");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor.getByRole("alert")).toHaveText("Step 1: say what HANNAH should do.");
+  await editor.getByLabel("What should HANNAH do?").fill("Suggest a light lunch.");
 
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Saved." })).toContainText("Next run:");
-  await expect(page.getByRole("checkbox", { name: "Run on schedule" })).toBeChecked();
+  // Weekdays only, at 12:30.
+  await editor.getByRole("button", { name: "Weekdays" }).click();
+  await expect(editor.getByRole("button", { name: "Saturday" })).toHaveAttribute("aria-pressed", "false");
+  await expect(editor.getByRole("button", { name: "Monday" })).toHaveAttribute("aria-pressed", "true");
+  await editor.getByLabel("At", { exact: true }).fill("12:30");
+  await expect(editor.getByText(/Weekdays at 12:30\. Next: /)).toBeVisible();
 
-  await page.getByRole("button", { name: /^Run .* now$/ }).click();
-  const toast = page.getByRole("status", { name: "Automation" });
-  await expect(toast).toContainText("Focus: finish the release notes.");
-  await expect(page.getByRole("list", { name: "Automation runs" }).getByText("Done", { exact: true })).toBeVisible();
-  await toast.getByRole("button", { name: "Dismiss" }).click();
-  await expect(toast).toBeHidden();
+  // Steps are added in order and can be moved and removed; nothing to wire up.
+  await editor.getByRole("group", { name: "Add a step" }).getByRole("button", { name: "Action" }).click();
+  await expect(editor.getByRole("listitem", { name: "Step 3: Action" })).toBeVisible();
+  await editor.getByRole("button", { name: "Move step 3 up" }).click();
+  await expect(editor.getByRole("listitem", { name: "Step 2: Action" })).toBeVisible();
+  await editor.getByRole("button", { name: "Remove step 2" }).click();
+  await expect(editor.getByRole("listitem")).toHaveCount(2);
+
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved “Lunch idea”" })).toContainText("Next run:");
+  const saved = page.getByRole("list", { name: "Saved automations" });
+  await expect(saved).toContainText("Weekdays at 12:30 · 2 steps");
+  await expect(saved.getByRole("checkbox", { name: "Run on schedule" })).toBeChecked();
+
+  await page.getByRole("button", { name: "Run Lunch idea now" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "“Lunch idea” finished." })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Automation runs" })).toContainText("lentil soup");
+  // This screen shows the result in place, so no floating card repeats it.
+  await expect(page.getByRole("status", { name: "Automation" })).toHaveCount(0);
+  expect(prompts).toEqual(["Suggest a light lunch."]);
+  await expect(saved).toContainText("Last run");
+
+  // Edit opens the same steps; changes are saved in place.
+  await page.getByRole("button", { name: "Edit Lunch idea" }).click();
+  const edit = page.getByRole("region", { name: "Edit automation" });
+  await expect(edit.getByLabel("What should HANNAH do?")).toHaveValue("Suggest a light lunch.");
+  await edit.getByLabel("Name").fill("Lunch ideas");
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(saved.getByText("Lunch ideas", { exact: true })).toBeVisible();
+  await expect(saved.getByRole("listitem")).toHaveCount(1);
+
+  // Delete asks first.
+  await page.getByRole("button", { name: "Delete Lunch ideas" }).click();
+  await page.getByRole("group", { name: "Delete Lunch ideas?" }).getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByRole("list", { name: "Saved automations" })).toHaveCount(0);
+});
+
+test("a template opens ready to save", async ({ page }) => {
+  await connectAsGuest(page);
+  await page.goto("/automations");
+  await page.getByRole("button", { name: "Use the Friday review template" }).click();
+  const editor = page.getByRole("region", { name: "New automation" });
+  await expect(editor.getByLabel("Name")).toHaveValue("Friday review");
+  await expect(editor.getByRole("button", { name: "Friday" })).toHaveAttribute("aria-pressed", "true");
+  await expect(editor.getByRole("button", { name: "Monday" })).toHaveAttribute("aria-pressed", "false");
+  await expect(editor.getByRole("listitem")).toHaveCount(3);
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("list", { name: "Saved automations" })).toContainText("Fri at 16:00 · 3 steps");
 });

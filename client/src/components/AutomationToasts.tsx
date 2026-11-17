@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ShieldCheck, Workflow, X } from "lucide-react";
 import { AUTOMATION_OUTPUT_EVENT, type AutomationOutput } from "../services/AutomationService";
 
 type Toast = AutomationOutput & { id: number };
 
 /** Results and approval requests from automations, shown on every app screen. */
-export function AutomationToasts({ onOpen }: { onOpen: () => void }) {
+export function AutomationToasts({ onOpen, onAutomationsScreen = false }: { onOpen: () => void; onAutomationsScreen?: boolean }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const onAutomationsScreenRef = useRef(onAutomationsScreen);
+  onAutomationsScreenRef.current = onAutomationsScreen;
   useEffect(() => {
     let next = 0;
     const onOutput = (event: Event) => {
@@ -14,6 +16,8 @@ export function AutomationToasts({ onOpen }: { onOpen: () => void }) {
       if (!detail) return;
       // Tells the automation runner the result was shown here.
       event.preventDefault();
+      // The Automations screen already shows results and approvals in place.
+      if (onAutomationsScreenRef.current) return;
       next += 1;
       const id = next;
       setToasts((current) => [...current.slice(-2), { ...detail, id }]);

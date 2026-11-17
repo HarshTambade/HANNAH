@@ -420,7 +420,7 @@ export default function Dashboard({ onOpenChat, onOpenMemory, onOpenAutomations,
 
       <section className="mt-4 grid gap-3 sm:grid-cols-3" aria-label="More">
         {[
-          { label: "Automations", detail: snapshot.workflows ? `${snapshot.workflows} saved workflow${snapshot.workflows === 1 ? "" : "s"}` : "Design a routine visually", Icon: Workflow, onClick: onOpenAutomations },
+          { label: "Automations", detail: snapshot.workflows ? `${snapshot.workflows} saved automation${snapshot.workflows === 1 ? "" : "s"}` : "Start from a template", Icon: Workflow, onClick: onOpenAutomations },
           { label: "Marketplace", detail: snapshot.installedPackages ? `${snapshot.installedPackages} installed · ${snapshot.activePackages} active` : "Add agents and skills", Icon: PackageOpen, onClick: onOpenMarketplace },
           { label: "Integrations", detail: "REST API and MCP setup", Icon: Cable, onClick: onOpenIntegrations },
         ].map(({ label, detail, Icon, onClick }) => (

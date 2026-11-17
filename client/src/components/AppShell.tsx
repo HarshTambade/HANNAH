@@ -91,7 +91,7 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
         </div>
       </nav>
       <ReminderToasts />
-      <AutomationToasts onOpen={() => onNavigate("automations")} />
+      <AutomationToasts onOpen={() => onNavigate("automations")} onAutomationsScreen={active === "automations"} />
       <RemoteApprovalToasts />
     </div>
   );

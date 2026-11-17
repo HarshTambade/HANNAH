@@ -29,9 +29,9 @@ const stops = [
     icon: Workflow,
     path: "/automations",
     image: "/screens/automations.webp",
-    alt: "HANNAH's Automations screen: a morning-plan routine waiting for approval before it saves to memory.",
+    alt: "HANNAH's Automations screen: editing a Morning plan routine that runs on weekdays at 08:00, with an Ask HANNAH step and an output step.",
     title: "Routines that run themselves",
-    points: ["Run daily, on weekdays or every few hours", "Each step hands its result to the next", "Actions pause until you press Approve"],
+    points: ["Pick the days and time, or every few hours", "Steps run in order, each using the last result", "Start from a template; actions wait for your approval"],
   },
   {
     id: "agents",
