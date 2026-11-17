@@ -12,6 +12,11 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
   - **File uploaded:** upload a CSV, JSON or text file (up to 1 MB) from the workflow list or the editor's Test run, and each row can become an item.
   - **Code (beta):** write JavaScript that runs in an isolated sandbox: QuickJS in WebAssembly in its own worker, with no network, files or credentials, at most 2 seconds and 32 MB. Its console output appears in the run.
   - A new **Invoice emails** template uses the email trigger.
+- **Workflow steps on your desktop (beta).**
+  - **What they do:** "Read a web page on your desktop" opens a page in a hidden, signed-out window on your computer, which works for pages that need JavaScript or are only reachable from your network. "Coding task on your desktop" runs HANNAH's Coding agent in a folder you shared.
+  - **Turning them on:** turn on **Run workflow tasks** in Settings → Desktop access. Each task asks you in a system dialog first, a coding task still asks before every file change and command, and it can use only the folder you approved.
+  - **Limits:** pages on this computer itself and cloud metadata addresses are refused.
+- **A redesigned website.** New sections for AI models (providers and Auto routing), AI agents (how Team works, and what runs on your computer, labelled by status), developers, a what-works-where table, the roadmap with Available, Beta and Coming labels, and help and support. The About page is rewritten to match the product. Every link, download and anchor was checked, and pages are checked for horizontal overflow at four widths.
 - **HANNAH's own icon on every platform.** The desktop apps (macOS, Windows, Linux, the Windows installer), Android (legacy, round and adaptive icons, plus a monochrome layer for themed icons) and iOS shipped framework default icons; they're now generated from the official mark by `client/scripts/generate-brand-assets.mjs`, with a CI check that refuses default icons. The web app gains favicon.ico and a maskable PWA icon.
 - **Website: an automation section** with screenshots of a real workflow run, the steps and integrations with their status (available, beta, coming), and a FAQ on where workflows run.
 

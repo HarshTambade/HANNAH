@@ -46,6 +46,7 @@ A stable release needs no class-5 cell in a row that the release notes advertise
 | Local models | ✅ T (WebLLM downloaded and answered in Chromium with WebGPU; after the worker change, download progress re-verified, reply not yet re-run) | ✅ D (llama.cpp on-device) | ✅ D (llama.cpp on-device) | 🟡 D (WebLLM with WebGPU; Ollama through the server) | 🟡 D (as macOS) | 🟡 D (as macOS; WebGPU support varies by GPU driver) |
 | Agents and Team mode | ✅ T (mocked models) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Desktop files and terminal | ❌ | ❌ | ❌ | ✅ T (HannahDesktop plugin; see below) | ✅ B | ✅ B |
+| Desktop tasks from workflows (beta: read a page, coding task) | ❌ | ❌ | ❌ | 🟡 T (page reader run in Electron 45 against a test page; job protocol and runner tested; not yet driven end to end with a person answering the dialogs) | 🟡 B | 🟡 B |
 | Tasks across devices (follow and approve) | ✅ T (approve from another device, mocked account API; server tests on SQLite) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Calendar and email (Google, Microsoft) | ✅ T (sign-in flow with mocked providers; server tests with fake Google and Graph) | 🟡 D (sign-in opens the system browser) | 🟡 D (sign-in opens the system browser) | 🟡 D (system browser) | 🟡 D (system browser) | 🟡 D (system browser) |
 | Desktop computer use | ❌ | ❌ | ❌ | 🟡 D (only in a self-built desktop app with the bridge, plus the server's Anthropic key) | 🟡 D | 🟡 D |

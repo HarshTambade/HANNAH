@@ -77,7 +77,7 @@ Statuses: workflows are **draft**, **published** and **active** or **paused**; v
 | Triggers | Manual, Schedule (interval, daily, weekly, cron; time zone), Webhook (token or HMAC), HANNAH event (reminder fired, team finished, budget exceeded, approval requested, workflow completed or failed, custom events), New email (Gmail or Outlook, optional search filter, checked every 5+ minutes), File uploaded (up to 1 MB; CSV and JSON can become one item per row) | Available |
 | Actions | HTTP request, Send notification, Email (read newest, draft, send), Calendar (list, add), Slack, Discord, GitHub (issue, comment, list issues, list workflow runs), Notion page, Save to memory, Create or list reminders, Create document (Markdown or CSV) | Available |
 | | PostgreSQL (parameterized SQL, read-only by default) | Beta |
-| | Browser task and coding task on the desktop app | Upcoming |
+| | Read a web page on your desktop, Coding task on your desktop (run by the signed-in desktop app; see "Desktop steps") | Beta |
 | Logic | If, Switch, Filter, Merge, Split into items, Aggregate, Limit, Wait, Approval, Wait for webhook | Available |
 | Data | Set fields, Map fields, Extract with pattern, Parse (JSON, CSV, key: value), Convert, Validate | Available |
 | | Code (JavaScript in a sandbox; once for all items or once per item; console output kept with the run) | Beta |
@@ -87,6 +87,26 @@ Statuses: workflows are **draft**, **published** and **active** or **paused**; v
 Each node declares its parameters (the editor renders them), ports, credential types, permissions, and one handler. Upcoming nodes are listed so people see what's planned, but validation refuses them, so a workflow can't be activated with a step that would only fail.
 
 AI steps use the account's saved provider keys through the same gateway as chat (`requestWithProviderFallback`); with no key saved, they fail with a message saying where to add one. Server keys are used only when the operator allows it (`accountsUseServerKeys`).
+
+### Desktop steps
+
+"Read a web page on your desktop" and "Coding task on your desktop" run on the person's own computer, through the desktop app.
+
+1. **The step queues a job.** On its first run, the step writes a row to `hannah_workflow_device_jobs`, and the execution waits (`waiting.kind = "device"`). The job id comes from the execution and step, so a retried step reuses it.
+2. **A desktop app claims it.** The desktop app must be signed in to the same account, with **Run workflow tasks** turned on in Settings → Desktop access. Turning that on asks in a native dialog, and it's off by default. The app polls `GET /api/workflows/device-jobs` every 20 seconds and on focus. It claims a job with `POST …/:id/claim`, a conditional update, so only one device gets each job.
+3. **The person approves it.** The desktop plugin asks in a native dialog before each task:
+   - **Page reads:** the plugin checks the address first. It refuses this computer itself, link-local and metadata addresses, and flags local-network addresses in the dialog. It then opens the page in a hidden window with an in-memory session: no cookies, no Node.js, sandboxed, with no pop-ups, downloads or permissions. Requests to loopback addresses are cancelled, including requests made by the page's own scripts. Title, text, links and an optional screenshot go back to the workflow.
+   - **Coding tasks:** the agent gets the desktop tools held to the one folder that was approved. Each file change and command still asks.
+4. **It reports back.** `POST …/:id/complete` from the claiming device stores the result and resumes the execution. A decline or an error fails the step with that reason.
+5. **It expires or is cancelled.** If no device finishes the job by the step's pickup time, the run times out with a message saying what's needed. Cancelling the run withdraws the job.
+
+Verified by:
+- **Server:** claim races, the wrong device, other accounts, success, decline, cancel and expiry, on SQLite and Postgres.
+- **Plugin core:** address rules, the setting and the dialogs.
+- **The page reader in real Electron 45:** JavaScript-rendered text, the screenshot, a blocked pop-up, and a page's own request to localhost that never arrived.
+- **The app's job runner:** unit tests.
+
+The full chain on a desktop with a person clicking the dialogs hasn't been run end to end. The dialogs can't be automated without a bypass, and adding one would be a security hole.
 
 ## 5. Security
 
@@ -147,7 +167,7 @@ Vercel's Hobby plan allows only daily cron jobs (a more frequent schedule fails 
 ## 8. Not built yet
 
 - Database change triggers. New email uses polling (every 5+ minutes), not Gmail push or Graph subscriptions.
-- Steps that run on the desktop app (browser tasks, coding tasks) from a server workflow.
+- Full computer use (screen, mouse, keyboard) as a workflow step. Desktop steps read pages and work in shared folders only.
 - Packages in the Code step: plain JavaScript only, no npm modules or network.
 - OAuth for integrations beyond Google and Microsoft (Slack, GitHub and Notion use tokens or webhook URLs today).
 - Workspace sharing: workflows belong to one account.

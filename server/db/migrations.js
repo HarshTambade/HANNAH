@@ -296,6 +296,34 @@ const MIGRATIONS = [
     // Polling triggers (new email) keep their cursor here: what they've already seen.
     statements: ["ALTER TABLE hannah_workflow_triggers ADD COLUMN state TEXT"],
   },
+  {
+    version: 8,
+    name: "workflow desktop jobs",
+    // A step that runs on the user's desktop app: the server queues it here, a
+    // signed-in desktop app claims it, runs it (asking the user there) and
+    // reports back, which resumes the waiting execution.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_workflow_device_jobs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        workflow_id TEXT NOT NULL,
+        execution_id TEXT NOT NULL,
+        node_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        input TEXT NOT NULL,
+        status TEXT NOT NULL,
+        device_id TEXT,
+        device_name TEXT,
+        claimed_at BIGINT,
+        result TEXT,
+        error TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_workflow_device_jobs_user ON hannah_workflow_device_jobs (user_id, status, created_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

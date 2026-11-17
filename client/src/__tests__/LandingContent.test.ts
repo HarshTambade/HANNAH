@@ -15,3 +15,23 @@ describe("landing automation content", () => {
     }
   });
 });
+
+describe("landing model and agent content", () => {
+  it("lists Auto's routing modes exactly as the app defines them", async () => {
+    const { ROUTING_MODES: app } = await import("../services/ModelRouting");
+    const { ROUTING_MODES: site } = await import("../content/landing");
+    expect(site.map(([label, text]) => ({ label, description: text }))).toEqual(app.map(({ label, description }) => ({ label, description })));
+  });
+
+  it("names only cloud providers the server supports", async () => {
+    const { MODEL_PROVIDERS } = await import("../content/landing");
+    const { listProviders } = require("../../../server/providers/catalog.js") as { listProviders: () => Array<{ label: string; local?: boolean }> };
+    const labels = listProviders().map((provider) => provider.label.replace(/ \(.*\)$/, ""));
+    for (const name of MODEL_PROVIDERS.cloud) expect(labels, `${name} isn't a server provider`).toContain(name);
+  });
+
+  it("marks the desktop workflow steps with the engine's status", async () => {
+    const { AGENTS } = await import("../content/landing");
+    expect(AGENTS.computer.find((item) => item.name === "Desktop tasks from workflows")?.status).toBe(REGISTRY.get("device.browser")!.status);
+  });
+});

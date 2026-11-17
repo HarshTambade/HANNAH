@@ -154,6 +154,8 @@ type AgentTurnOptions = {
   signal?: AbortSignal;
   /** Specialist agents: use exactly these tools instead of the task profile's. */
   allowedTools?: string[];
+  /** Use exactly these tool implementations instead of the device's (for example tools scoped to one folder). */
+  toolsOverride?: HANNAHTool[];
   /** Specialist agents: tier to ask Auto routing for. */
   routeHint?: "simple" | "standard" | "complex";
   /** Shown in the run log, for example "Research agent". */
@@ -187,9 +189,9 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
   const profile = routerAgent.selectProfile(taskType);
   const requestedIterations = options.maxIterations ?? profile.maxIterations ?? policy.maxIterations;
   const maxIterations = Math.max(1, Math.min(hardMaxIterations, Math.floor(requestedIterations)));
-  const allTools = [...getDeviceTools()].filter((tool) => !deniedTools.has(normalizeToolName(tool.name)));
+  const allTools = [...(options.toolsOverride ?? getDeviceTools())].filter((tool) => !deniedTools.has(normalizeToolName(tool.name)));
   const profileTools = selectToolsForProfile(profile, allTools);
-  const specialistTools = options.allowedTools ? allTools.filter((tool) => options.allowedTools!.includes(tool.name)) : null;
+  const specialistTools = options.toolsOverride ? allTools : options.allowedTools ? allTools.filter((tool) => options.allowedTools!.includes(tool.name)) : null;
   const tools = specialistTools ?? (profileTools.length ? profileTools : allTools);
   const marketplaceItemIds = MarketplaceService.getActivePackageIds();
   const marketplaceInstructions = MarketplaceService.getRuntimeInstructions();

@@ -153,7 +153,12 @@ export default function ExecutionDetail({ executionId, onOpenExecution, onClose,
       )}
       {execution.status === "waiting" && execution.waiting && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          {execution.waiting.kind === "time" ? <>Waiting until {when(execution.waiting.until)}, then it continues on its own.</> : (
+          {execution.waiting.kind === "time" ? <>Waiting until {when(execution.waiting.until)}, then it continues on its own.</> : execution.waiting.kind === "device" ? (
+            <>
+              <span className="block font-semibold">{execution.waiting.message ?? "Waiting for your desktop app."}</span>
+              <span className="mt-1 block text-xs">It runs when the HANNAH desktop app is open and signed in to this account, with “Run workflow tasks” on in Settings → Desktop access; it asks you there first. If no desktop picks it up by {when(execution.waiting.until)}, the run stops.</span>
+            </>
+          ) : (
             <>
               Waiting for a request at this run's resume URL (expires {when(execution.waiting.until)}):
               {detail.resumeUrl && <span className="mt-2 flex items-center gap-2 font-mono text-[11px]"><span className="min-w-0 flex-1 truncate rounded-lg bg-white px-2 py-1">{detail.resumeUrl}</span><button type="button" className="btn-ghost !p-1.5" aria-label="Copy resume URL" onClick={() => void navigator.clipboard?.writeText(detail.resumeUrl!)}><Copy size={12} /></button></span>}

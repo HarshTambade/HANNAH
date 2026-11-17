@@ -71,7 +71,7 @@ export type WebhookSecret = { nodeId: string; triggerId: string; secret: string 
 export type ExecutionStatus = "queued" | "running" | "waiting" | "waiting-approval" | "completed" | "failed" | "cancelled" | "timed-out";
 export type Execution = {
   id: string; workflowId: string; workflowVersion: number | null; mode: "manual" | "test" | "schedule" | "webhook" | "event" | "retry"; status: ExecutionStatus;
-  error: string | null; errorNode: string | null; attempts: number; waiting: { nodeId: string; kind: "time" | "approval" | "webhook"; until?: number; message?: string; details?: unknown } | null;
+  error: string | null; errorNode: string | null; attempts: number; waiting: { nodeId: string; kind: "time" | "approval" | "webhook" | "device"; until?: number; message?: string; details?: unknown } | null;
   retryOf: string | null; cancelRequested: boolean; createdAt: number; startedAt: number | null; finishedAt: number | null; updatedAt: number;
   workflowName?: string; nodes?: { done: number; failed: number; skipped: number; total: number };
 };
@@ -185,6 +185,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   reminders: "Create reminders",
   ai: "Use your AI provider keys (counts toward their usage)",
   "computer-use": "Control your computer",
+  desktop: "Send tasks to your desktop app (reading web pages, coding in shared folders); each one asks you there",
   "read-email": "Read your email",
   "run-code": "Run your JavaScript in an isolated sandbox (no network or files)",
 };

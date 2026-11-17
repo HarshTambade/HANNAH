@@ -198,6 +198,26 @@ function pickHeaders(headers) {
 const SECRET_PATTERNS = [/\b(?:gsk|sk|pk|rk|ghp|gho|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{16,}/i, /-----BEGIN [A-Z ]*PRIVATE KEY-----/, /\b(?:password|passcode|pin)\s*[:=]\s*\S+/i, /\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{1,4}\b/];
 const looksSecret = (text) => SECRET_PATTERNS.some((pattern) => pattern.test(text));
 
+/**
+ * A step that runs on the user's desktop app. The first time it runs it queues
+ * a job and the execution waits; when a desktop app reports back, the
+ * execution resumes here with the result. One job per step run, built from the
+ * first item; its output joins that item.
+ */
+async function deviceStep(ctx, kind, buildInput, shapeOutput) {
+  if (ctx.resumed) {
+    const reply = ctx.resumed.data || {};
+    if (!reply.ok) throw fail(reply.error || "The desktop app couldn't do this task.", { retryable: false });
+    return { main: [json({ ...(ctx.items[0]?.json || {}), ...shapeOutput(reply.output || {}), device: reply.device || null })] };
+  }
+  if (ctx.execution.mode === "test" && String(ctx.execution.id).startsWith("test-")) throw fail("Desktop steps can't be tested on their own. Use Test run for the whole workflow.", { retryable: false });
+  const params = ctx.resolveOnce();
+  const input = buildInput(params);
+  const minutes = Math.max(1, Math.min(1440, toNumber(params.pickupMinutes) || 60));
+  const job = await ctx.services.createDeviceJob({ nodeId: ctx.node.id, kind, input, expiresAt: ctx.now() + minutes * 60_000 });
+  return { wait: { kind: "device", jobId: job.id, until: job.expiresAt, message: kind === "browser" ? `Waiting for your desktop app to open ${input.url}` : `Waiting for your desktop app to run a coding task in “${input.folder || "a shared folder"}”` } };
+}
+
 // ---------- the registry ----------
 
 const NODES = [
@@ -936,16 +956,41 @@ const NODES = [
     execute: async (ctx) => ({ main: await perItem(ctx, async (params, item) => json({ ...item.json, memories: await ctx.services.searchMemories(toText(params.query), Math.max(1, Math.min(20, toNumber(params.limit) || 5))) })) }),
   },
   {
-    type: "device.browser", category: "action", label: "Browser task", icon: "AppWindow", status: STATUS.upcoming,
-    description: "Runs a browsing task on your desktop app. Coming soon: workflows run on the server, and the desktop runtime doesn't take server jobs yet.",
-    inputs: ["main"], outputs: ["main"], permissions: ["computer-use"], params: [],
-    execute: async () => { throw fail("Browser tasks from workflows aren't available yet."); },
+    type: "device.browser", category: "action", label: "Read a web page on your desktop", icon: "AppWindow", status: STATUS.beta,
+    description: "Your desktop app opens the page in a hidden, signed-out browser window (so pages that need JavaScript, or are only reachable from your computer, work) and returns its title, text and links. The desktop app asks you before opening each page. Needs the desktop app open and signed in, with “Run workflow tasks” turned on in Settings → Desktop access.",
+    inputs: ["main"], outputs: ["main"], permissions: ["desktop"],
+    params: [
+      { name: "url", label: "Page URL", type: "string", required: true, default: "https://", expression: true },
+      { name: "waitFor", label: "Wait for an element (CSS selector)", type: "string", default: "", help: "Optional, for pages that load their content later." },
+      { name: "screenshot", label: "Include a screenshot", type: "boolean", default: false },
+      { name: "pickupMinutes", label: "Fail if no desktop picks it up within (minutes)", type: "number", default: 60, min: 1, max: 1440 },
+    ],
+    execute: async (ctx) => deviceStep(ctx, "browser", (params) => {
+      let url;
+      try {
+        url = new URL(toText(params.url));
+      } catch {
+        throw fail(`“${toText(params.url)}” isn't a web address.`, { retryable: false });
+      }
+      if (!/^https?:$/.test(url.protocol)) throw fail("Only http and https pages can be opened.", { retryable: false });
+      return { url: url.toString(), waitFor: toText(params.waitFor).slice(0, 200), screenshot: Boolean(params.screenshot) };
+    }, (output) => ({ page: output })),
   },
   {
-    type: "device.coding", category: "action", label: "Coding task on desktop", icon: "TerminalSquare", status: STATUS.upcoming,
-    description: "Runs a coding task with files and the terminal on your desktop app. Coming soon, for the same reason.",
-    inputs: ["main"], outputs: ["main"], permissions: ["computer-use"], params: [],
-    execute: async () => { throw fail("Desktop coding tasks from workflows aren't available yet."); },
+    type: "device.coding", category: "action", label: "Coding task on your desktop", icon: "TerminalSquare", status: STATUS.beta,
+    description: "HANNAH's Coding agent works in a folder you shared in the desktop app: it reads files, and with your yes in a system dialog for each one, changes files and runs commands. It uses the AI chosen in that app. Needs the desktop app open and signed in, with “Run workflow tasks” turned on in Settings → Desktop access.",
+    inputs: ["main"], outputs: ["main"], permissions: ["desktop"],
+    params: [
+      { name: "folder", label: "Shared folder name", type: "string", required: true, default: "", help: "As shown in Settings → Desktop access." },
+      { name: "task", label: "Task", type: "text", required: true, default: "Run the tests and explain any failure: {{ $json.title }}", expression: true },
+      { name: "allowCommands", label: "Allow running commands", type: "boolean", default: true, help: "Each command still asks you on the desktop." },
+      { name: "pickupMinutes", label: "Fail if no desktop picks it up within (minutes)", type: "number", default: 60, min: 1, max: 1440 },
+    ],
+    execute: async (ctx) => deviceStep(ctx, "coding", (params) => {
+      const task = toText(params.task).trim();
+      if (!task) throw fail("Describe the task.", { retryable: false });
+      return { folder: toText(params.folder).trim().slice(0, 200), task: task.slice(0, 8000), allowCommands: params.allowCommands !== false };
+    }, (output) => ({ result: output.reply, activity: output.activity || [], folder: output.folder })),
   },
 ];
 

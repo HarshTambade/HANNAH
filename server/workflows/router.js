@@ -384,6 +384,59 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
   }));
 
   // ----- events and notifications -----
+  // ----- desktop jobs: steps that run on the user's desktop app -----
+  // The desktop app (signed in, with "Run workflow tasks" on) polls for jobs,
+  // claims one, asks the user there, runs it, and reports the result, which
+  // resumes the waiting execution. Only the device that claimed a job can finish it.
+  const DEVICE_ID = /^[A-Za-z0-9_-]{8,80}$/;
+  const deviceOf = (req) => {
+    const id = String(req.body?.deviceId || "");
+    if (!DEVICE_ID.test(id)) throw fail(400, "Send this device's id.", "bad-request");
+    return { id, name: clean(req.body?.deviceName, 80) || "Desktop" };
+  };
+  const workflowNames = async (db, userId, rows) => {
+    const ids = [...new Set(rows.map((row) => row.workflow_id))];
+    if (!ids.length) return new Map();
+    const { rows: names } = await db.query(`SELECT id, name FROM hannah_workflows WHERE user_id = $1 AND id IN (${ids.map((_, index) => `$${index + 2}`).join(",")})`, [userId, ...ids]);
+    return new Map(names.map((row) => [row.id, row.name]));
+  };
+  const publicJob = (row, names) => ({
+    id: row.id, kind: row.kind, status: row.status, workflowId: row.workflow_id, workflowName: names.get(row.workflow_id) || "Workflow",
+    executionId: row.execution_id, input: parse(row.input, {}), createdAt: Number(row.created_at), expiresAt: Number(row.expires_at), device: row.device_name || null,
+  });
+
+  router.get("/workflows/device-jobs", withAccount(async (_req, res, db, account) => {
+    const { rows } = await db.query("SELECT * FROM hannah_workflow_device_jobs WHERE user_id = $1 AND status = 'pending' AND expires_at > $2 ORDER BY created_at LIMIT 20", [account.id, Date.now()]);
+    const names = await workflowNames(db, account.id, rows);
+    res.json({ jobs: rows.map((row) => publicJob(row, names)) });
+  }));
+
+  router.post("/workflows/device-jobs/:id/claim", json, withAccount(async (req, res, db, account) => {
+    const device = deviceOf(req);
+    const at = Date.now();
+    const { rowCount } = await db.query("UPDATE hannah_workflow_device_jobs SET status = 'claimed', device_id = $1, device_name = $2, claimed_at = $3, updated_at = $3 WHERE id = $4 AND user_id = $5 AND status = 'pending' AND expires_at > $3", [device.id, device.name, at, String(req.params.id), account.id]);
+    if (rowCount !== 1) throw fail(409, "Another device took this task, or it was cancelled or expired.", "conflict");
+    const { rows: [row] } = await db.query("SELECT * FROM hannah_workflow_device_jobs WHERE id = $1 AND user_id = $2", [String(req.params.id), account.id]);
+    res.json({ job: publicJob(row, await workflowNames(db, account.id, [row])) });
+  }));
+
+  router.post("/workflows/device-jobs/:id/complete", json, withAccount(async (req, res, db, account) => {
+    const device = deviceOf(req);
+    const ok = req.body?.ok === true;
+    const output = ok && req.body?.output && typeof req.body.output === "object" && !Array.isArray(req.body.output) ? req.body.output : null;
+    if (output && JSON.stringify(output).length > 1_000_000) throw fail(413, "The result can be up to 1 MB.", "too-large");
+    const error = ok ? null : clean(req.body?.error, 1000) || "The desktop app couldn't do this task.";
+    const at = Date.now();
+    const { rows: [job] } = await db.query("SELECT * FROM hannah_workflow_device_jobs WHERE id = $1 AND user_id = $2", [String(req.params.id), account.id]);
+    if (!job) throw fail(404, "That task doesn't exist.", "not-found");
+    if (job.status !== "claimed" || job.device_id !== device.id) throw fail(409, job.status === "claimed" ? "Another device is running this task." : `This task is ${job.status}.`, "conflict");
+    const { rowCount } = await db.query("UPDATE hannah_workflow_device_jobs SET status = $1, result = $2, error = $3, updated_at = $4 WHERE id = $5 AND status = 'claimed' AND device_id = $6", [ok ? "done" : "failed", output ? JSON.stringify(output) : null, error, at, job.id, device.id]);
+    if (rowCount !== 1) throw fail(409, "This task changed while it ran.", "conflict");
+    await runtime.resume(account.id, job.execution_id, { nodeId: job.node_id, data: { ok, output, error, device: device.name } });
+    await drive(job.execution_id);
+    res.json({ status: ok ? "done" : "failed", executionId: job.execution_id });
+  }));
+
   router.post("/workflows/events", json, withAccount(async (req, res, _db, account) => {
     const name = String(req.body?.name || "");
     if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(name)) throw fail(400, "An event name is 1–64 lowercase letters, digits, dots, dashes or underscores.", "bad-request");

@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { createDesktopTools, parseCommand, tooBroad } from "./electron/dist/core.mjs";
+import { checkPageUrl, classifyAddress, createDesktopTools, parseCommand, tooBroad } from "./electron/dist/core.mjs";
 
 let sandbox;
 let project;
@@ -24,10 +24,12 @@ before(async () => {
 
 after(() => rm(sandbox, { recursive: true, force: true }));
 
-function tools({ answers = [], pick = project } = {}) {
+function tools({ answers = [], pick = project, loadPage, lookup } = {}) {
   const asked = [];
   const queue = [...answers];
   const instance = createDesktopTools({
+    loadPage,
+    lookup,
     storePath: path.join(sandbox, `store-${Math.random()}.json`),
     chooseFolder: async () => pick,
     confirm: async (request) => { asked.push(request); return queue.length ? queue.shift() : 0; },
@@ -116,4 +118,55 @@ test("removing a folder revokes its access and its allowed commands", async () =
   assert.equal(state.folders.length, 0);
   assert.equal(state.allowedCommands.length, 0);
   await assert.rejects(instance.listDirectory({ folderId: folder.id }), /isn't shared/);
+});
+
+test("workflow page addresses: this computer, link-local and metadata are refused; the local network is flagged", async () => {
+  assert.equal(classifyAddress("127.0.0.1"), "loopback");
+  assert.equal(classifyAddress("::ffff:127.0.0.1"), "loopback");
+  assert.equal(classifyAddress("::1"), "loopback");
+  assert.equal(classifyAddress("169.254.169.254"), "link-local");
+  assert.equal(classifyAddress("fe80::1"), "link-local");
+  assert.equal(classifyAddress("192.168.1.10"), "private");
+  assert.equal(classifyAddress("fd00::1"), "private");
+  assert.equal(classifyAddress("93.184.216.34"), "public");
+  const lookup = async (host) => ({ "status.example.com": [{ address: "93.184.216.34" }], "router.home": [{ address: "192.168.1.1" }], "sneaky.example.com": [{ address: "93.184.216.34" }, { address: "127.0.0.1" }], "meta.example.com": [{ address: "169.254.169.254" }] })[host] ?? [];
+  assert.deepEqual(await checkPageUrl("https://status.example.com/x?y=1", lookup), { url: "https://status.example.com/x?y=1", host: "status.example.com", localNetwork: false });
+  assert.equal((await checkPageUrl("http://router.home/", lookup)).localNetwork, true);
+  for (const [bad, reason] of [["http://localhost:3000/", /this computer itself/], ["http://127.0.0.1/", /this computer itself/], ["http://[::1]/", /this computer itself/], ["http://sneaky.example.com/", /this computer itself/], ["http://meta.example.com/", /link-local/], ["file:///etc/passwd", /Only http and https/], ["javascript:alert(1)", /Only http and https/], ["https://user:pw@status.example.com/", /user name or password/], ["https://nowhere.example.com/", /couldn't be found/]]) {
+    await assert.rejects(checkPageUrl(bad, lookup), reason, bad);
+  }
+});
+
+test("workflow tasks are off until allowed in a dialog; every page and coding task asks first", async () => {
+  const pages = [];
+  const lookup = async () => [{ address: "93.184.216.34" }];
+  const { instance, asked } = tools({ answers: [1, 0, 0, 1, 0, 1], lookup, loadPage: async (request) => { pages.push(request); return { title: "Status", text: "OK" }; } });
+  await assert.rejects(instance.readWebPage({ url: "https://status.example.com/", workflowName: "Watch status" }), /Workflow tasks are off/);
+  assert.deepEqual(await instance.workflowTaskSettings(), { enabled: false });
+
+  assert.deepEqual(await instance.setWorkflowTasks({ enabled: true }), { enabled: false }, "cancelled in the dialog");
+  assert.deepEqual(await instance.setWorkflowTasks({ enabled: true }), { enabled: true });
+  assert.match(asked[1].message, /send tasks to this computer/);
+
+  const read = await instance.readWebPage({ url: "https://status.example.com/", waitFor: "#status", screenshot: true, workflowName: "Watch status" });
+  assert.deepEqual(read, { approved: true, page: { title: "Status", text: "OK" } });
+  assert.deepEqual(pages, [{ url: "https://status.example.com/", waitFor: "#status", screenshot: true }]);
+  assert.match(asked[2].message, /“Watch status” wants to read a web page/);
+  assert.match(asked[2].detail, /https:\/\/status.example.com\//);
+
+  assert.deepEqual(await instance.readWebPage({ url: "https://status.example.com/", workflowName: "Watch status" }), { approved: false }, "declined: nothing is opened");
+  assert.equal(pages.length, 1);
+  await assert.rejects(instance.readWebPage({ url: "http://localhost:8080/admin", workflowName: "Watch status" }), /this computer itself/);
+  assert.equal(asked.length, 4, "a refused address never reaches a dialog");
+
+  const { folder } = await instance.addFolder({ access: "read-write" });
+  const approved = await instance.approveWorkflowTask({ workflowName: "Fix the build", summary: "Run the tests", folderId: folder.id });
+  assert.deepEqual(approved, { approved: true });
+  assert.match(asked.at(-1).message, /Coding agent to work in project/);
+  assert.deepEqual(await instance.approveWorkflowTask({ workflowName: "Fix the build", summary: "Run the tests", folderId: folder.id }), { approved: false });
+  const kinds = (await instance.recentActivity()).activity.map((entry) => entry.kind);
+  assert.ok(kinds.includes("workflow-page-read") && kinds.includes("workflow-page-declined") && kinds.includes("workflow-task-declined"));
+
+  assert.deepEqual(await instance.setWorkflowTasks({ enabled: false }), { enabled: false });
+  await assert.rejects(instance.approveWorkflowTask({ workflowName: "x", folderId: folder.id }), /Workflow tasks are off/);
 });

@@ -15,6 +15,7 @@ import { REMINDER_FIRED_EVENT, startReminderScheduler, type Reminder } from "./s
 import { startAutomationRunner } from "./services/AutomationService";
 import { Diagnostics } from "./services/Diagnostics";
 import { startDeviceTaskSync } from "./services/DeviceTasks";
+import { startDesktopWorkflowJobs } from "./services/DesktopWorkflowJobs";
 import { startWakeWord, WAKE_EVENT } from "./services/WakeWord";
 import { startNativeReminders } from "./services/NativeReminders";
 import { clearApiSession, getAccountHint, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
@@ -94,6 +95,8 @@ export default function App() {
   useEffect(() => { Diagnostics.markReady(); }, []);
   // Tasks and approvals from your other signed-in devices.
   useEffect(() => startDeviceTaskSync(), []);
+  // Desktop app: run tasks that server workflows send to this computer (when turned on in Settings → Desktop access).
+  useEffect(() => startDesktopWorkflowJobs(), []);
   // "Hey HANNAH" (if turned on): listen on this device and open a voice turn in chat.
   useEffect(() => startWakeWord(), []);
   useEffect(() => {

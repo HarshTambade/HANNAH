@@ -40,7 +40,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
     file: "index.html",
     name: "Home",
     title: "HANNAH: AI Companion with Voice, AI Agents & a 3D Avatar",
-    description: "Free AI companion with voice chat, a team of AI agents, memory you control and a live 3D avatar. Use any cloud or local AI model and approve every action.",
+    description: "Free AI companion with voice chat, AI agents, visual workflow automation, memory you control and a live 3D avatar. Use any cloud or local model; approve every action.",
     component: "/src/components/LandingPage.tsx",
     props: { onStart() {}, onIntegrations() {}, onMarketplace() {} },
   },

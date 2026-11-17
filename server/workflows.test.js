@@ -595,3 +595,81 @@ test("code step: runs in the sandbox with items and logs; escapes, endless loops
   const published = await api.post(`/workflows/${(await api.get("/workflows")).body.workflows[0].id}/publish`);
   assert.ok(published.body.permissions.some((entry) => entry.permission === "run-code"), "activation asks before running code");
 });
+
+test("desktop steps: the run waits for a job; one device claims it; its result resumes the run; failures, cancel and expiry are reported", async () => {
+  const api = client(await signUp("desktopjobs@example.com"));
+  const id = await createWorkflow(api, "Read the status page", definition([
+    { id: "t", name: "Start", type: "trigger.manual", params: { sample: { site: "https://status.example.com/" } } },
+    { id: "b", name: "Read page", type: "device.browser", params: { url: "{{ $json.site }}", pickupMinutes: 30 } },
+    { id: "s", name: "Keep", type: "data.set", params: { fields: [{ name: "title", value: "{{ $json.page.title }}" }, { name: "by", value: "{{ $json.device }}" }] } },
+  ], [["t", "b"], ["b", "s"]]));
+  const published = await api.post(`/workflows/${id}/publish`);
+  assert.ok(published.body.permissions.some((entry) => entry.permission === "desktop"));
+
+  const start = async () => {
+    const run = await api.post(`/workflows/${id}/run`, {});
+    const detail = await runToEnd(api, run.body.executionId);
+    assert.equal(detail.execution.status, "waiting", JSON.stringify(detail.execution));
+    const { jobs } = (await api.get("/workflows/device-jobs")).body;
+    const job = jobs.find((entry) => entry.executionId === run.body.executionId);
+    assert.ok(job, "the job is offered to the account's desktop apps");
+    return { executionId: run.body.executionId, job };
+  };
+
+  // Success.
+  const first = await start();
+  assert.equal(first.job.kind, "browser");
+  assert.equal(first.job.workflowName, "Read the status page");
+  assert.deepEqual(first.job.input, { url: "https://status.example.com/", waitFor: "", screenshot: false });
+  const laptop = { deviceId: "laptop-0123456789", deviceName: "Maya's laptop" };
+  const desktop = { deviceId: "desktop-0123456789", deviceName: "Office PC" };
+  assert.equal((await api.post(`/workflows/device-jobs/${first.job.id}/claim`, laptop)).status, 200);
+  assert.equal((await api.post(`/workflows/device-jobs/${first.job.id}/claim`, desktop)).status, 409, "only one device gets it");
+  assert.equal((await api.get("/workflows/device-jobs")).body.jobs.some((entry) => entry.id === first.job.id), false, "a claimed job isn't offered again");
+  assert.equal((await api.post(`/workflows/device-jobs/${first.job.id}/complete`, { ...desktop, ok: true, output: { title: "Fake" } })).status, 409, "another device can't finish it");
+  const stranger = client(await signUp("desktopjobs-stranger@example.com"));
+  assert.equal((await stranger.get("/workflows/device-jobs")).body.jobs.length, 0);
+  assert.equal((await stranger.post(`/workflows/device-jobs/${first.job.id}/complete`, { ...laptop, ok: true, output: {} })).status, 404, "another account can't see or finish it");
+  const done = await api.post(`/workflows/device-jobs/${first.job.id}/complete`, { ...laptop, ok: true, output: { title: "All systems operational", url: "https://status.example.com/", text: "OK" } });
+  assert.equal(done.status, 200, JSON.stringify(done.body));
+  const finished = await runToEnd(api, first.executionId);
+  assert.equal(finished.execution.status, "completed", JSON.stringify(finished.execution));
+  assert.deepEqual(finished.nodes.find((node) => node.name === "Keep").output.main.items[0].title, "All systems operational");
+  assert.equal(finished.nodes.find((node) => node.name === "Keep").output.main.items[0].by, "Maya's laptop");
+  assert.equal((await api.post(`/workflows/device-jobs/${first.job.id}/complete`, { ...laptop, ok: true, output: {} })).status, 409, "a finished job can't be reported twice");
+
+  // The person says no on the desktop: the run fails with that reason.
+  const second = await start();
+  await api.post(`/workflows/device-jobs/${second.job.id}/claim`, laptop);
+  await api.post(`/workflows/device-jobs/${second.job.id}/complete`, { ...laptop, ok: false, error: "You declined to open this page." });
+  const declined = await runToEnd(api, second.executionId);
+  assert.equal(declined.execution.status, "failed");
+  assert.match(declined.execution.error, /You declined to open this page/);
+
+  // Cancelling the run withdraws the job.
+  const third = await start();
+  await api.post(`/workflows/executions/${third.executionId}/cancel`);
+  assert.equal((await api.post(`/workflows/device-jobs/${third.job.id}/claim`, laptop)).status, 409);
+
+  // Nobody picks it up in time.
+  const fourth = await start();
+  const db = await require("./db").getDatabase();
+  await db.query("UPDATE hannah_workflow_executions SET wait_until = $1 WHERE id = $2", [Date.now() - 1000, fourth.executionId]);
+  await runtime.tick({ budgetMs: 10_000 });
+  const expired = (await api.get(`/workflows/executions/${fourth.executionId}`)).body;
+  assert.equal(expired.execution.status, "timed-out");
+  assert.match(expired.execution.error, /No desktop app finished the task in time/);
+  assert.equal((await api.post(`/workflows/device-jobs/${fourth.job.id}/claim`, laptop)).status, 409);
+
+  // A coding step sends its folder and task; a single-step test is refused with a reason.
+  const coding = await createWorkflow(api, "Fix the build", definition([
+    { id: "t", name: "Start", type: "trigger.manual", params: { sample: { title: "CI is red" } } },
+    { id: "c", name: "Investigate", type: "device.coding", params: { folder: "hannah", task: "Find why: {{ $json.title }}", allowCommands: false } },
+  ], [["t", "c"]]));
+  const single = await api.post(`/workflows/${coding}/test-node`, { nodeId: "c", items: [{ title: "x" }] });
+  assert.match(single.body.error, /Use Test run/);
+  const codingRun = await api.post(`/workflows/${coding}/run`, {});
+  await runToEnd(api, codingRun.body.executionId);
+  const codingJob = (await api.get("/workflows/device-jobs")).body.jobs.find((entry) => entry.executionId === codingRun.body.executionId);
+  assert.deepEqual(codingJob.input, { folder: "hannah", task: "Find why: CI is red", allowCommands: false });
+});

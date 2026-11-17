@@ -1,8 +1,9 @@
 // Electron side of the HannahDesktop Capacitor plugin. One instance lives in
 // the main process; the web page reaches only the methods in BRIDGED_METHODS.
 // Native dialogs come from here, so web content can't fake an approval.
-import { app, BrowserWindow, dialog, shell } from "electron";
+import { app, BrowserWindow, dialog, session, shell } from "electron";
 import path from "node:path";
+import { createPageLoader } from "./browse.mjs";
 import { BRIDGED_METHODS, createDesktopTools } from "./core.mjs";
 
 const parentWindow = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
@@ -37,6 +38,8 @@ class HannahDesktopImpl {
         });
         return result.response;
       },
+      // Workflow page reads: a hidden, signed-out window (browse.mjs).
+      loadPage: createPageLoader({ BrowserWindow, session }),
       reveal: async (folder) => {
         const error = await shell.openPath(folder);
         if (error) throw new Error(error);

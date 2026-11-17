@@ -116,6 +116,22 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         return mode === "send" ? connections.sendMail(fetchImpl, providerId, token, message) : connections.saveDraft(fetchImpl, providerId, token, message);
       },
 
+      /** Queue a job for the user's desktop app; idempotent per execution and step. */
+      async createDeviceJob({ nodeId, kind, input, expiresAt }) {
+        if (!executionId) throw fail(400, "Desktop steps need a whole workflow run.", "bad-request", { retryable: false });
+        const db = await database();
+        const id = `dj_${sha256(`${executionId}:${nodeId}`).slice(0, 32)}`;
+        const at = now();
+        const { rows } = await db.query("SELECT id, expires_at FROM hannah_workflow_device_jobs WHERE id = $1 AND user_id = $2", [id, userId]);
+        if (rows[0]) {
+          // A retry of the run: start the job again for this attempt.
+          await db.query("UPDATE hannah_workflow_device_jobs SET input = $1, status = 'pending', device_id = NULL, device_name = NULL, claimed_at = NULL, result = NULL, error = NULL, updated_at = $2, expires_at = $3 WHERE id = $4", [JSON.stringify(input), at, expiresAt, id]);
+        } else {
+          await db.query("INSERT INTO hannah_workflow_device_jobs (id, user_id, workflow_id, execution_id, node_id, kind, input, status, created_at, updated_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $8, $9)", [id, userId, workflowId, executionId, nodeId, kind, JSON.stringify(input), at, expiresAt]);
+        }
+        return { id, expiresAt };
+      },
+
       async readMail({ provider, id }) {
         const db = await database();
         const providerId = provider === "google" || provider === "microsoft" ? provider : await connectedProvider(db, userId);
@@ -358,7 +374,9 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'queued', resume = $1, waiting = NULL, wait_until = NULL, updated_at = $2 WHERE id = $3 AND status = 'waiting'", [JSON.stringify({ nodeId: waiting.nodeId }), now(), row.id]);
         report.woke += rowCount;
       } else {
-        const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'timed-out', error = $1, finished_at = $2, updated_at = $2 WHERE id = $3 AND status = $4", [waiting.kind === "approval" ? "Nobody answered the approval in time." : "The resume URL wasn't called in time.", now(), row.id, row.status]);
+        const reason = waiting.kind === "approval" ? "Nobody answered the approval in time." : waiting.kind === "device" ? "No desktop app finished the task in time. Open the desktop app signed in to this account, with “Run workflow tasks” on in Settings → Desktop access." : "The resume URL wasn't called in time.";
+        const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'timed-out', error = $1, finished_at = $2, updated_at = $2 WHERE id = $3 AND status = $4", [reason, now(), row.id, row.status]);
+        if (rowCount && waiting.kind === "device") await db.query("UPDATE hannah_workflow_device_jobs SET status = 'expired', updated_at = $1 WHERE execution_id = $2 AND status IN ('pending', 'claimed')", [now(), row.id]);
         report.expired += rowCount;
       }
     }
@@ -552,6 +570,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
       return { status: "cancelling" };
     }
     await db.query("UPDATE hannah_workflow_executions SET status = 'cancelled', cancel_requested = 1, error = 'Cancelled by you.', waiting = NULL, wait_until = NULL, finished_at = $1, updated_at = $1 WHERE id = $2 AND status = $3", [now(), executionId, row.status]);
+    await db.query("UPDATE hannah_workflow_device_jobs SET status = 'cancelled', updated_at = $1 WHERE execution_id = $2 AND status IN ('pending', 'claimed')", [now(), executionId]);
     return { status: "cancelled" };
   }
 

@@ -110,17 +110,63 @@ export const AUTOMATION = {
     { type: "action.memory", name: "HANNAH memory", status: "available" },
     { type: "action.reminder", name: "HANNAH reminders", status: "available" },
     { type: "trigger.email", name: "New-email trigger", status: "available" },
+    { type: "device.browser", name: "Read pages on your desktop", status: "beta" },
+    { type: "device.coding", name: "Coding tasks on your desktop", status: "beta" },
     { type: "trigger.file", name: "File uploads (CSV, JSON, text)", status: "available" },
     { type: "data.code", name: "JavaScript in a sandbox", status: "beta" },
-    { type: "device.browser", name: "Browser tasks on desktop", status: "upcoming" },
   ] as const,
+} as const;
+
+/** The model section: the providers HANNAH connects to (server/providers/catalog.js) and Auto's routing modes (services/ModelRouting.ts; LandingContent.test.ts keeps them in step). */
+export const MODEL_PROVIDERS = {
+  cloud: ["Groq", "OpenAI", "Anthropic", "Google Gemini", "OpenRouter", "Together AI", "Cerebras", "DeepSeek", "Mistral AI", "xAI Grok", "Fireworks AI", "NVIDIA NIM", "SambaNova", "Perplexity", "Hyperbolic"],
+  local: ["Ollama", "LM Studio", "llama.cpp", "vLLM / LiteLLM", "WebLLM in the browser", "On-device on Android and iOS"],
+} as const;
+
+export const ROUTING_MODES = [
+  ["Balanced", "Fits the model to each message: light for chat, stronger for coding and research."],
+  ["Best quality", "The most capable model you can use, for every message."],
+  ["Budget", "The lowest-cost model that can still handle the message."],
+  ["Fastest", "The quickest measured model, then models known to be fast."],
+  ["Private", "Only models on your own hardware or this HANNAH server. Nothing goes to a cloud AI provider."],
+  ["Custom", "Your own provider list and quality ceiling."],
+] as const;
+
+export type Status = "available" | "beta" | "upcoming";
+
+/** The agent section. Statuses follow docs/PLATFORM_SUPPORT.md. */
+export const AGENTS = {
+  team: ["Research", "Coding", "Memory", "Tasks"],
+  computer: [
+    { name: "Files and terminal", text: "Share a folder in the desktop app; HANNAH reads it, edits read-write folders and runs commands such as your tests. Each write and command asks you in a system dialog.", status: "available" },
+    { name: "Desktop tasks from workflows", text: "A server workflow can ask your desktop app to read a web page in a hidden, signed-out window or run a coding task in a shared folder. Each task asks you first.", status: "beta" },
+    { name: "Computer use", text: "Seeing the screen and using the mouse and keyboard. Today only in a desktop app you build yourself with the bridge; coming to the downloadable app.", status: "upcoming" },
+  ] as { name: string; text: string; status: Status }[],
+} as const;
+
+/**
+ * What works where, from docs/PLATFORM_SUPPORT.md (simplified: “yes”, a short
+ * note, or “—” for not available).
+ */
+export const PLATFORM_MATRIX = {
+  columns: ["Web", "macOS, Windows, Linux", "Android", "iOS"],
+  rows: [
+    ["Chat, voice, agents and memory", "yes", "yes", "yes", "Build from source"],
+    ["Local models", "WebLLM (WebGPU)", "WebLLM; Ollama via the server", "On-device", "On-device"],
+    ["“Hey HANNAH” wake word", "Desktop browsers", "yes", "While on screen", "—"],
+    ["Visual workflows", "yes", "yes", "Runs view; canvas best on larger screens", "Runs view; canvas best on larger screens"],
+    ["Files, terminal and desktop workflow tasks", "—", "yes", "—", "—"],
+    ["Reminders when HANNAH is closed", "—", "While the app runs", "yes", "yes"],
+    ["Automatic updates", "yes", "macOS, Windows, AppImage", "Web updates", "—"],
+  ],
 } as const;
 
 /** Planned, not in this release. */
 export const ROADMAP = [
-  ["Workflows on your desktop", "Steps that run browser and coding tasks on your desktop app from a server workflow."],
   ["Computer use in the desktop app", "Seeing the screen and using the mouse and keyboard, with approval for each action. Today it needs a desktop app you build yourself (see the README)."],
   ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],
+  ["Sign in to more services", "One-click sign-in for Slack, GitHub and Notion in workflows (today they use tokens or webhook URLs), and instant email triggers instead of checking every few minutes."],
+  ["Shared workspaces", "Workflows and credentials a team can share. Today each belongs to one account."],
 ] as const;
 
 export const FAQS = [
@@ -142,7 +188,7 @@ export const FAQS = [
   },
   {
     q: "Can HANNAH do things on my computer?",
-    a: "Yes, in the desktop app. Share a folder in Settings → Desktop access and HANNAH can read files there, change files in folders you mark read-write, and run commands such as your tests. Every write and every command waits for your yes in a system dialog, and the app enforces those limits itself, outside the AI model. Seeing your screen and using the mouse (computer use) still needs a desktop app you build yourself; it's on the roadmap for the downloadable app.",
+    a: "Yes, in the desktop app. Share a folder in Settings → Desktop access and HANNAH can read files there, change files in folders you mark read-write, and run commands such as your tests. Every write and every command waits for your yes in a system dialog, and the app enforces those limits itself, outside the AI model. Turn on “Run workflow tasks” and your server workflows can also ask it to read a web page or run a coding task (beta); each task asks you first. Seeing your screen and using the mouse (computer use) still needs a desktop app you build yourself; it's on the roadmap for the downloadable app.",
   },
   {
     q: "Where do workflows run?",
@@ -163,6 +209,10 @@ export const FAQS = [
   {
     q: "Can I talk to HANNAH hands-free?",
     a: "Yes. Turn on “Hey HANNAH” in Settings → Voice. The wake word is detected on your device in the desktop app, on Android and in desktop browsers, and no audio leaves the device until you speak to HANNAH.",
+  },
+  {
+    q: "How do I get help or report a problem?",
+    a: "Open an issue on GitHub with what you did and what happened; Settings → Diagnostics can export a report with keys and personal details removed. For a security problem, don't post the details publicly: open an issue asking for a private contact, and the maintainer will reach you.",
   },
   {
     q: "Is HANNAH open source?",

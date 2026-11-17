@@ -30,11 +30,18 @@ export interface HannahDesktopPlugin {
   runCommand(options: { folderId: string; path?: string; command: string }): Promise<CommandResult>;
   forgetCommand(options: { folderId: string; command: string }): Promise<{ allowedCommands: AllowedCommand[] }>;
   recentActivity(): Promise<{ activity: DesktopActivity[] }>;
+  /** Tasks sent by server workflows: off until turned on (with a system dialog); each task asks again. */
+  workflowTaskSettings(): Promise<{ enabled: boolean }>;
+  setWorkflowTasks(options: { enabled: boolean }): Promise<{ enabled: boolean }>;
+  approveWorkflowTask(options: { workflowName: string; summary: string; folderId: string }): Promise<{ approved: boolean }>;
+  readWebPage(options: { url: string; waitFor?: string; screenshot?: boolean; workflowName: string }): Promise<{ approved: boolean; page?: WebPageRead }>;
   /** The desktop app itself: version, update channel and checks, tray, shortcut, hannah:// links. */
   desktopInfo(): Promise<DesktopInfo>;
   setUpdateChannel(options: { channel: UpdateChannel }): Promise<DesktopInfo>;
   checkForUpdates(): Promise<{ available: boolean; version?: string; outcome: string }>;
 }
+
+export type WebPageRead = { title: string; url: string; description: string; text: string; textTruncated: boolean; links: Array<{ text: string; href: string }>; status: number | null; loadedInMs: number; screenshot?: string | null };
 
 export type UpdateChannel = "stable" | "beta";
 export type DesktopInfo = {
@@ -148,3 +155,17 @@ export function getDesktopFileTools(): HANNAHTool[] {
 }
 
 export const DESKTOP_TOOL_NAMES = desktopTools.map((tool) => tool.name);
+
+/**
+ * The desktop tools held to one shared folder, for a task a workflow sent:
+ * the person approved that folder, so the agent can't read another one.
+ * Writes and commands still ask in the system dialog (the plugin enforces it).
+ */
+export function scopedDesktopTools(folder: { id: string; name: string; access: FolderAccess }, { allowCommands }: { allowCommands: boolean }): HANNAHTool[] {
+  return desktopTools
+    .filter((tool) => allowCommands || tool.name !== "desktop_run_command")
+    .filter((tool) => folder.access === "read-write" || tool.name !== "desktop_write_file")
+    .map((tool) => tool.name === "desktop_folders"
+      ? { ...tool, description: "The one folder this task may use.", execute: async () => ({ folders: [{ id: folder.id, name: folder.name, access: folder.access }] }) }
+      : { ...tool, description: `${tool.description} This task may only use the folder “${folder.name}”.`, execute: (args) => tool.execute({ ...args, folder: folder.id }) });
+}

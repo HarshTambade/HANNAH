@@ -40,7 +40,7 @@
       details { border-bottom: 1px solid #e2e8f0; padding: 1rem 0; }
       summary { cursor: pointer; font-weight: 650; }
       footer { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; border-top: 1px solid #e2e8f0; padding: 1.5rem 0 2.5rem; color: #64748b; font-size: .85rem; }
-      @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } nav { gap: .75rem; font-size: .8rem; } .hide-small { display: none; } }
+      @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } } @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } nav { gap: .75rem; font-size: .8rem; } .hide-small { display: none; } }
     </style>
   </head>
   <body>
@@ -61,9 +61,9 @@
 
       <main>
         <section aria-labelledby="page-title">
-          <p class="eyebrow">AI companion · 3D avatar · voice chat</p>
-          <h1 id="page-title">Meet HANNAH, an AI companion with a living 3D avatar</h1>
-          <p class="lead">HANNAH brings conversation, expressive avatar animation, and voice interaction together in one responsive web app. Choose Groq-powered cloud replies or use supported local AI options when you want inference on your own device.</p>
+          <p class="eyebrow">AI companion · agents · workflows · voice</p>
+          <h1 id="page-title">Meet HANNAH, an AI companion that works for you</h1>
+          <p class="lead">HANNAH talks with you, remembers what you ask it to, and gets real work done: a team of AI agents for hard questions, and workflows that run on their own. It works with 20 AI providers or with models on your own hardware, and nothing changes on your device or data without your yes.</p>
           <div class="actions">
             <a class="button" href="/">Start a conversation</a>
             <a class="secondary" href="https://github.com/HarshTambade/Shanaya-Your-AI-companion">Explore the source code</a>
@@ -71,59 +71,72 @@
         </section>
 
         <section id="features" class="section" aria-labelledby="features-title">
-          <p class="eyebrow">Built for natural interaction</p>
-          <h2 id="features-title">A voice-enabled AI companion for web, mobile, and desktop</h2>
+          <p class="eyebrow">What it does</p>
+          <h2 id="features-title">One companion for conversation, work and automation</h2>
           <div class="grid">
             <article class="card">
-              <h3>Emotion-aware 3D avatar</h3>
-              <p>HANNAH’s React Three Fiber avatar uses model responses to animate supported expressions and idle movement, with a layout that adapts to desktop and mobile screens.</p>
+              <h3>Any model, picked for you</h3>
+              <p>Groq, OpenAI, Anthropic, Gemini and 11 more cloud providers with your own key, or Ollama, LM Studio, llama.cpp, vLLM, WebLLM and on-device models. Auto routing picks one per message.</p>
             </article>
             <article class="card">
-              <h3>Multilingual voice chat</h3>
-              <p>Use English, Hindi, or Marathi speech options where the browser or device provides compatible speech recognition and voice playback.</p>
+              <h3>A team of agents</h3>
+              <p>Research, Coding, Memory and Tasks specialists work in parallel and the result is checked before you see it. In the desktop app they can work in folders you share.</p>
             </article>
             <article class="card">
-              <h3>Cloud and optional local AI</h3>
-              <p>Groq is the default cloud route. The project also supports configured providers, browser WebLLM, and native llama.cpp models on supported mobile devices.</p>
+              <h3>Visual workflows</h3>
+              <p>Build automations on a canvas: schedules, new email, webhooks and file uploads start AI steps, conditions and integrations on HANNAH's server, with a record of every run.</p>
+            </article>
+            <article class="card">
+              <h3>Memory you own</h3>
+              <p>See, edit, export or delete everything HANNAH remembers. Only memories related to a message are sent with it, and sensitive ones go only to local models.</p>
+            </article>
+            <article class="card">
+              <h3>Voice and presence</h3>
+              <p>Talk in English, Hindi or Marathi, say “Hey HANNAH” hands-free, and watch a real-time 3D avatar react to the mood of each reply.</p>
+            </article>
+            <article class="card">
+              <h3>Everywhere you are</h3>
+              <p>The web app and PWA, desktop apps for macOS, Windows and Linux, and Android. Sign in and your memories, tasks and approvals follow you between devices.</p>
             </article>
           </div>
+          <p class="note">Each feature on the <a href="/#features">home page</a> is labelled Available, Beta or Coming. Features still being built aren't presented as working.</p>
         </section>
 
         <section id="privacy" class="section" aria-labelledby="privacy-title">
-          <p class="eyebrow">Understand the data path</p>
+          <p class="eyebrow">Your data, your rules</p>
           <h2 id="privacy-title">Choose how HANNAH processes your messages</h2>
-          <p>In cloud mode, conversation content is sent through the configured HANNAH API to the selected AI provider to generate a reply. Provider privacy and retention terms apply. Optional local inference can keep prompts on the device after its model is available. HANNAH does not claim that cloud requests are offline or zero-retention.</p>
-          <p class="note">Supported device actions use explicit confirmation prompts. Availability is limited by the operating system and app permissions; HANNAH does not have unrestricted control over every device or application.</p>
+          <p>With a cloud model, your message goes through the HANNAH server to the provider you chose, and that provider's privacy and retention terms apply. In Private mode the server refuses to send anything to a hosted provider: replies come only from models on your own hardware or the HANNAH server. Chat history stays on your device unless you sign in, which syncs through a database the server's operator chooses.</p>
+          <p class="note">Actions that change your device or data wait for your approval, and the desktop app enforces its folder and command limits itself, outside the AI model. Read the <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/docs/PRIVACY_POLICY.md">privacy policy</a> for every kind of data, where it goes and how long it's kept.</p>
         </section>
 
         <section id="api" class="section" aria-labelledby="api-title">
           <p class="eyebrow">Built for integration</p>
-          <h2 id="api-title">A clear API for AI chat, agents, voice, and tools</h2>
-          <p>Integrate HANNAH into a web app, mobile client, desktop shell, or automation workflow through a small Express API. Use the same-origin <code>/api</code> routes in production, keep provider credentials on the server, and select cloud or Ollama inference per request.</p>
+          <h2 id="api-title">An API for chat, agents, voice and tools</h2>
+          <p>Call HANNAH from your own apps through the same server the app uses. Provider keys stay on the server, and every request shares its rate limits and daily budget.</p>
           <div class="grid">
             <article class="card">
-              <h3>Chat and models</h3>
-              <p><code>GET /api/health</code>, <code>GET /api/models</code>, and <code>POST /api/chat</code> provide readiness, model discovery, and normalized replies with emotion metadata.</p>
+              <h3>OpenAI-compatible</h3>
+              <p><code>POST /v1/chat/completions</code> works with any OpenAI SDK and adds HANNAH's routing modes, including Private.</p>
             </article>
             <article class="card">
-              <h3>Agents and voice</h3>
-              <p><code>POST /api/agent</code> supports bounded tool-calling steps, while <code>POST /api/tts</code> proxies optional multilingual Mithi speech synthesis.</p>
+              <h3>Chat, agents and voice</h3>
+              <p><code>POST /api/chat</code> and <code>POST /api/agent</code> return replies with emotion metadata and bounded tool calls; <code>POST /api/tts</code> speaks with an optional configured voice.</p>
             </article>
             <article class="card">
-              <h3>Secure extensions</h3>
-              <p>Optional Pinecall token exchange, Electron computer use, and authenticated MCP tools keep sensitive credentials and provider calls behind the server boundary.</p>
+              <h3>Agents talking to agents</h3>
+              <p>An MCP server and client, agent-to-agent (A2A) messaging, signed webhooks and a JavaScript SDK.</p>
             </article>
           </div>
-          <p class="note">Read the <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/docs/API-INTEGRATION.md">API integration guide</a> for cURL examples, schemas, environment variables, error codes, CORS, and production security requirements.</p>
+          <p class="note">See <a href="/integrations">API and integrations</a> for examples, or the <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/docs/API-INTEGRATION.md">API integration guide</a> for schemas, environment variables, error codes and production security.</p>
         </section>
 
         <section class="section" aria-labelledby="platform-title">
-          <p class="eyebrow">One companion, multiple shells</p>
-          <h2 id="platform-title">Use HANNAH in a browser or install a supported app</h2>
-          <p>The project includes a React web app and PWA, with Capacitor builds for Android and iOS and an Electron desktop shell. Native installation packages are published on GitHub Releases after a versioned build; iOS distribution requires Apple signing and an approved distribution channel.</p>
+          <p class="eyebrow">Web, desktop and mobile</p>
+          <h2 id="platform-title">Use HANNAH in a browser or install the app</h2>
+          <p>Installers for macOS, Windows, Linux and Android are published with every release, each with a SHA-256 checksum. The desktop and Android packages aren't signed by a store yet, so your system may ask you to confirm the first time. The iOS app builds from source but isn't distributed: that needs Apple signing.</p>
           <div class="actions">
-            <a class="button" href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases">View app releases</a>
-            <a class="secondary" href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml">Browse build artifacts</a>
+            <a class="button" href="/#download">Download HANNAH</a>
+            <a class="secondary" href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/docs/PLATFORM_SUPPORT.md">What works on each platform</a>
           </div>
         </section>
 
@@ -132,16 +145,24 @@
           <h2 id="faq-title">About HANNAH</h2>
           <div class="faq">
             <details>
-              <summary>Does HANNAH work offline?</summary>
-              <p>Optional offline inference is available with WebLLM in supported browsers and with a downloaded GGUF model in supported iOS and Android apps. First-time model downloads require an internet connection.</p>
+              <summary>Who makes HANNAH?</summary>
+              <p>HANNAH is built by Harsh Tambade and contributors. The source code is public on GitHub under a source-available, non-commercial license: you can read, run and modify it for personal and non-commercial use.</p>
             </details>
             <details>
-              <summary>Which languages can I use for voice interaction?</summary>
-              <p>The interface offers English, Hindi, and Marathi language choices. Speech recognition and speech synthesis depend on the voices and capabilities available in your browser or operating system.</p>
+              <summary>Does HANNAH work offline?</summary>
+              <p>Yes, with a local model: WebLLM in a browser with WebGPU, or a downloaded model in the Android and iOS apps. The first model download needs an internet connection.</p>
+            </details>
+            <details>
+              <summary>Which languages can I use for voice?</summary>
+              <p>English, Hindi and Marathi. Speech recognition and voices depend on what your browser or operating system provides; Whisper transcription and OpenAI voices work everywhere with a key.</p>
             </details>
             <details>
               <summary>Can HANNAH control my device?</summary>
-              <p>Only the supported actions exposed by the current app are available. Sensitive actions require confirmation, and operating system permissions or restrictions still apply.</p>
+              <p>Only through the actions the app offers, and each one asks first. In the desktop app it can work in folders you share and run commands you approve. Seeing the screen and using the mouse (computer use) isn't in the downloadable app yet.</p>
+            </details>
+            <details>
+              <summary>How do I get help?</summary>
+              <p>Open an <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/issues/new">issue on GitHub</a>. For a security problem, don't post the details publicly: open an issue asking for a private contact.</p>
             </details>
             <details>
               <summary>Is HANNAH a medical or emergency service?</summary>
@@ -153,7 +174,7 @@
 
       <footer>
         <span>HANNAH is an actively developed, source-available AI companion project.</span>
-        <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/LICENSE">Read the project license</a>
+        <span><a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/docs/CHANGELOG.md">Changelog</a> · <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/LICENSE">License</a></span>
       </footer>
     </div>
   </body>

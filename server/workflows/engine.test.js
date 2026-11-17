@@ -93,9 +93,18 @@ describe("validation", () => {
       { id: "lonely", name: "Lonely", type: "data.set" },
       { id: "c1", name: "Loop A", type: "data.set" },
       { id: "c2", name: "Loop B", type: "data.set" },
-      { id: "e", name: "Browser", type: "device.browser" },
+      { id: "e", name: "Planned", type: "test.planned" },
     ], [connect("t", "h"), connect("h", "i"), connect("i", "s", "maybe"), connect("c1", "c2"), connect("c2", "c1"), connect("h", "t")]);
-    const { errors, warnings } = validateWorkflow(broken);
+    // Every shipped step is available or beta today, so a planned one is registered just for this check.
+    const { REGISTRY } = require("./nodes");
+    REGISTRY.set("test.planned", { type: "test.planned", category: "action", label: "Planned step", status: "upcoming", inputs: ["main"], outputs: ["main"], permissions: [], params: [], execute: async () => ({ main: [] }) });
+    let result;
+    try {
+      result = validateWorkflow(broken);
+    } finally {
+      REGISTRY.delete("test.planned");
+    }
+    const { errors, warnings } = result;
     const text = errors.map((error) => error.message).join(" | ");
     assert.match(text, /URL is required/);
     assert.match(text, /Unknown node type “nope.nope”/);

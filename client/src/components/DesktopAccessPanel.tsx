@@ -11,6 +11,12 @@ const activityLabel: Record<string, string> = {
   "write-denied": "You declined a write",
   command: "Ran",
   "command-denied": "You declined a command",
+  "workflow-tasks-on": "Turned on workflow tasks",
+  "workflow-tasks-off": "Turned off workflow tasks",
+  "workflow-page-read": "A workflow read a page",
+  "workflow-page-declined": "You declined a workflow's page",
+  "workflow-task-approved": "Started a workflow's coding task",
+  "workflow-task-declined": "You declined a workflow's coding task",
 };
 
 /** Settings → Desktop access. Only rendered in the desktop app. */
@@ -20,10 +26,12 @@ export default function DesktopAccessPanel() {
   const [activity, setActivity] = useState<DesktopActivity[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [workflowTasks, setWorkflowTasks] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
-      const [state, recent] = await Promise.all([hannahDesktop().listFolders(), hannahDesktop().recentActivity()]);
+      const [state, recent, tasks] = await Promise.all([hannahDesktop().listFolders(), hannahDesktop().recentActivity(), hannahDesktop().workflowTaskSettings().catch(() => ({ enabled: false }))]);
+      setWorkflowTasks(tasks.enabled);
       setFolders(state.folders);
       setCommands(state.allowedCommands);
       setActivity(recent.activity);
@@ -97,6 +105,16 @@ export default function DesktopAccessPanel() {
           </ul>
         </div>
       )}
+
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <label className="flex items-start gap-3">
+          <input type="checkbox" className="mt-1" checked={workflowTasks} disabled={busy} onChange={(event) => void act(() => hannahDesktop().setWorkflowTasks({ enabled: event.target.checked }))} />
+          <span>
+            <span className="block text-sm font-semibold text-ink">Run workflow tasks</span>
+            <span className="mt-0.5 block text-xs leading-5 text-slate-600">Server workflows signed in to your account can send this computer two kinds of task: read a web page in a hidden, signed-out window, and a coding task in a shared folder. Each task asks you here before it starts, and a coding task still asks before every file change and command. Only while this app is open.</span>
+          </span>
+        </label>
+      </div>
 
       {activity.length > 0 && (
         <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">

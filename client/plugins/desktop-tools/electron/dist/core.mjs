@@ -14,6 +14,8 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { promises as fsp, realpathSync } from "node:fs";
+import dns from "node:dns";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 
@@ -147,6 +149,56 @@ function minimalEnv(env = process.env, platform = process.platform) {
  *   platform?: NodeJS.Platform,
  * }} deps
  */
+/**
+ * Where a workflow may send this computer's hidden browser. A workflow is
+ * started from the server (possibly by a webhook with someone else's data), so
+ * the page it names is untrusted: this machine's own services (loopback),
+ * link-local addresses and cloud metadata endpoints are refused outright, and
+ * a page on the local network is allowed only after a dialog that says so.
+ */
+export function classifyAddress(address) {
+  const family = net.isIP(address);
+  if (!family) return "invalid";
+  let ip = address.toLowerCase();
+  if (family === 6 && ip.startsWith("::ffff:") && net.isIPv4(ip.slice(7))) ip = ip.slice(7);
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split(".").map(Number);
+    if (a === 127 || a === 0) return "loopback";
+    if (a === 169 && b === 254) return "link-local";
+    if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)) return "private";
+    if (a >= 224) return "reserved";
+    return "public";
+  }
+  if (ip === "::1" || ip === "::") return "loopback";
+  if (/^fe[89ab]/.test(ip)) return "link-local";
+  if (/^f[cd]/.test(ip)) return "private";
+  if (/^ff/.test(ip)) return "reserved";
+  return "public";
+}
+
+const REFUSED = { loopback: "this computer itself", "link-local": "a link-local address", reserved: "a reserved address", invalid: "an address that couldn't be read" };
+
+/** Check a page address and say where it points. Throws for pages that are never allowed. */
+export async function checkPageUrl(input, lookup = (host) => dns.promises.lookup(host, { all: true })) {
+  let url;
+  try {
+    url = new URL(String(input || ""));
+  } catch {
+    fail("BAD_URL", "That isn't a web address.");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") fail("BAD_URL", "Only http and https pages can be opened.");
+  if (url.username || url.password) fail("BAD_URL", "Addresses with a user name or password in them aren't opened.");
+  if (url.href.length > 2048) fail("BAD_URL", "That address is too long.");
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host === "metadata.google.internal") fail("BLOCKED_ADDRESS", "Workflows can't open pages on this computer itself or cloud metadata addresses.");
+  const addresses = net.isIP(host) ? [{ address: host }] : await lookup(host).catch(() => fail("DNS", `${host} couldn't be found.`));
+  if (!addresses.length) fail("DNS", `${host} couldn't be found.`);
+  const kinds = addresses.map((entry) => classifyAddress(entry.address));
+  const refused = kinds.find((kind) => REFUSED[kind]);
+  if (refused) fail("BLOCKED_ADDRESS", `${host} points to ${REFUSED[refused]}, which workflows can't open.`);
+  return { url: url.href, host, localNetwork: kinds.includes("private") };
+}
+
 export function createDesktopTools(deps) {
   const spawn = deps.spawn ?? nodeSpawn;
   const now = deps.now ?? Date.now;
@@ -159,12 +211,13 @@ export function createDesktopTools(deps) {
     try {
       const parsed = JSON.parse(await fsp.readFile(deps.storePath, "utf8"));
       cache = {
+        workflowTasks: parsed.workflowTasks === true,
         folders: Array.isArray(parsed.folders) ? parsed.folders.filter((item) => item && typeof item.id === "string" && typeof item.path === "string") : [],
         allowedCommands: Array.isArray(parsed.allowedCommands) ? parsed.allowedCommands.filter((item) => item && typeof item.command === "string") : [],
         log: Array.isArray(parsed.log) ? parsed.log : [],
       };
     } catch {
-      cache = { folders: [], allowedCommands: [], log: [] };
+      cache = { workflowTasks: false, folders: [], allowedCommands: [], log: [] };
     }
     return cache;
   }
@@ -394,6 +447,69 @@ export function createDesktopTools(deps) {
       const state = await load();
       return { activity: state.log.slice(0, 50) };
     },
+
+    // ----- tasks sent by server workflows -----
+    // Off until the person turns it on here (with a native dialog). Even then,
+    // every task asks again before it runs, and a coding task's writes and
+    // commands keep their own dialogs.
+
+    async workflowTaskSettings() {
+      const state = await load();
+      return { enabled: state.workflowTasks === true };
+    },
+
+    async setWorkflowTasks({ enabled } = {}) {
+      const state = await load();
+      if (enabled === true && !state.workflowTasks) {
+        const choice = await deps.confirm({
+          title: "Run workflow tasks",
+          message: "Let workflows from your HANNAH account send tasks to this computer?",
+          detail: "They can ask to read web pages in a hidden browser window and to run coding tasks in folders you shared. Each task asks you here before it starts, and a coding task still asks before every file change and command. You can turn this off at any time.",
+          buttons: ["Allow workflow tasks", "Cancel"],
+        });
+        if (choice !== 0) return { enabled: false };
+      }
+      state.workflowTasks = enabled === true;
+      await save();
+      await record({ kind: enabled === true ? "workflow-tasks-on" : "workflow-tasks-off" });
+      return { enabled: state.workflowTasks };
+    },
+
+    /** Ask before a workflow's coding task starts. */
+    async approveWorkflowTask({ workflowName, summary, folderId } = {}) {
+      const state = await load();
+      if (!state.workflowTasks) fail("WORKFLOW_TASKS_OFF", "Workflow tasks are off on this computer. Turn on “Run workflow tasks” in Settings → Desktop access.");
+      const folder = await folderById(String(folderId || ""));
+      const choice = await deps.confirm({
+        title: "Workflow task",
+        message: `“${String(workflowName || "A workflow").slice(0, 120)}” wants HANNAH's Coding agent to work in ${folder.name}.`,
+        detail: `${String(summary || "").slice(0, 1200)}\n\nFile changes and commands will each ask you again.`,
+        buttons: ["Start the task", "Decline"],
+      });
+      await record({ kind: choice === 0 ? "workflow-task-approved" : "workflow-task-declined", folder: folder.name, detail: String(workflowName || "").slice(0, 120) });
+      return { approved: choice === 0 };
+    },
+
+    /** Read a web page for a workflow: checked, approved here, then opened in a hidden, signed-out window. */
+    async readWebPage({ url, waitFor, screenshot, workflowName } = {}) {
+      const state = await load();
+      if (!state.workflowTasks) fail("WORKFLOW_TASKS_OFF", "Workflow tasks are off on this computer. Turn on “Run workflow tasks” in Settings → Desktop access.");
+      if (!deps.loadPage) fail("UNAVAILABLE", "This build can't open pages.");
+      const target = await checkPageUrl(url, deps.lookup);
+      const choice = await deps.confirm({
+        title: "Workflow task",
+        message: `“${String(workflowName || "A workflow").slice(0, 120)}” wants to read a web page on this computer.`,
+        detail: `${target.url}\n\n${target.localNetwork ? "This address is on your local network, which HANNAH's server can't reach. Open it only if you expect this workflow to read it.\n\n" : ""}It opens in a hidden window with no cookies or sign-ins, and the page's title, text and links go back to the workflow.`,
+        buttons: ["Open and read it", "Don't open"],
+      });
+      if (choice !== 0) {
+        await record({ kind: "workflow-page-declined", detail: target.host });
+        return { approved: false };
+      }
+      const page = await deps.loadPage({ url: target.url, waitFor: typeof waitFor === "string" ? waitFor.slice(0, 200) : "", screenshot: screenshot === true });
+      await record({ kind: "workflow-page-read", detail: target.host });
+      return { approved: true, page };
+    },
   };
 }
 
@@ -401,4 +517,5 @@ export function createDesktopTools(deps) {
 export const BRIDGED_METHODS = Object.freeze([
   "listFolders", "addFolder", "removeFolder", "setAccess", "revealFolder",
   "listDirectory", "readFile", "writeFile", "runCommand", "forgetCommand", "recentActivity",
+  "workflowTaskSettings", "setWorkflowTasks", "approveWorkflowTask", "readWebPage",
 ]);
