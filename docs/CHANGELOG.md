@@ -10,6 +10,12 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 - **Knowledge.** Memory & trust → Knowledge: add text files or paste text (in the desktop app, index a shared folder's text files), and HANNAH answers questions from them with citations such as `[Trip notes §3]`, through the new `knowledge_search` and `knowledge_documents` tools (also given to the Research specialist). Passages are ranked with BM25 in any script, kept on this device within a 2 MB budget, included in backups, and never synced. PDFs and Office files aren't read yet.
 - **Setup check.** Settings → Setup check runs one pass over the server, your AI model (including Ollama through the server), account, calendar and email, voice, microphone, notifications, storage, the desktop app's tray and shortcut, the briefing's place and recent errors, with a verdict and a fix for each.
 
+### Fixed
+
+- **The crash screen says what happened.** "A moment of stillness" now shows the error in one line (keys and paths removed) and offers **Copy details**, **Export diagnostics** and **Disconnect and reload** beside Reload, so a crash right after connecting can be reported and escaped without clearing the app.
+- **Desktop app: the boot script was blocked.** The script that marks the apps and applies your text size before the first paint was inline, which the desktop app's content security policy refuses; it's now a file, so the desktop splash and text size work there too.
+- **Link preview matches the app.** The social card behind WhatsApp, Slack and Twitter previews is now the app's own light bento look (`client/scripts/social-card.html`, rendered by `scripts/render-social-card.mjs`), not the dark card.
+
 ## 1.4.0 — 2026-11-17
 
 ### New

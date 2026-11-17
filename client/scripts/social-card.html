@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- Source of public/social-card.png: the link preview, in the app's own light bento style. Render with `node scripts/render-social-card.mjs`. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body { font-family: "DM Sans", "Helvetica Neue", Arial, sans-serif; color: #111827; background: #f8fafc; position: relative; }
+  .glow { position: absolute; inset: 0; background:
+    radial-gradient(42% 60% at 86% 22%, #c9cdf4 0%, rgba(201,205,244,0) 70%),
+    radial-gradient(38% 55% at 78% 92%, #cfe7ec 0%, rgba(207,231,236,0) 70%),
+    radial-gradient(30% 40% at 12% 95%, #fff3b0 0%, rgba(255,243,176,0) 70%); }
+  .card { position: absolute; left: 72px; top: 72px; width: 640px; height: 486px; border-radius: 40px; background: rgba(255,255,255,0.86); border: 1px solid rgba(255,255,255,0.9); box-shadow: 0 30px 70px -40px rgba(38,44,74,0.35); padding: 52px 56px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .brand span { font-family: "Manrope", sans-serif; font-weight: 700; letter-spacing: 0.22em; font-size: 22px; color: #111827; }
+  .pill { margin-top: 36px; display: inline-flex; align-items: center; gap: 8px; width: max-content; padding: 8px 14px; border-radius: 999px; background: #fff; border: 1px solid #e2e8f0; font-size: 15px; font-weight: 600; color: #334155; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block; }
+  h1 { margin-top: 20px; font-family: "Manrope", sans-serif; font-weight: 600; font-size: 52px; line-height: 1.04; letter-spacing: -0.03em; color: #111827; }
+  p.lead { margin-top: 16px; font-size: 20px; line-height: 1.45; color: #475569; max-width: 520px; }
+  .tags { margin-top: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+  .tags b { font-weight: 600; font-size: 15px; padding: 8px 14px; border-radius: 14px; color: #1f2937; }
+  .sky { background: linear-gradient(108deg, #eff2f4 0%, #bcd5ea 100%); }
+  .lavender { background: linear-gradient(112deg, #f1f1f6 0%, #c9cdf4 100%); }
+  .butter { background: linear-gradient(160deg, #fff9bd 0%, #fdf4a3 100%); }
+  .mint { background: linear-gradient(180deg, #cfe7ec 0%, #e6eedb 100%); }
+  .side { position: absolute; left: 744px; top: 72px; width: 384px; height: 486px; display: grid; grid-template-rows: 1fr 1fr; gap: 18px; }
+  .tile { border-radius: 32px; padding: 30px 32px; display: flex; flex-direction: column; justify-content: flex-end; box-shadow: 0 24px 60px -40px rgba(38,44,74,0.4); }
+  .tile .n { font-family: "Manrope", sans-serif; font-weight: 500; font-size: 72px; line-height: 1; letter-spacing: -0.04em; color: #111827; }
+  .tile .l { margin-top: 10px; font-size: 17px; font-weight: 500; color: #334155; }
+  .url { position: absolute; left: 72px; bottom: 30px; font-size: 15px; color: #64748b; font-weight: 500; }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <section class="card">
+    <div class="brand">
+      <svg viewBox="0 0 512 512" width="52" height="52" aria-hidden="true">
+        <defs>
+          <linearGradient id="a" gradientUnits="userSpaceOnUse" x1="256" y1="106" x2="406" y2="256"><stop offset="0" stop-color="#4f8ff0"/><stop offset="1" stop-color="#8be3f2"/></linearGradient>
+          <linearGradient id="b" gradientUnits="userSpaceOnUse" x1="406" y1="256" x2="256" y2="406"><stop offset="0" stop-color="#8be3f2"/><stop offset="1" stop-color="#f7e27a"/></linearGradient>
+          <linearGradient id="c" gradientUnits="userSpaceOnUse" x1="256" y1="406" x2="106" y2="256"><stop offset="0" stop-color="#f7e27a"/><stop offset="1" stop-color="#f4a9c0"/></linearGradient>
+          <linearGradient id="d" gradientUnits="userSpaceOnUse" x1="106" y1="256" x2="256" y2="106"><stop offset="0" stop-color="#f4a9c0"/><stop offset="1" stop-color="#4f8ff0"/></linearGradient>
+        </defs>
+        <g fill="none" stroke-width="78">
+          <path d="M256 106a150 150 0 0 1 150 150" stroke="url(#a)"/>
+          <path d="M406 256a150 150 0 0 1-150 150" stroke="url(#b)"/>
+          <path d="M256 406a150 150 0 0 1-150-150" stroke="url(#c)"/>
+          <path d="M106 256a150 150 0 0 1 150-150" stroke="url(#d)"/>
+        </g>
+      </svg>
+      <span>HANNAH</span>
+    </div>
+    <div class="pill"><i></i> Free · No sign-up · Any AI model</div>
+    <h1>Your personal AI,<br/>with a voice and a face.</h1>
+    <p class="lead">Talk or type, let a team of agents do the work, keep the memory you control, and approve every action.</p>
+    <div class="tags"><b class="sky">Voice</b><b class="lavender">AI agents</b><b class="butter">3D avatar</b><b class="mint">Cloud or local</b></div>
+  </section>
+  <aside class="side">
+    <div class="tile lavender"><div class="n">20+</div><div class="l">AI providers, or run models on your device</div></div>
+    <div class="tile mint"><div class="n">1 yes</div><div class="l">Every action waits for your approval</div></div>
+  </aside>
+  <div class="url">hannah.eliteforums.in</div>
+</body>
+</html>

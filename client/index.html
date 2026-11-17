@@ -13,18 +13,10 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <!-- The build plugin (scripts/seoPlugin.ts) adds the title, description, canonical, social preview, indexing and schema.org data. -->
     <!-- HANNAH_SEO_TAGS -->
-    <!-- The desktop and mobile apps (not the website) show a splash until HANNAH is ready; main.tsx removes it. -->
-    <script>
-      (function () {
-        var protocol = location.protocol, origin = location.origin;
-        if (protocol === "capacitor:" || protocol === "capacitor-electron:" || origin === "https://localhost") document.documentElement.classList.add("native-app");
-        // Text size (Settings → Appearance), applied before the first paint so nothing jumps.
-        try {
-          var size = window.localStorage.getItem("hannah.textSize");
-          if (size === "large" || size === "larger") document.documentElement.setAttribute("data-text-size", size);
-        } catch (error) {}
-      })();
-    </script>
+    <!-- The desktop and mobile apps (not the website) show a splash until HANNAH is ready; main.tsx removes it.
+         boot.js (public/) marks the apps and applies the text size before the first paint. It's a file, not an
+         inline script, because the desktop app's content security policy allows only the app's own files. -->
+    <script src="%BASE_URL%boot.js"></script>
     <style>
       #boot-splash { display: none; }
       .native-app #boot-splash { position: fixed; inset: 0; z-index: 2147483000; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(60% 45% at 50% 42%, #1c2140 0%, #0c0e14 72%); color: #fff; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; transition: opacity 0.35s ease; }
