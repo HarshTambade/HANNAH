@@ -16,6 +16,15 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
   - **What they do:** "Read a web page on your desktop" opens a page in a hidden, signed-out window on your computer, which works for pages that need JavaScript or are only reachable from your network. "Coding task on your desktop" runs HANNAH's Coding agent in a folder you shared.
   - **Turning them on:** turn on **Run workflow tasks** in Settings → Desktop access. Each task asks you in a system dialog first, a coding task still asks before every file change and command, and it can use only the folder you approved.
   - **Limits:** pages on this computer itself and cloud metadata addresses are refused.
+- **Use your phone from your computer (HANNAH Phone Bridge).**
+  - **Pairing:** pair your Android phone or iPhone in Settings → Phone with a one-time code. The phone gets its own key, and both screens show the same fingerprint.
+  - **Asking:** from your computer, ask in chat ("call Aman using my phone", "text my brother I'm running late") or use the Phone panel.
+  - **On the phone:** the phone looks the name up in its own contacts and sends back only the matches, then its own dialer or Messages opens with everything filled in. You tap Call or Send.
+  - **Confirmations:** HANNAH confirms the name and number with you first, and reports only what the phone verified: dialer opened, composer opened, and on iPhone sent or cancelled. It never claims a call connected.
+  - **Never later:** requests last a minute, an offline phone gets nothing, and nothing is queued for later.
+  - **Refused:** emergency numbers and `*`/`#` codes.
+  - **No restricted permissions:** no `CALL_PHONE` or `SEND_SMS`, only Contacts when you first look up a name.
+  - **Verified:** run end to end on Android in the emulator.
 - **A redesigned website.** New sections for AI models (providers and Auto routing), AI agents (how Team works, and what runs on your computer, labelled by status), developers, a what-works-where table, the roadmap with Available, Beta and Coming labels, and help and support. The About page is rewritten to match the product. Every link, download and anchor was checked, and pages are checked for horizontal overflow at four widths.
 - **HANNAH's own icon on every platform.** The desktop apps (macOS, Windows, Linux, the Windows installer), Android (legacy, round and adaptive icons, plus a monochrome layer for themed icons) and iOS shipped framework default icons; they're now generated from the official mark by `client/scripts/generate-brand-assets.mjs`, with a CI check that refuses default icons. The web app gains favicon.ico and a maskable PWA icon.
 - **Website: an automation section** with screenshots of a real workflow run, the steps and integrations with their status (available, beta, coming), and a FAQ on where workflows run.

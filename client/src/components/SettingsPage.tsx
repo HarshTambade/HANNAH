@@ -7,6 +7,7 @@ import { apiFetch, apiUrl, getAccountHint, getApiAccessToken, getSessionGroqKey,
 import AccountPanel from "./AccountPanel";
 import VoiceSettingsPanel from "./VoiceSettingsPanel";
 import DesktopAccessPanel from "./DesktopAccessPanel";
+import PhonePanel from "./PhonePanel";
 import DesktopAppPanel from "./DesktopAppPanel";
 import ConnectionsPanel from "./ConnectionsPanel";
 import WakeWordSetting from "./WakeWordSetting";
@@ -274,6 +275,10 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
 
       <Section title="Daily briefing" description="One short spoken summary of the day: today's calendar, reminders due, the newest mail, your routines, and (if you turn them on) the weather and the news. Say “good morning” in chat, add the Daily briefing step to an automation, or preview it here.">
         <BriefingSettings />
+      </Section>
+
+      <Section title="Phone" description="Pair your Android phone or iPhone and ask from your computer to call or text someone: your phone's own dialer or Messages opens with it filled in, and you tap Call or Send there. Nothing is placed or sent silently.">
+        <PhonePanel />
       </Section>
 
       {desktopFilesAvailable() && (

@@ -42,4 +42,17 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Phone Bridge: look up a name on this phone when the person allows it. No CALL_PHONE or SEND_SMS: the dialer and messaging app do that after the person taps. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Android 11+ package visibility: check that a dialer and a messaging app exist. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+    </queries>
 </manifest>

@@ -34,6 +34,7 @@ const { createA2ARouter } = require("./a2a");
 const { createWebhookRouter, emitUserEvent, onUserEvent } = require("./webhooks");
 const { createDownloadRouter } = require("./downloads");
 const { createDeviceTaskRouter } = require("./device-tasks");
+const { createPhoneBridgeRouter } = require("./phone-bridge");
 const { createTaskRunRouter } = require("./task-runs");
 const { createConnectionsRouter, publicBaseUrl } = require("./connections");
 const { createRuntime } = require("./workflows/runtime");
@@ -324,6 +325,8 @@ const workflowRuntime = createRuntime({ emit: emitUserEvent });
 onUserEvent((userId, event, data) => (databaseConfigured() ? workflowRuntime.emitEvent(userId, event, data, { sourceWorkflowId: data?.workflowId || null, depth: Number(data?.$depth) || 0 }) : 0));
 // Public workflow webhooks read the raw body (HMAC signatures cover the exact bytes), so they're mounted before the JSON parser.
 app.use("/api", createHookRouter({ runtime: workflowRuntime }));
+// Phone Bridge: a paired phone signs its requests over the exact body, so it parses its own.
+app.use("/api", createPhoneBridgeRouter());
 app.use(express.json({ limit: "12mb" }));
 if (databaseConfigured()) setSpendStore(createSpendStore());
 const isOperator = (res) => Boolean(res.locals.hannahApiTokenId) && !res.locals.hannahAccount && !res.locals.hannahByok;

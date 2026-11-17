@@ -47,6 +47,7 @@ A stable release needs no class-5 cell in a row that the release notes advertise
 | Agents and Team mode | ✅ T (mocked models) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Desktop files and terminal | ❌ | ❌ | ❌ | ✅ T (HannahDesktop plugin; see below) | ✅ B | ✅ B |
 | Desktop tasks from workflows (beta: read a page, coding task) | ❌ | ❌ | ❌ | 🟡 T (page reader run in Electron 45 against a test page; job protocol and runner tested; not yet driven end to end with a person answering the dialogs) | 🟡 B | 🟡 B |
+| Phone Bridge: a computer asks the paired phone to call, text or find a contact | 🟡 T (as the computer: server and unit tests) | 🟡 D (Swift plugin type-checked against Capacitor and the iOS SDK; not run on a device) | ✅ T (emulator, 12/12: pairing, contact lookup, dialer and Messages opened with the right content, no call placed, revocation) | 🟡 D (as the computer, same web code) | 🟡 D (same) | 🟡 D (same) |
 | Tasks across devices (follow and approve) | ✅ T (approve from another device, mocked account API; server tests on SQLite) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Calendar and email (Google, Microsoft) | ✅ T (sign-in flow with mocked providers; server tests with fake Google and Graph) | 🟡 D (sign-in opens the system browser) | 🟡 D (sign-in opens the system browser) | 🟡 D (system browser) | 🟡 D (system browser) | 🟡 D (system browser) |
 | Desktop computer use | ❌ | ❌ | ❌ | 🟡 D (only in a self-built desktop app with the bridge, plus the server's Anthropic key) | 🟡 D | 🟡 D |

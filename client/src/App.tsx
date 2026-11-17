@@ -16,6 +16,7 @@ import { startAutomationRunner } from "./services/AutomationService";
 import { Diagnostics } from "./services/Diagnostics";
 import { startDeviceTaskSync } from "./services/DeviceTasks";
 import { startDesktopWorkflowJobs } from "./services/DesktopWorkflowJobs";
+import { startPhoneBridge } from "./services/PhoneBridge";
 import { startWakeWord, WAKE_EVENT } from "./services/WakeWord";
 import { startNativeReminders } from "./services/NativeReminders";
 import { clearApiSession, getAccountHint, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
@@ -97,6 +98,8 @@ export default function App() {
   useEffect(() => startDeviceTaskSync(), []);
   // Desktop app: run tasks that server workflows send to this computer (when turned on in Settings → Desktop access).
   useEffect(() => startDesktopWorkflowJobs(), []);
+  // Phone app: take call, SMS and contact requests from this account's computers (when paired and turned on).
+  useEffect(() => startPhoneBridge(), []);
   // "Hey HANNAH" (if turned on): listen on this device and open a voice turn in chat.
   useEffect(() => startWakeWord(), []);
   useEffect(() => {

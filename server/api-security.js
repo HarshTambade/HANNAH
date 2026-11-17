@@ -35,7 +35,8 @@ function isPublic(path) {
 // plus its own account and sync routes. Operator-only routes stay closed.
 function accountMayUse(path) {
   return BYOK_PATHS.has(path) || path === "/sync/memory" || path === "/account" || path.startsWith("/account/")
-    || path === "/workflows" || path.startsWith("/workflows/") || path === "/notifications" || path.startsWith("/notifications/");
+    || path === "/workflows" || path.startsWith("/workflows/") || path === "/notifications" || path.startsWith("/notifications/")
+    || path.startsWith("/phone/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 

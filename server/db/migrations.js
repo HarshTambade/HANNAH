@@ -324,6 +324,56 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_workflow_device_jobs_user ON hannah_workflow_device_jobs (user_id, status, created_at)",
     ],
   },
+  {
+    version: 9,
+    name: "phone bridge",
+    // A phone paired to the account with its own key; one-time pairing codes;
+    // and short-lived commands (call, SMS, contact lookup) a computer sends it.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_paired_phones (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        public_key TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        capabilities TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        paired_by TEXT,
+        created_at BIGINT NOT NULL,
+        last_seen_at BIGINT,
+        revoked_at BIGINT
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_paired_phones_user ON hannah_paired_phones (user_id)",
+      `CREATE TABLE IF NOT EXISTS hannah_phone_pairing_codes (
+        code_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        created_by TEXT,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        used_at BIGINT,
+        phone_id TEXT
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_phone_commands (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        phone_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        nonce TEXT NOT NULL,
+        status TEXT NOT NULL,
+        requested_by TEXT,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        delivered_at BIGINT,
+        finished_at BIGINT,
+        result TEXT
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_phone_commands_phone ON hannah_phone_commands (phone_id, status, created_at)",
+      "CREATE INDEX IF NOT EXISTS hannah_phone_commands_user ON hannah_phone_commands (user_id, created_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

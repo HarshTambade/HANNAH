@@ -10,6 +10,8 @@ import { MemoryService } from "./MemoryService";
 import { CATEGORY_LABELS, SOURCE_LABELS } from "./MemoryModel";
 import { notifyMemoryChanged } from "./MemoryStore";
 import { getDesktopFileTools } from "./DesktopFiles";
+import { checkNumber } from "./PhoneBridge";
+import { getPhoneTools } from "./PhoneTools";
 import { getConnectionTools } from "./Connections";
 import { getKnowledgeTools } from "./Knowledge";
 import { getBriefingTools } from "./Briefing";
@@ -167,9 +169,9 @@ const deviceTools: HANNAHTool[] = [
       required: ["recipient"],
     },
     execute: async (args) => {
-      const recipient = String(args.recipient ?? "").trim();
-      if (!/^\+?[0-9 ().-]{3,24}$/.test(recipient)) throw new Error("Enter a valid phone number.");
-      await AppLauncher.openUrl({ url: `tel:${recipient.replace(/[ ().-]/g, "")}` });
+      const checked = checkNumber(String(args.recipient ?? ""));
+      if ("refused" in checked) throw new Error(checked.refused);
+      await AppLauncher.openUrl({ url: `tel:${checked.number}` });
       return { ok: true, message: "Opened the phone dialer. Review the number and tap Call." };
     },
   },
@@ -341,7 +343,7 @@ export function setExternalTools(tools: HANNAHTool[]) {
 export function getDeviceTools() {
   const desktop = getDesktopFileTools();
   const connections = getConnectionTools();
-  return [...deviceTools, ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...desktop, ...connections, ...externalTools];
+  return [...deviceTools, ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...externalTools];
 }
 
 /**

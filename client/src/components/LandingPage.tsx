@@ -441,7 +441,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
 
           <div className="mt-12">
             <h3 className="text-[17px] font-semibold text-ink">What works where</h3>
-            <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <div tabIndex={0} role="region" aria-label="Features by platform (scrolls sideways)" className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
               <table className="w-full min-w-[42rem] text-left text-[13px]">
                 <caption className="sr-only">Features by platform</caption>
                 <thead className="bg-slate-50 text-[12px] text-slate-600">
@@ -477,7 +477,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
             </div>
             <figure className="min-w-0 overflow-hidden rounded-[1.25rem] border border-slate-800 bg-slate-950 text-slate-100">
               <figcaption className="flex items-center gap-2 border-b border-slate-800 px-4 py-2.5 text-[12px] text-slate-400"><Code2 size={13} aria-hidden="true" /> Any OpenAI client works. Here, Auto routing on a budget with your Groq key:</figcaption>
-              <pre className="overflow-x-auto p-4 font-mono text-[12px] leading-6"><code>{API_EXAMPLE}</code></pre>
+              <pre tabIndex={0} aria-label="Example request" className="overflow-x-auto p-4 font-mono text-[12px] leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"><code>{API_EXAMPLE}</code></pre>
             </figure>
           </div>
         </section>

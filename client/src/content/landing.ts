@@ -69,6 +69,11 @@ export const CAPABILITIES = [
   },
   {
     icon: "MonitorSmartphone",
+    title: "Your phone, from your computer",
+    description: "Pair your phone, then ask from your computer to call or text someone. HANNAH finds them in the phone's contacts, and the phone's own dialer or Messages opens with it filled in. You tap Call or Send.",
+  },
+  {
+    icon: "MonitorSmartphone",
     title: "Tasks across devices",
     description: "Sign in on each device and start a task on your laptop, follow it on your phone, and approve its next step from whichever device is in your hand.",
     // An odd card out: on two-column screens it takes the full row.
@@ -156,6 +161,7 @@ export const PLATFORM_MATRIX = {
     ["“Hey HANNAH” wake word", "Desktop browsers", "yes", "While on screen", "—"],
     ["Visual workflows", "yes", "yes", "Runs view; canvas best on larger screens", "Runs view; canvas best on larger screens"],
     ["Files, terminal and desktop workflow tasks", "—", "yes", "—", "—"],
+    ["Call or text from your computer (Phone Bridge)", "Sends the request", "Sends the request", "yes", "Build from source"],
     ["Reminders when HANNAH is closed", "—", "While the app runs", "yes", "yes"],
     ["Automatic updates", "yes", "macOS, Windows, AppImage", "Web updates", "—"],
   ],

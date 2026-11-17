@@ -895,6 +895,15 @@ Sign in with the same account on your laptop, phone and desktop app, and each de
 
 Server: [`server/device-tasks.js`](./server/device-tasks.js), [`server/task-runs.js`](./server/task-runs.js). App: [`DeviceTasks.ts`](./client/src/services/DeviceTasks.ts), [`TaskRecords.ts`](./client/src/services/TaskRecords.ts), [`ApprovalCenter.ts`](./client/src/services/ApprovalCenter.ts).
 
+## Phone Bridge
+
+Use your own phone from your computer.
+- **Pairing:** pair it once in **Settings → Phone**. Press **Pair a phone** on the computer, type the code in HANNAH on the phone (signed in to the same account), and check that both show the same fingerprint.
+- **Asking:** say "call Aman using my phone" or "text my brother I'll be late", or use the panel. HANNAH finds the person in the phone's contacts (only matches come back) and asks you to confirm the name and number. The phone's own dialer or Messages then opens with it filled in, and you tap Call or Send.
+- **What HANNAH reports:** only what the phone verified, never "connected" or "delivered".
+- **Limits:** requests last a minute, and a phone that isn't open with HANNAH gets nothing, rather than a call happening later. Emergency numbers and `*`/`#` codes are refused. No restricted call or SMS permissions are used.
+- **More:** design, security and verification are in [`docs/DEVICE_INTELLIGENCE.md`](./docs/DEVICE_INTELLIGENCE.md), along with the audit and backlog for computer use, startup routines and communication services.
+
 ## Calendar and email
 
 Connect Google (Calendar and Gmail) or Microsoft (Outlook calendar and mail) in **Settings → Calendar and email**. You sign in on the provider's own page; HANNAH stores the sign-in encrypted in your account, so it works on all your devices.

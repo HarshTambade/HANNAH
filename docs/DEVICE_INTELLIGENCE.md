@@ -1,0 +1,175 @@
+# Device intelligence: audit, decisions and backlog
+
+How HANNAH acts on the person's own devices: the desktop, the phone, and the services they connect. The goal is one intelligence layer (models, agents, tasks, workflows, memory, permissions) with each environment doing only what it can really do. This page records what exists, what was built, what's next, and what won't be built and why.
+
+Status words: **Available** (shipped and verified), **Beta** (shipped, verified in parts, labelled in the app), **Next** (dependency-ready, planned in this order), **Later** (needs something else first), **Not planned** (a platform, policy or legal limit; the reason is given).
+
+## 1. Audit: what HANNAH already had
+
+| Layer | Where | Reused for device work |
+| --- | --- | --- |
+| Model gateway and routing (20 providers, Auto modes, Private mode, budgets) | `server/gateway.js`, `server/providers/catalog.js`, `client/src/services/ModelRouting.ts` | Yes: every agent and workflow step uses it. |
+| Agent loop, specialists, Team mode | `client/src/services/AgentRuntime.ts`, `Orchestrator.ts`, `SpecialistAgents.ts`, `server/orchestrate.js` | Yes: the desktop coding task runs the same loop with tools held to one folder. |
+| Tool registry and approvals | `client/src/services/DeviceTools.ts` (`getDeviceTools`, `executeHANNAHTool`), `SafetyGuard.ts`, `GuardianAgent.ts` | Yes: phone and desktop tools go through Guardian and confirmation. |
+| Durable tasks across devices | `server/task-runs.js` (checkpoints, one-device lease), `server/device-tasks.js` (follow and approve from another device) | Yes: the pattern for "one device does it, others watch". |
+| Workflow engine | `server/workflows/` (durable queue, waits, approvals, desktop jobs) | Yes: desktop steps; phone steps are next. |
+| Memory with provenance and sensitivity | `client/src/services/Memory*.ts`, account sync | Yes: preferences (favourite apps, contacts' roles) will live here, never credentials. |
+| Mail and calendar | `server/connections.js` (Google, Microsoft: search, read, draft, send with approval, events) | Yes: the communication layer builds on it. |
+| Desktop runtime | Electron app + `client/plugins/desktop-tools` (shared folders, approved commands, native dialogs, workflow tasks, hidden page reader) | Yes: the base for the vision and action engine. |
+| Computer use | Only a bridge you build yourself (`client/electron-agent-main.example.cjs`: screenshot-desktop, sharp, nut-js) and `/api/desktop/computer` (Anthropic computer use, server key). Not in the downloadable app. | Partly: the action vocabulary and approval summaries (`DesktopAgent.ts`) carry over. The dependencies need review: current nut-js releases aren't on the public npm registry. |
+| Phone actions on the phone itself | `make_call` and `send_message` tools: open the dialer or composer on the same phone | Yes: now share the Phone Bridge's number checks (no emergency numbers, no `*`/`#` codes). |
+| Native agent plugins | `capacitor-native-agent`, `capacitor-mobile-claw`, `capacitor-mobilecron` (Rust agent loop, scheduling) | Not used by the Phone Bridge; noted for background work on Android. |
+
+What was missing for "use my phone from my computer": pairing, a device identity the server can verify, a channel for short-lived commands, and native code to open the dialer and composer and look up contacts.
+
+## 2. Built: HANNAH Phone Bridge
+
+Give a command on the computer → HANNAH sends it to your paired phone → the phone's own dialer or Messages opens with it filled in → you tap Call or Send → HANNAH reports only what the phone verified.
+
+**Pairing** (`server/phone-bridge.js`, Settings → Phone on both devices)
+- The computer, signed in, creates a one-time code (8 characters, 10 minutes, stored as a hash, at most 3 waiting).
+- The phone, signed in to the **same account**, sends the code with a P-256 public key. The key was generated in the app's WebView with WebCrypto as non-extractable and is kept in IndexedDB.
+- A code can't pair a phone to a different account.
+- Both screens show the key's fingerprint so you can compare them.
+- The phone chooses what it allows: calls, SMS, contact lookups. The computer can't grant itself more.
+
+**Commands**
+- Every request from the phone is signed with its key: phone id, time (±60 s), method, path, SHA-256 of the exact body. The server verifies it against the key stored at pairing.
+- A command lives for **60 seconds**. A phone not seen in the last 45 seconds is reported **offline**, and nothing is queued: a call or SMS never happens later.
+- Each command carries a nonce. The phone checks it hasn't seen it before and sends it back with the result. A result is accepted once, in a valid order.
+- Removing a phone ends its waiting commands, and its next request gets 403.
+
+**On the phone**, each command is checked again, independently:
+- the phone's own on/off switch and allowed actions;
+- the command's expiry and its nonce;
+- the number's shape;
+- no emergency numbers, and no USSD or MMI codes (`*`, `#`).
+
+Then the native `HannahPhone` plugin acts:
+
+| | Android (`HannahPhonePlugin.java`) | iOS (`HannahPhonePlugin.swift`) |
+| --- | --- | --- |
+| Call | `ACTION_DIAL`: dialer opens with the number; you tap Call. No `CALL_PHONE` permission. | `tel:` URL: iOS shows its own call confirmation. |
+| SMS | `ACTION_SENDTO` `smsto:` with `sms_body`: your messaging app opens with recipient and text; you tap Send. No `SEND_SMS` permission (Google Play restricts it). | `MFMessageComposeViewController`: you send or cancel, and iOS reports which. |
+| Find contact | `ContactsContract` query after `READ_CONTACTS` is granted; only matches are returned. | `CNContactStore` after Contacts access; only matches. |
+
+**Reported states:**
+- Sent to phone.
+- Delivered.
+- Dialer opened.
+- Composer opened.
+- On iOS only: you sent the SMS, or you cancelled it.
+- Declined on the phone, with its reason.
+- Failed.
+- Expired.
+
+"Call connected" and "message delivered" are never reported: the platforms don't give apps that information without restricted permissions.
+
+**From chat on a computer:** `phone_find_contact`, then `phone_call` or `phone_text`.
+- Calls and texts need your confirmation in HANNAH, showing the name and number, and then your tap on the phone.
+- "Call Aman" looks Aman up on the phone. If several people or numbers match, HANNAH asks you which.
+
+**Why Java on Android:** the app module is Java, with no Kotlin toolchain. The plugin uses the same Android APIs. Adding the Kotlin Gradle plugin for one class would change the build for no functional gain; converting is cheap if the module moves to Kotlin.
+
+**Why polling, not push:** the phone checks every 3 seconds while HANNAH is open on it. Waking a closed app needs Firebase Cloud Messaging and APNs keys, which this deployment doesn't have. Until then, "open HANNAH on the phone" is the honest requirement, and the computer says so when the phone is offline.
+
+**Verification**
+- `server/phone-bridge.test.js` (real server, SQLite):
+  - pairing across accounts, one-time codes and fingerprints;
+  - signatures: unsigned, tampered, old, and another account's phone id;
+  - one-time delivery, nonces and result order;
+  - emergency and USSD refusals, and allowed actions;
+  - offline phones, expiry with no later delivery, and revocation;
+  - contact matches only.
+- `client/src/__tests__/PhoneBridge.test.ts`:
+  - the app signs exactly the string the server checks, and checks numbers the same way;
+  - the phone-side refusals;
+  - Android and iOS SMS outcomes;
+  - outcome wording that never claims more than was verified;
+  - tools only on signed-in computers, with approval.
+- iOS: the Swift plugin type-checks against Capacitor and the iOS SDK (with a negative control). A full Xcode build here stops in a third-party package (`capacitor-lancedb`'s Rust bindings), before reaching HANNAH's code. CI builds iOS.
+- Android: compiled with Gradle and run end to end in the emulator, 12 of 12 checks (section 5).
+
+## 3. Backlog, in dependency order
+
+### Phase 2: Desktop vision and action (Next)
+1. **Screen observation, on request.**
+   - Electron `desktopCapturer` takes a screenshot only when you ask, with a visible indicator and per-session consent. The image goes to a vision-capable model through the gateway ("what's on my screen", "explain this error").
+   - macOS needs the Screen Recording permission, which the app can't grant itself; Settings will say so.
+   - Watching is separate from acting.
+2. **Open and switch apps** with approval: `open -a` (macOS), the Start menu or app paths (Windows), `.desktop` launchers (Linux). Verify by checking the app's window appears.
+3. **Startup routines.**
+   - `app.setLoginItemSettings` starts HANNAH at login only if you turn it on, and the Login Items list shows it.
+   - A "When the desktop app starts" trigger then opens your apps, folders and URLs in order, with a run history.
+   - No hidden services.
+4. **Accessibility-first control:** macOS AX API, Windows UI Automation, Linux AT-SPI, through a native helper. Mouse and keyboard only where accessibility gives nothing.
+   - Every action is summarized and approved, as `DesktopAgent.ts` does today.
+   - The result is checked with a fresh observation before the next step.
+5. **Browser automation** beyond reading pages: navigation and form filling in a separate signed-out window. Signed-in sites only through the person's own browser with their go-ahead per step.
+
+### Phase 3: Daily tasks on the desktop (Later: needs Phase 2)
+- **YouTube study notes.**
+  - Search and open a video. Read the transcript only where it's shown on the page or captions are publicly available; YouTube's caption download API is limited to the video's owner.
+  - Generate notes, then a PDF (Markdown to PDF on the desktop), and verify the file.
+  - If no transcript is accessible, say so; never invent a summary.
+- **Instagram and other social feeds:** read what's on screen and summarize, with scrolling you approve. HANNAH never likes, follows, comments or posts on its own, and doesn't bypass sign-in or CAPTCHAs.
+- **Food ordering (Swiggy, Zomato):** neither offers a public ordering API.
+  - The only route is computer use in your own signed-in browser: prepare the cart, show restaurant, items, taxes, delivery fee, total and address, then **you** place the order.
+  - HANNAH never authorizes payment.
+
+### Phase 4: Phone Bridge, remaining (Later)
+- **Push wake-up (FCM and APNs)** so a closed phone app can receive a request, and the request is shown as a notification you confirm.
+- **QR pairing:** the code works today; scanning needs a barcode plugin.
+- **iPhone end-to-end run on a device.**
+- **Workflow nodes:** "Start a phone call" and "Prepare an SMS", using the same bridge with the same confirmations. A workflow can't bypass the phone's tap.
+
+### Phase 5: Communication (Next after Phase 2's first items)
+- **Gmail and Outlook:** add labels, archive, follow-ups and attachments to the existing search, read, draft and approved send.
+- **Google Chat:** the official API needs a Google Workspace account and a configured Chat app, and is planned for Workspace users only.
+- **WhatsApp:** only the WhatsApp Business Platform (Cloud API), for business numbers. Personal WhatsApp has no official API. HANNAH won't read message databases or use session tokens.
+- **Slack and Discord reading:** through their official APIs with OAuth.
+
+### Not planned
+- **Placing a call with no tap** (`ACTION_CALL` or `CALL_PHONE`), **silent SMS** (`SEND_SMS`), or **reading call state or logs:** these need restricted permissions that the use case doesn't justify under Google Play policy, and iOS doesn't allow them.
+- **Calling or texting emergency numbers** on someone's behalf.
+- **Cloud telephony presented as "your phone":** VoIP could be a separate, clearly labelled integration.
+- **Hidden screen recording, or monitoring without a visible indicator.**
+
+## 4. Permissions
+
+| Permission | Where | Asked when |
+| --- | --- | --- |
+| Contacts (`READ_CONTACTS`, `NSContactsUsageDescription`) | Phone app | The first time your computer asks the phone to find a name |
+| None for calls or SMS | Phone app | The dialer and composer act after your tap |
+| Using this phone from a computer | Phone app, Settings → Phone | When you pair; can be turned off or narrowed any time |
+| Shared folders, commands, workflow tasks | Desktop app, Settings → Desktop access | When you add each one |
+
+The register CI checks is `docs/NATIVE_PERMISSIONS.json`.
+
+## 5. Android end-to-end run
+
+The real Android app (debug build) in the emulator (API 36, Google dialer and Messages) is the phone. `scripts/phone-bridge-android-e2e.mjs` is the computer, signed in to the same account against a local server. The script:
+- types the pairing code into the app's own Settings → Phone screen, through Playwright's Android WebView support;
+- inspects the phone with `adb`: the resumed activity, a UI dump and screenshots;
+- adds a test contact through the contacts provider.
+
+Latest run: **12 of 12 checks passed.**
+
+| Check | Result |
+| --- | --- |
+| Pairing completes; computer and phone show the same key fingerprint | Pass |
+| The computer sees the phone online with the actions it allowed (call, SMS, contacts) | Pass |
+| A lookup for "Bridgetest" returns only that contact and number | Pass |
+| The call request is reported as "dialer opened" | Pass |
+| Google's dialer is the resumed activity | Pass |
+| The dialer shows +91 98765 43210, waiting for Call | Pass |
+| No call is active (`dumpsys telecom`) | Pass |
+| The SMS request is reported as "composer opened" | Pass |
+| Google Messages is the resumed activity | Pass |
+| The composer holds "Reaching in 20 minutes", waiting for Send | Pass |
+| After the computer removes the phone, the app clears its pairing and shows the pair form again | Pass |
+| A request to the removed phone is refused (409) | Pass |
+
+To reach a server on the development machine, debug builds allow HTTP to `localhost` only (`android/app/src/debug`, used with `adb reverse`). Release builds don't include that file and stay HTTPS-only.
+
+Not run: an iPhone end to end (no device here; the Swift plugin type-checks), and a closed phone app, which can't receive requests until push wake-up exists.
