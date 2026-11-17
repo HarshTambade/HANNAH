@@ -1,3 +1,5 @@
+import { categoryOf, DUPLICATE_THRESHOLD, MEMORY_CATEGORIES, rankMemories, secretIn, sensitivityOf, similarity, type MemoryCategory, type MemorySource, type Ranked, type Sensitivity } from "./MemoryModel";
+
 export type MemoryLayer = "session" | "long_term" | "persona";
 export type MemoryTier = "episodic" | "semantic" | "procedural";
 
@@ -12,14 +14,51 @@ export type MemoryRecord = {
   accessCount: number;
   createdAt: string;
   updatedAt: string;
+  /** Older records don't have these; they're filled in when read. */
+  category: MemoryCategory;
+  source: MemorySource;
+  sensitivity: Sensitivity;
 };
 
+export type MemorySettings = { enabled: boolean; categories: Record<MemoryCategory, boolean> };
+export type RememberResult = { ok: true; record: MemoryRecord; merged: boolean } | { ok: false; reason: string };
+
 const KEY = "hannah.memory.v1";
+const SETTINGS_KEY = "hannah.memory.settings.v1";
+export const MEMORY_SETTINGS_EVENT = "hannah:memory-settings";
+const MAX_CHARS = 300;
+const SOURCE_KINDS = new Set(["you", "chat", "assistant", "automation", "insight", "import", "legacy"]);
+const SECRET_REFUSAL = (secret: string) => `That looks like ${secret}. HANNAH never stores passwords, keys, tokens, card or ID numbers as memories.`;
+
+/** Fill in fields older records don't have, without trusting stored values blindly. */
+function normalize(raw: Partial<MemoryRecord> & { content?: unknown }): MemoryRecord | null {
+  if (!raw || typeof raw.id !== "string" || typeof raw.content !== "string") return null;
+  const content = raw.content;
+  const layer: MemoryLayer = raw.layer === "session" || raw.layer === "persona" ? raw.layer : "long_term";
+  const now = new Date().toISOString();
+  return {
+    id: raw.id,
+    layer,
+    tier: raw.tier === "episodic" || raw.tier === "procedural" || raw.tier === "semantic" ? raw.tier : layer === "session" ? "episodic" : "semantic",
+    content,
+    weight: Number.isFinite(raw.weight) ? Number(raw.weight) : 1,
+    decay: Number.isFinite(raw.decay) ? Number(raw.decay) : 0,
+    lastAccessed: typeof raw.lastAccessed === "string" ? raw.lastAccessed : raw.createdAt ?? now,
+    accessCount: Number.isFinite(raw.accessCount) ? Number(raw.accessCount) : 0,
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now,
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : raw.createdAt ?? now,
+    category: MEMORY_CATEGORIES.includes(raw.category as MemoryCategory) ? raw.category as MemoryCategory : categoryOf(content),
+    source: raw.source && typeof raw.source === "object" && SOURCE_KINDS.has(String(raw.source.kind))
+      ? { kind: raw.source.kind, ...(typeof raw.source.detail === "string" ? { detail: raw.source.detail.slice(0, 120) } : {}) }
+      : { kind: layer === "persona" ? "you" : "legacy" },
+    sensitivity: raw.sensitivity === "sensitive" || raw.sensitivity === "normal" ? raw.sensitivity : sensitivityOf(content),
+  };
+}
 
 function read(): MemoryRecord[] {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(KEY) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.map(normalize).filter((record): record is MemoryRecord => Boolean(record)) : [];
   } catch {
     return [];
   }
@@ -33,6 +72,23 @@ function write(records: MemoryRecord[]) {
   }
 }
 
+const allCategories = (on: boolean) => Object.fromEntries(MEMORY_CATEGORIES.map((category) => [category, on])) as Record<MemoryCategory, boolean>;
+
+function readSettings(): MemorySettings {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || "null") as Partial<MemorySettings> | null;
+    const categories = allCategories(true);
+    if (parsed?.categories && typeof parsed.categories === "object") {
+      for (const category of MEMORY_CATEGORIES) if (parsed.categories[category] === false) categories[category] = false;
+    }
+    return { enabled: parsed?.enabled !== false, categories };
+  } catch {
+    return { enabled: true, categories: allCategories(true) };
+  }
+}
+
+const clean = (content: string) => content.replace(/\s+/g, " ").trim().slice(0, MAX_CHARS);
+
 export const MemoryService = {
   list(layer?: MemoryLayer, tier?: MemoryTier) {
     const records = read();
@@ -41,31 +97,101 @@ export const MemoryService = {
     if (tier) filtered = filtered.filter((r) => r.tier === tier);
     return filtered;
   },
-  add(layer: MemoryLayer, content: string, weight = 1, tier?: MemoryTier) {
+
+  settings: readSettings,
+  saveSettings(next: Partial<MemorySettings>) {
+    const current = readSettings();
+    const settings: MemorySettings = { enabled: next.enabled ?? current.enabled, categories: { ...current.categories, ...(next.categories ?? {}) } };
+    try {
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      window.dispatchEvent(new Event(MEMORY_SETTINGS_EVENT));
+    } catch {
+      // Best effort.
+    }
+    return settings;
+  },
+
+  /**
+   * Save something to remember. Refuses secrets, and refuses everything while
+   * memory is off. A memory that says nearly the same as an existing one
+   * replaces it (the newer wording wins) instead of adding a duplicate.
+   */
+  remember(content: string, options: { source: MemorySource; layer?: MemoryLayer; category?: MemoryCategory; sensitivity?: Sensitivity; weight?: number }): RememberResult {
+    if (!readSettings().enabled) return { ok: false, reason: "Memory is turned off, so HANNAH didn't save this. Turn it on under What HANNAH remembers." };
+    const text = clean(content);
+    if (!text) return { ok: false, reason: "There's nothing to save." };
+    const secret = secretIn(text);
+    if (secret) return { ok: false, reason: SECRET_REFUSAL(secret) };
+    const layer = options.layer ?? "long_term";
+    const records = read();
     const now = new Date().toISOString();
-    const resolvedTier: MemoryTier = tier || (layer === "session" ? "episodic" : layer === "long_term" ? "semantic" : "procedural");
+    if (layer !== "session") {
+      const index = records.findIndex((record) => record.layer !== "session" && similarity(record.content, text) >= DUPLICATE_THRESHOLD);
+      if (index >= 0) {
+        const existing = records[index];
+        const merged: MemoryRecord = {
+          ...existing,
+          content: text,
+          weight: Math.min(5, Math.max(existing.weight, options.weight ?? 1) + 0.5),
+          decay: 0,
+          updatedAt: now,
+          category: options.category ?? existing.category,
+          sensitivity: options.sensitivity ?? (existing.sensitivity === "sensitive" ? "sensitive" : sensitivityOf(text)),
+        };
+        records.splice(index, 1);
+        write([merged, ...records]);
+        return { ok: true, record: merged, merged: true };
+      }
+    }
+    const tier: MemoryTier = layer === "session" ? "episodic" : layer === "long_term" ? "semantic" : "procedural";
     const record: MemoryRecord = {
       id: crypto.randomUUID(),
       layer,
-      tier: resolvedTier,
-      content,
-      weight,
-      decay: resolvedTier === "episodic" ? 0.5 : resolvedTier === "semantic" ? 0.2 : 0,
+      tier,
+      content: text,
+      weight: options.weight ?? 1,
+      decay: tier === "episodic" ? 0.5 : tier === "semantic" ? 0.2 : 0,
       lastAccessed: now,
       accessCount: 0,
       createdAt: now,
       updatedAt: now,
+      category: options.category ?? categoryOf(text),
+      source: options.source,
+      sensitivity: options.sensitivity ?? sensitivityOf(text),
     };
-    write([record, ...read()]);
-    return record;
+    write([record, ...records]);
+    return { ok: true, record, merged: false };
   },
-  update(id: string, content: string) {
+
+  /** Older entry point, used by background modules: an insight HANNAH derived. Null when refused. */
+  add(layer: MemoryLayer, content: string, weight = 1, _tier?: MemoryTier): MemoryRecord | null {
+    const result = this.remember(content, { source: { kind: layer === "persona" ? "you" : "insight" }, layer, weight });
+    return result.ok ? result.record : null;
+  },
+
+  /** Change a memory's text, category or sensitivity. Returns why it was refused, or "". */
+  edit(id: string, patch: { content?: string; category?: MemoryCategory; sensitivity?: Sensitivity }) {
     const records = read();
     const index = records.findIndex((record) => record.id === id);
-    if (index >= 0) {
-      records[index] = { ...records[index], content, updatedAt: new Date().toISOString() };
-      write(records);
+    if (index < 0) return "That memory no longer exists.";
+    const next = { ...records[index] };
+    if (patch.content !== undefined) {
+      const text = clean(patch.content);
+      if (!text) return "A memory can't be empty. Delete it instead.";
+      const secret = secretIn(text);
+      if (secret) return SECRET_REFUSAL(secret);
+      next.content = text;
+      if (patch.sensitivity === undefined && next.sensitivity === "normal") next.sensitivity = sensitivityOf(text);
     }
+    if (patch.category) next.category = patch.category;
+    if (patch.sensitivity) next.sensitivity = patch.sensitivity;
+    next.updatedAt = new Date().toISOString();
+    records[index] = next;
+    write(records);
+    return "";
+  },
+  update(id: string, content: string) {
+    this.edit(id, { content });
   },
   remove(id: string) {
     write(read().filter((record) => record.id !== id));
@@ -73,6 +199,30 @@ export const MemoryService = {
   resetPersona() {
     write(read().filter((record) => record.layer !== "persona"));
   },
+
+  /**
+   * The memories to send with a message: the ones that match it, plus a few
+   * preferences. Nothing while memory is off. Sensitive memories only when the
+   * model is on-device or self-hosted (`allowSensitive`).
+   */
+  forMessage(query: string, options: { allowSensitive?: boolean; limit?: number } = {}): { picked: Ranked<MemoryRecord>[]; hiddenSensitive: number } {
+    const settings = readSettings();
+    if (!settings.enabled) return { picked: [], hiddenSensitive: 0 };
+    return rankMemories(read(), query, { limit: options.limit ?? 8, allowSensitive: options.allowSensitive, categories: settings.categories });
+  },
+
+  /** For the search_memories tool: ranked matches, or the newest when there's no query. Never sensitive ones. */
+  search(query: string, limit = 20) {
+    const settings = readSettings();
+    if (!settings.enabled) return { memories: [] as MemoryRecord[], hiddenSensitive: 0, off: true };
+    const usable = read().filter((record) => record.layer !== "session" && settings.categories[record.category] !== false);
+    const hiddenSensitive = usable.filter((record) => record.sensitivity === "sensitive").length;
+    const open = usable.filter((record) => record.sensitivity !== "sensitive");
+    if (!query.trim()) return { memories: open.slice(0, limit), hiddenSensitive, off: false };
+    const { picked } = rankMemories(open, query, { limit, preferences: 0, categories: settings.categories });
+    return { memories: picked.map((item) => item.memory), hiddenSensitive, off: false };
+  },
+
   consolidated() {
     return read().filter((record) => record.layer === "long_term");
   },
@@ -105,16 +255,20 @@ export const MemoryService = {
     });
     write(updated);
   },
-  // Access a memory (reinforces it, reducing decay)
-  access(id: string) {
+  /** Mark memories as used in a reply (reinforces them, and the panel shows when). */
+  access(...ids: string[]) {
+    const wanted = new Set(ids);
     const records = read();
-    const index = records.findIndex((r) => r.id === id);
-    if (index >= 0) {
-      records[index].lastAccessed = new Date().toISOString();
-      records[index].accessCount += 1;
-      records[index].decay = Math.max(0, records[index].decay - 0.01);
-      write(records);
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const record of records) {
+      if (!wanted.has(record.id)) continue;
+      record.lastAccessed = now;
+      record.accessCount += 1;
+      record.decay = Math.max(0, record.decay - 0.01);
+      changed = true;
     }
+    if (changed) write(records);
   },
   // Get memories sorted by relevance (weight * (1 - decay))
   getRelevant(tier?: MemoryTier, limit = 10) {

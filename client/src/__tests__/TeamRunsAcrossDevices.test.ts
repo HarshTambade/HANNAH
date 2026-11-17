@@ -14,7 +14,7 @@ const net = vi.hoisted(() => ({
   plan: [] as unknown[],
   verify: [] as unknown[],
   agentCalls: [] as string[],
-  onStep: async (_task: string) => undefined as void,
+  onStep: async (_task: string, _onActivity?: (activity: { phase: string; message: string }) => void) => undefined as void,
 }));
 
 vi.mock("../services/api", () => ({
@@ -34,10 +34,10 @@ vi.mock("../services/api", () => ({
 }));
 vi.mock("../services/LLMRouter", () => ({ DAILY_BUDGET_KEY: "hannah.budget.dailyUsd" }));
 vi.mock("../services/AgentRuntime", () => ({
-  runAgentTurn: async (options: { messages: Array<{ content: string }> }) => {
+  runAgentTurn: async (options: { messages: Array<{ content: string }>; onActivity?: (activity: { phase: string; message: string }) => void }) => {
     const task = options.messages[0].content.match(/Your step: (.*)/)?.[1] ?? "";
     net.agentCalls.push(task);
-    await net.onStep(task);
+    await net.onStep(task, options.onActivity);
     return { reply: `result of ${task}`, emotion: "neutral" };
   },
 }));
@@ -174,6 +174,30 @@ describe("team runs across devices", () => {
     expect(local.status).toBe("cancelled");
     await expect(laptop.modules.Orchestrator.resumeTeamRun(runId, { generateLocal: async () => "" })).rejects.toThrow(/cancelled/);
     expect((await api(`/account/runs/${runId}`)).body.run.status).toBe("cancelled");
+  });
+
+  it("a step waiting for your approval shows as waiting-approval in your account, and the device keeps the run", async () => {
+    net.plan = [{ id: "s1", agent: "tasks", task: "Send the summary", dependsOn: [] }];
+    net.verify = [pass("Sent")];
+    const laptop = await boot(laptopDevice);
+    const seen: Array<{ status: string; step: string; lease: string | null }> = [];
+    net.onStep = async (_task, onActivity) => {
+      const [{ id }] = laptop.modules.Orchestrator.TeamRuns.list();
+      const snapshot = async () => {
+        await laptop.modules.TaskRecords.settled(id);
+        const run = (await api(`/account/runs/${id}`)).body.run;
+        seen.push({ status: run.status, step: run.record.steps[0].status, lease: run.lease?.deviceName ?? null });
+      };
+      onActivity?.({ phase: "waiting-approval", message: "Waiting for your approval: send email" });
+      await snapshot();
+      onActivity?.({ phase: "acting", message: "Using send email…" });
+      await snapshot();
+    };
+    await laptop.modules.Orchestrator.runTeamTask({ ...base, messages: [{ role: "user", content: "Send it" }] });
+    expect(seen).toEqual([
+      { status: "waiting-approval", step: "waiting-approval", lease: "MacBook" },
+      { status: "running", step: "running", lease: "MacBook" },
+    ]);
   });
 
   it("checkpoints made offline go out when the device is back", async () => {

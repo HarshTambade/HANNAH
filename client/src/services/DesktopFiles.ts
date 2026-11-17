@@ -93,6 +93,7 @@ const desktopTools: HANNAHTool[] = [
   },
   {
     name: "desktop_write_file",
+    asksUser: true,
     description: "Create or replace a text file (up to 1 MB) in a read-write folder the user shared. The user confirms every write in a system dialog that shows the path and content.",
     inputSchema: {
       type: "object",
@@ -106,6 +107,7 @@ const desktopTools: HANNAHTool[] = [
   },
   {
     name: "desktop_run_command",
+    asksUser: true,
     description: "Run one program (for example `npm test`, `git status`, `python script.py`) inside a shared folder and return its output. No shell: pipes, redirects, `&&` and variables aren't supported. The user approves each command in a system dialog; it times out after 60 seconds.",
     inputSchema: {
       type: "object",

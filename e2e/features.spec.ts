@@ -306,3 +306,58 @@ test("a template opens ready to save", async ({ page }) => {
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("list", { name: "Saved automations" })).toContainText("Fri at 16:00 · 3 steps");
 });
+
+test("the memory center records sources, refuses secrets, and chat sends only related memories", async ({ page }) => {
+  await connectAsGuest(page);
+  const sentMemories: string[][] = [];
+  await page.route(/\/api\/(providers|models|agent)$/, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/providers") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ defaultProvider: "groq", providers: [{ id: "groq", label: "Groq", local: false, configured: true }] }) });
+    if (url.pathname === "/api/models") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ provider: "Groq", defaultModel: "openai/gpt-oss-120b", models: ["openai/gpt-oss-120b"] }) });
+    const body = JSON.parse(route.request().postData() || "{}");
+    sentMemories.push(Array.isArray(body.memories) ? body.memories : []);
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ message: { content: JSON.stringify({ reply: "Bruno is a beagle.", emotion: "happy" }), tool_calls: [] } }) });
+  });
+  await page.addInitScript(() => window.localStorage.setItem("hannah.onboarding.v1", "complete"));
+  await page.goto("/memory");
+
+  const input = page.getByLabel("Add something for HANNAH to remember");
+  const add = async (text: string) => {
+    await input.fill(text);
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+  };
+  await add("I prefer short answers");
+  await expect(page.getByRole("status").filter({ hasText: "Saved under Preferences." })).toBeVisible();
+  await add("My dog Bruno is a beagle");
+  await add("I take medication for anxiety");
+  await expect(page.getByRole("status").filter({ hasText: "marked sensitive" })).toBeVisible();
+  await add("My password is hunter22!");
+  await expect(page.getByRole("status").filter({ hasText: "never stores passwords" })).toBeVisible();
+  await add("Gardening tips from my neighbour are great");
+
+  const memories = page.getByRole("list", { name: "Memories" }).getByRole("listitem");
+  await expect(memories).toHaveCount(4);
+  await expect(memories.first()).toContainText("Added by you");
+  await page.getByLabel("Search memories").fill("bruno");
+  await expect(memories).toHaveCount(1);
+  await expect(memories.first()).toContainText("My dog Bruno is a beagle");
+  await page.getByLabel("Search memories").fill("");
+
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("link", { name: "Chat" }).click();
+  const message = page.getByRole("textbox", { name: "Message HANNAH" });
+  await message.fill("What breed is Bruno again?");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText("Bruno is a beagle.")).toBeVisible();
+  // Related memories and preferences go with the message; unrelated and sensitive ones don't.
+  expect(sentMemories.at(-1)).toEqual(["My dog Bruno is a beagle", "I prefer short answers"]);
+
+  // With memory off, nothing is sent.
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("link", { name: /Memory/ }).click();
+  await page.getByRole("switch", { name: "Memory on" }).click();
+  await expect(page.getByText("Memory is off: HANNAH doesn't use or save memories.")).toBeVisible();
+  await page.getByRole("navigation", { name: "App navigation" }).getByRole("link", { name: "Chat" }).click();
+  await message.fill("And how old is Bruno?");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect.poll(() => sentMemories.length).toBe(2);
+  expect(sentMemories.at(-1)).toEqual([]);
+});

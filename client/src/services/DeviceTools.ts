@@ -7,6 +7,7 @@ import type { DeviceTool as MobileClawTool } from "capacitor-mobile-claw";
 import { HITLDeniedError, SafetyGuard, type SensitiveAction } from "./SafetyGuard";
 import { ReminderService, resolveDueAt } from "./ReminderService";
 import { MemoryService } from "./MemoryService";
+import { CATEGORY_LABELS, SOURCE_LABELS } from "./MemoryModel";
 import { notifyMemoryChanged } from "./MemoryStore";
 import { getDesktopFileTools } from "./DesktopFiles";
 import { getConnectionTools } from "./Connections";
@@ -25,6 +26,8 @@ export type HANNAHTool = {
   sensitive?: SensitiveAction;
   /** What the approval card shows, when it isn't the raw arguments. */
   approvalDetails?: (args: Record<string, unknown>) => Record<string, unknown>;
+  /** The tool itself waits for the user's yes (a system dialog), without HANNAH's approval card. */
+  asksUser?: boolean;
   execute: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
@@ -287,13 +290,15 @@ const deviceTools: HANNAHTool[] = [
   },
   {
     name: "search_memories",
-    description: "Search the facts the user asked HANNAH to remember on this device. Returns matching memories, newest first.",
+    description: "Search the facts the user asked HANNAH to remember on this device. Returns the best matches first, with each memory's category and where it came from. Sensitive memories are never returned here.",
     inputSchema: { type: "object", properties: { query: { type: "string", description: "Words to look for. Leave empty to list recent memories." } } },
     execute: async (args) => {
-      const terms = String(args.query ?? "").toLowerCase().split(/\s+/).filter((term) => term.length > 1);
-      const records = MemoryService.list().filter((record) => record.layer !== "session");
-      const matches = terms.length ? records.filter((record) => terms.some((term) => record.content.toLowerCase().includes(term))) : records;
-      return { memories: matches.slice(0, 20).map((record) => ({ id: record.id, content: record.content, savedAt: record.createdAt })) };
+      const result = MemoryService.search(String(args.query ?? "").slice(0, 300));
+      if (result.off) return { memories: [], note: "The user turned memory off." };
+      return {
+        memories: result.memories.map((record) => ({ id: record.id, content: record.content, category: CATEGORY_LABELS[record.category], source: SOURCE_LABELS[record.source.kind], savedAt: record.createdAt })),
+        ...(result.hiddenSensitive ? { note: `${result.hiddenSensitive} sensitive memor${result.hiddenSensitive === 1 ? "y is" : "ies are"} not shared through this tool.` } : {}),
+      };
     },
   },
   {
@@ -304,10 +309,10 @@ const deviceTools: HANNAHTool[] = [
     sensitive: "store_memory",
     execute: async (args) => {
       const content = String(args.content ?? "").trim().replace(/[\r\n]+/g, " ").slice(0, 300);
-      if (!content) throw new Error("There's nothing to save.");
-      const record = MemoryService.add("long_term", content);
+      const result = MemoryService.remember(content, { source: { kind: "assistant" } });
+      if (!result.ok) throw new Error(result.reason);
       notifyMemoryChanged();
-      return { saved: true, id: record.id, content };
+      return { saved: true, id: result.record.id, content: result.record.content, category: CATEGORY_LABELS[result.record.category], ...(result.merged ? { note: "This updated a memory that said nearly the same thing." } : {}) };
     },
   },
 ];

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, BookOpen, Brain, CheckCircle2, CircleDashed, Code2, ListChecks, Loader2, MinusCircle, MonitorSmartphone, PauseCircle, Play, ShieldCheck, Square, Trash2, Users, XCircle } from "lucide-react";
+import { AlertTriangle, BookOpen, Brain, CheckCircle2, CircleDashed, Code2, Hand, ListChecks, Loader2, MinusCircle, MonitorSmartphone, PauseCircle, Play, ShieldCheck, Square, Trash2, Users, XCircle } from "lucide-react";
 import { apiFetch, apiUrl } from "../services/api";
 import { ChatHistory } from "../services/ChatHistory";
 import { resumeTeamRun, TEAM_RUNS_EVENT, TeamRuns, type TeamRun, type TeamStep, type TeamStepStatus } from "../services/Orchestrator";
@@ -15,6 +15,7 @@ const agentTones: Record<SpecialistId, string> = { research: "tone-sky", coding:
 const stepStatus: Record<TeamStepStatus, { label: string; Icon: typeof Brain; className: string }> = {
   pending: { label: "Waiting", Icon: CircleDashed, className: "text-slate-500" },
   running: { label: "Working", Icon: Loader2, className: "text-sky-700" },
+  "waiting-approval": { label: "Waiting for you", Icon: Hand, className: "text-amber-700" },
   done: { label: "Done", Icon: CheckCircle2, className: "text-emerald-700" },
   failed: { label: "Failed", Icon: XCircle, className: "text-rose-700" },
   skipped: { label: "Skipped", Icon: MinusCircle, className: "text-slate-500" },
@@ -71,7 +72,7 @@ function RunCard({ run, onResume, onCancel, resuming }: { run: TeamRun; onResume
           {elsewhere && <p className="mt-1 flex items-center gap-1 text-xs font-medium text-sky-800"><MonitorSmartphone size={12} /> Running on {run.runningOn}</p>}
         </button>
         <div className="flex items-center gap-2">
-          <span className="pill-badge" data-status={run.status}>{(run.status === "running" || run.status === "verifying" || run.status === "planning") && <Loader2 size={12} className="animate-spin" />}{runStatus[run.status]}</span>
+          <span className="pill-badge" data-status={run.status}>{(run.status === "running" || run.status === "verifying" || run.status === "planning") && <Loader2 size={12} className="animate-spin" />}{run.status === "running" && run.steps.some((step) => step.status === "waiting-approval") ? "Waiting for you" : runStatus[run.status]}</span>
           {resumable && <button type="button" disabled={resuming} onClick={() => onResume(run.id)} className="btn-outline !py-1.5 text-xs"><Play size={12} /> Resume</button>}
           {elsewhere && <button type="button" onClick={() => onCancel(run.id)} className="btn-outline !py-1.5 text-xs text-rose-700"><Square size={11} /> Cancel on {run.runningOn}</button>}
           {!TeamRuns.isLive(run.id) && !elsewhere && <button type="button" aria-label="Remove this run" onClick={() => TeamRuns.remove(run.id)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"><Trash2 size={13} /></button>}

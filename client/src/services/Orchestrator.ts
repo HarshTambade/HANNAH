@@ -26,7 +26,7 @@ import { activeSpecialists, SPECIALISTS, type SpecialistId } from "./SpecialistA
 import { DeviceTasks, thisDevice } from "./DeviceTasks";
 import { TaskRecords, type LostReason, type RemoteRun, type RunStatus } from "./TaskRecords";
 
-export type TeamStepStatus = "pending" | "running" | "done" | "failed" | "skipped" | "declined" | "blocked" | "stopped";
+export type TeamStepStatus = "pending" | "running" | "waiting-approval" | "done" | "failed" | "skipped" | "declined" | "blocked" | "stopped";
 export type TeamStep = {
   id: string;
   agent: SpecialistId;
@@ -98,12 +98,14 @@ function save(run: TeamRun) {
   write([structuredClone(run), ...read().filter((item) => item.id !== run.id)]);
   reportAcrossDevices(run);
   const { runningOn: _elsewhere, ...record } = run;
-  void TaskRecords.checkpoint(run.id, { kind: "team", title: run.objective.split("\n")[0].slice(0, 140) || "Agent team task", status: recordStatus(run.status), record: structuredClone(record) });
+  void TaskRecords.checkpoint(run.id, { kind: "team", title: run.objective.split("\n")[0].slice(0, 140) || "Agent team task", status: recordStatus(run.status, run.steps), record: structuredClone(record) });
 }
 
 /** The account's status for a run (the brief's task states). */
-export function recordStatus(status: TeamRunStatus): RunStatus {
-  if (status === "planning" || status === "running" || status === "verifying") return "running";
+export function recordStatus(status: TeamRunStatus, steps: TeamStep[] = []): RunStatus {
+  if (status === "planning" || status === "running" || status === "verifying") {
+    return steps.some((step) => step.status === "waiting-approval") ? "waiting-approval" : "running";
+  }
   if (status === "succeeded") return "completed";
   if (status === "failed") return "failed";
   if (status === "cancelled") return "cancelled";
@@ -111,7 +113,7 @@ export function recordStatus(status: TeamRunStatus): RunStatus {
   return "paused";
 }
 
-const STEP_STATUSES = new Set<TeamStepStatus>(["pending", "running", "done", "failed", "skipped", "declined", "blocked", "stopped"]);
+const STEP_STATUSES = new Set<TeamStepStatus>(["pending", "running", "waiting-approval", "done", "failed", "skipped", "declined", "blocked", "stopped"]);
 const RUN_STATUSES = new Set<TeamRunStatus>(["planning", "running", "verifying", "succeeded", "needs-attention", "failed", "stopped", "interrupted", "cancelled"]);
 const SPECIALIST_IDS = new Set<string>(SPECIALISTS.map((agent) => agent.id));
 const text = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : "");
@@ -180,9 +182,10 @@ function fromRemote(remote: RemoteRun, record: TeamRun): TeamRun {
 /** Tasks across devices: your other signed-in devices see this run's progress. */
 function reportAcrossDevices(run: TeamRun) {
   const done = run.steps.filter((step) => step.status === "done").length;
-  const status = run.status === "succeeded" ? "done" : run.status === "needs-attention" ? "needs-attention" : run.status === "stopped" ? "stopped" : run.status === "failed" || run.status === "interrupted" ? "failed" : "running";
+  const status = run.status === "succeeded" ? "done" : run.status === "needs-attention" ? "needs-attention" : run.status === "stopped" || run.status === "cancelled" ? "stopped" : run.status === "failed" || run.status === "interrupted" ? "failed" : "running";
   const detail = run.status === "planning" ? "Planning"
     : run.status === "verifying" ? "Checking the result"
+      : status === "running" && run.steps.some((step) => step.status === "waiting-approval") ? "Waiting for your approval"
       : status === "running" ? `${done} of ${run.steps.length} steps done`
         : run.error || run.reply?.slice(0, 300) || run.summary || "";
   DeviceTasks.report({ id: run.id, title: run.objective.split("\n")[0].slice(0, 140) || "Agent team task", status, detail });
@@ -195,7 +198,7 @@ export const TeamRuns = {
     for (const run of runs) {
       if (ACTIVE_STATUSES.has(run.status) && !liveRuns.has(run.id) && !run.runningOn) {
         run.status = "interrupted";
-        for (const step of run.steps) if (step.status === "running") step.status = "pending";
+        for (const step of run.steps) if (step.status === "running" || step.status === "waiting-approval") step.status = "pending";
         changed = true;
       }
     }
@@ -348,6 +351,13 @@ async function executeSteps(run: TeamRun, options: TeamOptions) {
         signal: options.signal,
         generateLocal: options.generateLocal,
         messages: [{ role: "user", content: stepPrompt(run, step, agent.instructions) }],
+        // Shows on this run, and on your other devices, while a step waits for your yes or no.
+        onActivity: (activity) => {
+          const waiting = activity.phase === "waiting-approval";
+          if (waiting === (step.status === "waiting-approval") || (step.status !== "running" && step.status !== "waiting-approval")) return;
+          step.status = waiting ? "waiting-approval" : "running";
+          save(run);
+        },
       });
       step.output = reply.reply;
       step.model = reply.meta?.model;
@@ -466,7 +476,7 @@ async function finish(run: TeamRun, options: TeamOptions): Promise<AgentReply> {
 /** What this device does when it may no longer work on a run (cancelled or taken over elsewhere). */
 function settleLost(run: TeamRun, message: string, reason: LostReason): AgentReply {
   run.status = reason === "cancelled" ? "cancelled" : "interrupted";
-  for (const step of run.steps) if (step.status === "running" || step.status === "stopped") step.status = "pending";
+  for (const step of run.steps) if (step.status === "running" || step.status === "waiting-approval" || step.status === "stopped") step.status = "pending";
   run.error = message;
   save(run);
   return { reply: reason === "cancelled" ? `${message} I stopped working on it here.` : `${message} I stopped working on it on this device.`, emotion: "neutral", outcome: "stopped" };

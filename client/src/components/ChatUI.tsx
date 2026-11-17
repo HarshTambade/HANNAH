@@ -134,6 +134,8 @@ type CloudProviderOption = { id: string; label: string; local: boolean; configur
 export default function ChatUI({ onEmotionChange, onActivityChange, panel = false, groqApiKey, initialMode = "cloud", onSessionExpired }: ChatUIProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [rememberedIds, setRememberedIds] = useState<Record<string, true>>({});
+  /** Why "Remember this" was refused for a message (memory off, or it looked like a secret). */
+  const [rememberRefusals, setRememberRefusals] = useState<Record<string, string>>({});
   const [input, setInput] = useState("");
   // The chosen inference mode survives leaving the chat (and "Use in chat" on the Models page sets it).
   const [mode, setMode] = useState<InferenceMode>(() => {
@@ -1197,13 +1199,18 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                   </div>
                 </div>
                 {isUser && message.id && (
-                  <div className="flex justify-end pr-1">
+                  <div className="flex flex-col items-end pr-1">
                     <button
                       type="button"
                       disabled={remembered}
                       onClick={() => {
-                        MemoryService.add("long_term", message.content.slice(0, 300));
+                        const result = MemoryService.remember(message.content, { source: { kind: "chat" } });
+                        if (!result.ok) {
+                          setRememberRefusals((current) => ({ ...current, [message.id!]: result.reason }));
+                          return;
+                        }
                         notifyMemoryChanged();
+                        setRememberRefusals((current) => { const next = { ...current }; delete next[message.id!]; return next; });
                         setRememberedIds((current) => ({ ...current, [message.id!]: true }));
                       }}
                       title={remembered ? "Saved to memory" : "Ask HANNAH to remember this"}
@@ -1211,6 +1218,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                     >
                       {remembered ? <BookmarkCheck size={12} /> : <Bookmark size={12} />} {remembered ? "Remembered" : "Remember this"}
                     </button>
+                    {rememberRefusals[message.id] && <p role="status" className="max-w-xs text-right text-xs text-amber-800">{rememberRefusals[message.id]}</p>}
                   </div>
                 )}
                 {!isUser && message.id && message.id !== welcomeMessage.id && (

@@ -1,7 +1,8 @@
 import type { ChatMessage, Emotion, InferenceMode } from "../types";
 import { executeHANNAHTool, getDeviceTools, type HANNAHTool } from "./DeviceTools";
 import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentStepMeta, type AgentToolCall } from "./LLMRouter";
-import { memoriesForPrompt } from "./MemoryStore";
+import { selectMemoriesForPrompt } from "./MemoryStore";
+import { readRoutingPreferences } from "./ModelRouting";
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
 import { RouterAgent, selectToolsForProfile, defaultAgentProfiles } from "./AgentRouter";
@@ -36,7 +37,8 @@ function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentMessage[
 }
 const hardMaxIterations = 20;
 
-export type AgentPhase = "thinking" | "acting" | "tool-result";
+/** "waiting-approval": a tool is waiting for the user to approve or deny it. */
+export type AgentPhase = "thinking" | "acting" | "waiting-approval" | "tool-result";
 export type AgentActivity = { phase: AgentPhase; message: string };
 /** outcome is set when the turn ended early: the user declined, the Guardian blocked, or Stop was pressed. */
 export type AgentReply = { reply: string; emotion: Emotion; meta?: AgentStepMeta; outcome?: "declined" | "blocked" | "stopped" };
@@ -197,7 +199,18 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
   const conversation: AgentMessage[] = options.messages
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")
     .map(({ role, content }) => ({ role, content: role === "user" ? screenIncomingPrompt(content) : content }));
-  const memories = memoriesForPrompt();
+  // Only the memories that relate to what you just asked, plus a few preferences.
+  // Sensitive ones go only to self-hosted models: Ollama, or Auto in Private routing
+  // (the server keeps Private on self-hosted providers).
+  const memoryQuery = options.messages.filter((message) => message.role === "user").slice(-2).map((message) => message.content).join("\n").slice(0, 1000);
+  const routing = readRoutingPreferences();
+  const privateRouting = options.model === "auto" && (routing.mode === "private" || (routing.mode === "custom" && routing.localOnly));
+  const memorySelections = new Map<boolean, string[]>();
+  const memoriesFor = (mode: InferenceMode) => {
+    const allowSensitive = mode === "ollama" || (mode === "cloud" && privateRouting);
+    if (!memorySelections.has(allowSensitive)) memorySelections.set(allowSensitive, selectMemoriesForPrompt(memoryQuery, { allowSensitive }).texts);
+    return memorySelections.get(allowSensitive)!;
+  };
   const latestUserRequest = [...options.messages].reverse().find((message) => message.role === "user")?.content.slice(0, 500);
   let preferredMode = options.mode;
   const meta: AgentStepMeta = {};
@@ -227,7 +240,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memories, { routeHint: options.routeHint });
+        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memoriesFor(mode), { routeHint: options.routeHint });
         content = step.content;
         if (step.meta?.provider) meta.provider = step.meta.provider;
         if (step.meta?.model) meta.model = step.meta.model;
@@ -282,7 +295,13 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
         if (ChaosEngine.consume("tool-timeout")) {
           throw new Error(`Simulated timeout: ${formatToolName(tool.name)} did not respond. The circuit breaker recorded the failure.`);
         }
-        result = await executeHANNAHTool(tool, call.arguments, { intent: latestUserRequest });
+        const waitsForYou = Boolean(tool.requiresApproval || tool.asksUser);
+        if (waitsForYou) options.onActivity?.({ phase: "waiting-approval", message: `Waiting for your approval: ${formatToolName(tool.name)}` });
+        try {
+          result = await executeHANNAHTool(tool, call.arguments, { intent: latestUserRequest });
+        } finally {
+          if (waitsForYou) options.onActivity?.({ phase: "acting", message: `Using ${formatToolName(tool.name)}…` });
+        }
         toolCircuitBreaker.recordSuccess(tool.name);
         AgentRunLog.step(runId, { tool: tool.name, outcome: "ok" });
       } catch (error) {

@@ -19,6 +19,7 @@
 import { getSessionGroqKey } from "./api";
 import { DeviceTasks } from "./DeviceTasks";
 import { MemoryService } from "./MemoryService";
+import { notifyMemoryChanged } from "./MemoryStore";
 import { ReminderService, notificationPermission } from "./ReminderService";
 import { TaskSpineService } from "./TaskSpineService";
 import type { WorkflowNode, WorkflowSchema } from "./WorkflowSchema";
@@ -190,7 +191,7 @@ export type AutomationDeps = {
   ask: (prompt: string) => Promise<string>;
   notify: (title: string, body: string) => void;
   speak: (text: string) => Promise<void>;
-  saveMemory: (text: string) => void;
+  saveMemory: (text: string, automation?: string) => void;
   createReminder: (text: string, dueAt: number) => void;
   now: () => number;
   /** Tasks across devices: report runs and let another signed-in device answer approvals. */
@@ -277,7 +278,11 @@ export const defaultDeps: AutomationDeps = {
   ask: askHannah,
   notify: showNotification,
   speak: speakText,
-  saveMemory: (text) => { MemoryService.add("long_term", text.slice(0, 300)); },
+  saveMemory: (text, automation) => {
+    const result = MemoryService.remember(text, { source: { kind: "automation", ...(automation ? { detail: automation.slice(0, 120) } : {}) } });
+    if (!result.ok) throw new Error(result.reason);
+    notifyMemoryChanged();
+  },
   createReminder: (text, dueAt) => { ReminderService.create(text, dueAt); },
   now: () => Date.now(),
   remote: {
@@ -450,7 +455,7 @@ export const AutomationService = {
         deps.createReminder(text.slice(0, 280), deps.now() + minutes * 60_000);
         step.output = `Reminder set for ${minutes} minutes from approval: ${text.slice(0, 120)}`;
       } else {
-        deps.saveMemory(text);
+        deps.saveMemory(text, run.name);
         step.output = text;
       }
       step.status = "done";

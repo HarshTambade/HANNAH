@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InferenceMode } from "../types";
 
-const { executeTool, requestStep, resolveMode } = vi.hoisted(() => ({
+const { executeTool, requestStep, resolveMode, toolFlags } = vi.hoisted(() => ({
   executeTool: vi.fn(),
   requestStep: vi.fn(),
   resolveMode: vi.fn(),
+  toolFlags: { requiresApproval: false },
 }));
 
 vi.mock("../services/DeviceTools", () => ({
@@ -14,6 +15,7 @@ vi.mock("../services/DeviceTools", () => ({
     description: "Look up the weather.",
     inputSchema: { type: "object", properties: { city: { type: "string" } }, required: ["city"] },
     execute: executeTool,
+    ...(toolFlags.requiresApproval ? { requiresApproval: true } : {}),
   }],
 }));
 vi.mock("../services/MobileAgent", () => ({ getNativeMemoryTools: vi.fn(async () => []) }));
@@ -57,6 +59,23 @@ describe("AgentRuntime tool loop", () => {
       content: JSON.stringify({ temperatureC: 22, condition: "sunny" }),
     }));
     expect(result).toEqual({ reply: "Pune is sunny at 22°C.", emotion: "happy" });
+  });
+
+  it("reports when a tool is waiting for the user's approval, and when it stops waiting", async () => {
+    toolFlags.requiresApproval = true;
+    const phases: string[] = [];
+    try {
+      await runAgentTurn({
+        mode: "cloud",
+        messages: [{ role: "user", content: "What is the weather in Pune?" }],
+        onActivity: (activity) => phases.push(activity.phase),
+        generateLocal: async () => { throw new Error("unused"); },
+      });
+    } finally {
+      toolFlags.requiresApproval = false;
+    }
+    expect(phases.indexOf("waiting-approval")).toBeGreaterThan(-1);
+    expect(phases.slice(phases.indexOf("waiting-approval"), phases.indexOf("waiting-approval") + 2)).toEqual(["waiting-approval", "acting"]);
   });
 
   it("does not execute a tool returned by the model when it is denied by runtime policy", async () => {

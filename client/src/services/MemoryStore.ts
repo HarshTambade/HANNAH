@@ -1,21 +1,11 @@
 /**
- * Small helpers around HANNAH's saved memories (the same storage key that
- * MemoryService uses). Kept separate so the UI and prompt wiring do not depend
- * on MemoryService internals.
+ * Helpers around HANNAH's saved memories for the UI and prompt wiring:
+ * change notifications, choosing what goes with a message, and clearing.
  */
+import { MemoryService } from "./MemoryService";
+
 const KEY = "hannah.memory.v1";
 export const MEMORY_EVENT = "hannah:memory";
-
-type StoredMemory = { id?: unknown; layer?: unknown; content?: unknown };
-
-function readRaw(): StoredMemory[] {
-  try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(KEY) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 /** Tell open screens (memory panel, dashboard) that memories changed. */
 export function notifyMemoryChanged() {
@@ -26,12 +16,25 @@ export function notifyMemoryChanged() {
   }
 }
 
-/** Saved facts sent with each cloud turn so HANNAH can use them. Newest first. */
-export function memoriesForPrompt(limit = 12): string[] {
-  return readRaw()
-    .filter((record) => record.layer !== "session" && typeof record.content === "string" && record.content.trim())
-    .slice(0, limit)
-    .map((record) => String(record.content).slice(0, 300));
+/**
+ * The memories to send with a message: the ones that relate to it, plus a few
+ * of your preferences (at most 11, under the server's limit of 12). Sensitive
+ * memories only when the model is on-device or self-hosted. The chosen ones
+ * are marked as used, so the memory panel can show when each last helped.
+ */
+export function selectMemoriesForPrompt(query: string, options: { allowSensitive?: boolean } = {}) {
+  const { picked, hiddenSensitive } = MemoryService.forMessage(query, { allowSensitive: options.allowSensitive });
+  if (picked.length) MemoryService.access(...picked.map((item) => item.memory.id));
+  return {
+    texts: picked.map((item) => item.memory.content.replace(/[\r\n]+/g, " ").slice(0, 300)),
+    ids: picked.map((item) => item.memory.id),
+    hiddenSensitive,
+  };
+}
+
+/** Compatibility wrapper: the texts only. */
+export function memoriesForPrompt(query = "", options: { allowSensitive?: boolean } = {}): string[] {
+  return selectMemoriesForPrompt(query, options).texts;
 }
 
 export function clearAllMemories() {
