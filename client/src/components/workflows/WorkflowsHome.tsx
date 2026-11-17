@@ -8,7 +8,7 @@ import { duration, when } from "./support";
 const WorkflowEditor = lazy(() => import("./WorkflowEditor"));
 
 type Tab = "workflows" | "runs" | "credentials";
-const TRIGGER_LABELS: Record<string, string> = { "trigger.manual": "Manual", "trigger.schedule": "Schedule", "trigger.webhook": "Webhook", "trigger.event": "Event" };
+const TRIGGER_LABELS: Record<string, string> = { "trigger.manual": "Manual", "trigger.schedule": "Schedule", "trigger.webhook": "Webhook", "trigger.event": "Event", "trigger.email": "New email", "trigger.file": "File upload" };
 
 function Card({ title, children, label, aside }: { title: string; children: React.ReactNode; label?: string; aside?: React.ReactNode }) {
   return (
@@ -99,8 +99,30 @@ function WorkflowList({ onOpen, onRuns }: { onOpen: (id: string) => void; onRuns
                     {workflow.triggers?.length ? ` · ${workflow.triggers.map((type) => TRIGGER_LABELS[type] ?? type).join(", ")}` : ""}
                     {` · ${workflow.nodes ?? 0} steps`}
                     {workflow.nextRunAt ? ` · next ${when(workflow.nextRunAt)}` : ""}
+                    {workflow.active && workflow.mailbox?.checkedAt && !workflow.mailbox.lastError ? ` · mailbox checked ${when(workflow.mailbox.checkedAt)}` : ""}
                   </span>
+                  {workflow.active && workflow.mailbox?.lastError && <span role="alert" className="mt-0.5 block text-xs text-rose-700">Mailbox check failed: {workflow.mailbox.lastError}</span>}
                 </button>
+                {workflow.active && workflow.triggers?.includes("trigger.file") && (
+                  <label className="btn-ghost cursor-pointer !px-2 !py-1 text-xs">
+                    {busy === `upload:${workflow.id}` ? <Loader2 size={13} className="animate-spin" /> : <FileUp size={13} />} Upload file
+                    <input type="file" className="sr-only" aria-label={`Upload a file to ${workflow.name}`} onChange={async (event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (!file) return;
+                      setBusy(`upload:${workflow.id}`);
+                      try {
+                        await WorkflowApi.uploadFile(workflow.id, file);
+                        setError("");
+                        onRuns(workflow.id);
+                      } catch (cause) {
+                        setError(cause instanceof Error ? cause.message : "The file couldn't be uploaded.");
+                      } finally {
+                        setBusy("");
+                      }
+                    }} />
+                  </label>
+                )}
                 {workflow.lastRun && <button type="button" className="flex items-center gap-1.5 text-xs text-slate-500" onClick={() => onRuns(workflow.id)}><StatusPill status={workflow.lastRun.status} /> {when(workflow.lastRun.at)}</button>}
                 <button type="button" className="btn-ghost !p-1.5 text-rose-700" aria-label={`Delete ${workflow.name}`} onClick={async () => { if (window.confirm(`Delete “${workflow.name}”? Its run history goes too.`)) { await WorkflowApi.remove(workflow.id); void load(); } }}><Trash2 size={14} /></button>
               </li>

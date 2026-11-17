@@ -548,4 +548,4 @@ function createConnectionsRouter({ fetchImpl = (...args) => fetch(...args), now 
   return router;
 }
 
-module.exports = { accessTokenFor, publicBaseUrl, recipients, buildRawMessage, createConnectionsRouter, createEvent, gmailText, listEvents, PROVIDERS, saveDraft, searchMail, sendMail };
+module.exports = { accessTokenFor, publicBaseUrl, recipients, buildRawMessage, createConnectionsRouter, createEvent, gmailText, listEvents, PROVIDERS, readMessage, saveDraft, searchMail, sendMail };

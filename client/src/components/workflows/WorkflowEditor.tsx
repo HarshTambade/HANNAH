@@ -319,6 +319,7 @@ function EditorInner({ workflowId, catalog, onBack, onOpenExecution }: Props) {
   const [activating, setActivating] = useState(false);
   const [showRun, setShowRun] = useState(false);
   const [askTestData, setAskTestData] = useState(false);
+  const testFileInput = useRef<HTMLInputElement>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<Parameters<typeof ConfigPanel>[0]["testResult"]>(null);
   const history = useRef(new History());
@@ -502,7 +503,9 @@ function EditorInner({ workflowId, catalog, onBack, onOpenExecution }: Props) {
   const testDataKey = `hannah.workflowTestData.${workflowId}`;
   const startTrigger = definition?.nodes.find((node) => node.type === "trigger.manual" && !node.disabled) ?? definition?.nodes.find((node) => byType.get(node.type)?.category === "trigger" && !node.disabled);
   const testRun = useCallback(async (triggerData?: unknown) => {
-    if (startTrigger && startTrigger.type !== "trigger.manual" && triggerData === undefined) { setAskTestData(true); return; }
+    // New email uses your newest matching message; File uploaded asks for a file; the rest take sample data.
+    if (startTrigger?.type === "trigger.file") { testFileInput.current?.click(); return; }
+    if (startTrigger && !["trigger.manual", "trigger.email"].includes(startTrigger.type) && triggerData === undefined) { setAskTestData(true); return; }
     if (!(await save())) return;
     setBusy("run");
     try {
@@ -519,6 +522,24 @@ function EditorInner({ workflowId, catalog, onBack, onOpenExecution }: Props) {
       setBusy("");
     }
   }, [save, workflowId, startTrigger]);
+
+  const testWithFile = useCallback(async (file: File) => {
+    if (!(await save())) return;
+    setBusy("run");
+    try {
+      const { executionId } = await WorkflowApi.uploadFile(workflowId, file, { test: true });
+      setRun(null);
+      setRunId(executionId);
+      setShowRun(true);
+      setNotice({ tone: "info", text: `Test run started with “${file.name}”.` });
+    } catch (error) {
+      const body = error instanceof AccountError ? (error.body as { validation?: Validation } | undefined) : undefined;
+      if (body?.validation) setValidation(body.validation);
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "The file couldn't be uploaded." });
+    } finally {
+      setBusy("");
+    }
+  }, [save, workflowId]);
 
   const publish = useCallback(async () => {
     if (!(await save())) return;
@@ -719,6 +740,7 @@ function EditorInner({ workflowId, catalog, onBack, onOpenExecution }: Props) {
           onClose={() => setAskTestData(false)}
         />
       )}
+      <input ref={testFileInput} type="file" className="sr-only" tabIndex={-1} aria-label="Choose a file for the test run" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void testWithFile(file); }} />
       {secrets && <SecretsDialog secrets={secrets} webhooks={detail.webhooks} onClose={() => setSecrets(null)} />}
     </div>
   );

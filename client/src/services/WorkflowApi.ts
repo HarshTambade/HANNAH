@@ -59,6 +59,8 @@ export type Permission = { permission: string; nodes: string[] };
 export type WorkflowSummary = {
   id: string; name: string; description: string; active: boolean; draftVersion: number; publishedVersion: number | null; createdAt: number; updatedAt: number;
   nodes?: number; triggers?: string[]; lastRun?: { status: ExecutionStatus; at: number; error: string | null } | null; nextRunAt?: number | null;
+  /** For a New email trigger: when the mailbox was last checked, and why the check failed. */
+  mailbox?: { checkedAt: number | null; lastError: string | null } | null;
 };
 export type WebhookInfo = { nodeId: string; triggerId: string; url: string; enabled: boolean; auth: "token" | "hmac"; hmacReady: boolean };
 export type WorkflowDetail = {
@@ -74,7 +76,7 @@ export type Execution = {
   workflowName?: string; nodes?: { done: number; failed: number; skipped: number; total: number };
 };
 export type PortData = Record<string, { count: number; items: unknown[] }>;
-export type NodeRun = { nodeId: string; name: string; status: string; attempts: number; startedAt: number | null; finishedAt: number | null; durationMs: number | null; input: { count: number; items: unknown[] } | null; output: PortData | null; error: string | null };
+export type NodeRun = { nodeId: string; name: string; status: string; attempts: number; startedAt: number | null; finishedAt: number | null; durationMs: number | null; input: { count: number; items: unknown[] } | null; output: PortData | null; error: string | null; logs?: string[] | null };
 export type ExecutionDetail = { execution: Execution & { triggerData: unknown }; definition: WorkflowDefinition; nodes: NodeRun[]; resumeUrl: string | null };
 export type Credential = { id: string; name: string; type: string; typeLabel: string; hint: string; createdAt: number; updatedAt: number };
 
@@ -113,6 +115,11 @@ export const WorkflowApi = {
   activate: (id: string, approvedPermissions: Permission[]) => post<{ active: true; webhookSecrets: WebhookSecret[]; webhooks: WebhookInfo[] }>(`/api/workflows/${encodeURIComponent(id)}/activate`, { approvedPermissions }),
   deactivate: (id: string) => post<{ active: false }>(`/api/workflows/${encodeURIComponent(id)}/deactivate`),
   run: (id: string, options: { draft?: boolean; triggerData?: unknown; triggerNodeId?: string } = {}) => post<{ executionId: string }>(`/api/workflows/${encodeURIComponent(id)}/run`, options),
+  /** Upload a file to a workflow that starts with "File uploaded"; test runs the draft. */
+  uploadFile: (id: string, file: File, { test = false }: { test?: boolean } = {}) => accountRequest<{ executionId: string; file: { name: string; type: string; size: number; sha256: string } }>(
+    `/api/workflows/${encodeURIComponent(id)}/files${test ? "?test=1" : ""}`,
+    { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-File-Type": file.type || "" }, signal: AbortSignal.timeout(60_000) },
+  ),
   testNode: (id: string, nodeId: string, items?: unknown[], definition?: WorkflowDefinition) => post<{ status: string; error: string | null; output: PortData | null; waiting: { kind: string; message: string | null } | null }>(`/api/workflows/${encodeURIComponent(id)}/test-node`, { nodeId, items, definition }),
   versions: (id: string) => accountRequest<{ versions: Array<{ version: number; createdAt: number; published: boolean }> }>(`/api/workflows/${encodeURIComponent(id)}/versions`),
   restore: (id: string, version: number) => post<{ definition: WorkflowDefinition; draftVersion: number }>(`/api/workflows/${encodeURIComponent(id)}/versions/${version}/restore`),
@@ -179,4 +186,5 @@ export const PERMISSION_LABELS: Record<string, string> = {
   ai: "Use your AI provider keys (counts toward their usage)",
   "computer-use": "Control your computer",
   "read-email": "Read your email",
+  "run-code": "Run your JavaScript in an isolated sandbox (no network or files)",
 };

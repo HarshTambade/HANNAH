@@ -250,16 +250,53 @@ const NODES = [
     execute: async (ctx) => ({ main: [json(ctx.triggerData || {})] }),
   },
   {
-    type: "trigger.email", category: "trigger", label: "New email", icon: "MailOpen", status: STATUS.upcoming,
-    description: "Runs for each new message in your connected Gmail or Outlook. Coming soon: it needs a polling job per mailbox.",
-    inputs: [], outputs: ["main"], permissions: ["read-email"], params: [],
-    execute: async () => { throw fail("The New email trigger isn't available yet."); },
+    type: "trigger.email", category: "trigger", label: "New email", icon: "MailOpen", status: STATUS.available,
+    description: "Runs once for each new message in your connected Gmail or Outlook mailbox, checked every few minutes. Only mail that arrives after you activate the workflow counts. A test run uses your newest matching message.",
+    inputs: [], outputs: ["main"], permissions: ["read-email"],
+    params: [
+      { name: "provider", label: "Mailbox", type: "select", default: "auto", options: [{ value: "auto", label: "My connected account" }, { value: "google", label: "Gmail" }, { value: "microsoft", label: "Outlook" }] },
+      { name: "query", label: "Only messages matching", type: "string", default: "", help: "Optional. In Gmail use its search syntax, such as from:billing@example.com has:attachment; in Outlook, words to search for. Empty means every new message." },
+      { name: "minutes", label: "Check every (minutes)", type: "number", default: 5, min: 5, max: 1440 },
+      { name: "includeBody", label: "Include the message text", type: "boolean", default: true, help: "Up to 20,000 characters of the body, for AI steps to read." },
+    ],
+    execute: async (ctx) => {
+      if (ctx.triggerData?.message) return { main: [json(ctx.triggerData.message)] };
+      // Run by hand or as a test: use the newest matching message, so the steps get real data.
+      const params = ctx.params;
+      const provider = params.provider === "google" || params.provider === "microsoft" ? params.provider : undefined;
+      const { messages } = await ctx.services.mail({ mode: "search", provider, query: toText(params.query), max: 1 });
+      if (!messages.length) throw fail("No message in your mailbox matches this filter, so there's nothing to run with.", { retryable: false });
+      const message = params.includeBody ? { ...messages[0], ...(await ctx.services.readMail({ provider: messages[0].provider, id: messages[0].id })) } : messages[0];
+      return { main: [json({ ...message, newest: true })] };
+    },
   },
   {
-    type: "trigger.file", category: "trigger", label: "File uploaded", icon: "FileUp", status: STATUS.upcoming,
-    description: "Runs when you upload a file to a workflow. Coming soon: it needs file storage on the server.",
-    inputs: [], outputs: ["main"], permissions: [], params: [],
-    execute: async () => { throw fail("The File uploaded trigger isn't available yet."); },
+    type: "trigger.file", category: "trigger", label: "File uploaded", icon: "FileUp", status: STATUS.available,
+    description: "Runs when you upload a file to this workflow, from the Automations screen or with an authenticated POST to /api/workflows/{id}/files. Files up to 1 MB; text, CSV and JSON can be read into items.",
+    inputs: [], outputs: ["main"], permissions: [],
+    params: [
+      { name: "output", label: "Output", type: "select", default: "file", options: [{ value: "file", label: "One item with the file" }, { value: "rows", label: "One item per CSV row or JSON list entry" }] },
+    ],
+    execute: async (ctx) => {
+      const file = ctx.triggerData?.file;
+      if (!file || typeof file !== "object") throw fail("This workflow starts with an uploaded file. Use Upload file (or Test run, which asks for one).", { retryable: false });
+      if (ctx.params.output !== "rows") return { main: [json({ file })] };
+      if (typeof file.text !== "string") throw fail(`“${file.name}” isn't a text file, so it can't be read into rows. Choose “One item with the file”.`, { retryable: false });
+      const meta = { name: file.name, type: file.type, size: file.size };
+      if (/json/i.test(file.type) || /\.json$/i.test(file.name)) {
+        let data;
+        try {
+          data = JSON.parse(file.text);
+        } catch {
+          throw fail(`“${file.name}” isn't valid JSON.`, { retryable: false });
+        }
+        const list = Array.isArray(data) ? data : [data];
+        return { main: list.slice(0, 5000).map((entry) => json({ ...(entry && typeof entry === "object" && !Array.isArray(entry) ? entry : { value: entry }), $file: meta })) };
+      }
+      const rows = parseCsv(file.text, /\.tsv$/i.test(file.name) || /tab-separated/i.test(file.type) ? "\t" : ",");
+      if (!rows.length) throw fail(`“${file.name}” has no rows under a header line.`, { retryable: false });
+      return { main: rows.slice(0, 5000).map((row) => json({ ...row, $file: meta })) };
+    },
   },
 
   // ===== Actions =====
@@ -597,6 +634,20 @@ const NODES = [
         return list.slice(0, 1000).map((entry, index) => json({ ...(ctx.node.params.keepParent ? item.json : {}), ...(entry && typeof entry === "object" && !Array.isArray(entry) ? entry : { value: entry }), $index: index }));
       }),
     }),
+  },
+  {
+    type: "data.code", category: "data", label: "Code", icon: "Braces", status: STATUS.beta,
+    description: "Runs your JavaScript in an isolated sandbox: a separate engine with no network, files, credentials or server access, at most 2 seconds and 32 MB per run. Return an object or a list of objects; each becomes an item.",
+    inputs: ["main"], outputs: ["main"], permissions: ["run-code"],
+    params: [
+      { name: "mode", label: "Run", type: "select", default: "all", options: [{ value: "all", label: "Once for all items (use items)" }, { value: "each", label: "Once per item (use $json, $index)" }] },
+      { name: "code", label: "JavaScript", type: "code", required: true, default: "// items is the list of incoming data. Return what the next step should get.\nreturn items.map((item) => ({ ...item, total: Number(item.amount || 0) * 1.18 }));", help: "Plain JavaScript (no require, fetch or timers). console.log output is kept with the run. Returning nothing for an item in per-item mode drops it." },
+    ],
+    execute: async (ctx) => {
+      const { runCode, toItems } = require("./sandbox");
+      const { value, logs } = await runCode({ code: toText(ctx.node.params.code), mode: ctx.node.params.mode, items: ctx.items, signal: ctx.signal });
+      return { main: toItems(value), logs };
+    },
   },
   {
     type: "logic.aggregate", category: "logic", label: "Aggregate", icon: "Group", status: STATUS.available,

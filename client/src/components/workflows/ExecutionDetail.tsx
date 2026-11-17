@@ -44,6 +44,12 @@ function NodeRow({ run, open, onToggle }: { run: NodeRun; open: boolean; onToggl
               )) : <p className="text-xs text-slate-500">{run.status === "skipped" ? "Skipped: no items reached this step." : "No output."}</p>}
             </div>
           </div>
+          {run.logs?.length ? (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Console ({run.logs.length} line{run.logs.length === 1 ? "" : "s"})</p>
+              <pre aria-label={`Console output of ${run.name}`} className="max-h-48 overflow-auto rounded-xl bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-emerald-200">{run.logs.join("\n")}</pre>
+            </div>
+          ) : null}
           <p className="text-[11px] text-slate-500">Started {when(run.startedAt)} · finished {when(run.finishedAt)} · values that look like secrets are hidden.</p>
         </div>
       )}

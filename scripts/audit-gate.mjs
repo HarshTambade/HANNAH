@@ -16,7 +16,7 @@
  * vulnerable only because they depend on an excepted package (npm lists them
  * "via" it) are covered too; anything with its own advisory is not.
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
@@ -41,7 +41,10 @@ for (const entry of exceptions) {
 
 let report;
 try {
-  const output = execFileSync("npm", ["audit", "--json", ...(omitDev ? ["--omit=dev"] : [])], { cwd: dir, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  const args = ["audit", "--json", ...(omitDev ? ["--omit=dev"] : [])];
+  const options = { cwd: dir, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] };
+  // On Windows npm is npm.cmd, which Node only starts through a shell. The arguments are fixed words, so the command line is safe.
+  const output = process.platform === "win32" ? execSync(`npm ${args.join(" ")}`, options) : execFileSync("npm", args, options);
   report = JSON.parse(output);
 } catch (error) {
   // npm audit exits non-zero when it finds anything; the JSON is still on stdout.

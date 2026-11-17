@@ -85,9 +85,9 @@ export const CAPABILITIES = [
 export const AUTOMATION = {
   points: [
     ["A real visual editor", "Drag steps onto a canvas, connect them, and configure each one. Copy, paste, undo, tidy up, import and export; drafts and published versions."],
-    ["Triggers", "Run by hand, on a schedule in your time zone, from a webhook (secret token or HMAC signature with replay protection), or when something happens in HANNAH."],
+    ["Triggers", "Run by hand, on a schedule in your time zone, when a new email arrives in Gmail or Outlook, when you upload a file, from a webhook (secret token or HMAC signature with replay protection), or when something happens in HANNAH."],
     ["AI steps that do work", "Ask any model through HANNAH's gateway, extract structured fields from text, classify, or hand a task to a specialist agent with your memories."],
-    ["Logic and data", "If, Switch, Filter, Merge, Split into items, Aggregate, Wait and Approval steps; set, map, parse, convert and validate data with safe {{ expressions }}."],
+    ["Logic, data and code", "If, Switch, Filter, Merge, Split into items, Aggregate, Wait and Approval steps; set, map, parse, convert and validate data with safe {{ expressions }}; or write JavaScript that runs in an isolated sandbox with no network or file access."],
     ["Runs you can inspect", "Every run records each step's input, output, timing, attempts and exact error. Retry from the failed step, run again, cancel, or approve a waiting step from any device."],
     ["Built to keep going", "Durable queue, retries with backoff, step and workflow time limits, recovery after a server restart, and a dead-letter state instead of silent loss."],
     ["Safe by design", "Credentials are encrypted and never shown again, internal network addresses are blocked, and a workflow lists what it may do before you activate it."],
@@ -109,14 +109,15 @@ export const AUTOMATION = {
     { type: "ai.agent", name: "Specialist agents", status: "beta" },
     { type: "action.memory", name: "HANNAH memory", status: "available" },
     { type: "action.reminder", name: "HANNAH reminders", status: "available" },
-    { type: "trigger.email", name: "New-email trigger", status: "upcoming" },
+    { type: "trigger.email", name: "New-email trigger", status: "available" },
+    { type: "trigger.file", name: "File uploads (CSV, JSON, text)", status: "available" },
+    { type: "data.code", name: "JavaScript in a sandbox", status: "beta" },
     { type: "device.browser", name: "Browser tasks on desktop", status: "upcoming" },
   ] as const,
 } as const;
 
 /** Planned, not in this release. */
 export const ROADMAP = [
-  ["More workflow triggers", "A new-email trigger for Gmail and Outlook, and a file-upload trigger."],
   ["Workflows on your desktop", "Steps that run browser and coding tasks on your desktop app from a server workflow."],
   ["Computer use in the desktop app", "Seeing the screen and using the mouse and keyboard, with approval for each action. Today it needs a desktop app you build yourself (see the README)."],
   ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],

@@ -498,7 +498,8 @@ async function execute({ definition, execution, workflow, services, now = () => 
         await onCheckpoint(state, { nodeId: id, status: "failed-continued", error: message });
         continue;
       }
-      state.nodes[id] = { ...state.nodes[id], status: "failed", error: message, finishedAt: now() };
+      const failedLogs = Array.isArray(lastError.logs) && lastError.logs.length ? { logs: lastError.logs.slice(0, 50).map((line) => String(line).slice(0, 2000)) } : {};
+      state.nodes[id] = { ...state.nodes[id], status: "failed", error: message, finishedAt: now(), ...failedLogs };
       await onCheckpoint(state, { nodeId: id, status: "failed", error: message });
       const timedOut = lastError.code === "timeout";
       return { status: "failed", state, error: `${node.name}: ${message}${state.nodes[id].attempts > 1 ? ` (after ${state.nodes[id].attempts} attempts)` : ""}`, errorNode: id, warnings, timedOut };
@@ -512,7 +513,9 @@ async function execute({ definition, execution, workflow, services, now = () => 
     }
 
     const outputs = normalizeOutputs(result, ports, node.name);
-    state.nodes[id] = { ...state.nodes[id], status: "done", finishedAt: now(), outputs, resumed: undefined, waiting: undefined };
+    // A node may also return logs (the Code step's console output), kept with its result.
+    const logs = Array.isArray(result?.logs) ? result.logs.slice(0, 50).map((line) => String(line).slice(0, 2000)) : undefined;
+    state.nodes[id] = { ...state.nodes[id], status: "done", finishedAt: now(), outputs, ...(logs?.length ? { logs } : {}), resumed: undefined, waiting: undefined };
     if (Buffer.byteLength(JSON.stringify(state), "utf8") > LIMITS.stateBytes) {
       state.nodes[id] = { ...state.nodes[id], status: "failed", outputs: undefined, error: "The data passed between steps grew past 4 MB. Use Limit, Aggregate or Map fields to keep only what you need." };
       await onCheckpoint(state, { nodeId: id, status: "failed" });

@@ -93,7 +93,7 @@ describe("validation", () => {
       { id: "lonely", name: "Lonely", type: "data.set" },
       { id: "c1", name: "Loop A", type: "data.set" },
       { id: "c2", name: "Loop B", type: "data.set" },
-      { id: "e", name: "Email trigger", type: "trigger.email" },
+      { id: "e", name: "Browser", type: "device.browser" },
     ], [connect("t", "h"), connect("h", "i"), connect("i", "s", "maybe"), connect("c1", "c2"), connect("c2", "c1"), connect("h", "t")]);
     const { errors, warnings } = validateWorkflow(broken);
     const text = errors.map((error) => error.message).join(" | ");

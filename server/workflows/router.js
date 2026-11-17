@@ -52,6 +52,21 @@ const { FINAL, sha256 } = require("./runtime");
 
 const ID = /^[A-Za-z0-9_-]{6,80}$/;
 const MAX_DEFINITION_BYTES = 512 * 1024;
+const MAX_UPLOAD_BYTES = 1024 * 1024;
+const TEXT_TYPES = /^(text\/|application\/(json|xml|csv|x-ndjson|yaml|x-yaml|javascript))|\+(json|xml)$/i;
+const TEXT_NAMES = /\.(txt|csv|tsv|json|ndjson|md|xml|yaml|yml|log|html?|ics|vcf)$/i;
+
+/** A file as trigger data: text when it's valid UTF-8 text, otherwise base64. */
+function describeFile(buffer, name, givenType) {
+  const type = givenType || (/\.csv$/i.test(name) ? "text/csv" : /\.json$/i.test(name) ? "application/json" : TEXT_NAMES.test(name) ? "text/plain" : "application/octet-stream");
+  const looksText = TEXT_TYPES.test(type) || TEXT_NAMES.test(name);
+  let text = null;
+  if (looksText) {
+    const decoded = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+    if (!decoded.includes("\uFFFD") && !decoded.includes("\u0000")) text = decoded.replace(/^\uFEFF/, "");
+  }
+  return { name, type, size: buffer.length, sha256: crypto.createHash("sha256").update(buffer).digest("hex"), uploadedAt: new Date().toISOString(), ...(text === null ? { base64: buffer.toString("base64") } : { text }) };
+}
 const SERVERLESS = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const parse = (text, fallback = null) => { try { return text ? JSON.parse(text) : fallback; } catch { return fallback; } };
 const clean = (value, max) => String(value ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max);
@@ -180,14 +195,15 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
       `SELECT e.workflow_id, e.status, e.created_at, e.error FROM hannah_workflow_executions e
        JOIN (SELECT workflow_id, MAX(created_at) AS at FROM hannah_workflow_executions WHERE user_id = $1 AND mode <> 'test' GROUP BY workflow_id) latest
        ON latest.workflow_id = e.workflow_id AND latest.at = e.created_at WHERE e.user_id = $1`, [account.id]);
-    const { rows: triggers } = await db.query("SELECT workflow_id, kind, next_run_at, enabled FROM hannah_workflow_triggers WHERE user_id = $1", [account.id]);
+    const { rows: triggers } = await db.query("SELECT workflow_id, kind, next_run_at, enabled, state FROM hannah_workflow_triggers WHERE user_id = $1", [account.id]);
     const lastBy = new Map(last.map((row) => [row.workflow_id, { status: row.status, at: Number(row.created_at), error: row.error || null }]));
     res.json({
       workflows: rows.map((row) => {
         const draft = parse(row.draft, {});
         const own = triggers.filter((trigger) => trigger.workflow_id === row.id && Number(trigger.enabled));
         const nextRun = own.filter((trigger) => trigger.kind === "schedule" && trigger.next_run_at).map((trigger) => Number(trigger.next_run_at)).sort()[0] ?? null;
-        return publicWorkflow(row, { nodes: (draft.nodes || []).length, triggers: [...new Set((draft.nodes || []).filter((node) => REGISTRY.get(node.type)?.category === "trigger").map((node) => node.type))], lastRun: lastBy.get(row.id) || null, nextRunAt: nextRun });
+        const mailbox = own.filter((trigger) => trigger.kind === "email").map((trigger) => parse(trigger.state, null)).find(Boolean);
+        return publicWorkflow(row, { nodes: (draft.nodes || []).length, triggers: [...new Set((draft.nodes || []).filter((node) => REGISTRY.get(node.type)?.category === "trigger").map((node) => node.type))], lastRun: lastBy.get(row.id) || null, nextRunAt: nextRun, mailbox: mailbox ? { checkedAt: mailbox.checkedAt || null, lastError: mailbox.lastError || null } : null });
       }),
     });
   }));
@@ -261,6 +277,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
     const { rows: nodes } = await db.query("SELECT * FROM hannah_workflow_node_runs WHERE execution_id = $1", [row.id]);
     const definition = parse(row.definition, {});
     const order = new Map((definition.nodes || []).map((node, index) => [node.id, index]));
+    const runState = parse(row.state, {}) || {};
     const { rows: [workflowRow] } = await db.query("SELECT name FROM hannah_workflows WHERE user_id = $1 AND id = $2", [account.id, row.workflow_id]);
     res.json({
       execution: { ...publicExecution(row), workflowName: workflowRow?.name || "Deleted workflow", triggerData: engine.sanitize(parse(row.trigger_data, null)) },
@@ -270,6 +287,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
         startedAt: node.started_at === null ? null : Number(node.started_at), finishedAt: node.finished_at === null ? null : Number(node.finished_at),
         durationMs: node.started_at && node.finished_at ? Number(node.finished_at) - Number(node.started_at) : null,
         input: parse(node.input, null), output: parse(node.output, null), error: node.error || null,
+        logs: Array.isArray(runState.nodes?.[node.node_id]?.logs) ? engine.sanitize(runState.nodes[node.node_id].logs) : null,
       })),
       resumeUrl: (() => { const waiting = parse(row.waiting, null); return waiting?.kind === "webhook" && waiting.token ? `${publicBaseUrl(req)}/api/hooks/resume/${waiting.token}` : null; })(),
     });
@@ -462,7 +480,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
     const manifest = engine.permissionManifest(published);
     // Consent: the client sends back exactly the permissions the user reviewed.
     if (manifestHash(Array.isArray(req.body?.approvedPermissions) ? req.body.approvedPermissions : []) !== manifestHash(manifest)) throw fail(409, "Review what this workflow may do, then activate it.", "approve-permissions", { permissions: manifest });
-    const triggers = published.nodes.filter((node) => !node.disabled && ["trigger.schedule", "trigger.webhook", "trigger.event"].includes(node.type));
+    const triggers = published.nodes.filter((node) => !node.disabled && ["trigger.schedule", "trigger.webhook", "trigger.event", "trigger.email", "trigger.file"].includes(node.type));
     if (!triggers.length) throw fail(409, "This workflow only has a manual trigger, so there's nothing to activate. Run it with Run.", "manual-only");
     const at = Date.now();
     await db.query("UPDATE hannah_workflows SET active = 1, approved_manifest = $1, updated_at = $2 WHERE user_id = $3 AND id = $4", [manifestHash(manifest), at, account.id, row.id]);
@@ -494,6 +512,40 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
     const queued = await runtime.enqueue({ userId: account.id, workflowId: row.id, definition, version: useDraft ? null : Number(row.published_version), mode: useDraft ? "test" : "manual", triggerNodeId: trigger.id, triggerData });
     await drive(queued.id);
     res.status(202).json({ executionId: queued.id });
+  }));
+
+  // A file for a workflow that starts with "File uploaded". The body is the raw
+  // file (send it as application/octet-stream); its name and type go in the
+  // X-File-Name (URI-encoded) and X-File-Type headers. ?test=1 runs the draft
+  // as a test; otherwise the workflow must be active.
+  const rawFile = express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES });
+  router.post("/workflows/:id/files", rawFile, withAccount(async (req, res, db, account) => {
+    const row = await loadWorkflow(db, account.id, String(req.params.id));
+    if (!Buffer.isBuffer(req.body)) throw fail(415, "Send the file itself as the request body with Content-Type: application/octet-stream.", "bad-request");
+    if (!req.body.length) throw fail(400, "The file is empty.", "bad-request");
+    const test = req.query.test === "1" || req.query.test === "true";
+    let definition;
+    if (test) definition = parse(row.draft, {});
+    else {
+      if (!Number(row.active) || !row.published_version) throw fail(409, "Activate this workflow first, or upload the file as a test run.", "not-active");
+      definition = parse((await db.query("SELECT definition FROM hannah_workflow_versions WHERE user_id = $1 AND workflow_id = $2 AND version = $3", [account.id, row.id, row.published_version])).rows[0]?.definition, {});
+    }
+    const trigger = (definition.nodes || []).find((node) => node.type === "trigger.file" && !node.disabled && (!req.query.node || node.id === req.query.node));
+    if (!trigger) throw fail(409, "This workflow doesn't start with a File uploaded step.", "no-file-trigger");
+    if (test) {
+      const validation = engine.validateWorkflow(definition, { credentials: await credentialTypes(db, account.id) });
+      if (validation.errors.length) throw fail(422, `Fix ${validation.errors.length} problem${validation.errors.length === 1 ? "" : "s"} before running.`, "invalid", { validation });
+    }
+    let name;
+    try {
+      name = decodeURIComponent(String(req.get("x-file-name") || "upload"));
+    } catch {
+      name = String(req.get("x-file-name") || "upload");
+    }
+    const file = describeFile(req.body, clean(name.replace(/[\\/]/g, "_"), 200) || "upload", clean(req.get("x-file-type"), 120));
+    const queued = await runtime.enqueue({ userId: account.id, workflowId: row.id, definition, version: test ? null : Number(row.published_version), mode: test ? "test" : "file", triggerNodeId: trigger.id, triggerData: { file } });
+    await drive(queued.id);
+    res.status(202).json({ executionId: queued.id, file: { name: file.name, type: file.type, size: file.size, sha256: file.sha256 } });
   }));
 
   router.post("/workflows/:id/test-node", json, withAccount(async (req, res, db, account) => {

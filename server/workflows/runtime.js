@@ -116,6 +116,13 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         return mode === "send" ? connections.sendMail(fetchImpl, providerId, token, message) : connections.saveDraft(fetchImpl, providerId, token, message);
       },
 
+      async readMail({ provider, id }) {
+        const db = await database();
+        const providerId = provider === "google" || provider === "microsoft" ? provider : await connectedProvider(db, userId);
+        const token = await connections.accessTokenFor(db, userId, providerId, { fetchImpl, now });
+        return connections.readMessage(fetchImpl, providerId, token, id);
+      },
+
       async calendar({ operation, from, to, event }) {
         const db = await database();
         const providerId = await connectedProvider(db, userId);
@@ -328,7 +335,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
   async function tick({ budgetMs = 25_000, only = null } = {}) {
     const db = await database();
     const started = now();
-    const report = { recovered: 0, deadLettered: 0, woke: 0, expired: 0, scheduled: 0, ran: [] };
+    const report = { recovered: 0, deadLettered: 0, woke: 0, expired: 0, scheduled: 0, mail: 0, ran: [] };
 
     // 1. Executions whose worker disappeared.
     const { rows: stale } = await db.query("SELECT id, attempts FROM hannah_workflow_executions WHERE status = 'running' AND lease_expires_at < $1 LIMIT 50", [now()]);
@@ -358,6 +365,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
 
     // 3. Schedules.
     if (!only) report.scheduled = await fireSchedules();
+    if (!only) report.mail = await pollMailboxes({ budgetMs: Math.max(2000, budgetMs / 2) });
 
     // 4. Run queued executions, oldest first, within limits.
     const { rows: queued } = await db.query(
@@ -407,6 +415,61 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     return fired;
   }
 
+  /**
+   * New-email triggers: check each mailbox that's due and queue one execution
+   * per message that arrived since the last check.
+   *
+   * The trigger's state is the cursor: the newest arrival time seen, plus the
+   * ids of recent messages. The first check after activation only records
+   * where the mailbox is, so old mail never starts a run. Each message's
+   * execution has the idempotency key mail:<trigger>:<message id>, so two
+   * overlapping checks can't run it twice.
+   */
+  async function pollMailboxes({ budgetMs = 10_000 } = {}) {
+    const db = await database();
+    const at = now();
+    let queued = 0;
+    const { rows } = await db.query("SELECT * FROM hannah_workflow_triggers WHERE kind = 'email' AND enabled = 1 AND next_run_at <= $1 ORDER BY next_run_at LIMIT 25", [at]);
+    for (const trigger of rows) {
+      if (now() - at > budgetMs) break;
+      const config = parse(trigger.config, {});
+      const params = config.params || {};
+      const slot = Number(trigger.next_run_at);
+      const every = Math.max(5, Math.min(1440, Number(params.minutes) || 5)) * 60_000;
+      const { rowCount } = await db.query("UPDATE hannah_workflow_triggers SET next_run_at = $1, updated_at = $2 WHERE id = $3 AND next_run_at = $4", [at + every, at, trigger.id, slot]);
+      if (rowCount !== 1) continue;
+      const workflow = await publishedDefinition(trigger.user_id, trigger.workflow_id);
+      if (!workflow) continue;
+      const state = parse(trigger.state, null);
+      let next;
+      try {
+        const services = servicesFor(trigger.user_id, { workflowId: trigger.workflow_id });
+        const provider = params.provider === "google" || params.provider === "microsoft" ? params.provider : undefined;
+        const { messages } = await services.mail({ mode: "search", provider, query: String(params.query || ""), max: 20 });
+        const arrived = (message) => Date.parse(message.date) || 0;
+        const newest = messages.reduce((latest, message) => Math.max(latest, arrived(message)), 0);
+        if (!state?.since) {
+          next = { since: Math.max(newest, at - 60_000), seen: messages.map((message) => message.id).slice(0, 200), checkedAt: at, lastError: null };
+        } else {
+          const seen = new Set(state.seen || []);
+          // A minute of grace for clock differences; the seen list catches repeats.
+          const fresh = messages.filter((message) => !seen.has(message.id) && arrived(message) > Number(state.since) - 60_000).sort((a, b) => arrived(a) - arrived(b)).slice(0, 10);
+          for (const message of fresh) {
+            const full = params.includeBody === false ? message : { ...message, ...(await services.readMail({ provider: message.provider, id: message.id })) };
+            await enqueue({ userId: trigger.user_id, workflowId: trigger.workflow_id, definition: workflow.definition, version: workflow.version, mode: "email", triggerNodeId: trigger.node_id, triggerData: { message: full }, idempotencyKey: `mail:${trigger.id}:${message.id}` });
+            queued += 1;
+          }
+          next = { since: Math.max(Number(state.since), newest), seen: [...fresh.map((message) => message.id), ...(state.seen || [])].slice(0, 200), checkedAt: at, lastError: null };
+        }
+      } catch (error) {
+        // Keep the cursor; show why the check failed on the workflow.
+        next = { ...(state || {}), checkedAt: at, lastError: String(error.message || error).slice(0, 300) };
+      }
+      await db.query("UPDATE hannah_workflow_triggers SET state = $1 WHERE id = $2", [JSON.stringify(next), trigger.id]);
+    }
+    return queued;
+  }
+
   async function publishedDefinition(userId, workflowId) {
     const db = await database();
     const { rows: [workflow] } = await db.query("SELECT published_version, active FROM hannah_workflows WHERE user_id = $1 AND id = $2", [userId, workflowId]);
@@ -444,20 +507,23 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     const byNode = new Map(existing.map((row) => [row.node_id, row]));
     const keep = new Set();
     for (const node of definition.nodes || []) {
-      const kind = node.type === "trigger.schedule" ? "schedule" : node.type === "trigger.webhook" ? "webhook" : node.type === "trigger.event" ? "event" : null;
+      const kind = { "trigger.schedule": "schedule", "trigger.webhook": "webhook", "trigger.event": "event", "trigger.email": "email", "trigger.file": "file" }[node.type] || null;
       if (!kind || node.disabled) continue;
       keep.add(node.id);
       const params = engine.withDefaults(REGISTRY.get(node.type), node.params);
       const config = JSON.stringify({ params, timezone: timezone || definition.settings?.timezone || "UTC" });
-      const nextRun = kind === "schedule" && enabled ? engine.nextScheduledRun(params, timezone || definition.settings?.timezone || "UTC", at) : null;
+      // Schedules fire at their next slot; mailboxes are checked right away (the first check only records where the mailbox is).
+      const nextRun = !enabled ? null : kind === "schedule" ? engine.nextScheduledRun(params, timezone || definition.settings?.timezone || "UTC", at) : kind === "email" ? at : null;
       const row = byNode.get(node.id);
       if (row) {
-        await db.query("UPDATE hannah_workflow_triggers SET kind = $1, config = $2, enabled = $3, next_run_at = $4, updated_at = $5 WHERE id = $6", [kind, config, enabled ? 1 : 0, kind === "schedule" ? nextRun : null, at, row.id]);
+        // Re-activating a mailbox trigger starts from now, not from where it stopped.
+        const restart = kind === "email" && (enabled && !Number(row.enabled) || row.config !== config);
+        await db.query(`UPDATE hannah_workflow_triggers SET kind = $1, config = $2, enabled = $3, next_run_at = $4, updated_at = $5${restart ? ", state = NULL" : ""} WHERE id = $6`, [kind, config, enabled ? 1 : 0, nextRun, at, row.id]);
         if (kind === "webhook" && !row.secret_hash) secrets.push(await rotateWebhookSecret(userId, row.id, node.id));
         else if (kind === "webhook" && params.auth === "hmac" && !row.secret_ciphertext) secrets.push(await rotateWebhookSecret(userId, row.id, node.id));
       } else {
         const id = kind === "webhook" ? `wh_${crypto.randomBytes(12).toString("base64url")}` : newId("tr");
-        await db.query("INSERT INTO hannah_workflow_triggers (id, user_id, workflow_id, node_id, kind, config, enabled, next_run_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)", [id, userId, workflowId, node.id, kind, config, enabled ? 1 : 0, kind === "schedule" ? nextRun : null, at]);
+        await db.query("INSERT INTO hannah_workflow_triggers (id, user_id, workflow_id, node_id, kind, config, enabled, next_run_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)", [id, userId, workflowId, node.id, kind, config, enabled ? 1 : 0, nextRun, at]);
         if (kind === "webhook") secrets.push(await rotateWebhookSecret(userId, id, node.id));
       }
     }

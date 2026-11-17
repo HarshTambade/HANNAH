@@ -49,8 +49,27 @@ globalThis.fetch = async (input, init = {}) => {
     const content = /Fields: \{/.test(prompt) ? JSON.stringify({ vendor: /from (\w+)/i.exec(prompt)?.[1] || null, amount: Number(/total ([\d.]+)/i.exec(prompt)?.[1]) || null }) : `Summary of: ${prompt.slice(0, 60)}`;
     return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content } }], usage: { prompt_tokens: 5, completion_tokens: 5 } }), { status: 200, headers: { "content-type": "application/json" } });
   }
+  if (url.startsWith("https://gmail.googleapis.com/")) return fakeGmail(url, init);
   return realFetch(input, init);
 };
+
+// A Gmail stand-in for the New email trigger: a mailbox the tests add to.
+const mailbox = [];
+const gmailRequests = [];
+let gmailDown = false;
+function fakeGmail(url, init) {
+  const parsed = new URL(url);
+  gmailRequests.push({ path: parsed.pathname, q: parsed.searchParams.get("q"), auth: init.headers?.Authorization });
+  const reply = (status, body) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  if (gmailDown) return reply(503, { error: { message: "backend error" } });
+  const id = /\/messages\/([^/?]+)$/.exec(parsed.pathname)?.[1];
+  if (!id) return reply(200, { messages: [...mailbox].sort((a, b) => b.at - a.at).slice(0, Number(parsed.searchParams.get("maxResults")) || 20).map((item) => ({ id: item.id, threadId: `t-${item.id}` })) });
+  const item = mailbox.find((entry) => entry.id === decodeURIComponent(id));
+  if (!item) return reply(404, { error: { message: "not found" } });
+  const headers = [{ name: "From", value: item.from }, { name: "Subject", value: item.subject }, { name: "To", value: "me@example.com" }, { name: "Date", value: new Date(item.at).toUTCString() }];
+  const body = parsed.searchParams.get("format") === "full" ? { mimeType: "text/plain", body: { data: Buffer.from(item.body).toString("base64url") } } : {};
+  return reply(200, { id: item.id, threadId: `t-${item.id}`, internalDate: String(item.at), snippet: item.body.slice(0, 40), labelIds: ["UNREAD", "INBOX"], payload: { headers, ...body } });
+}
 
 before(async () => {
   if (process.env.HANNAH_TEST_DB === "pglite") await require("./db").useDatabase(await require("./db/pglite-adapter").createPgliteAdapter());
@@ -433,4 +452,146 @@ test("a description becomes an inactive draft with only real steps and no smuggl
   assert.equal(drafted.body.definition.settings.timezone, "Asia/Kolkata");
   assert.deepEqual(drafted.body.validation.errors, []);
   assert.match(drafted.body.notes, /Connect Google/);
+});
+
+async function connectGoogle(email) {
+  const db = await require("./db").getDatabase();
+  const { rows: [user] } = await db.query("SELECT id FROM hannah_users WHERE email = $1", [email]);
+  const sealed = require("./vault").encryptSecret(JSON.stringify({ accessToken: "ya29.workflow-test", refreshToken: "1//refresh", expiresAt: Date.now() + 3_600_000 }), { userId: user.id, providerId: "connection:google" });
+  await db.query("INSERT INTO hannah_connections (user_id, provider, account_email, scopes, key_id, wrapped_key, ciphertext, created_at, updated_at) VALUES ($1, 'google', $2, 'gmail.readonly', $3, $4, $5, $6, $6)", [user.id, email, sealed.keyId, sealed.wrappedKey, sealed.ciphertext, Date.now()]);
+}
+
+test("new-email trigger: the first check only records the mailbox; each new message then runs once, with its text", async () => {
+  const email = "mailtrigger@example.com";
+  const api = client(await signUp(email));
+  await connectGoogle(email);
+  mailbox.push({ id: "old-1", from: "Billing <billing@acme.test>", subject: "Old invoice", body: "Invoice total 10", at: Date.now() - 86_400_000 });
+  const id = await createWorkflow(api, "Invoices by mail", definition([
+    { id: "m", name: "Invoice mail", type: "trigger.email", params: { query: "from:billing@acme.test", minutes: 5, includeBody: true } },
+    { id: "s", name: "Keep", type: "data.set", params: { fields: [{ name: "subject", value: "{{ $json.subject }}" }, { name: "text", value: "{{ $json.body }}" }] } },
+  ], [["m", "s"]]));
+
+  // A test run uses the newest real message.
+  const test = await api.post(`/workflows/${id}/run`, {});
+  const tested = await runToEnd(api, test.body.executionId);
+  assert.equal(tested.execution.status, "completed", JSON.stringify(tested.execution));
+  assert.equal(tested.nodes.find((node) => node.name === "Keep").output.main.items[0].subject, "Old invoice");
+
+  const published = await api.post(`/workflows/${id}/publish`);
+  assert.deepEqual(published.body.permissions.map((entry) => entry.permission), ["read-email"]);
+  assert.equal((await api.post(`/workflows/${id}/activate`, { approvedPermissions: published.body.permissions })).status, 200);
+  const live = async () => (await api.get(`/workflows/executions?workflowId=${id}`)).body.executions.filter((run) => run.mode === "email");
+
+  await runtime.tick({ budgetMs: 10_000 });
+  assert.equal((await live()).length, 0, "mail that was already there doesn't start runs");
+  assert.ok(gmailRequests.some((request) => request.q === "from:billing@acme.test" && request.auth === "Bearer ya29.workflow-test"), "the filter and the account's token reach Gmail");
+
+  const db = await require("./db").getDatabase();
+  const due = () => db.query("UPDATE hannah_workflow_triggers SET next_run_at = $1 WHERE workflow_id = $2 AND kind = 'email'", [Date.now() - 1000, id]);
+  mailbox.push({ id: "new-1", from: "Billing <billing@acme.test>", subject: "Invoice 2041", body: "Invoice from Acme, total 1499", at: Date.now() + 1000 });
+  mailbox.push({ id: "new-2", from: "Billing <billing@acme.test>", subject: "Invoice 2042", body: "Invoice from Acme, total 20", at: Date.now() + 2000 });
+  await due();
+  await Promise.all([runtime.tick({ budgetMs: 10_000 }), runtime.tick({ budgetMs: 10_000 })]);
+  await due();
+  await runtime.tick({ budgetMs: 10_000 });
+  const runs = await live();
+  assert.equal(runs.length, 2, "two new messages, two runs, even with overlapping checks");
+  const details = await Promise.all(runs.map((run) => runToEnd(api, run.id)));
+  const kept = details.map((detail) => detail.nodes.find((node) => node.name === "Keep").output.main.items[0]).sort((a, b) => a.subject.localeCompare(b.subject));
+  assert.deepEqual(kept.map((item) => item.subject), ["Invoice 2041", "Invoice 2042"]);
+  assert.equal(kept[0].text, "Invoice from Acme, total 1499", "the body was read");
+
+  // A failing mailbox check is shown on the workflow and doesn't lose the cursor.
+  gmailDown = true;
+  await due();
+  await runtime.tick({ budgetMs: 10_000 });
+  gmailDown = false;
+  const listed = (await api.get("/workflows")).body.workflows.find((workflow) => workflow.id === id);
+  assert.match(listed.mailbox.lastError, /./);
+  await due();
+  await runtime.tick({ budgetMs: 10_000 });
+  assert.equal((await live()).length, 2, "after recovering it doesn't re-run messages it already handled");
+  assert.equal((await api.get("/workflows")).body.workflows.find((workflow) => workflow.id === id).mailbox.lastError, null);
+});
+
+test("file trigger: an uploaded CSV becomes one item per row; limits and wrong workflows are refused", async () => {
+  const cookie = await signUp("filetrigger@example.com");
+  const api = client(cookie);
+  const id = await createWorkflow(api, "Expenses", definition([
+    { id: "f", name: "Expense sheet", type: "trigger.file", params: { output: "rows" } },
+    { id: "s", name: "Amount", type: "data.set", params: { fields: [{ name: "inr", value: "{{ number($json.amount) * 83 }}" }] } },
+  ], [["f", "s"]]));
+  const upload = (workflowId, body, { name = "expenses.csv", type = "text/csv", query = "", contentType = "application/octet-stream" } = {}) => realFetch(`${baseUrl}/api/workflows/${workflowId}/files${query}`, { method: "POST", headers: { Cookie: cookie, "Content-Type": contentType, "X-File-Name": encodeURIComponent(name), "X-File-Type": type }, body });
+
+  const notActive = await upload(id, "item,amount\nTaxi,12\n");
+  assert.equal(notActive.status, 409);
+  const tested = await upload(id, "item,amount\nTaxi,12\nLunch,\"3,5\"\n", { query: "?test=1", name: "Expenses May.csv" });
+  assert.equal(tested.status, 202, await tested.clone().text());
+  const testRun = await tested.json();
+  assert.equal(testRun.file.name, "Expenses May.csv");
+  assert.equal(testRun.file.sha256, crypto.createHash("sha256").update("item,amount\nTaxi,12\nLunch,\"3,5\"\n").digest("hex"));
+  const detail = await runToEnd(api, testRun.executionId);
+  assert.equal(detail.execution.status, "completed", JSON.stringify(detail.execution));
+  const rows = detail.nodes.find((node) => node.name === "Amount").output.main.items;
+  assert.deepEqual(rows.map((row) => [row.item, row.$file.name]), [["Taxi", "Expenses May.csv"], ["Lunch", "Expenses May.csv"]]);
+  assert.equal(rows[0].inr, 996);
+  assert.equal(rows[1].amount, "3,5", "quoted commas stay in their cell");
+
+  const published = await api.post(`/workflows/${id}/publish`);
+  await api.post(`/workflows/${id}/activate`, { approvedPermissions: published.body.permissions });
+  const live = await upload(id, "item,amount\nHotel,100\n");
+  assert.equal(live.status, 202);
+  const liveRun = await runToEnd(api, (await live.json()).executionId);
+  assert.equal(liveRun.execution.mode, "file");
+  assert.equal(liveRun.nodes.find((node) => node.name === "Amount").output.main.items[0].inr, 8300);
+
+  assert.equal((await upload(id, Buffer.alloc(1024 * 1024 + 10, 65))).status, 413, "files over 1 MB are refused");
+  assert.equal((await upload(id, "")).status, 400);
+  assert.equal((await upload(id, JSON.stringify([{ a: 1 }]), { contentType: "application/json" })).status, 415, "a body the JSON parser already consumed is refused with a reason");
+  const other = await createWorkflow(api, "No file step", definition([{ id: "t", name: "Start", type: "trigger.manual" }], []));
+  assert.equal((await upload(other, "a,b\n1,2\n", { query: "?test=1" })).status, 409);
+  const stranger = await signUp("filestranger@example.com");
+  assert.equal((await realFetch(`${baseUrl}/api/workflows/${id}/files?test=1`, { method: "POST", headers: { Cookie: stranger, "Content-Type": "application/octet-stream" }, body: "a,b\n1,2\n" })).status, 404, "another account can't upload to it");
+
+  // A binary file arrives as base64 and can't be read into rows.
+  const binaryFlow = await createWorkflow(api, "Binary", definition([{ id: "f", name: "Upload", type: "trigger.file", params: { output: "file" } }], []));
+  const binary = await upload(binaryFlow, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 255]), { name: "pixel.png", type: "image/png", query: "?test=1" });
+  const binaryRun = await runToEnd(api, (await binary.json()).executionId);
+  const file = binaryRun.nodes.find((node) => node.name === "Upload").output.main.items[0].file;
+  assert.equal(file.base64, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 255]).toString("base64"));
+  assert.equal(file.text, undefined);
+});
+
+test("code step: runs in the sandbox with items and logs; escapes, endless loops and memory bombs are stopped", async () => {
+  const api = client(await signUp("codestep@example.com"));
+  const flow = (code, mode = "all") => definition([{ id: "t", name: "Start", type: "trigger.manual", params: { sample: { amounts: [100, 250] } } }, { id: "split", name: "Each", type: "logic.split", params: { field: "amounts" } }, { id: "c", name: "Code", type: "data.code", params: { mode, code } }], [["t", "split"], ["split", "c"]]);
+  const run = async (code, mode) => {
+    const id = await createWorkflow(api, "Code", flow(code, mode));
+    const started = await api.post(`/workflows/${id}/run`, {});
+    return runToEnd(api, started.body.executionId);
+  };
+
+  const all = await run("console.log('count', items.length); return [{ total: items.reduce((sum, item) => sum + item.value, 0) }];");
+  assert.equal(all.execution.status, "completed", JSON.stringify(all.execution));
+  const node = all.nodes.find((entry) => entry.name === "Code");
+  assert.deepEqual(node.output.main.items, [{ total: 350 }]);
+  assert.deepEqual(node.logs, ["count 2"]);
+
+  const each = await run("return $index === 0 ? { ...$json, gst: $json.value * 0.18 } : null;", "each");
+  assert.deepEqual(each.nodes.find((entry) => entry.name === "Code").output.main.items, [{ value: 100, $index: 0, gst: 18 }]);
+
+  const escape = await run("return [{ seen: [typeof require, typeof process, typeof fetch, typeof setTimeout, (function () {}).constructor('return typeof process')()].join(',') }];");
+  assert.equal(escape.nodes.find((entry) => entry.name === "Code").output.main.items[0].seen, "undefined,undefined,undefined,undefined,undefined");
+
+  const loop = await run("while (true) {}");
+  assert.equal(loop.execution.status, "failed");
+  assert.match(loop.execution.error, /longer than 2 seconds/);
+  const bomb = await run("const keep = []; for (let i = 0; i < 5000; i++) keep.push('x'.repeat(100000) + i); return [];");
+  assert.equal(bomb.execution.status, "failed");
+  assert.match(bomb.execution.error, /more than 32 MB/);
+  const broken = await run("return {");
+  assert.match(broken.execution.error, /SyntaxError/);
+
+  const published = await api.post(`/workflows/${(await api.get("/workflows")).body.workflows[0].id}/publish`);
+  assert.ok(published.body.permissions.some((entry) => entry.permission === "run-code"), "activation asks before running code");
 });

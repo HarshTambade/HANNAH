@@ -290,6 +290,12 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_notifications_user ON hannah_notifications (user_id, created_at)",
     ],
   },
+  {
+    version: 7,
+    name: "workflow trigger state",
+    // Polling triggers (new email) keep their cursor here: what they've already seen.
+    statements: ["ALTER TABLE hannah_workflow_triggers ADD COLUMN state TEXT"],
+  },
 ];
 
 module.exports = { MIGRATIONS };

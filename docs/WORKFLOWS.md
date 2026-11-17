@@ -28,6 +28,8 @@ Browser / desktop / mobile app                     HANNAH server (Express)
                                             │                       triggers, services         │
 Other services ── POST /api/hooks/:id ────► │ workflows/expressions.js  safe {{ }} language    │
 Vercel Cron ───── /api/workflows/tick ────► │ workflows/http.js     SSRF-safe outbound HTTP    │
+Gmail / Outlook ◄── polled by the tick ──── │ workflows/sandbox.js  Code step: QuickJS (WASM)  │
+                                            │                       in a worker thread         │
                                             └──────────────┬─────────────────────────────────┘
                                                            │ account database (Postgres or SQLite)
                                                            ▼
@@ -63,6 +65,7 @@ Statuses: workflows are **draft**, **published** and **active** or **paused**; v
 - **At-least-once per node, at-most-once for finished nodes.** A run that stops (worker crash, serverless freeze, wait, approval) continues from its last checkpoint; finished nodes never run again. The node that was mid-call when a worker died runs again, so HTTP steps can send an `Idempotency-Key` (`<execution>:<node>:<item>`). Exactly-once external effects are not claimed.
 - **Recovery and dead-letter.** An expired lease puts the run back in the queue. After 3 recoveries it is marked failed as "dead-lettered" and never retried silently.
 - **No silent success.** A failed node fails the run, unless that node is set to "continue on error"; then its error becomes its output and the run reads "completed with errors".
+- **New mail starts one run per message.** Each check lists the newest matching messages and queues one execution per message that arrived since the last check, with the idempotency key `mail:<trigger>:<message id>`. The trigger's cursor (newest arrival seen plus recent message ids) lives in `hannah_workflow_triggers.state`. The first check after activation only records where the mailbox is, so old mail never starts runs; reactivating starts from that moment again. A failed check keeps the cursor and shows the error on the workflow.
 - **Schedules fire once per slot.** Moving `next_run_at` forward is a conditional update, and each slot's execution has an idempotency key `sched:<trigger>:<slot>`. Missed runs: "run once when back" or "skip".
 - **Webhooks don't run twice for one delivery.** `X-Hannah-Delivery` (or the HMAC signature) is recorded; a repeat returns `200 {duplicate: true}`.
 - **Limits.** Per user: 3 concurrent runs (`WORKFLOW_USER_CONCURRENCY`), 500 runs a day (`WORKFLOW_DAILY_EXECUTIONS`), 200 workflows, 100 credentials. Per run: 5,000 items per node, 4 MB of state, node time limit up to 5 minutes, workflow limit up to 60 minutes. Webhooks: 60 requests a minute per hook, 120 per client address. Runs are kept 30 days.
@@ -71,13 +74,13 @@ Statuses: workflows are **draft**, **published** and **active** or **paused**; v
 
 | Category | Nodes | Status |
 | --- | --- | --- |
-| Triggers | Manual, Schedule (interval, daily, weekly, cron; time zone), Webhook (token or HMAC), HANNAH event (reminder fired, team finished, budget exceeded, approval requested, workflow completed or failed, custom events) | Available |
-| | New email, File uploaded | Upcoming |
+| Triggers | Manual, Schedule (interval, daily, weekly, cron; time zone), Webhook (token or HMAC), HANNAH event (reminder fired, team finished, budget exceeded, approval requested, workflow completed or failed, custom events), New email (Gmail or Outlook, optional search filter, checked every 5+ minutes), File uploaded (up to 1 MB; CSV and JSON can become one item per row) | Available |
 | Actions | HTTP request, Send notification, Email (read newest, draft, send), Calendar (list, add), Slack, Discord, GitHub (issue, comment, list issues, list workflow runs), Notion page, Save to memory, Create or list reminders, Create document (Markdown or CSV) | Available |
 | | PostgreSQL (parameterized SQL, read-only by default) | Beta |
 | | Browser task and coding task on the desktop app | Upcoming |
 | Logic | If, Switch, Filter, Merge, Split into items, Aggregate, Limit, Wait, Approval, Wait for webhook | Available |
 | Data | Set fields, Map fields, Extract with pattern, Parse (JSON, CSV, key: value), Convert, Validate | Available |
+| | Code (JavaScript in a sandbox; once for all items or once per item; console output kept with the run) | Beta |
 | AI | Ask an AI model, Extract information (typed fields), Classify (one output per category), Search memory | Available |
 | | Specialist agent (Research, Coding, Memory, Tasks; no device tools on the server) | Beta |
 
@@ -93,7 +96,13 @@ AI steps use the account's saved provider keys through the same gateway as chat 
 - **Credentials.** Encrypted with the vault key (AES-GCM envelope, `HANNAH_VAULT_KEY`), bound to the user and credential id. They're never returned by the API, never in workflow JSON, exports, runs or logs; the list shows a hint only. Imports drop credential references the importer doesn't own.
 - **Outbound requests (SSRF).** Only http and https; the address is checked when the socket connects (no DNS rebinding); loopback, private, link-local and metadata (169.254.169.254), carrier-grade NAT, multicast and reserved ranges are refused for IPv4, IPv6 and mapped addresses; redirects are re-checked and drop credentials when the host changes; responses are capped. The PostgreSQL node resolves its host the same way. Self-hosters can allow their own network with `WORKFLOW_ALLOW_PRIVATE_NETWORK=true`.
 - **Webhooks.** Unguessable ids; a secret token (stored as a hash) or HMAC-SHA256 over `timestamp.body` with a 5-minute window and replay protection; rate limits; only safe headers are passed to the workflow. Secrets are shown once and can be rotated.
-- **Untrusted data.** Expressions can't execute code. External responses, email and AI outputs are data; AI prompts label them as such. There's no code-execution node: arbitrary code in the server process isn't allowed, and a sandboxed runtime is future work.
+- **Untrusted data.** Expressions can't execute code. External responses, email and AI outputs are data; AI prompts label them as such.
+- **The Code step's sandbox.** User JavaScript never runs on the server's JavaScript engine:
+  - It runs in QuickJS compiled to WebAssembly, a separate engine with its own heap, started fresh for each run in its own worker thread. The worker gets an empty environment.
+  - The code can reach nothing: no `require`, `process`, network, file system, timers or credentials. It sees only the step's input items. The only bridge back is a `console.log` that copies strings out.
+  - **Limits:** 2 seconds of execution (QuickJS's interrupt handler, plus a hard terminate of the worker), 32 MB for the engine, and 1 MB of output. The WebAssembly memory has a fixed maximum, because QuickJS's own memory limit doesn't count every string allocation (we measured a 200 MB string build passing it). With the fixed memory, the same code fails with "out of memory".
+  - Running code is its own permission (`run-code`), shown before activation.
+  - Tested: escapes through the `Function` constructor, endless loops, memory bombs, syntax errors.
 - **Redaction.** Node data shown in the UI masks keys that look sensitive (`authorization`, `token`, `password`, `apiKey` …) and values that look like keys or card numbers.
 
 ## 6. Deploying
@@ -124,13 +133,22 @@ Vercel's Hobby plan allows only daily cron jobs (a more frequent schedule fails 
 
 - `server/workflows/engine.test.js`: expressions (including sandbox escapes), SSRF checks, validation, schedules across time zones, data passing, branching, retries with backoff, continue-on-error, cancellation, approvals, email approval and denial, resume without re-running, split, filter and aggregate, single-node tests, redaction.
 - `server/workflows.test.js` (SQLite) and `server/workflows.pglite.test.js` (Postgres): the API end to end with the real worker: draft versioning, validation errors pointing at nodes, token and HMAC webhooks with replay protection, AI extraction, notifications, retries and retry-from-failure, cancel while waiting and while running, approvals, crash recovery and dead-lettering, schedules firing once per slot with two workers ticking at once, event chaining, account isolation, credential secrecy, import and export, the cron secret.
-- `e2e/workflows.spec.ts`: a browser against a real server process: build a workflow in the editor, test-run it and see data on the canvas, run the invoice template from a real webhook, see a failure with its exact error and retry it.
+- `server/workflows.test.js` also covers:
+  - **New email:** against a Gmail stand-in. The first check only records the mailbox; one run per new message even with two workers checking at once; the body is read; a failed check is shown and doesn't re-run handled mail.
+  - **File uploads:** CSV rows, quoted commas, base64 for binary files, the 1 MB limit, and other accounts refused.
+  - **Code step:** items, per-item mode, console logs, escape attempts, endless loop, memory bomb, the `run-code` permission.
+- `e2e/workflows.spec.ts`: a browser against a real server process:
+  - Build a workflow in the editor, test-run it and see data on the canvas.
+  - Run the invoice template from a real webhook.
+  - See a failure with its exact error and retry it.
+  - Test-run a file workflow with a CSV from the editor, see the Code step's console, activate it and upload a file from the list.
+- `client/src/__tests__/WorkflowTemplates.test.ts`: every template passes the server's validator, except for credentials and fields its "needs" list asks you to supply.
 
 ## 8. Not built yet
 
-- New-email and file-upload triggers; database change triggers.
+- Database change triggers. New email uses polling (every 5+ minutes), not Gmail push or Graph subscriptions.
 - Steps that run on the desktop app (browser tasks, coding tasks) from a server workflow.
-- A code node (needs a sandboxed runtime outside the server process).
+- Packages in the Code step: plain JavaScript only, no npm modules or network.
 - OAuth for integrations beyond Google and Microsoft (Slack, GitHub and Notion use tokens or webhook URLs today).
 - Workspace sharing: workflows belong to one account.
 - Push notifications when HANNAH isn't open: workflow notifications appear in the app and as the `workflow.notification` webhook event, which you can forward to ntfy or Pushover.

@@ -32,6 +32,19 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     ], [["hook", "extract"], ["extract", "review"], ["review", "large"], ["large", "save", "true"], ["save", "notify"]]),
   },
   {
+    id: "invoice-email",
+    name: "Invoice emails",
+    summary: "An email with “invoice” in the subject arrives → extract vendor, amount and date → over 1,000? → notify you; smaller ones are saved to memory.",
+    needs: ["Gmail or Outlook connected (Settings → Calendar and email)", "An AI provider key in your account"],
+    build: () => definition([
+      { id: "mail", name: "Invoice email", type: "trigger.email", params: { provider: "auto", query: "subject:invoice", minutes: 5, includeBody: true }, at: [0, 0] },
+      { id: "extract", name: "Extract invoice", type: "ai.extract", params: { model: "auto", text: "From {{ $json.from }}. Subject: {{ $json.subject }}\n\n{{ $json.body }}", fields: [{ field: "vendor", type: "string", required: true }, { field: "amount", type: "number", required: true }, { field: "date", type: "date", required: false }, { field: "invoiceNumber", type: "string", required: false }] }, at: [1, 0] },
+      { id: "large", name: "Over 1,000?", type: "logic.if", params: { conditions: [{ left: "{{ $json.amount }}", operator: "gt", right: "1000" }], combine: "all" }, at: [2, 0] },
+      { id: "notify", name: "Tell me", type: "action.notify", params: { title: "Large invoice from {{ $json.vendor }}", body: "{{ $json.amount }}, dated {{ $json.date }}. Invoice {{ $json.invoiceNumber }}." }, at: [3, -0.5] },
+      { id: "remember", name: "Remember it", type: "action.memory", params: { content: "Invoice {{ $json.invoiceNumber }} from {{ $json.vendor }}: {{ $json.amount }}, dated {{ $json.date }}.", category: "project" }, at: [3, 0.6] },
+    ], [["mail", "extract"], ["extract", "large"], ["large", "notify", "true"], ["large", "remember", "false"]]),
+  },
+  {
     id: "morning-mail",
     name: "Morning email summary",
     summary: "Every morning at 07:30 → read your newest mail → AI summary → notification.",

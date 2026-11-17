@@ -96,7 +96,7 @@ test("build a workflow in the editor, test-run it, and see real data on the canv
   await page.getByRole("button", { name: "Close step settings" }).click();
   await expect(page.getByRole("button", { name: /Valid/ })).toBeVisible();
 
-  await page.getByRole("button", { name: "Test run" }).click();
+  await page.getByRole("button", { name: "Test run", exact: true }).click();
   const run = page.getByRole("region", { name: "Run details" });
   await expect(run.getByText("Completed").first()).toBeVisible({ timeout: 20_000 });
   await run.getByRole("button", { name: /Set fields/ }).click();
@@ -127,7 +127,7 @@ test("the invoice template runs from a real webhook: extraction, AI review, a br
   const hookUrl = (await secretDialog.locator("p.font-mono span").first().innerText()).trim();
   await secretDialog.getByRole("button", { name: "I've saved it" }).click();
 
-  await page.getByRole("button", { name: "Activate" }).click();
+  await page.getByRole("button", { name: "Activate", exact: true }).click();
   const consent = page.getByRole("dialog", { name: "Activate this workflow?" });
   await expect(consent).toContainText("Receive requests from other services at a private URL");
   await expect(consent).toContainText("Use your AI provider keys");
@@ -167,7 +167,7 @@ test("a failing step is shown with its error and retried from the failure", asyn
   }, `http://127.0.0.1:${port}/api/does-not-exist`);
   await page.reload();
   await page.getByRole("list", { name: "Workflows" }).getByRole("button", { name: /^Calls a dead service Draft/ }).click();
-  await page.getByRole("button", { name: "Test run" }).click();
+  await page.getByRole("button", { name: "Test run", exact: true }).click();
   const run = page.getByRole("region", { name: "Run details" });
   await expect(run.getByText("Failed at “Dead service”")).toBeVisible({ timeout: 20_000 });
   await expect(run.getByRole("alert").first()).toContainText(/returned HTTP 4\d\d/);
@@ -176,4 +176,49 @@ test("a failing step is shown with its error and retried from the failure", asyn
   expect(created.workflow.id).toBeTruthy();
   await run.getByRole("button", { name: "Retry from failed step" }).click();
   await expect(page.getByRole("region", { name: "Run details" }).getByText(/retry of/)).toBeVisible({ timeout: 15_000 });
+});
+
+test("a file workflow: test-run with a CSV from the editor, see the code step's console, then upload to the active workflow", async ({ page }) => {
+  await signedIn(page, "files@example.com");
+  await page.goto("/automations");
+  await page.evaluate(async () => {
+    const definition = {
+      format: "hannah-workflow", version: 2, settings: { timezone: "UTC" },
+      nodes: [
+        { id: "f", name: "Expense sheet", type: "trigger.file", params: { output: "rows" }, position: { x: 80, y: 160 } },
+        { id: "c", name: "Total", type: "data.code", params: { mode: "all", code: "console.log('rows', items.length);\nreturn [{ total: items.reduce((sum, row) => sum + Number(row.amount), 0), file: items[0].$file.name }];" }, position: { x: 380, y: 160 } },
+      ],
+      connections: [{ id: "c1", source: "f", target: "c", sourceOutput: "main", targetInput: "main" }],
+    };
+    await fetch("/api/workflows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Expense totals", definition }) });
+  });
+  await page.reload();
+  await page.getByRole("list", { name: "Workflows" }).getByRole("button", { name: /^Expense totals Draft/ }).click();
+  await expect(page.getByText("Expense sheet").first()).toBeVisible();
+
+  // Test run asks for a file instead of sample JSON.
+  await page.getByLabel("Choose a file for the test run").setInputFiles({ name: "may.csv", mimeType: "text/csv", buffer: Buffer.from("item,amount\nTaxi,12\nLunch,30.5\n") });
+  const run = page.getByRole("region", { name: "Run details" });
+  await expect(run.getByText("Completed").first()).toBeVisible({ timeout: 20_000 });
+  await run.getByRole("button", { name: /^Total/ }).click();
+  await expect(run.getByLabel("Console output of Total")).toHaveText("rows 2");
+  await expect(run.getByText(/"total": 42.5/)).toBeVisible();
+  await expect(run.getByText(/"file": "may.csv"/)).toBeVisible();
+
+  // Activation names the sandboxed code; then a file uploaded from the list starts a live run.
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText(/Published version 1/)).toBeVisible();
+  await page.getByRole("button", { name: "Activate", exact: true }).click();
+  const consent = page.getByRole("dialog", { name: "Activate this workflow?" });
+  await expect(consent).toContainText("Run your JavaScript in an isolated sandbox");
+  await consent.getByRole("button", { name: "Activate" }).click();
+  await expect(page.getByText(/Active: it now runs on its triggers/)).toBeVisible();
+  await page.getByRole("button", { name: "Back to workflows" }).click();
+  await page.getByLabel("Upload a file to Expense totals").setInputFiles({ name: "june.csv", mimeType: "text/csv", buffer: Buffer.from("item,amount\nHotel,100\n") });
+  await expect(page.getByRole("tab", { name: "Runs", selected: true })).toBeVisible();
+  await page.getByRole("button", { name: "Expense totals" }).first().click();
+  const live = page.getByRole("region", { name: "Run details" });
+  await expect(live.getByText("Completed").first()).toBeVisible({ timeout: 20_000 });
+  await live.getByRole("button", { name: /^Total/ }).click();
+  await expect(live.getByText(/"file": "june.csv"/)).toBeVisible();
 });
