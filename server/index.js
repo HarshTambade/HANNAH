@@ -34,6 +34,7 @@ const { createA2ARouter } = require("./a2a");
 const { createWebhookRouter, emitUserEvent } = require("./webhooks");
 const { createDownloadRouter } = require("./downloads");
 const { createDeviceTaskRouter } = require("./device-tasks");
+const { createTaskRunRouter } = require("./task-runs");
 const { createConnectionsRouter } = require("./connections");
 const serverVersion = require("./package.json").version;
 const { assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
@@ -331,6 +332,8 @@ app.use("/api", createAccountRouter({
 app.use("/api", createWebhookRouter());
 // Tasks across devices and approvals from another device (signed-in accounts).
 app.use("/api", createDeviceTaskRouter());
+// Durable task runs: checkpoints, a one-device lease, resume on another device.
+app.use("/api", createTaskRunRouter());
 // Calendar and email: Google and Microsoft accounts connected with their own sign-in.
 app.use("/api", createConnectionsRouter({ allowedOrigins }));
 app.use("/api", createOrchestrateHandler({ getRequestProvider, preferredProviderId, timeoutMs: cloudRequestTimeout }));

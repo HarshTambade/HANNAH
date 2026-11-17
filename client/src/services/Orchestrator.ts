@@ -12,14 +12,19 @@
  * Every run is saved on the device after each change, so the Agents screen can
  * show it live, and a run cut short (closed tab, crash, Stop) can be resumed:
  * finished steps keep their results and only the rest runs again.
+ *
+ * When you're signed in, each save is also a checkpoint in your account
+ * (TaskRecords), so the run can be followed, cancelled or resumed from your
+ * other devices. One device works on a run at a time.
  */
 import type { ChatMessage, Emotion, InferenceMode } from "../types";
 import { apiFetch, apiUrl } from "./api";
-import { Account } from "./Account";
+import { Account, AccountError } from "./Account";
 import { runAgentTurn, type AgentActivity, type AgentReply } from "./AgentRuntime";
 import { DAILY_BUDGET_KEY } from "./LLMRouter";
 import { activeSpecialists, SPECIALISTS, type SpecialistId } from "./SpecialistAgents";
-import { DeviceTasks } from "./DeviceTasks";
+import { DeviceTasks, thisDevice } from "./DeviceTasks";
+import { TaskRecords, type LostReason, type RemoteRun, type RunStatus } from "./TaskRecords";
 
 export type TeamStepStatus = "pending" | "running" | "done" | "failed" | "skipped" | "declined" | "blocked" | "stopped";
 export type TeamStep = {
@@ -35,7 +40,7 @@ export type TeamStep = {
   startedAt?: number;
   finishedAt?: number;
 };
-export type TeamRunStatus = "planning" | "running" | "verifying" | "succeeded" | "needs-attention" | "failed" | "stopped" | "interrupted";
+export type TeamRunStatus = "planning" | "running" | "verifying" | "succeeded" | "needs-attention" | "failed" | "stopped" | "interrupted" | "cancelled";
 export type TeamRun = {
   id: string;
   objective: string;
@@ -51,6 +56,8 @@ export type TeamRun = {
   error?: string;
   settings: { mode: InferenceMode; providerId?: string };
   context: Array<Pick<ChatMessage, "role" | "content">>;
+  /** Another of your devices is working on this run right now (from your account). Not saved to it. */
+  runningOn?: string;
 };
 
 const STORAGE_KEY = "hannah.teamRuns.v1";
@@ -58,6 +65,7 @@ export const TEAM_RUNS_EVENT = "hannah:team-runs";
 const MAX_RUNS = 20;
 const MAX_PARALLEL = 3;
 const MAX_REVISION_ROUNDS = 1;
+const CHECKPOINT_WAIT_MS = 3_000;
 const ACTIVE_STATUSES = new Set<TeamRunStatus>(["planning", "running", "verifying"]);
 const STOP_STATUSES = new Set<TeamStepStatus>(["failed", "skipped", "declined", "blocked", "stopped"]);
 /** Runs being driven by this page right now; anything else "active" was cut short. */
@@ -89,6 +97,84 @@ function save(run: TeamRun) {
   run.updatedAt = Date.now();
   write([structuredClone(run), ...read().filter((item) => item.id !== run.id)]);
   reportAcrossDevices(run);
+  const { runningOn: _elsewhere, ...record } = run;
+  void TaskRecords.checkpoint(run.id, { kind: "team", title: run.objective.split("\n")[0].slice(0, 140) || "Agent team task", status: recordStatus(run.status), record: structuredClone(record) });
+}
+
+/** The account's status for a run (the brief's task states). */
+export function recordStatus(status: TeamRunStatus): RunStatus {
+  if (status === "planning" || status === "running" || status === "verifying") return "running";
+  if (status === "succeeded") return "completed";
+  if (status === "failed") return "failed";
+  if (status === "cancelled") return "cancelled";
+  // Stopped, interrupted and partly done runs can be resumed.
+  return "paused";
+}
+
+const STEP_STATUSES = new Set<TeamStepStatus>(["pending", "running", "done", "failed", "skipped", "declined", "blocked", "stopped"]);
+const RUN_STATUSES = new Set<TeamRunStatus>(["planning", "running", "verifying", "succeeded", "needs-attention", "failed", "stopped", "interrupted", "cancelled"]);
+const SPECIALIST_IDS = new Set<string>(SPECIALISTS.map((agent) => agent.id));
+const text = (value: unknown, max: number) => (typeof value === "string" ? value.slice(0, max) : "");
+
+/** A run saved by one of your devices, checked before it's used. Null if it isn't a usable team run. */
+export function teamRunFromRecord(value: unknown, id: string): TeamRun | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<TeamRun>;
+  if (raw.id !== id || typeof raw.objective !== "string" || !Array.isArray(raw.steps) || !RUN_STATUSES.has(raw.status as TeamRunStatus)) return null;
+  const steps: TeamStep[] = [];
+  for (const item of raw.steps.slice(0, 12)) {
+    const step = item as Partial<TeamStep>;
+    if (!step || typeof step.id !== "string" || !SPECIALIST_IDS.has(String(step.agent)) || typeof step.task !== "string" || !STEP_STATUSES.has(step.status as TeamStepStatus)) return null;
+    steps.push({
+      id: step.id.slice(0, 40),
+      agent: step.agent as SpecialistId,
+      task: step.task.slice(0, 2000),
+      dependsOn: Array.isArray(step.dependsOn) ? step.dependsOn.filter((dep): dep is string => typeof dep === "string").slice(0, 12) : [],
+      status: step.status as TeamStepStatus,
+      attempts: Number.isFinite(step.attempts) ? Number(step.attempts) : 0,
+      ...(typeof step.output === "string" ? { output: step.output.slice(0, 20_000) } : {}),
+      ...(typeof step.model === "string" ? { model: step.model.slice(0, 120) } : {}),
+      ...(typeof step.feedback === "string" ? { feedback: step.feedback.slice(0, 2000) } : {}),
+      ...(Number.isFinite(step.startedAt) ? { startedAt: Number(step.startedAt) } : {}),
+      ...(Number.isFinite(step.finishedAt) ? { finishedAt: Number(step.finishedAt) } : {}),
+    });
+  }
+  const settings = raw.settings && typeof raw.settings === "object" ? raw.settings : null;
+  if (!settings || (settings.mode !== "cloud" && settings.mode !== "ollama")) return null;
+  const verification = raw.verification && typeof raw.verification === "object" && (raw.verification.verdict === "pass" || raw.verification.verdict === "revise")
+    ? { verdict: raw.verification.verdict, issues: Array.isArray(raw.verification.issues) ? raw.verification.issues.filter((issue): issue is string => typeof issue === "string").slice(0, 10) : [], rounds: Number(raw.verification.rounds) || 0, ...(typeof raw.verification.model === "string" ? { model: raw.verification.model } : {}) }
+    : undefined;
+  return {
+    id,
+    objective: raw.objective.slice(0, 4000),
+    createdAt: Number(raw.createdAt) || Date.now(),
+    updatedAt: Number(raw.updatedAt) || Date.now(),
+    status: raw.status as TeamRunStatus,
+    ...(text(raw.summary, 500) ? { summary: text(raw.summary, 500) } : {}),
+    ...(raw.planFallback ? { planFallback: true } : {}),
+    steps,
+    ...(verification ? { verification } : {}),
+    ...(text(raw.reply, 20_000) ? { reply: text(raw.reply, 20_000) } : {}),
+    ...(typeof raw.emotion === "string" ? { emotion: raw.emotion as Emotion } : {}),
+    ...(text(raw.error, 2000) ? { error: text(raw.error, 2000) } : {}),
+    settings: { mode: settings.mode, ...(typeof settings.providerId === "string" ? { providerId: settings.providerId.slice(0, 60) } : {}) },
+    context: Array.isArray(raw.context)
+      ? raw.context.filter((message) => message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string").slice(-6).map(({ role, content }) => ({ role, content: content.slice(0, 800) }))
+      : [],
+  };
+}
+
+/** Use the account's copy of a run on this device. */
+function fromRemote(remote: RemoteRun, record: TeamRun): TeamRun {
+  const run = { ...record };
+  const elsewhere = remote.lease && remote.lease.deviceId !== thisDevice().id ? remote.lease.deviceName : undefined;
+  if (remote.status === "cancelled") {
+    run.status = "cancelled";
+    run.error = run.error || `Cancelled from ${remote.lastDevice}.`;
+  }
+  if (elsewhere) run.runningOn = elsewhere;
+  else delete run.runningOn;
+  return run;
 }
 
 /** Tasks across devices: your other signed-in devices see this run's progress. */
@@ -107,7 +193,7 @@ export const TeamRuns = {
     const runs = read();
     let changed = false;
     for (const run of runs) {
-      if (ACTIVE_STATUSES.has(run.status) && !liveRuns.has(run.id)) {
+      if (ACTIVE_STATUSES.has(run.status) && !liveRuns.has(run.id) && !run.runningOn) {
         run.status = "interrupted";
         for (const step of run.steps) if (step.status === "running") step.status = "pending";
         changed = true;
@@ -124,9 +210,58 @@ export const TeamRuns = {
   },
   remove(id: string) {
     write(read().filter((run) => run.id !== id));
+    if (TaskRecords.enabled()) void TaskRecords.remove(id).catch(() => undefined);
   },
   clear() {
-    write(read().filter((run) => liveRuns.has(run.id)));
+    const runs = read();
+    write(runs.filter((run) => liveRuns.has(run.id) || run.runningOn));
+    if (TaskRecords.enabled()) for (const run of runs) if (!liveRuns.has(run.id) && !run.runningOn) void TaskRecords.remove(run.id).catch(() => undefined);
+  },
+  /**
+   * Bring in runs from your other devices, and refresh which device is working
+   * on each. A run whose device went quiet shows as interrupted, ready to resume here.
+   */
+  async syncFromAccount() {
+    if (!TaskRecords.enabled()) return;
+    await TaskRecords.retryPending();
+    const remote = await TaskRecords.list().catch(() => null);
+    if (!remote) return;
+    const runs = read();
+    let changed = false;
+    for (const item of remote) {
+      if (item.kind !== "team" || liveRuns.has(item.id)) continue;
+      const record = teamRunFromRecord(item.record, item.id);
+      if (!record) continue;
+      const index = runs.findIndex((run) => run.id === item.id);
+      const known = TaskRecords.knownVersion(item.id);
+      if (index < 0 || known === null || item.version > known) {
+        const next = fromRemote(item, record);
+        if (index < 0) runs.push(next);
+        else runs[index] = next;
+        TaskRecords.rememberVersion(item.id, item.version);
+        changed = true;
+        continue;
+      }
+      // Same checkpoint: only the working device may have changed (or gone quiet).
+      const current = runs[index];
+      const refreshed = fromRemote(item, current);
+      if (refreshed.runningOn !== current.runningOn || refreshed.status !== current.status) {
+        runs[index] = refreshed;
+        changed = true;
+      }
+    }
+    if (changed) write(runs.sort((a, b) => b.createdAt - a.createdAt));
+  },
+  /** Stop a run that another of your devices is working on. It can't be resumed afterwards. */
+  async cancelElsewhere(id: string) {
+    const remote = await TaskRecords.cancel(id);
+    const runs = read();
+    const index = runs.findIndex((run) => run.id === id);
+    const record = teamRunFromRecord(remote.record, id);
+    if (index >= 0) {
+      runs[index] = fromRemote(remote, record ?? runs[index]);
+      write(runs);
+    }
   },
 };
 
@@ -226,6 +361,9 @@ async function executeSteps(run: TeamRun, options: TeamOptions) {
   };
 
   for (;;) {
+    // Confirm the last checkpoint before starting more work, so a cancel or a
+    // takeover from another device stops the run here. Offline, don't wait long.
+    await Promise.race([TaskRecords.settled(run.id), new Promise((resolve) => setTimeout(resolve, CHECKPOINT_WAIT_MS))]);
     if (options.signal?.aborted) {
       for (const step of run.steps) if (step.status === "pending") step.status = "stopped";
       save(run);
@@ -325,6 +463,45 @@ async function finish(run: TeamRun, options: TeamOptions): Promise<AgentReply> {
   }
 }
 
+/** What this device does when it may no longer work on a run (cancelled or taken over elsewhere). */
+function settleLost(run: TeamRun, message: string, reason: LostReason): AgentReply {
+  run.status = reason === "cancelled" ? "cancelled" : "interrupted";
+  for (const step of run.steps) if (step.status === "running" || step.status === "stopped") step.status = "pending";
+  run.error = message;
+  save(run);
+  return { reply: reason === "cancelled" ? `${message} I stopped working on it here.` : `${message} I stopped working on it on this device.`, emotion: "neutral", outcome: "stopped" };
+}
+
+/**
+ * Run `work` as this device's turn on the run: checkpoints go to your account,
+ * and a cancel or takeover from another device stops it.
+ */
+async function drive(run: TeamRun, options: TeamOptions, work: (options: TeamOptions) => Promise<AgentReply>): Promise<AgentReply> {
+  const control = new AbortController();
+  let lost: { message: string; reason: LostReason } | null = null;
+  const signal = options.signal ? AbortSignal.any([options.signal, control.signal]) : control.signal;
+  liveRuns.add(run.id);
+  TaskRecords.attach(run.id, (message, reason) => {
+    lost = { message, reason };
+    control.abort();
+  });
+  try {
+    const reply = await work({ ...options, signal });
+    const stoppedBy = lost as { message: string; reason: LostReason } | null;
+    return stoppedBy ? settleLost(run, stoppedBy.message, stoppedBy.reason) : reply;
+  } catch (error) {
+    const stoppedBy = lost as { message: string; reason: LostReason } | null;
+    if (stoppedBy) return settleLost(run, stoppedBy.message, stoppedBy.reason);
+    run.status = signal.aborted ? "stopped" : "failed";
+    run.error = error instanceof Error ? error.message : "The team run failed.";
+    save(run);
+    throw error;
+  } finally {
+    liveRuns.delete(run.id);
+    TaskRecords.detach(run.id);
+  }
+}
+
 /** Plan, run and verify a task with the specialist team. */
 export async function runTeamTask(options: TeamOptions): Promise<AgentReply> {
   if (options.mode !== "cloud" && options.mode !== "ollama") {
@@ -344,38 +521,46 @@ export async function runTeamTask(options: TeamOptions): Promise<AgentReply> {
     settings: { mode: options.mode, providerId: options.mode === "ollama" ? "ollama" : options.providerId },
     context: options.messages.filter((message) => message.role === "user" || message.role === "assistant").slice(-7, -1).map(({ role, content }) => ({ role, content: content.slice(0, 800) })),
   };
-  liveRuns.add(run.id);
-  save(run);
-  try {
-    options.onActivity?.({ phase: "thinking", message: "Planning with your agent team…" });
+  return drive(run, options, async (driven) => {
+    save(run);
+    driven.onActivity?.({ phase: "thinking", message: "Planning with your agent team…" });
     const plan = await orchestrate<{ summary: string; steps: Array<{ id: string; agent: SpecialistId; task: string; dependsOn: string[] }>; fallback: boolean }>({
       phase: "plan",
       task: run.objective,
       agents: agents.map(({ id, name, description }) => ({ id, name, description })),
       context: run.context,
       provider: run.settings.providerId,
-    }, options);
+    }, driven);
     run.summary = plan.summary;
     run.planFallback = plan.fallback;
     run.steps = plan.steps.map((step) => ({ ...step, status: "pending", attempts: 0 }));
     run.status = "running";
     save(run);
-    return await finish(run, options);
-  } catch (error) {
-    run.status = options.signal?.aborted ? "stopped" : "failed";
-    run.error = error instanceof Error ? error.message : "The team run failed.";
-    save(run);
-    throw error;
-  } finally {
-    liveRuns.delete(run.id);
-  }
+    return finish(run, driven);
+  });
 }
 
 /** Continue an interrupted, stopped or partly failed run. Finished steps are kept. */
 export async function resumeTeamRun(runId: string, options: Omit<TeamOptions, "messages" | "mode" | "providerId">): Promise<AgentReply> {
-  const run = TeamRuns.get(runId);
+  let run = TeamRuns.get(runId);
   if (!run) throw new TeamError("That run no longer exists.");
   if (liveRuns.has(run.id)) throw new TeamError("That run is already in progress.");
+  if (run.status === "cancelled") throw new TeamError("This run was cancelled, so it can't be resumed. Ask again instead.");
+  if (TaskRecords.enabled()) {
+    // Take the run over in your account first, so no other device works on it at the same time.
+    const known = TaskRecords.knownVersion(run.id);
+    let claimed: RemoteRun | null = null;
+    try {
+      claimed = await TaskRecords.claim(run.id);
+    } catch (error) {
+      if (error instanceof AccountError && (error.status === 409 || error.status === 404)) throw new TeamError(error.message, error.status);
+      // Unreachable or signed out: continue here; checkpoints go out once the server is back.
+    }
+    // Another device saved newer progress than this one has: continue from that.
+    const remote = claimed ? teamRunFromRecord(claimed.record, run.id) : null;
+    if (claimed && remote && (known === null || claimed.version - 1 > known)) run = { ...remote };
+    delete run.runningOn;
+  }
   if (!run.steps.length) throw new TeamError("This run stopped before it had a plan. Ask again instead.");
   for (const step of run.steps) {
     if (step.status !== "done") {
@@ -385,16 +570,9 @@ export async function resumeTeamRun(runId: string, options: Omit<TeamOptions, "m
   }
   run.status = "running";
   run.error = undefined;
-  liveRuns.add(run.id);
-  save(run);
-  try {
-    return await finish(run, { ...options, messages: [], mode: run.settings.mode, providerId: run.settings.providerId });
-  } catch (error) {
-    run.status = options.signal?.aborted ? "stopped" : "failed";
-    run.error = error instanceof Error ? error.message : "The team run failed.";
-    save(run);
-    throw error;
-  } finally {
-    liveRuns.delete(run.id);
-  }
+  const resumed = run;
+  return drive(resumed, { ...options, messages: [], mode: resumed.settings.mode, providerId: resumed.settings.providerId }, async (driven) => {
+    save(resumed);
+    return finish(resumed, driven);
+  });
 }

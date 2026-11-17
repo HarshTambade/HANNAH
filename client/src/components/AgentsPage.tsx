@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, BookOpen, Brain, CheckCircle2, CircleDashed, Code2, ListChecks, Loader2, MinusCircle, PauseCircle, Play, ShieldCheck, Trash2, Users, XCircle } from "lucide-react";
+import { AlertTriangle, BookOpen, Brain, CheckCircle2, CircleDashed, Code2, ListChecks, Loader2, MinusCircle, MonitorSmartphone, PauseCircle, Play, ShieldCheck, Square, Trash2, Users, XCircle } from "lucide-react";
 import { apiFetch, apiUrl } from "../services/api";
 import { ChatHistory } from "../services/ChatHistory";
 import { resumeTeamRun, TEAM_RUNS_EVENT, TeamRuns, type TeamRun, type TeamStep, type TeamStepStatus } from "../services/Orchestrator";
 import { readSpecialistSettings, SPECIALISTS, SPECIALISTS_EVENT, updateSpecialist, type SpecialistId } from "../services/SpecialistAgents";
 import { desktopFilesAvailable } from "../services/DesktopFiles";
+import { TaskRecords } from "../services/TaskRecords";
 
 const onDesktop = desktopFilesAvailable();
 
@@ -24,7 +25,7 @@ const stepStatus: Record<TeamStepStatus, { label: string; Icon: typeof Brain; cl
 
 const runStatus: Record<TeamRun["status"], string> = {
   planning: "Planning", running: "Running", verifying: "Verifying", succeeded: "Done", "needs-attention": "Partly done",
-  failed: "Failed", stopped: "Stopped", interrupted: "Interrupted",
+  failed: "Failed", stopped: "Stopped", interrupted: "Interrupted", cancelled: "Cancelled",
 };
 
 function Panel({ title, tone = "tone-plain", aside, className = "", children }: { title: string; tone?: string; aside?: ReactNode; className?: string; children: ReactNode }) {
@@ -56,21 +57,24 @@ function duration(step: TeamStep) {
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
-function RunCard({ run, onResume, resuming }: { run: TeamRun; onResume: (id: string) => void; resuming: boolean }) {
+function RunCard({ run, onResume, onCancel, resuming }: { run: TeamRun; onResume: (id: string) => void; onCancel: (id: string) => void; resuming: boolean }) {
   const [open, setOpen] = useState(run.status === "running" || run.status === "verifying" || run.status === "planning");
   const done = run.steps.filter((step) => step.status === "done").length;
-  const resumable = !TeamRuns.isLive(run.id) && run.steps.length > 0 && ["interrupted", "stopped", "failed", "needs-attention"].includes(run.status);
+  const elsewhere = !TeamRuns.isLive(run.id) && run.runningOn;
+  const resumable = !TeamRuns.isLive(run.id) && !run.runningOn && run.steps.length > 0 && ["interrupted", "stopped", "failed", "needs-attention"].includes(run.status);
   return (
     <li className="rounded-2xl border border-white/80 bg-white/80 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} className="min-w-0 flex-1 text-left">
           <p className="line-clamp-2 text-sm font-medium text-ink">{run.objective}</p>
           <p className="mt-0.5 text-xs text-slate-500">{new Date(run.createdAt).toLocaleString()} · {done}/{run.steps.length || "?"} steps · {run.planFallback ? "single step" : run.summary || "plan pending"}</p>
+          {elsewhere && <p className="mt-1 flex items-center gap-1 text-xs font-medium text-sky-800"><MonitorSmartphone size={12} /> Running on {run.runningOn}</p>}
         </button>
         <div className="flex items-center gap-2">
           <span className="pill-badge" data-status={run.status}>{(run.status === "running" || run.status === "verifying" || run.status === "planning") && <Loader2 size={12} className="animate-spin" />}{runStatus[run.status]}</span>
           {resumable && <button type="button" disabled={resuming} onClick={() => onResume(run.id)} className="btn-outline !py-1.5 text-xs"><Play size={12} /> Resume</button>}
-          {!TeamRuns.isLive(run.id) && <button type="button" aria-label="Remove this run" onClick={() => TeamRuns.remove(run.id)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"><Trash2 size={13} /></button>}
+          {elsewhere && <button type="button" onClick={() => onCancel(run.id)} className="btn-outline !py-1.5 text-xs text-rose-700"><Square size={11} /> Cancel on {run.runningOn}</button>}
+          {!TeamRuns.isLive(run.id) && !elsewhere && <button type="button" aria-label="Remove this run" onClick={() => TeamRuns.remove(run.id)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"><Trash2 size={13} /></button>}
         </div>
       </div>
       {open && (
@@ -125,10 +129,17 @@ export default function AgentsPage() {
     window.addEventListener(TEAM_RUNS_EVENT, refresh);
     window.addEventListener(SPECIALISTS_EVENT, refreshSettings);
     const timer = window.setInterval(refresh, 1000);
+    // Runs from your other signed-in devices, and which device is working on each.
+    const syncRemote = () => {
+      if (document.visibilityState === "visible") void TeamRuns.syncFromAccount();
+    };
+    syncRemote();
+    const remoteTimer = window.setInterval(syncRemote, 8000);
     return () => {
       window.removeEventListener(TEAM_RUNS_EVENT, refresh);
       window.removeEventListener(SPECIALISTS_EVENT, refreshSettings);
       window.clearInterval(timer);
+      window.clearInterval(remoteTimer);
     };
   }, []);
 
@@ -162,12 +173,24 @@ export default function AgentsPage() {
     }
   };
 
+  const cancelElsewhere = async (id: string) => {
+    const run = TeamRuns.get(id);
+    if (!window.confirm(`Cancel this task on ${run?.runningOn ?? "your other device"}? It stops at its next step and can't be resumed.`)) return;
+    setMessage("");
+    try {
+      await TeamRuns.cancelElsewhere(id);
+      setMessage(`Cancelled. ${run?.runningOn ?? "The other device"} stops at its next step.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Couldn't cancel that run.");
+    }
+  };
+
   const live = runs.filter((run) => TeamRuns.isLive(run.id)).length;
   return (
     <main className="mx-auto max-w-6xl px-3 pb-12 pt-5 sm:px-6 sm:pt-8">
       <div className="mb-6">
         <h1 className="display-title text-[clamp(2.2rem,5vw,3.5rem)]">Agents</h1>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500">Turn on <strong className="font-medium text-ink">Team</strong> in chat and HANNAH plans the task, hands steps to these specialists (in parallel when they don't depend on each other), then a verification pass checks the results before you get an answer. Every tool still goes through the Guardian and your approval.</p>
+        <p className="mt-1 max-w-2xl text-sm text-slate-500">Turn on <strong className="font-medium text-ink">Team</strong> in chat and HANNAH plans the task, hands steps to these specialists (in parallel when they don't depend on each other), then a verification pass checks the results before you get an answer. Every tool still goes through the Guardian and your approval.{TaskRecords.enabled() ? " Signed in, each run is saved to your account step by step, so you can follow, cancel or resume it from your other devices." : ""}</p>
       </div>
       {message && <p role="status" className="mb-4 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-800">{message}</p>}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -201,7 +224,7 @@ export default function AgentsPage() {
           <p className="text-sm text-slate-500">No team runs yet. Turn on Team in chat and ask for something with several parts, for example “Plan a weekend in Pune and remind me Friday to pack”.</p>
         ) : (
           <>
-            <ul className="space-y-3" aria-label="Team runs">{runs.map((run) => <RunCard key={run.id} run={run} onResume={(id) => void resume(id)} resuming={resuming} />)}</ul>
+            <ul className="space-y-3" aria-label="Team runs">{runs.map((run) => <RunCard key={run.id} run={run} onResume={(id) => void resume(id)} onCancel={(id) => void cancelElsewhere(id)} resuming={resuming} />)}</ul>
             <button type="button" onClick={() => TeamRuns.clear()} className="btn-ghost mt-3 text-rose-600"><Trash2 size={13} /> Clear finished runs</button>
           </>
         )}

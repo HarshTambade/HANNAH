@@ -146,6 +146,31 @@ const MIGRATIONS = [
       )`,
     ],
   },
+  {
+    version: 5,
+    name: "durable task runs",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_task_runs (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        record TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        last_write_id TEXT,
+        lease_device_id TEXT,
+        lease_device_name TEXT,
+        lease_expires_at BIGINT,
+        last_device_name TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        finished_at BIGINT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_task_runs_user ON hannah_task_runs (user_id, updated_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

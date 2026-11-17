@@ -436,7 +436,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
   }));
 
   router.get("/account/export", requireSession(async (_req, res, db, account) => {
-    const [user, data, credentials, keys, events, tasks, connections] = await Promise.all([
+    const [user, data, credentials, keys, events, tasks, connections, runs] = await Promise.all([
       db.query("SELECT id, email, display_name, created_at FROM hannah_users WHERE id = $1", [account.id]),
       db.query("SELECT namespace, value, version, updated_at FROM hannah_user_data WHERE user_id = $1", [account.id]),
       db.query("SELECT provider_id, hint, updated_at FROM hannah_credentials WHERE user_id = $1", [account.id]),
@@ -444,6 +444,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
       db.query("SELECT event, detail, created_at FROM hannah_audit WHERE user_id = $1 ORDER BY created_at", [account.id]),
       db.query("SELECT id, kind, title, detail, status, device_name, created_at, updated_at, decided_by FROM hannah_device_tasks WHERE user_id = $1 ORDER BY created_at", [account.id]),
       db.query("SELECT provider, account_email, scopes, created_at FROM hannah_connections WHERE user_id = $1", [account.id]),
+      db.query("SELECT id, kind, title, status, record, last_device_name, created_at, updated_at, finished_at FROM hannah_task_runs WHERE user_id = $1 ORDER BY created_at", [account.id]),
     ]);
     await audit(db, account.id, "account.exported");
     res.setHeader("Content-Disposition", "attachment; filename=\"hannah-account-export.json\"");
@@ -456,6 +457,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
       audit: events.rows.map((row) => ({ event: row.event, detail: row.detail ? JSON.parse(row.detail) : null, at: Number(row.created_at) })),
       deviceTasks: tasks.rows.map((row) => ({ id: row.id, kind: row.kind, title: row.title, detail: row.detail || "", status: row.status, device: row.device_name, createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), decidedBy: row.decided_by || null })),
       connections: connections.rows.map((row) => ({ provider: row.provider, email: row.account_email, scopes: row.scopes, connectedAt: Number(row.created_at), note: "Sign-in tokens are never exported." })),
+      taskRuns: runs.rows.map((row) => ({ id: row.id, kind: row.kind, title: row.title, status: row.status, record: JSON.parse(row.record), lastDevice: row.last_device_name, createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), finishedAt: row.finished_at === null ? null : Number(row.finished_at) })),
     });
   }));
 
