@@ -31,11 +31,13 @@ const { createOrchestrateHandler } = require("./orchestrate");
 const { createVoiceRouter } = require("./voice");
 const { createMcpClientRouter } = require("./mcp-client");
 const { createA2ARouter } = require("./a2a");
-const { createWebhookRouter, emitUserEvent } = require("./webhooks");
+const { createWebhookRouter, emitUserEvent, onUserEvent } = require("./webhooks");
 const { createDownloadRouter } = require("./downloads");
 const { createDeviceTaskRouter } = require("./device-tasks");
 const { createTaskRunRouter } = require("./task-runs");
-const { createConnectionsRouter } = require("./connections");
+const { createConnectionsRouter, publicBaseUrl } = require("./connections");
+const { createRuntime } = require("./workflows/runtime");
+const { createHookRouter, createWorkflowRouter } = require("./workflows/router");
 const serverVersion = require("./package.json").version;
 const { assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
 const router = require("./router");
@@ -317,6 +319,11 @@ app.post("/api/events", createRateLimiter(rateLimits.events));
 app.post("/api/account/mail/send", createRateLimiter(rateLimits.chat));
 app.post("/api/account/mail/drafts", createRateLimiter(rateLimits.chat));
 app.post("/api/account/calendar/events", createRateLimiter(rateLimits.chat));
+// Workflows: one runtime per process. Events anywhere in HANNAH can start workflows with an event trigger.
+const workflowRuntime = createRuntime({ emit: emitUserEvent });
+onUserEvent((userId, event, data) => (databaseConfigured() ? workflowRuntime.emitEvent(userId, event, data, { sourceWorkflowId: data?.workflowId || null, depth: Number(data?.$depth) || 0 }) : 0));
+// Public workflow webhooks read the raw body (HMAC signatures cover the exact bytes), so they're mounted before the JSON parser.
+app.use("/api", createHookRouter({ runtime: workflowRuntime }));
 app.use(express.json({ limit: "12mb" }));
 if (databaseConfigured()) setSpendStore(createSpendStore());
 const isOperator = (res) => Boolean(res.locals.hannahApiTokenId) && !res.locals.hannahAccount && !res.locals.hannahByok;
@@ -334,6 +341,7 @@ app.use("/api", createWebhookRouter());
 app.use("/api", createDeviceTaskRouter());
 // Durable task runs: checkpoints, a one-device lease, resume on another device.
 app.use("/api", createTaskRunRouter());
+app.use("/api", createWorkflowRouter({ runtime: workflowRuntime, publicBaseUrl }));
 // Calendar and email: Google and Microsoft accounts connected with their own sign-in.
 app.use("/api", createConnectionsRouter({ allowedOrigins }));
 app.use("/api", createOrchestrateHandler({ getRequestProvider, preferredProviderId, timeoutMs: cloudRequestTimeout }));
@@ -592,7 +600,9 @@ function isValidAgentMessage(message) {
 }
 
 function normalizeTools(tools) {
-  if (!Array.isArray(tools) || tools.length < 1 || tools.length > 20) return null;
+  // No tools is a valid agent turn: automation steps, briefings and specialists without tools send none.
+  if (tools === undefined) return [];
+  if (!Array.isArray(tools) || tools.length > 20) return null;
   const normalized = [];
   for (const tool of tools) {
     const fn = tool?.function;
@@ -969,6 +979,8 @@ async function startServer() {
     mountHANNAHMcpEndpoint(app, process.env.MCP_API_TOKEN);
   }
 
+  // A long-running server runs the workflow worker itself; serverless hosting uses /api/workflows/tick from a cron.
+  if (databaseConfigured() && process.env.WORKFLOW_WORKER !== "off") workflowRuntime.startWorker();
   const server = app.listen(port, host, () => {
     console.log(`HANNAH API listening on http://${host}:${port}`);
     if (mcpEnabled) console.log(`HANNAH MCP endpoint enabled at http://${host}:${port}/mcp`);
@@ -989,7 +1001,7 @@ async function startServer() {
 
 // Export the Express app for serverless adapters while preserving direct startup
 // when this file is launched with Node from the desktop/dev scripts.
-Object.assign(app, { cloudModels, parseAssistantOutput, requestCloud, requestCloudAgent, startServer });
+Object.assign(app, { cloudModels, parseAssistantOutput, requestCloud, requestCloudAgent, startServer, workflowRuntime });
 module.exports = app;
 
 if (require.main === module) {

@@ -1,0 +1,26 @@
+[
+  {
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "scope": "client/electron",
+    "reason": "No patched picomatch exists: the advisory (published 2026-10-19) covers every version through 4.0.7, the latest release. It reaches the build through electron-builder \u2192 @electron/rebuild \u2192 node-gyp \u2192 tinyglobby \u2192 fdir. The minimatch advisory in the same tree is fixed by an override (client/scripts/prepare-electron-release.mjs).",
+    "exposure": "Build time only. electron-builder and its tooling run in CI to package the app and are not included in the installers. picomatch here matches glob patterns written in this repository (electron-builder files lists), not input from users or the network, so the ReDoS can't be triggered by an attacker.",
+    "expires": "2027-01-31"
+  },
+  {
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "scope": ".",
+    "reason": "No patched picomatch exists (all versions through 4.0.7). At the repository root it reaches the build through the desktop workspace's electron-builder (apps/desktop) and its glob tooling.",
+    "exposure": "Development and packaging only: none of these packages are production dependencies of the root (npm audit --omit=dev is clean). They glob paths from this repository's own configuration, never user or network input.",
+    "expires": "2027-01-31"
+  },
+  {
+    "advisory": "GHSA-fc5q-39xc-vjpf",
+    "package": "picomatch",
+    "scope": "client",
+    "reason": "No patched picomatch exists (all versions through 4.0.7). In the client it reaches Vite, Vitest, Tailwind CSS, vite-plugin-pwa / workbox-build and rollup-plugin-visualizer.",
+    "exposure": "Build and test tools only: the client's production audit (npm audit --omit=dev) has no high findings. The glob patterns come from this repository's build configuration; nothing in the shipped app or the server uses picomatch on user input.",
+    "expires": "2027-01-31"
+  }
+]

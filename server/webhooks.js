@@ -23,7 +23,13 @@ const net = require("node:net");
 const { createHmac, randomBytes, randomUUID } = require("node:crypto");
 const { getDatabase } = require("./db");
 
-const EVENTS = new Set(["reminder.fired", "team.completed", "budget.exceeded", "approval.requested", "webhook.test"]);
+const EVENTS = new Set(["reminder.fired", "team.completed", "budget.exceeded", "approval.requested", "workflow.completed", "workflow.failed", "workflow.notification", "webhook.test"]);
+// In-process listeners (the workflow engine's event triggers) hear every event too.
+const listeners = new Set();
+function onUserEvent(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
 const CLIENT_EVENTS = new Set(["reminder.fired", "team.completed"]);
 const MAX_HOOKS = 5;
 
@@ -83,6 +89,7 @@ async function deliver(db, hook, event, data, { fetchImpl = fetch } = {}) {
 
 /** Send an event to every matching webhook of a user. Never throws. */
 async function emitUserEvent(userId, event, data, options) {
+  for (const listener of listeners) Promise.resolve().then(() => listener(userId, event, data)).catch(() => {});
   try {
     const db = await getDatabase();
     if (!db) return [];
@@ -155,4 +162,4 @@ function createWebhookRouter({ fetchImpl } = {}) {
   return router;
 }
 
-module.exports = { assertPublicUrl, createWebhookRouter, emitUserEvent, privateAddress, sign, EVENTS };
+module.exports = { assertPublicUrl, createWebhookRouter, emitUserEvent, onUserEvent, privateAddress, sign, EVENTS };

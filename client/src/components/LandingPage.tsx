@@ -5,7 +5,7 @@ import {
   MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, TerminalSquare, Waypoints, Workflow, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
-import { CAPABILITIES as capabilities, FAQS as faqs, ROADMAP as roadmap, type IconName } from "../content/landing";
+import { AUTOMATION as automation, CAPABILITIES as capabilities, FAQS as faqs, ROADMAP as roadmap, type IconName } from "../content/landing";
 import AppTour from "./AppTour";
 import { APP_VERSION, PLATFORM_DOWNLOADS, RELEASE_NOTES_URL, RELEASES_URL, REPOSITORY_URL } from "../config/project";
 
@@ -71,7 +71,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
     setKeyDialogOpen(true);
   };
 
-  const sections: Array<[string, string]> = [["Features", "features"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
+  const sections: Array<[string, string]> = [["Features", "features"], ["Automation", "automation"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
 
   return (
     <main className="landing-page relative h-[100dvh] overflow-x-hidden overflow-y-auto bg-slate-50 text-ink selection:bg-brand-200/30">
@@ -133,10 +133,10 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
         {/* Hero */}
         <section id="home" tabIndex={-1} className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-16 pt-10 outline-none sm:px-8 sm:pt-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-24">
           <div className="max-w-[40rem]">
-            <a href={RELEASE_NOTES_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-200 hover:text-ink">
-              <span className="font-semibold text-brand-700">New in {APP_VERSION}</span>
+            <a href="#automation" onClick={(event) => scrollToSection(event, "automation")} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-200 hover:text-ink">
+              <span className="font-semibold text-brand-700">New</span>
               <span className="h-3 w-px bg-slate-200" aria-hidden="true" />
-              Smart model routing, agent team, voice <ArrowRight size={12} />
+              Visual workflow automation with AI steps <ArrowRight size={12} />
             </a>
             <h1 className="display-title mt-6 text-[clamp(2.5rem,5.6vw,4.9rem)]">
               Your Personal AI.
@@ -182,7 +182,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
             <div className="max-w-2xl">
               <p className="section-kicker">Available now</p>
               <h2 className="section-title">One companion. Every kind of intelligence.</h2>
-              <p className="section-desc">Everything on this list is in HANNAH {APP_VERSION} today.</p>
+              <p className="section-desc">Everything on this list works today. Things still being built are under “On the roadmap”.</p>
             </div>
             <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {capabilities.map((item) => {
@@ -204,6 +204,59 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               <h3 className="mt-5 text-[15px] font-semibold text-ink">Files and terminal on desktop</h3>
               <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-700">Share a project folder and HANNAH can read it, edit files in folders you mark read-write, and run commands such as your tests. You approve every write and every command in a system dialog, and the app enforces the folder limits itself, outside the AI model.</p>
             </article>
+            </div>
+          </div>
+        </section>
+
+        {/* Automation */}
+        <section id="automation" tabIndex={-1} className="mx-auto max-w-7xl px-5 py-20 outline-none sm:px-8 sm:py-24 lg:px-12">
+          <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-end">
+            <div>
+              <p className="section-kicker">Automation</p>
+              <h2 className="section-title">Workflows you can watch work.</h2>
+              <p className="section-desc">Build automations on a canvas the way you'd sketch them: a trigger, then steps that read, decide, call AI and act. They run on HANNAH's server, so a schedule or a webhook doesn't need your laptop open, and every run shows exactly what each step received and produced.</p>
+              <p className="mt-4 text-[13px] text-slate-500">For signed-in accounts on a HANNAH server with its database set up. Without an account, simpler routines run on your device while HANNAH is open.</p>
+            </div>
+            <figure className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_30px_90px_-45px_rgba(15,23,42,0.45)]">
+              <img src="/screens/workflow-editor.webp" width={1600} height={833} loading="lazy" decoding="async" alt="HANNAH's workflow editor after a test run: Invoice arrives (webhook), Extract invoice, AI review and Over 1,000? each marked Done with one item; the true branch saves the invoice and notifies, the false branch is skipped; the run panel lists every step's time." className="block h-auto w-full" />
+              <figcaption className="border-t border-slate-100 px-4 py-2.5 text-[12px] text-slate-500">A real test run of the invoice workflow below: each step shows its result on the canvas.</figcaption>
+            </figure>
+          </div>
+
+          <ol className="mt-10 flex flex-wrap items-center gap-2" aria-label="Example workflow">
+            {automation.flow.map((step, index) => (
+              <li key={step} className="flex items-center gap-2">
+                <span className={`rounded-xl border px-3 py-1.5 text-[13px] font-medium ${index === 0 ? "border-amber-200 bg-amber-50 text-amber-900" : index === 3 ? "border-violet-200 bg-violet-50 text-violet-900" : index === 1 || index === 2 ? "border-rose-200 bg-rose-50 text-rose-900" : "border-sky-200 bg-sky-50 text-sky-900"}`}>{step}</span>
+                {index < automation.flow.length - 1 && <ArrowRight size={14} className="text-slate-400" aria-hidden="true" />}
+              </li>
+            ))}
+          </ol>
+
+          <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {automation.points.map(([title, text]) => (
+              <li key={title} className="rounded-2xl border border-slate-200/80 bg-white p-5">
+                <p className="text-[14px] font-semibold text-ink">{title}</p>
+                <p className="mt-2 text-[13px] leading-6 text-slate-600">{text}</p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+            <figure className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white">
+              <img src="/screens/workflow-runs.webp" width={1600} height={920} loading="lazy" decoding="async" alt="The runs view: a completed run of Invoice intake with each step's duration; the Extract invoice step is open, showing the webhook text as input and vendor Acme, amount 1250.5 and date 2026-12-01 as output." className="block h-auto w-full" />
+              <figcaption className="border-t border-slate-100 px-4 py-2.5 text-[12px] text-slate-500">Every run keeps each step's input, output, timing and errors. Here, the AI extraction turned an invoice's text into fields.</figcaption>
+            </figure>
+            <div>
+              <h3 className="text-[15px] font-semibold text-ink">Steps and integrations</h3>
+              <p className="mt-1 text-[13px] text-slate-600">Plus If, Switch, Merge, Wait, Approval and data steps. Status as of this version:</p>
+              <ul className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Workflow integrations">
+                {automation.integrations.map((item) => (
+                  <li key={item.type} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-[13px]">
+                    <span className="text-ink">{item.name}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${item.status === "available" ? "bg-emerald-50 text-emerald-800" : item.status === "beta" ? "bg-amber-50 text-amber-900" : "bg-slate-100 text-slate-600"}`}>{item.status === "upcoming" ? "Coming" : item.status === "beta" ? "Beta" : "Available"}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>

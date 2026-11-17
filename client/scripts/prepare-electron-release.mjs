@@ -24,6 +24,14 @@ electronPackage.devDependencies = {
   electron: "^45.3.2",
   "electron-updater": "^6.6.2",
 };
+// Build-tool security fixes the packager's own dependency ranges don't pick up yet.
+// minimatch < 11.0.1 (GHSA-g3hv-75wg-m249) comes in through @electron/universal and
+// app-builder-lib at 9.x and 10.x; 11.x keeps the same named `minimatch` export.
+electronPackage.overrides = {
+  ...electronPackage.overrides,
+  "minimatch@^9.0.0": "^11.0.9",
+  "minimatch@^10.0.0": "^11.0.9",
+};
 electronPackage.homepage = "https://hannah.app";
 electronPackage.author = "HANNAH contributors";
 electronPackage.description = appPackage.description || "HANNAH desktop companion";
@@ -52,6 +60,13 @@ copyFileSync(resolve(clientRoot, "electron-splash.html"), resolve(electronRoot, 
 for (const name of ["tray-16.png", "tray-32.png", "trayTemplate.png", "trayTemplate@2x.png"]) {
   copyFileSync(resolve(clientRoot, "electron-assets", name), resolve(electronRoot, "assets", name));
 }
+// App icons (scripts/generate-brand-assets.mjs): .icns, .ico and the Linux PNG set for electron-builder,
+// and a PNG the app uses as its window icon on Windows and Linux.
+const iconSource = resolve(clientRoot, "electron-assets", "icons");
+mkdirSync(resolve(electronRoot, "build-resources", "png"), { recursive: true });
+for (const name of ["icon.icns", "icon.ico", "icon.png"]) copyFileSync(resolve(iconSource, name), resolve(electronRoot, "build-resources", name));
+for (const size of [16, 32, 48, 64, 128, 256, 512, 1024]) copyFileSync(resolve(iconSource, "png", `${size}x${size}.png`), resolve(electronRoot, "build-resources", "png", `${size}x${size}.png`));
+copyFileSync(resolve(iconSource, "icon.png"), resolve(electronRoot, "assets", "icon.png"));
 const signingAvailable = Boolean(process.env.CSC_LINK || process.env.WIN_CSC_LINK);
 let builderConfig = readFileSync(resolve(clientRoot, "electron-builder.yml"), "utf8");
 builderConfig = builderConfig.replace(/^  notarize: false$/m, `  notarize: ${releaseRequested && signingAvailable ? "true" : "false"}`);

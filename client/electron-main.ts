@@ -212,6 +212,27 @@ function trayIcon() {
   return image;
 }
 
+/** HANNAH's app icon (assets/icon.png, generated from public/icon.svg). */
+function appIcon() {
+  return nativeImage.createFromPath(path.join(app.getAppPath(), "assets", "icon.png"));
+}
+
+/**
+ * Windows and Linux take the window and taskbar icon from the window itself
+ * (the packaged .exe and .desktop icons come from electron-builder); a
+ * development run on macOS would otherwise show Electron's icon in the Dock.
+ */
+function brandWindows() {
+  const icon = appIcon();
+  if (icon.isEmpty()) return;
+  if (isMac) {
+    if (!app.isPackaged) app.dock?.setIcon(icon);
+    return;
+  }
+  for (const window of BrowserWindow.getAllWindows()) window.setIcon(icon);
+  app.on("browser-window-created", (_event, window) => window.setIcon(icon));
+}
+
 function buildTray() {
   try {
     const icon = trayIcon();
@@ -319,6 +340,8 @@ function desktopInfo() {
     updateHistory: readJson<UpdateHistoryEntry[]>("update-history.json", []),
     shortcut: { accelerator: TALK_SHORTCUT, registered: globalShortcut.isRegistered(TALK_SHORTCUT) },
     tray: tray !== null,
+    // HANNAH's own icon loaded (assets/icon.png); the CI launch check fails without it.
+    appIcon: !appIcon().isEmpty(),
     deepLinks: { scheme: "hannah", screens: Object.keys(DEEP_LINK_SCREENS), registered: app.isPackaged ? app.isDefaultProtocolClient("hannah") : false },
   };
 }
@@ -337,7 +360,9 @@ app.whenReady().then(() => {
     applicationVersion: app.getVersion(),
     copyright: "© 2026 Harsh Tambade and HANNAH contributors",
     website: REPOSITORY,
+    ...(isMac ? {} : { iconPath: path.join(app.getAppPath(), "assets", "icon.png") }),
   });
+  brandWindows();
   buildMenu();
   buildTray();
   recordVersion();
@@ -391,6 +416,7 @@ if (process.env.HANNAH_SMOKE_TEST === "1") {
     const info = await plugin.desktopInfo();
     if (!info?.shortcut?.registered) throw new Error("the Talk to HANNAH shortcut isn't registered");
     if (!info.tray) throw new Error("the tray icon is missing");
+    if (!info.appIcon) throw new Error("HANNAH's app icon (assets/icon.png) is missing");
     return document.title + " channel=" + info.channel;
   })()`;
   app.on("browser-window-created", (_event, window) => {

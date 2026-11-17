@@ -23,11 +23,19 @@ const configuredTokenDigest = configuredTokenIsValid
 const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/a2a", "/route/preview"]);
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
 // The calendar/email sign-in callbacks are opened by Google or Microsoft; the single-use state identifies the user.
-const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback"]);
+const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/workflows/catalog", "/workflows/tick"]);
+// Workflow webhooks are called by other services. Each one authenticates
+// itself (a secret token or an HMAC signature) in server/workflows/router.js;
+// the cron tick checks CRON_SECRET. Nothing else under these paths is public.
+const PUBLIC_PREFIXES = ["/hooks/"];
+function isPublic(path) {
+  return PUBLIC_PATHS.has(path) || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
 // A signed-in account (session or developer API key) may use the model routes
 // plus its own account and sync routes. Operator-only routes stay closed.
 function accountMayUse(path) {
-  return BYOK_PATHS.has(path) || path === "/sync/memory" || path === "/account" || path.startsWith("/account/");
+  return BYOK_PATHS.has(path) || path === "/sync/memory" || path === "/account" || path.startsWith("/account/")
+    || path === "/workflows" || path.startsWith("/workflows/") || path === "/notifications" || path.startsWith("/notifications/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 
@@ -47,7 +55,7 @@ function assertProductionApiToken() {
 }
 
 function requireApiToken(req, res, next) {
-  if (PUBLIC_PATHS.has(req.path)) return next();
+  if (isPublic(req.path)) return next();
   if (res.locals.hannahAccount) {
     if (accountMayUse(req.path)) return next();
     return res.status(403).json({ error: "This needs the server operator's access token.", reason: "operator-only" });

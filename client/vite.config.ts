@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => ({
     wakeModelPlugin(),
     VitePWA({
       registerType: "prompt",
-      includeAssets: ["icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
+      includeAssets: ["icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "favicon.ico"],
       manifest: {
         id: "/",
         name: "HANNAH · AI Companion",
@@ -49,6 +49,8 @@ export default defineConfig(({ mode }) => ({
           { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
           { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          // Full-bleed, with the ring inside the 80 % safe zone, for launchers that crop icons to a shape.
+          { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {

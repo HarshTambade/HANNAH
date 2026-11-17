@@ -24,17 +24,24 @@ publish:
   - provider: github
     owner: HarshTambade
     repo: Shanaya-Your-AI-companion
+# App icons: generated from public/icon.svg by scripts/generate-brand-assets.mjs and copied to
+# build-resources/ by scripts/prepare-electron-release.mjs. Without these, electron-builder ships Electron's icon.
 win:
+  icon: build-resources/icon.ico
   forceCodeSigning: false
   target:
     - target: nsis
       arch:
         - x64
 nsis:
+  installerIcon: build-resources/icon.ico
+  uninstallerIcon: build-resources/icon.ico
+  installerHeaderIcon: build-resources/icon.ico
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
 mac:
+  icon: build-resources/icon.icns
   forceCodeSigning: false
   target:
     - target: dmg
@@ -56,6 +63,7 @@ mac:
   entitlementsInherit: ../config/entitlements.mac.inherit.plist
   notarize: false
 linux:
+  icon: build-resources/png
   target:
     - AppImage
     - deb

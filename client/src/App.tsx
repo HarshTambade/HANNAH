@@ -4,7 +4,7 @@ import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
 import ModelsPage from "./components/ModelsPage";
 import AgentsPage from "./components/AgentsPage";
-import WorkflowBuilder from "./components/WorkflowBuilder";
+import AutomationsScreen from "./components/AutomationsScreen";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
 import ChatUI from "./components/ChatUI";
 import AvatarScene, { type AvatarActivity, type AvatarMotion } from "./components/AvatarScene";
@@ -251,7 +251,7 @@ export default function App() {
   if (screen === "automations") {
     return (
       <AppShell {...shellProps}>
-        <WorkflowBuilder />
+        <AutomationsScreen />
       </AppShell>
     );
   }

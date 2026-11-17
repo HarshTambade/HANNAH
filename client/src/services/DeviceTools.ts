@@ -13,6 +13,7 @@ import { getDesktopFileTools } from "./DesktopFiles";
 import { getConnectionTools } from "./Connections";
 import { getKnowledgeTools } from "./Knowledge";
 import { getBriefingTools } from "./Briefing";
+import { getWorkflowTools } from "./WorkflowTools";
 
 export type ToolSchema = {
   type: "object";
@@ -340,7 +341,7 @@ export function setExternalTools(tools: HANNAHTool[]) {
 export function getDeviceTools() {
   const desktop = getDesktopFileTools();
   const connections = getConnectionTools();
-  return [...deviceTools, ...getKnowledgeTools(), ...getBriefingTools(), ...desktop, ...connections, ...externalTools];
+  return [...deviceTools, ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...desktop, ...connections, ...externalTools];
 }
 
 /**

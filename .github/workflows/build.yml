@@ -56,15 +56,24 @@ jobs:
         run: node scripts/scan-secrets.mjs
       - name: Native permission audit (Android manifest, iOS Info.plist)
         run: node scripts/check-native-permissions.mjs
+      - name: Brand check (HANNAH's icon on every platform, no framework defaults)
+        run: node scripts/check-brand-assets.mjs
       - run: npm ci --ignore-scripts
-      - run: npm audit --audit-level=high
       - run: npm ci --ignore-scripts
-        working-directory: client
-      - run: npm audit --audit-level=high
         working-directory: client
       - run: npm ci --ignore-scripts
         working-directory: server
-      - run: npm audit --prefix server --audit-level=high
+      # Fails on any high or critical advisory not recorded, with a reason and an expiry, in .audit-exceptions.json.
+      - name: Dependency audit (all dependencies, high and above)
+        run: |
+          node scripts/audit-gate.mjs .
+          node scripts/audit-gate.mjs client
+          node scripts/audit-gate.mjs server
+      - name: Dependency audit (what ships, moderate and above, no exceptions)
+        run: |
+          node scripts/audit-gate.mjs . --omit-dev --level moderate
+          node scripts/audit-gate.mjs client --omit-dev --level moderate
+          node scripts/audit-gate.mjs server --omit-dev --level moderate
       - name: Licence check (production dependencies of root, client and server)
         run: node scripts/check-licenses.mjs
       - name: Software bill of materials (CycloneDX, production dependencies)
@@ -103,9 +112,13 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             client/package-lock.json
+            server/package-lock.json
       - run: npm ci --ignore-scripts
       - run: npm ci --ignore-scripts
         working-directory: client
+      # e2e/workflows.spec.ts starts a real HANNAH server (SQLite) to test the workflow engine end to end.
+      - run: npm ci --ignore-scripts
+        working-directory: server
       - run: npm run build
         working-directory: client
       - run: npx playwright install --with-deps
@@ -194,8 +207,9 @@ jobs:
       # electron-builder downloads its own NSIS; no system install is needed.
       - run: npm install --no-audit --no-fund
         working-directory: client/electron
-      - run: npm audit --audit-level=high
-        working-directory: client/electron
+      # Fails on any high or critical advisory not recorded, with a reason and an expiry, in .audit-exceptions.json.
+      - name: Dependency audit (Electron packaging tools)
+        run: node scripts/audit-gate.mjs client/electron
       - run: npx cap sync @capawesome/capacitor-electron
         working-directory: client
       - name: Package Electron app

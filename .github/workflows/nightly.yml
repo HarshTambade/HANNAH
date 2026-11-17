@@ -26,9 +26,15 @@ jobs:
         working-directory: client
       - run: npm ci --ignore-scripts
         working-directory: server
-      - run: npm audit --audit-level=high
-        working-directory: client
-      - run: npm audit --prefix server --audit-level=high
+      # Fails on any high or critical advisory not recorded, with a reason and an expiry, in .audit-exceptions.json.
+      - name: Dependency audit
+        run: |
+          node scripts/audit-gate.mjs .
+          node scripts/audit-gate.mjs client
+          node scripts/audit-gate.mjs server
+          node scripts/audit-gate.mjs . --omit-dev --level moderate
+          node scripts/audit-gate.mjs client --omit-dev --level moderate
+          node scripts/audit-gate.mjs server --omit-dev --level moderate
       - run: npm test
         working-directory: client
       - uses: actions/setup-python@v5

@@ -48,6 +48,7 @@ export type DesktopInfo = {
   updateHistory: Array<{ version: string; at: number }>;
   shortcut: { accelerator: string; registered: boolean };
   tray: boolean;
+  appIcon?: boolean;
   deepLinks: { scheme: string; screens: string[]; registered: boolean };
 };
 

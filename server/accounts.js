@@ -507,4 +507,4 @@ function createSyncBlobStore() {
   };
 }
 
-module.exports = { accountAuth, accountsUseServerKeys, createAccountRouter, createSpendStore, createSyncBlobStore, hashPassword, parseCookies, verifyPassword, SYNC_NAMESPACES };
+module.exports = { accountAuth, accountsUseServerKeys, createAccountRouter, createSpendStore, createSyncBlobStore, hashPassword, loadAccountKeys, parseCookies, verifyPassword, SYNC_NAMESPACES };

@@ -19,7 +19,7 @@ Three rules shape the product:
 2. **Bring your own key (BYOK).** Paste your own free Groq key and start talking: no account, no sign-up. An operator access token is optional. Keys are kept for the browser tab session only.
 3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
-> **Status:** active development. The latest published release is [v1.0.2](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/tag/v1.0.2) (still branded Shanaya). `main` contains the HANNAH v2 redesign, which has not been released yet. See [Project status](#project-status) for what is finished and what is experimental.
+> **Status:** active development. The latest published release is [v1.4.0](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/tag/v1.4.0). `main` is ahead of it with the unreleased work listed under [Unreleased in the changelog](./docs/CHANGELOG.md) (daily briefing, Knowledge, Setup check, crash diagnostics and more). See [Project status](#project-status) for what is finished and what is experimental.
 
 ---
 
@@ -28,6 +28,7 @@ Three rules shape the product:
 - [Downloads](#downloads)
 - [What you can do](#what-you-can-do)
 - [The safety model: Guardian, then you](#the-safety-model-guardian-then-you)
+- [Visual overview](#visual-overview)
 - [Architecture](#architecture)
 - [Privacy and data](#privacy-and-data)
 - [Quick start](#quick-start)
@@ -58,7 +59,7 @@ Three rules shape the product:
 
 ## Downloads
 
-Installers for **HANNAH 1.3.0** are attached to the [latest release](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest), with a `SHA256SUMS` file to check them. The links below always point at the newest release.
+Installers for **HANNAH 1.4.0** are attached to the [latest release](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest), with a `SHA256SUMS` file to check them. The links below always point at the newest release.
 
 | Platform | Download | Before you install |
 | --- | --- | --- |
@@ -151,6 +152,159 @@ sequenceDiagram
 - **Server limits:** with only a Groq key, a visitor can reach just the chat routes, and their key is forwarded only to Groq's official API. Server-held keys and every other route need the operator token. Rate limits apply per token and per visitor key.
 
 These checks are defense in depth. They are not a guarantee against every prompt injection, so test your own release build before relying on them.
+
+---
+
+## Visual overview
+
+HANNAH is a client-heavy app: the browser or native shell owns the chat, the avatar, the stores and the safety chain, while a small Express API owns provider credentials, routing policy and optional accounts. The diagrams below are the ones worth keeping in your head while you install or extend it.
+
+### 1. System context
+
+```mermaid
+flowchart TB
+    U["You (browser, phone, desktop app)"]
+    C["HANNAH client<br/>React 19 + Vite + Capacitor/Electron"]
+    S["HANNAH API<br/>Express 5 (server/)"]
+    P["Model providers<br/>Groq, OpenAI, Anthropic, Gemini, …"]
+    O["Local runtimes<br/>Ollama, LM Studio, llama.cpp, vLLM"]
+    L["On-device models<br/>WebLLM, llama.cpp"]
+    D["Your database<br/>(optional: Postgres or SQLite)"]
+    E["Optional Python fallback<br/>FastAPI (backend/)"]
+
+    U --> C
+    C -->|local modes| L
+    C -->|cloud / Ollama / accounts| S
+    S --> P
+    S --> O
+    S -. optional .-> E
+    S -. accounts, sync, vault .-> D
+    C -. optional MCP hosts .-> S
+```
+
+### 2. Request lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant You
+    participant Chat as ChatUI
+    participant Router as AgentRouter
+    participant LLM as LLMRouter
+    participant API as Express API
+    participant Prov as Provider
+    participant Guard as GuardianAgent
+    participant You2 as You (approval)
+    participant Tool as Device tool
+    You->>Chat: message
+    Chat->>Router: classify task profile
+    Router->>LLM: resolve inference mode
+    alt local mode
+        LLM->>LLM: generate on device
+    else cloud / Ollama mode
+        LLM->>API: POST /api/agent (token + optional Groq key)
+        API->>Prov: provider request
+        Prov-->>API: reply / tool calls
+        API-->>LLM: reply, emotion, usage
+    end
+    opt tool call
+        LLM->>Guard: screen(tool, args)
+        alt blocked
+            Guard-->>LLM: GuardianBlockedError
+        else allowed
+            Guard-->>LLM: allowed
+            opt changes data or device
+                LLM->>You2: approval card
+                You2-->>LLM: approve / decline
+            end
+            LLM->>Tool: execute
+            Tool-->>LLM: result
+            LLM->>API: next step (if needed)
+        end
+    end
+    LLM-->>Chat: final reply + emotion
+    Chat-->>You: rendered reply, voice, avatar
+```
+
+### 3. Auto routing decision
+
+```mermaid
+flowchart TD
+    M["Incoming message"] --> C["Classify task and complexity"]
+    C --> Mode{"Routing mode?"}
+    Mode -->|Balanced| B["Pick a model that fits the message"]
+    Mode -->|Best quality| Q["Most capable model you can use"]
+    Mode -->|Budget| U["Lowest-cost capable model"]
+    Mode -->|Fastest| F["Lowest measured latency, then profiled fast"]
+    Mode -->|Private| P["Self-hosted only"]
+    Mode -->|Custom| K["Your provider list and caps"]
+    B & Q & U & F & P & K --> Policy["Apply privacy policy and provider allow-list"]
+    Policy --> Fallback["Up to 3 alternatives within the same policy"]
+    Fallback --> Preview["POST /api/route/preview (no model call)"]
+```
+
+### 4. Agent team execution
+
+```mermaid
+flowchart LR
+    Req["Your request"] --> Plan["Plan: split into up to 6 steps"]
+    Plan --> Exec["Execute: up to 3 steps in parallel"]
+    Exec --> V["Verify: check results, write final answer"]
+    V -->|up to 3 steps back once| Exec
+    V --> Done["Final answer"]
+    Exec -->|declined / blocked / failed| Skip["Skip dependent steps"]
+```
+
+### 5. Cross-device approvals and task runs
+
+```mermaid
+sequenceDiagram
+    participant A as Device A (started the run)
+    participant S as Your account (server)
+    participant B as Device B
+    A->>S: checkpoint after each step
+    A->>S: approval request
+    S->>B: mirrored approval card
+    B->>S: approve / deny (first answer wins)
+    S->>A: result
+    Note over A: continues from last checkpoint
+    B->>S: resume or cancel (lease-aware)
+```
+
+### 6. Data storage map
+
+```mermaid
+flowchart LR
+    subgraph Browser["Browser / app (this device)"]
+        LS["localStorage<br/>chat history, usage, memories,<br/>Guardian log, team runs, automations"]
+        SS["sessionStorage<br/>token + Groq key (tab only)"]
+        IDB["IndexedDB / app storage<br/>knowledge, caches, models"]
+    end
+    subgraph Server["Server (optional)"]
+        DB["Postgres or SQLite<br/>accounts, sync, vault, runs, budgets"]
+        ENV["Environment<br/>provider keys, tokens"]
+        FS["Files<br/>logs, audit chain, content reports"]
+    end
+    LS -. sync when signed in .-> DB
+    ENV --> Server
+```
+
+### 7. Setup flow
+
+```mermaid
+flowchart TD
+    Start["Clone repository"] --> Install["npm install (+ client/server)"]
+    Install --> ServerEnv["Create server/.env<br/>token + provider keys"]
+    ServerEnv --> ClientEnv["Optional client/.env"]
+    ClientEnv --> Run["npm run dev"]
+    Run --> Health["curl /api/health"]
+    Health --> Connect["Open client, connect with Groq key or token"]
+    Connect --> Optional{"Need more?"}
+    Optional -->|accounts/sync| DB["Set DATABASE_URL + HANNAH_VAULT_KEY"]
+    Optional -->|local models| Ollama["Install Ollama and pull a model"]
+    Optional -->|mobile/desktop| Native["cap:sync and run on device"]
+    Optional -->|Python fallback| Py["Create venv, install backend, run fallback"]
+```
 
 ---
 
@@ -329,6 +483,149 @@ npm run dev:with-python-fallback
 ```
 
 The Python service binds to localhost only, requires approval for every tool (including reads) over a session-bound WebSocket, runs code in a network-disabled Docker container, and writes a redacted, hash-chained audit log to `logs/hannah_audit.jsonl`.
+
+---
+
+## Installation and setup (detailed)
+
+This section expands the [Quick start](#quick-start) with the choices you usually have to make when moving from a laptop to a phone, a desktop app or a hosted server.
+
+### 1. Prerequisites
+
+| Tool | Required for | Notes |
+| --- | --- | --- |
+| Node.js 20+ (CI uses 24) and npm | Web app and API | `node --version` should be 20 or newer. |
+| Git | Clone and updates | — |
+| Modern browser with WebGPU | WebLLM on-device AI | Recent Chrome or Edge, or Safari 26+. Not needed for cloud mode. |
+| Python 3.12+ | Optional Python fallback | Only if you run `backend/`. |
+| Ollama | Local Ollama mode | `ollama serve`, then `ollama pull qwen3:8b` (or any model). |
+| Android Studio + SDK 36 / NDK 29 | Android builds | See the Capacitor scripts. |
+| Xcode + CocoaPods | iOS builds | iOS signing needs an Apple Developer identity. |
+| Docker | Self-hosting or Python sandbox | Optional for the API; required for the Python fallback's code sandbox. |
+
+### 2. Clone and install
+
+```bash
+git clone https://github.com/HarshTambade/Shanaya-Your-AI-companion.git
+cd Shanaya-Your-AI-companion
+npm install
+npm install --prefix client --ignore-scripts
+npm install --prefix server
+```
+
+The client uses `--ignore-scripts` because a transitive package ships a broken lifecycle script the app does not need.
+
+### 3. Configure the server
+
+```bash
+cp server/.env.example server/.env
+openssl rand -hex 32   # paste into HANNAH_API_TOKEN
+```
+
+Minimum working file:
+
+```dotenv
+PORT=3001
+HOST=127.0.0.1
+CLIENT_ORIGIN=http://localhost:5173
+HANNAH_API_TOKEN=<32-512 random characters>
+GROQ_API_KEY=
+GROQ_MODEL=openai/gpt-oss-120b
+GROQ_MODEL_FALLBACKS=openai/gpt-oss-20b,llama-3.1-8b-instant
+```
+
+With only `GROQ_API_KEY` set and no token, the server still forwards visitors' own Groq keys, but server-held keys and every other route need the token.
+
+### 4. Configure the client (optional)
+
+```bash
+cp client/.env.example client/.env
+```
+
+Leave `VITE_API_BASE_URL` empty for local development: Vite proxies `/api` to `localhost:3001`. Set it only when the API is on another origin, such as a phone or a deployed server.
+
+### 5. Run and verify
+
+```bash
+npm run dev
+curl http://localhost:3001/api/health
+```
+
+Then open `http://localhost:5173`, choose **Talk to HANNAH**, paste a [Groq key](https://console.groq.com/keys), and send a message. The avatar should react to the reply's emotion. If you use the operator token instead, open **I have an access token**.
+
+### 6. Optional: accounts and sync
+
+```bash
+# server/.env
+DATABASE_URL=postgresql://user:password@host:5432/hannah
+HANNAH_VAULT_KEY=$(openssl rand -hex 32)
+```
+
+Tables are created on first use. Check the connection with:
+
+```bash
+npm run db:check --prefix server
+```
+
+SQLite works for one self-hosted server: `DATABASE_URL=sqlite:./data/hannah.db`.
+
+### 7. Optional: local models
+
+- **Ollama:** `ollama serve && ollama pull qwen3:8b`, then set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `server/.env`.
+- **LM Studio / llama.cpp / vLLM:** set their `*_BASE_URL` and `*_MODEL` values.
+- **WebLLM:** no setup; the browser downloads Llama 3.2 1B on first use.
+- **On-device mobile AI:** set `VITE_OFFLINE_MODEL_URL` to an HTTPS GGUF URL.
+
+### 8. Optional: Python fallback
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
+cp .env.example .env
+npm run dev:with-python-fallback
+```
+
+The fallback binds to localhost, requires approval for every tool, runs code in a network-disabled Docker container, and writes a redacted, hash-chained audit log.
+
+### 9. Mobile and desktop builds
+
+```bash
+npm run cap:sync --prefix client          # build + sync + native patches
+npm run cap:run:android --prefix client
+npm run cap:run:ios --prefix client
+npm run cap:run:electron --prefix client
+```
+
+On a physical phone, set `VITE_API_BASE_URL` to a reachable HTTPS API or your computer's LAN address, and add that origin to `CLIENT_ORIGIN`. The patch scripts fix third-party native modules (Kotlin/Java 17 on Android, zlib/privacy manifest on iOS).
+
+### 10. Docker self-hosting
+
+```bash
+cp .env.example .env   # or create server/.env values at the project root
+docker compose up -d --build
+curl http://localhost:3001/api/health
+```
+
+The compose file persists data in the `hannah-data` volume and runs the health check every 30 seconds.
+
+### 11. Vercel deployment
+
+1. Import the repository; `vercel.json` defines the `client` and `server` services.
+2. Leave `VITE_API_BASE_URL` empty so the browser uses same-origin `/api`.
+3. Set `HANNAH_API_TOKEN`, `GROQ_API_KEY` and other provider keys in the server service for operator features.
+4. Set `VITE_SITE_URL` to your production origin.
+5. Deploy and check `curl https://your-domain/api/health`.
+
+### 12. Setup verification checklist
+
+- [ ] `npm run build --prefix client` succeeds.
+- [ ] `npm test --prefix client` and `npm test --prefix server` pass.
+- [ ] `/api/health` returns `{ status, provider, ready }`.
+- [ ] A chat message returns a reply and the avatar changes expression.
+- [ ] With a database, `npm run db:check --prefix server` succeeds.
+- [ ] On mobile, `VITE_API_BASE_URL` points at a reachable API and the origin is in `CLIENT_ORIGIN`.
+- [ ] No secret appears in any `VITE_*` variable or committed file.
 
 ---
 
@@ -541,7 +838,12 @@ The server checks the instructions again and labels them as untrusted guidance. 
 
 ## Automations
 
-**Automations** are routines: a trigger (chosen days at a time, every few hours, or only when you run it), then steps in order: **Ask HANNAH** (an agent task), **Daily briefing** (today's calendar, reminders, mail, weather and news, narrated; see [Daily briefing](#daily-briefing)), **Action** (save to memory or create a reminder, after your approval) and **Output** (notification, speech or run history only). Build one with **New automation** or start from a template (Morning briefing, Morning plan, Evening reflection, Stretch break, Friday review), add steps, move them up or down, and save. Each step gets the previous step's result. The editor ([`AutomationDraft.ts`](./client/src/services/AutomationDraft.ts)) stores it as a workflow chain ([`WorkflowSchema.ts`](./client/src/services/WorkflowSchema.ts)) on the device; automations made with the old canvas open with their steps in run order.
+HANNAH has two kinds of automation:
+
+- **Workflows** (signed in, on a server with its database): a visual editor on a canvas, run by the engine on HANNAH's server. Triggers: manual, schedules in your time zone, webhooks (secret token or HMAC with replay protection) and HANNAH events. Steps: HTTP, email (read, draft, send with approval), calendar, Slack, Discord, GitHub, Notion, PostgreSQL (beta), memory, reminders, documents; If, Switch, Filter, Merge, Split, Aggregate, Wait, Approval; data mapping, parsing and validation with safe `{{ expressions }}`; AI prompts, structured extraction, classification and specialist agents. Every run records each step's input, output, timing and errors; you can retry from the failed step, cancel, or approve from any device. Credentials are encrypted and never shown again, internal network addresses are blocked, and a workflow lists what it may do before you activate it. Type a description and HANNAH drafts the workflow for you. Templates: invoice intake, morning email summary, GitHub issue triage, evening summary to memory, build failure monitor. Deployment, the security model and the API: [`docs/WORKFLOWS.md`](./docs/WORKFLOWS.md).
+- **Routines on this device** (no account needed), below.
+
+**Routines** are a trigger (chosen days at a time, every few hours, or only when you run it), then steps in order: **Ask HANNAH** (an agent task), **Daily briefing** (today's calendar, reminders, mail, weather and news, narrated; see [Daily briefing](#daily-briefing)), **Action** (save to memory or create a reminder, after your approval) and **Output** (notification, speech or run history only). Build one with **New automation** or start from a template (Morning briefing, Morning plan, Evening reflection, Stretch break, Friday review), add steps, move them up or down, and save. Each step gets the previous step's result. The editor ([`AutomationDraft.ts`](./client/src/services/AutomationDraft.ts)) stores it as a workflow chain ([`WorkflowSchema.ts`](./client/src/services/WorkflowSchema.ts)) on the device; automations made with the old canvas open with their steps in run order.
 
 - **Running.** [`AutomationService.ts`](./client/src/services/AutomationService.ts) checks every 30 seconds while HANNAH is open in a tab or the desktop app and starts what's due. A run missed while HANNAH was closed happens once when it reopens, not once per missed slot. **Run now** starts one on demand.
 - **Across your devices.** Signed in, automations and schedules sync to your account, and a due routine runs on whichever of your devices has HANNAH open. Each scheduled slot runs once: the first device to claim it runs it, the others skip it. Every run is saved to your account step by step ([`TaskRecords.ts`](./client/src/services/TaskRecords.ts)). You can approve an action from any device; continue a run that was cut off when its device closed (**Continue here**); or cancel a run from another device (**Cancel on …**), which stops it before its next step. Signed out or offline, runs stay on the device.
