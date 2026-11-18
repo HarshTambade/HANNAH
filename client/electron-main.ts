@@ -233,20 +233,46 @@ function brandWindows() {
   app.on("browser-window-created", (_event, window) => window.setIcon(icon));
 }
 
+type ScreenState = { state: "inactive" | "observing" | "paused"; expiresAt: number | null };
+type ScreenControls = { stopScreenSession: () => Promise<unknown>; pauseScreenSession: (options: { paused: boolean }) => Promise<unknown> };
+let screenIndicator: ScreenState = { state: "inactive", expiresAt: null };
+const screenControls = () => (globalThis as Record<string, unknown>).__hannahDesktopTools as ScreenControls | undefined;
+
+/** While HANNAH may look at the screen, the tray says so and offers Pause and Stop. */
+function setScreenIndicator(state: ScreenState) {
+  screenIndicator = state;
+  if (!tray) return;
+  const until = state.expiresAt ? new Date(state.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  tray.setToolTip(state.state === "observing" ? `HANNAH can see your screen until ${until}` : state.state === "paused" ? "HANNAH: screen viewing paused" : "HANNAH");
+  if (isMac) tray.setTitle(state.state === "observing" ? " Seeing screen" : state.state === "paused" ? " Paused" : "");
+  tray.setContextMenu(trayMenu());
+}
+
+function trayMenu() {
+  const watching = screenIndicator.state !== "inactive";
+  return Menu.buildFromTemplate([
+    ...(watching ? [
+      { label: screenIndicator.state === "observing" ? "HANNAH can see your screen" : "Screen viewing is paused", enabled: false },
+      { label: screenIndicator.state === "observing" ? "Pause Screen Viewing" : "Resume Screen Viewing", click: () => void screenControls()?.pauseScreenSession({ paused: screenIndicator.state === "observing" }) },
+      { label: "Stop Screen Viewing", click: () => void screenControls()?.stopScreenSession() },
+      { type: "separator" },
+    ] as MenuItemConstructorOptions[] : []),
+    { label: "Open HANNAH", click: () => showWindow() },
+    { label: "Talk to HANNAH", accelerator: TALK_SHORTCUT, click: () => openScreen("/chat") },
+    { type: "separator" },
+    { label: "Check for Updates…", click: () => void checkForUpdatesInteractively() },
+    { type: "separator" },
+    { label: isMac ? "Quit HANNAH" : "Exit", click: () => app.quit() },
+  ]);
+}
+
 function buildTray() {
   try {
     const icon = trayIcon();
     if (icon.isEmpty()) return;
     tray = new Tray(icon);
     tray.setToolTip("HANNAH");
-    tray.setContextMenu(Menu.buildFromTemplate([
-      { label: "Open HANNAH", click: () => showWindow() },
-      { label: "Talk to HANNAH", accelerator: TALK_SHORTCUT, click: () => openScreen("/chat") },
-      { type: "separator" },
-      { label: "Check for Updates…", click: () => void checkForUpdatesInteractively() },
-      { type: "separator" },
-      { label: isMac ? "Quit HANNAH" : "Exit", click: () => app.quit() },
-    ]));
+    tray.setContextMenu(trayMenu());
     tray.on("click", () => showWindow());
   } catch (error) {
     console.error("HANNAH couldn't add its tray icon.", error);
@@ -352,6 +378,7 @@ function desktopInfo() {
   setUpdateChannel: (channel: unknown) => { applyUpdateChannel(channel === "beta" ? "beta" : "stable"); return desktopInfo(); },
   checkForUpdates,
   openDeepLink,
+  setScreenIndicator,
 };
 
 app.whenReady().then(() => {

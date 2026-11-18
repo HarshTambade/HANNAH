@@ -18,6 +18,7 @@ import dns from "node:dns";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { findApps } from "./apps.mjs";
 
 export const LIMITS = Object.freeze({
   readBytes: 256 * 1024,
@@ -28,6 +29,12 @@ export const LIMITS = Object.freeze({
   commandLength: 2_000,
   logEntries: 100,
   allowedCommands: 50,
+  allowedApps: 50,
+  screenSessionMs: 15 * 60_000,
+  capturesPerMinute: 12,
+  startupSteps: 12,
+  startupHistory: 20,
+  startupWaitSeconds: 120,
 });
 
 /** Programs HANNAH never runs, even with approval. */
@@ -212,21 +219,34 @@ export function createDesktopTools(deps) {
       const parsed = JSON.parse(await fsp.readFile(deps.storePath, "utf8"));
       cache = {
         workflowTasks: parsed.workflowTasks === true,
+        allowedApps: Array.isArray(parsed.allowedApps) ? parsed.allowedApps.filter((item) => item && typeof item.id === "string") : [],
+        startup: {
+          enabled: parsed.startup?.enabled === true,
+          steps: Array.isArray(parsed.startup?.steps) ? parsed.startup.steps : [],
+          history: Array.isArray(parsed.startup?.history) ? parsed.startup.history : [],
+        },
         folders: Array.isArray(parsed.folders) ? parsed.folders.filter((item) => item && typeof item.id === "string" && typeof item.path === "string") : [],
         allowedCommands: Array.isArray(parsed.allowedCommands) ? parsed.allowedCommands.filter((item) => item && typeof item.command === "string") : [],
         log: Array.isArray(parsed.log) ? parsed.log : [],
       };
     } catch {
-      cache = { workflowTasks: false, folders: [], allowedCommands: [], log: [] };
+      cache = { workflowTasks: false, folders: [], allowedCommands: [], log: [], allowedApps: [], startup: { enabled: false, steps: [], history: [] } };
     }
     return cache;
   }
 
-  async function save() {
-    await fsp.mkdir(path.dirname(deps.storePath), { recursive: true });
-    const temp = `${deps.storePath}.${process.pid}.tmp`;
-    await fsp.writeFile(temp, JSON.stringify(cache, null, 2), { mode: 0o600 });
-    await fsp.rename(temp, deps.storePath);
+  // One write at a time, so two saves never race on the same temporary file.
+  let saving = Promise.resolve();
+  function save() {
+    const write = async () => {
+      await fsp.mkdir(path.dirname(deps.storePath), { recursive: true });
+      const temp = `${deps.storePath}.${process.pid}.tmp`;
+      await fsp.writeFile(temp, JSON.stringify(cache, null, 2), { mode: 0o600 });
+      await fsp.rename(temp, deps.storePath);
+    };
+    const next = saving.then(write, write);
+    saving = next.catch(() => undefined);
+    return next;
   }
 
   async function record(entry) {
@@ -267,6 +287,82 @@ export function createDesktopTools(deps) {
   }
 
   const publicFolder = (folder) => ({ id: folder.id, name: folder.name, path: folder.path, access: folder.access, addedAt: folder.addedAt });
+
+  // ----- screen: on request, with consent, visibly -----
+  // Seeing the screen is separate from acting on it: nothing here clicks or types.
+  let screenSession = null; // { startedAt, expiresAt, paused, captures }
+  let screenTimer = null;
+  let recentCaptures = [];
+  const screenState = () => {
+    if (screenSession && screenSession.expiresAt <= now()) endScreenSession("expired");
+    return screenSession
+      ? { state: screenSession.paused ? "paused" : "observing", startedAt: screenSession.startedAt, expiresAt: screenSession.expiresAt, captures: screenSession.captures }
+      : { state: "inactive", startedAt: null, expiresAt: null, captures: 0 };
+  };
+  function endScreenSession(reason) {
+    if (!screenSession) return Promise.resolve();
+    screenSession = null;
+    if (screenTimer) clearTimeout(screenTimer);
+    screenTimer = null;
+    deps.onScreenSession?.(screenState());
+    return record({ kind: "screen-stopped", detail: reason }).catch(() => undefined);
+  }
+
+  // ----- apps -----
+  let appCache = null;
+  async function installedApps({ fresh = false } = {}) {
+    if (!deps.apps) fail("UNAVAILABLE", "This build can't open apps.");
+    if (!fresh && appCache && appCache.at > now() - 60_000) return appCache.apps;
+    appCache = { at: now(), apps: await deps.apps.discover() };
+    return appCache.apps;
+  }
+  async function resolveApp(name) {
+    const apps = await installedApps();
+    const byId = apps.find((app) => app.id === name);
+    if (byId) return byId;
+    const matches = findApps(apps, name);
+    if (!matches.length) fail("NO_APP", `No app called “${String(name || "").slice(0, 80)}” was found on this computer.`);
+    if (matches.length > 1) fail("AMBIGUOUS", `More than one app matches “${String(name).slice(0, 80)}”: ${matches.map((app) => app.name).join(", ")}. Say which one.`);
+    return matches[0];
+  }
+  async function folderPathFor(folderId) {
+    if (!folderId) return "";
+    const folder = await folderById(String(folderId));
+    const { target } = await resolveInside(folder, "");
+    return target;
+  }
+  const publicApp = (app) => ({ id: app.id, name: app.name });
+  const describeLaunch = (app, result) => result.alreadyRunning
+    ? `${app.name} was already running and was brought forward.`
+    : result.verified === true ? `${app.name} is open: its process is running.`
+      : result.verified === null ? `${app.name} was asked to open; this system gives HANNAH no way to check it's running.`
+        : `${app.name} was asked to open, but no ${app.name} process appeared within 10 seconds.`;
+
+  function cleanStep(step) {
+    if (!step || typeof step !== "object") fail("INVALID", "A startup step is missing.");
+    if (step.kind === "app") return { kind: "app", app: { id: String(step.app?.id || ""), name: String(step.app?.name || "").slice(0, 120) }, folderId: step.folderId ? String(step.folderId) : "" };
+    if (step.kind === "url") {
+      let url;
+      try { url = new URL(String(step.url || "")); } catch { fail("BAD_URL", "A startup link isn't a web address."); }
+      if (url.protocol !== "https:" && url.protocol !== "http:") fail("BAD_URL", "Startup links must be http or https.");
+      if (url.username || url.password) fail("BAD_URL", "Startup links can't contain a user name or password.");
+      return { kind: "url", url: url.href.slice(0, 2048) };
+    }
+    if (step.kind === "wait") {
+      const seconds = Math.round(Number(step.seconds));
+      if (!Number.isFinite(seconds) || seconds < 1 || seconds > LIMITS.startupWaitSeconds) fail("INVALID", `A wait is 1 to ${LIMITS.startupWaitSeconds} seconds.`);
+      return { kind: "wait", seconds };
+    }
+    fail("INVALID", "A startup step is an app, a link or a wait.");
+  }
+  async function describeStep(step) {
+    if (step.kind === "app") {
+      const folder = step.folderId ? (await load()).folders.find((item) => item.id === step.folderId) : null;
+      return `Open ${step.app.name}${folder ? ` with ${folder.name}` : step.folderId ? " with a folder that's no longer shared" : ""}`;
+    }
+    if (step.kind === "url") return `Open ${step.url} in your browser`;
+    return `Wait ${step.seconds} second${step.seconds === 1 ? "" : "s"}`;
+  }
 
   return {
     async listFolders() {
@@ -510,6 +606,226 @@ export function createDesktopTools(deps) {
       await record({ kind: "workflow-page-read", detail: target.host });
       return { approved: true, page };
     },
+
+    // ----- screen -----
+
+    async screenStatus() {
+      return { ...screenState(), permission: (await deps.screenPermission?.()) ?? "unknown", platform };
+    },
+
+    /**
+     * Take one screenshot, for a question the person asked. The first one in
+     * a session asks in a system dialog: look once, or allow for 15 minutes
+     * (shown by the tray icon, stoppable any time). Nothing is saved here.
+     */
+    async captureScreen({ reason } = {}) {
+      if (!deps.captureScreen) fail("UNAVAILABLE", "This build can't see the screen.");
+      const why = String(reason || "answer your question").replace(/\s+/g, " ").trim().slice(0, 200);
+      const current = screenState();
+      if (current.state === "paused") fail("SCREEN_PAUSED", "Screen viewing is paused. Resume it in the HANNAH menu or Settings → Desktop access.");
+      recentCaptures = recentCaptures.filter((at) => at > now() - 60_000);
+      if (recentCaptures.length >= LIMITS.capturesPerMinute) fail("TOO_MANY", "HANNAH already looked at the screen many times this minute. Try again shortly.");
+      const systemPermission = await deps.screenPermission?.();
+      if (systemPermission === "denied" || systemPermission === "restricted") {
+        fail("SCREEN_PERMISSION", "macOS hasn't given HANNAH permission to record the screen. Open System Settings → Privacy & Security → Screen & System Audio Recording, turn on HANNAH, then quit and reopen HANNAH.");
+      }
+      let once = false;
+      if (current.state === "inactive") {
+        const choice = await deps.confirm({
+          title: "Let HANNAH see your screen?",
+          message: `HANNAH wants to take a screenshot to ${why}.`,
+          detail: "The screenshot goes to your AI model through HANNAH's server to answer you, and isn't saved. HANNAH can only look: she can't click or type.\n\nIf you allow it for 15 minutes, HANNAH's icon in the menu bar or tray shows it, and you can stop at any time.",
+          buttons: ["Look once", "Allow for 15 minutes", "Don't allow"],
+        });
+        if (choice !== 0 && choice !== 1) {
+          await record({ kind: "screen-denied", detail: why });
+          fail("DENIED", "You declined. HANNAH didn't look at your screen.");
+        }
+        once = choice === 0;
+        if (!once) {
+          screenSession = { startedAt: now(), expiresAt: now() + LIMITS.screenSessionMs, paused: false, captures: 0 };
+          screenTimer = setTimeout(() => endScreenSession("expired"), LIMITS.screenSessionMs);
+          screenTimer.unref?.();
+          deps.onScreenSession?.(screenState());
+          await record({ kind: "screen-started" });
+        }
+      }
+      let shot;
+      try {
+        shot = await deps.captureScreen();
+      } catch {
+        shot = { permission: "unavailable" };
+      }
+      if (shot?.permission !== "granted" || !shot.image) {
+        // A session that never produced a picture ends, so the indicator doesn't stay on.
+        if (screenSession?.captures === 0) await endScreenSession("no-permission");
+        const blocked = shot?.permission === "denied" || shot?.permission === "restricted" || shot?.permission === "not-determined";
+        fail("SCREEN_PERMISSION", platform === "darwin" && blocked
+          ? "macOS hasn't given HANNAH permission to record the screen. Open System Settings → Privacy & Security → Screen & System Audio Recording, turn on HANNAH, then quit and reopen HANNAH."
+          : "HANNAH couldn't capture the screen on this system.");
+      }
+      recentCaptures.push(now());
+      if (screenSession) screenSession.captures += 1;
+      await record({ kind: "screen-captured", detail: why });
+      return { image: shot.image, mediaType: shot.mediaType || "image/jpeg", width: shot.width, height: shot.height, windows: Array.isArray(shot.windows) ? shot.windows.slice(0, 20) : [], capturedAt: now(), session: screenState() };
+    },
+
+    async pauseScreenSession({ paused } = {}) {
+      if (screenSession) {
+        screenSession.paused = paused !== false;
+        deps.onScreenSession?.(screenState());
+        await record({ kind: screenSession.paused ? "screen-paused" : "screen-resumed" });
+      }
+      return screenState();
+    },
+
+    async stopScreenSession() {
+      await endScreenSession("stopped");
+      return screenState();
+    },
+
+    async openScreenSettings() {
+      await deps.openScreenSettings?.();
+      return {};
+    },
+
+    // ----- apps -----
+
+    async listApps({ query } = {}) {
+      const apps = await installedApps({ fresh: !query });
+      const shown = query ? findApps(apps, query) : apps;
+      const state = await load();
+      return { apps: shown.slice(0, 300).map(publicApp), total: shown.length, allowedApps: state.allowedApps, platform };
+    },
+
+    /** Open an app, optionally with a shared folder. Asks first unless the person said "always" for this app. */
+    async openApp({ name, folderId } = {}) {
+      const app = await resolveApp(String(name || ""));
+      const folder = await folderPathFor(folderId);
+      const state = await load();
+      if (!state.allowedApps.some((item) => item.id === app.id)) {
+        const choice = await deps.confirm({
+          title: "Open an app?",
+          message: `HANNAH wants to open ${app.name}${folder ? ` with the folder ${path.basename(folder)}` : ""}.`,
+          detail: `${app.id}${folder ? `\n\nFolder: ${folder}` : ""}`,
+          buttons: ["Open", `Always allow opening ${app.name}`, "Cancel"],
+        });
+        if (choice !== 0 && choice !== 1) {
+          await record({ kind: "app-denied", detail: app.name });
+          fail("DENIED", `You declined. HANNAH didn't open ${app.name}.`);
+        }
+        if (choice === 1) {
+          state.allowedApps = [{ id: app.id, name: app.name, addedAt: now() }, ...state.allowedApps].slice(0, LIMITS.allowedApps);
+          await save();
+        }
+      }
+      const result = await deps.apps.launch(app, { folder });
+      await record({ kind: "app-opened", detail: app.name, verified: result.verified });
+      return { app: publicApp(app), folder: folder ? path.basename(folder) : null, ...result, outcome: describeLaunch(app, result) };
+    },
+
+    async forgetApp({ id } = {}) {
+      const state = await load();
+      state.allowedApps = state.allowedApps.filter((item) => item.id !== id);
+      await save();
+      return { allowedApps: state.allowedApps };
+    },
+
+    // ----- startup routine -----
+    // HANNAH starts at login only if you turn it on (it's then listed in the
+    // system's Login Items or Startup apps). The routine itself is shown in a
+    // system dialog before it's saved, then runs without asking at login.
+
+    async startupSettings() {
+      const state = await load();
+      const steps = await Promise.all(state.startup.steps.map(async (step) => ({ ...step, label: await describeStep(step) })));
+      return { enabled: state.startup.enabled, steps, history: state.startup.history, loginItem: (await deps.loginItem?.get()) ?? null };
+    },
+
+    async saveStartupRoutine({ steps } = {}) {
+      if (!Array.isArray(steps)) fail("INVALID", "The routine needs a list of steps.");
+      if (steps.length > LIMITS.startupSteps) fail("INVALID", `A routine has at most ${LIMITS.startupSteps} steps.`);
+      const clean = steps.map(cleanStep);
+      for (const step of clean) {
+        if (step.kind === "app") {
+          const app = await resolveApp(step.app.id || step.app.name);
+          step.app = publicApp(app);
+          if (step.folderId) await folderById(step.folderId);
+        }
+      }
+      if (clean.length) {
+        const lines = await Promise.all(clean.map(async (step, index) => `${index + 1}. ${await describeStep(step)}`));
+        const choice = await deps.confirm({
+          title: "Save your startup routine?",
+          message: "When HANNAH starts at login, she'll do this, in order, without asking again:",
+          detail: `${lines.join("\n")}\n\nYou can change or turn it off in Settings → Desktop access.`,
+          buttons: ["Save", "Cancel"],
+        });
+        if (choice !== 0) fail("DENIED", "You declined. The startup routine wasn't changed.");
+      }
+      const state = await load();
+      state.startup.steps = clean;
+      await save();
+      await record({ kind: "startup-saved", detail: `${clean.length} steps` });
+      return this.startupSettings();
+    },
+
+    async setStartupEnabled({ enabled } = {}) {
+      const state = await load();
+      if (enabled === true && !state.startup.enabled) {
+        const lines = await Promise.all(state.startup.steps.map(describeStep));
+        const choice = await deps.confirm({
+          title: "Start HANNAH when you sign in?",
+          message: "Open HANNAH when you sign in to this computer and run your startup routine?",
+          detail: `${lines.length ? lines.map((line, index) => `${index + 1}. ${line}`).join("\n") : "Your routine is empty, so HANNAH will only open."}\n\nHANNAH appears in your system's login items, where you can also remove it.`,
+          buttons: ["Turn on", "Cancel"],
+        });
+        if (choice !== 0) return this.startupSettings();
+      }
+      await deps.loginItem?.set(enabled === true);
+      state.startup.enabled = enabled === true;
+      await save();
+      await record({ kind: enabled === true ? "startup-on" : "startup-off" });
+      return this.startupSettings();
+    },
+
+    /**
+     * Run the routine: at login (only when turned on) or when the person
+     * presses "Run now". Each app is checked to be running; the run is kept
+     * in the history with what happened at each step.
+     */
+    async runStartupRoutine({ trigger } = {}) {
+      const state = await load();
+      const atLogin = trigger === "login";
+      if (atLogin && !state.startup.enabled) return { ran: false, reason: "The startup routine is off." };
+      const sleep = deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+      const steps = [];
+      for (const step of state.startup.steps) {
+        const label = await describeStep(step);
+        try {
+          if (step.kind === "wait") {
+            await sleep(step.seconds * 1000);
+            steps.push({ label, ok: true });
+          } else if (step.kind === "url") {
+            if (!deps.openUrl) fail("UNAVAILABLE", "This build can't open links.");
+            await deps.openUrl(step.url);
+            steps.push({ label, ok: true, detail: "Handed to your default browser." });
+          } else {
+            const app = await resolveApp(step.app.id || step.app.name);
+            const result = await deps.apps.launch(app, { folder: await folderPathFor(step.folderId) });
+            steps.push({ label, ok: result.verified !== false, detail: describeLaunch(app, result) });
+          }
+        } catch (error) {
+          steps.push({ label, ok: false, detail: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      const entry = { at: now(), trigger: atLogin ? "login" : "manual", ok: steps.every((step) => step.ok), steps };
+      state.startup.history = [entry, ...state.startup.history].slice(0, LIMITS.startupHistory);
+      await save();
+      await record({ kind: "startup-ran", detail: `${steps.filter((step) => step.ok).length}/${steps.length} steps` });
+      deps.notify?.({ title: entry.ok ? "Startup routine done" : "Startup routine: something didn't work", body: steps.map((step) => `${step.ok ? "✓" : "✗"} ${step.label}`).join("\n") });
+      return { ran: true, ...entry };
+    },
   };
 }
 
@@ -518,4 +834,7 @@ export const BRIDGED_METHODS = Object.freeze([
   "listFolders", "addFolder", "removeFolder", "setAccess", "revealFolder",
   "listDirectory", "readFile", "writeFile", "runCommand", "forgetCommand", "recentActivity",
   "workflowTaskSettings", "setWorkflowTasks", "approveWorkflowTask", "readWebPage",
+  "screenStatus", "captureScreen", "pauseScreenSession", "stopScreenSession", "openScreenSettings",
+  "listApps", "openApp", "forgetApp",
+  "startupSettings", "saveStartupRoutine", "setStartupEnabled", "runStartupRoutine",
 ]);

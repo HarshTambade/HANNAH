@@ -960,6 +960,24 @@ The rules live in the `HannahDesktop` plugin ([`client/plugins/desktop-tools`](.
 
 On Windows, `.cmd` and `.bat` programs (such as `npm`) can't run without a shell; run `node`, `git` or `python` directly instead.
 
+### Your screen, apps and startup routine
+
+The desktop app can do three more things, also from **Settings → Desktop access** and in chat:
+
+- **Look at your screen when you ask.** Ask "what's on my screen?" or "explain this error".
+  - HANNAH asks first: **Look once** or **Allow for 15 minutes**. While allowed, the menu bar or tray and an in-app banner show it, with **Pause** and **Stop**.
+  - One screenshot goes through the server to a vision model you can use, and only the answer comes back. Private mode keeps it on self-hosted models.
+  - Nothing is saved, and HANNAH can only look, not click or type.
+  - On macOS, turn on HANNAH in **System Settings → Privacy & Security → Screen & System Audio Recording**.
+- **Open apps:** say "open VS Code with my project".
+  - HANNAH finds the app from your system's launchers and asks first, unless you chose "always".
+  - She says it's open only when she sees its process running.
+- **Startup routine:** apps, links and waits, run in order when you sign in, with a history.
+  - It's off until you turn on **Start HANNAH when I sign in**, which adds HANNAH to your system's login items.
+  - Saving a routine shows every step first.
+
+Design and verification: [`docs/DEVICE_INTELLIGENCE.md`](./docs/DEVICE_INTELLIGENCE.md).
+
 ---
 
 ## Desktop computer use

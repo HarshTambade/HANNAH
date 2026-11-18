@@ -10,6 +10,7 @@ import { MemoryService } from "./MemoryService";
 import { CATEGORY_LABELS, SOURCE_LABELS } from "./MemoryModel";
 import { notifyMemoryChanged } from "./MemoryStore";
 import { getDesktopFileTools } from "./DesktopFiles";
+import { getDesktopActionTools } from "./DesktopActions";
 import { checkNumber } from "./PhoneBridge";
 import { getPhoneTools } from "./PhoneTools";
 import { getConnectionTools } from "./Connections";
@@ -341,7 +342,7 @@ export function setExternalTools(tools: HANNAHTool[]) {
 }
 
 export function getDeviceTools() {
-  const desktop = getDesktopFileTools();
+  const desktop = [...getDesktopFileTools(), ...getDesktopActionTools()];
   const connections = getConnectionTools();
   return [...deviceTools, ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...externalTools];
 }

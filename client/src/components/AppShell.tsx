@@ -3,6 +3,8 @@ import { Brain, Cpu, LayoutDashboard, MessageSquare, Settings2, Users, Workflow 
 import { ReminderToasts } from "./Reminders";
 import { AutomationToasts } from "./AutomationToasts";
 import { RemoteApprovalToasts } from "./DeviceTasksPanel";
+import { ScreenWatchIndicator } from "./DesktopControlSections";
+import { desktopFilesAvailable } from "../services/DesktopFiles";
 import { pathForScreen } from "../routes";
 
 export type AppSection = "conversation" | "companion" | "agents" | "models" | "accountability" | "automations" | "settings";
@@ -94,6 +96,7 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
       <ReminderToasts />
       <AutomationToasts onOpen={() => onNavigate("automations")} onAutomationsScreen={active === "automations"} />
       <RemoteApprovalToasts />
+      {desktopFilesAvailable() && <ScreenWatchIndicator />}
     </div>
   );
 }

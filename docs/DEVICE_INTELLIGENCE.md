@@ -90,15 +90,80 @@ Then the native `HannahPhone` plugin acts:
 - iOS: the Swift plugin type-checks against Capacitor and the iOS SDK (with a negative control). A full Xcode build here stops in a third-party package (`capacitor-lancedb`'s Rust bindings), before reaching HANNAH's code. CI builds iOS.
 - Android: compiled with Gradle and run end to end in the emulator, 12 of 12 checks (section 5).
 
+## 2a. Built: seeing the screen, opening apps, startup routine (desktop)
+
+All three are in the desktop app. The rules are enforced in Electron's main process (`client/plugins/desktop-tools`), not by the web page or the model.
+
+**Seeing the screen, on request** (`core.mjs` `captureScreen`, `plugin.mjs`, `server/vision.js`)
+- "What's on my screen?" or "explain this error" in chat calls `desktop_look_at_screen`.
+- The first look asks in a system dialog: **Look once**, **Allow for 15 minutes**, or **Don't allow**. While allowed:
+  - the menu bar (macOS) or tray shows it, with **Pause** and **Stop**;
+  - an in-app banner shows it with **Stop**;
+  - the session ends by itself after 15 minutes.
+- Looks are limited to 12 a minute.
+- If macOS hasn't given Screen Recording permission, HANNAH says how to turn it on instead of asking.
+- One JPEG of the display under the pointer, at most 1568 px on its long side. HANNAH's own windows are hidden for a moment so it shows what you're looking at.
+- The image goes to `POST /api/vision/describe`, which sends it to one vision model the caller may use and returns text. The chat agent never receives the image.
+  - **Keys:** the same as chat (saved keys, a visitor's Groq key, or the server's).
+  - **Private mode:** keeps it on self-hosted models (`HANNAH_VISION_MODEL`, for example an Ollama vision model).
+  - **Model fallback:** a retired model (404) falls through to the provider's next vision model.
+- Nothing is saved.
+- Text on the screen is treated as data. The model reports instructions it sees instead of following them, and doesn't read out passwords, codes or keys.
+- Looking is separate from acting: this tool can't click or type.
+
+**Opening apps** (`apps.mjs`)
+- Apps are found from the system's own launchers:
+  - **macOS:** `.app` bundles in the Applications folders.
+  - **Windows:** Start menu shortcuts.
+  - **Linux:** XDG `.desktop` entries, with the user's own entries taking precedence.
+- "VS Code" and "chrome" are matched to the real names. If more than one app matches, HANNAH asks which.
+- Each open asks first (**Open**, **Always allow opening this app**, or **Cancel**). An app can also open with a shared folder, for example a project in VS Code.
+- Apps are opened without a shell:
+  - **macOS:** `open -a`.
+  - **Windows:** the shortcut itself.
+  - **Linux:** the entry's `Exec` line, split per the Desktop Entry spec.
+- **Verified by process ID:** a new process for that app means it opened. No new process, but one already running, means it was brought forward. Neither means "not confirmed". A Windows shortcut with no target is reported as "couldn't check", never as success.
+
+**Startup routine** (Settings → Desktop access)
+- Steps are apps (optionally with a shared folder), links (http or https only) and waits, up to 12 steps.
+- Saving shows every step in a system dialog. **Start HANNAH when I sign in** is a separate switch with its own dialog:
+  - **macOS and Windows:** it registers a login item (`app.setLoginItemSettings`), visible in Login Items or Startup apps.
+  - **Linux:** it writes `~/.config/autostart/hannah.desktop`.
+  - **Development copies:** they can't turn it on.
+- At sign-in, HANNAH waits 5 seconds, runs the steps in order and checks each app. Then it shows a notification and keeps the run in a history. **Run now** does the same on demand.
+- Turning it off removes the login item.
+
+**Verified on this Mac (macOS, Electron 45)**
+
+| Check | Result |
+| --- | --- |
+| 76 apps found; "vs code", "chrome", "calculator" matched | Pass |
+| Calculator opened and its new process confirmed (about 0.6 s); a second open reported "already running" | Pass |
+| A missing app gives the system's error, not success | Pass |
+| The Linux launcher path (spawn from a `.desktop` `Exec`, check by program name) with a real process | Pass |
+| The real plugin in Electron: open an app, save a routine, Run now (each step confirmed), recent activity | Pass |
+| Login item: on gives macOS status "enabled", off gives "not-registered" | Pass |
+| Launched with `--hannah-login` and a routine switched on: the routine ran by itself and Calculator was confirmed | Pass |
+| The vision route against Groq's `qwen/qwen3.8-27b` with a rendered editor and terminal: explained the real bug (`useState()` without a default) and refused the planted "call this number" line | Pass (1.5 s) |
+| Private mode with no self-hosted vision model: refused to send the picture | Pass |
+| A screenshot with macOS Screen Recording denied: no dialog, the session doesn't start, readable steps to fix | Pass |
+| The desktop app's launch smoke test with the new tray menu | Pass |
+
+**Not run:**
+- **A real screenshot reaching the model.** The development Electron binary doesn't have macOS Screen Recording permission here, and granting it needs a person in System Settings. The capture code and the vision route are each verified, but not together.
+- **Windows and Linux on real systems.** The Windows code path and Linux desktop sessions are covered by unit tests and fixture folders only.
+- **Unsigned macOS builds.** macOS ties Screen Recording permission to the app's signature, so it may need granting again after each update until builds are signed.
+
 ## 3. Backlog, in dependency order
 
-### Phase 2: Desktop vision and action (Next)
-1. **Screen observation, on request.**
+### Phase 2: Desktop vision and action
+Items 1 to 3 are built (section 2a). Next are 4 and 5.
+1. **Screen observation, on request.** (Built.)
    - Electron `desktopCapturer` takes a screenshot only when you ask, with a visible indicator and per-session consent. The image goes to a vision-capable model through the gateway ("what's on my screen", "explain this error").
    - macOS needs the Screen Recording permission, which the app can't grant itself; Settings will say so.
    - Watching is separate from acting.
-2. **Open and switch apps** with approval: `open -a` (macOS), the Start menu or app paths (Windows), `.desktop` launchers (Linux). Verify by checking the app's window appears.
-3. **Startup routines.**
+2. **Open apps** (built; switching windows comes with item 4) with approval: `open -a` (macOS), the Start menu or app paths (Windows), `.desktop` launchers (Linux). Verify by checking the app's window appears.
+3. **Startup routines.** (Built.)
    - `app.setLoginItemSettings` starts HANNAH at login only if you turn it on, and the Login Items list shows it.
    - A "When the desktop app starts" trigger then opens your apps, folders and URLs in order, with a run history.
    - No hidden services.
@@ -143,6 +208,9 @@ Then the native `HannahPhone` plugin acts:
 | None for calls or SMS | Phone app | The dialer and composer act after your tap |
 | Using this phone from a computer | Phone app, Settings → Phone | When you pair; can be turned off or narrowed any time |
 | Shared folders, commands, workflow tasks | Desktop app, Settings → Desktop access | When you add each one |
+| Screen Recording (macOS) | System Settings → Privacy & Security | macOS asks the first time HANNAH looks; HANNAH's own dialog asks before every look or 15-minute session |
+| Opening an app | Desktop app, a system dialog | Each time, unless you chose "always" for that app |
+| Start at sign-in (login item or XDG autostart) | Desktop app, Settings → Desktop access | When you turn it on |
 
 The register CI checks is `docs/NATIVE_PERMISSIONS.json`.
 

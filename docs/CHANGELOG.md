@@ -6,6 +6,17 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### New
 
+- **HANNAH Desktop can look at your screen, open apps, and run a startup routine.**
+  - **"What's on my screen?" / "Explain this error":**
+    - HANNAH takes one screenshot after you allow it, once or for 15 minutes, and a vision model answers.
+    - While allowed, the menu bar or tray and an in-app banner show it, with Pause and Stop.
+    - The screenshot isn't saved, Private mode keeps it on self-hosted models, and text on the screen is never treated as instructions.
+    - HANNAH can only look; she can't click or type.
+  - **"Open VS Code with my project":** HANNAH finds the app from your system's own launchers, asks first (or not, if you chose "always"), and says it's open only when she sees its process running.
+  - **Startup routine:** apps, links and waits, run in order when you sign in, with a history of what worked.
+    - It's off until you turn on "Start HANNAH when I sign in", and HANNAH then appears in your system's login items.
+    - Saving a routine shows every step first.
+  - **Verified on macOS:** opening apps, the startup routine, the login item, launching at sign-in, and the vision answer. Windows and Linux are covered by tests. See docs/DEVICE_INTELLIGENCE.md.
 - **Visual workflows that run on the server.** Automations → Workflows: build on a canvas (drag, connect, configure, copy and paste, undo, tidy up, import and export), test the draft with sample data, publish versions and activate. A server engine runs them with a durable queue, leases and heartbeats, retries with backoff, step and workflow time limits, checkpoints after every step, recovery after a restart with a dead-letter state, and schedules that fire once per slot. 42 step types across triggers, actions, logic, data and AI (37 available, 3 in beta, 2 coming and refused by validation until they exist); webhooks with token or HMAC authentication and replay protection; an encrypted credential store; a permission review before activation; a runs center with each step's input, output, timing and exact error, retry from the failed step, cancel and approvals. Describe a workflow in a sentence and HANNAH drafts it. See docs/WORKFLOWS.md.
 - **Workflows start from new email or an uploaded file, and can run code.**
   - **New email:** a workflow runs once for each new message in your connected Gmail or Outlook, optionally filtered by a search, checked every 5 minutes or more. Only mail that arrives after activation counts, and a test run uses your newest matching message.

@@ -29,6 +29,7 @@ const { knownPriceFor, tokenUsageMiddleware, verifiedPriceFor } = require("./cos
 const { createV1Router } = require("./v1");
 const { createOrchestrateHandler } = require("./orchestrate");
 const { createVoiceRouter } = require("./voice");
+const { createVisionRouter } = require("./vision");
 const { createMcpClientRouter } = require("./mcp-client");
 const { createA2ARouter } = require("./a2a");
 const { createWebhookRouter, emitUserEvent, onUserEvent } = require("./webhooks");
@@ -314,6 +315,7 @@ app.post("/api/a2a", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/transcribe", createRateLimiter(rateLimits.chat));
 app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
+app.post("/api/vision/describe", createRateLimiter(rateLimits.desktop));
 app.post("/api/feedback", createRateLimiter(rateLimits.feedback));
 app.post("/api/report-content", createRateLimiter(rateLimits.contentReport));
 app.post("/api/events", createRateLimiter(rateLimits.events));
@@ -349,6 +351,8 @@ app.use("/api", createWorkflowRouter({ runtime: workflowRuntime, publicBaseUrl }
 app.use("/api", createConnectionsRouter({ allowedOrigins }));
 app.use("/api", createOrchestrateHandler({ getRequestProvider, preferredProviderId, timeoutMs: cloudRequestTimeout }));
 app.use("/api", createVoiceRouter({ getRequestProvider, allowedProviderIds, timeoutMs: cloudRequestTimeout }));
+// "What's on my screen?": one screenshot to one vision model (server/vision.js).
+app.use("/api", createVisionRouter({ usableProviders, normalizeRouting: router.normalizeRouting, privacyBlocks: router.privacyBlocks, timeoutMs: cloudRequestTimeout }));
 // Outside MCP servers (operator-configured, operator-only routes).
 app.use("/api", createMcpClientRouter({ timeoutMs: cloudRequestTimeout }));
 // Agent2Agent: public agent card, authenticated message/send.

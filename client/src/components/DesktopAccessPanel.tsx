@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { FolderLock, FolderOpen, FolderPlus, Terminal, Trash2 } from "lucide-react";
+import { AppsSection, ScreenSection, StartupSection } from "./DesktopControlSections";
 import { hannahDesktop, type AllowedCommand, type DesktopActivity, type FolderAccess, type SharedFolder } from "../services/DesktopFiles";
 
 const activityLabel: Record<string, string> = {
@@ -17,6 +18,18 @@ const activityLabel: Record<string, string> = {
   "workflow-page-declined": "You declined a workflow's page",
   "workflow-task-approved": "Started a workflow's coding task",
   "workflow-task-declined": "You declined a workflow's coding task",
+  "screen-started": "Allowed screen viewing for 15 minutes",
+  "screen-captured": "Looked at the screen",
+  "screen-denied": "You declined a screenshot",
+  "screen-paused": "Paused screen viewing",
+  "screen-resumed": "Resumed screen viewing",
+  "screen-stopped": "Screen viewing ended",
+  "app-opened": "Opened",
+  "app-denied": "You declined opening",
+  "startup-saved": "Saved the startup routine",
+  "startup-on": "Turned on start at sign-in",
+  "startup-off": "Turned off start at sign-in",
+  "startup-ran": "Ran the startup routine",
 };
 
 /** Settings → Desktop access. Only rendered in the desktop app. */
@@ -115,6 +128,10 @@ export default function DesktopAccessPanel() {
           </span>
         </label>
       </div>
+
+      <ScreenSection />
+      <AppsSection />
+      <StartupSection folders={folders} />
 
       {activity.length > 0 && (
         <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">

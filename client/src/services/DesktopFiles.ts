@@ -35,6 +35,21 @@ export interface HannahDesktopPlugin {
   setWorkflowTasks(options: { enabled: boolean }): Promise<{ enabled: boolean }>;
   approveWorkflowTask(options: { workflowName: string; summary: string; folderId: string }): Promise<{ approved: boolean }>;
   readWebPage(options: { url: string; waitFor?: string; screenshot?: boolean; workflowName: string }): Promise<{ approved: boolean; page?: WebPageRead }>;
+  /** Screen: one screenshot per request, after a system dialog; a session is shown in the tray and can be paused or stopped. */
+  screenStatus(): Promise<ScreenStatus>;
+  captureScreen(options: { reason: string }): Promise<ScreenCapture>;
+  pauseScreenSession(options: { paused: boolean }): Promise<ScreenSessionState>;
+  stopScreenSession(): Promise<ScreenSessionState>;
+  openScreenSettings(): Promise<void>;
+  /** Apps from the system's own launchers; opening asks first (or not, for apps marked "always"), then checks the process. */
+  listApps(options?: { query?: string }): Promise<{ apps: InstalledApp[]; total: number; allowedApps: AllowedApp[]; platform: string }>;
+  openApp(options: { name: string; folderId?: string }): Promise<AppLaunch>;
+  forgetApp(options: { id: string }): Promise<{ allowedApps: AllowedApp[] }>;
+  /** Startup routine: saved after a system dialog; runs at login only when turned on. */
+  startupSettings(): Promise<StartupSettings>;
+  saveStartupRoutine(options: { steps: StartupStep[] }): Promise<StartupSettings>;
+  setStartupEnabled(options: { enabled: boolean }): Promise<StartupSettings>;
+  runStartupRoutine(options: { trigger: "manual" }): Promise<{ ran: boolean } & Partial<StartupRun>>;
   /** The desktop app itself: version, update channel and checks, tray, shortcut, hannah:// links. */
   desktopInfo(): Promise<DesktopInfo>;
   setUpdateChannel(options: { channel: UpdateChannel }): Promise<DesktopInfo>;
@@ -42,6 +57,16 @@ export interface HannahDesktopPlugin {
 }
 
 export type WebPageRead = { title: string; url: string; description: string; text: string; textTruncated: boolean; links: Array<{ text: string; href: string }>; status: number | null; loadedInMs: number; screenshot?: string | null };
+
+export type ScreenSessionState = { state: "inactive" | "observing" | "paused"; startedAt: number | null; expiresAt: number | null; captures: number };
+export type ScreenStatus = ScreenSessionState & { permission: string; platform: string };
+export type ScreenCapture = { image: string; mediaType: "image/jpeg" | "image/png"; width: number; height: number; windows: string[]; capturedAt: number; session: ScreenSessionState };
+export type InstalledApp = { id: string; name: string };
+export type AllowedApp = { id: string; name: string; addedAt: number };
+export type AppLaunch = { app: InstalledApp; folder: string | null; verified: boolean | null; alreadyRunning: boolean; outcome: string };
+export type StartupStep = { kind: "app"; app: InstalledApp; folderId?: string } | { kind: "url"; url: string } | { kind: "wait"; seconds: number };
+export type StartupRun = { at: number; trigger: "login" | "manual"; ok: boolean; steps: Array<{ label: string; ok: boolean; detail?: string }> };
+export type StartupSettings = { enabled: boolean; steps: Array<StartupStep & { label: string }>; history: StartupRun[]; loginItem: { openAtLogin: boolean; status: string; where: string } | null };
 
 export type UpdateChannel = "stable" | "beta";
 export type DesktopInfo = {
