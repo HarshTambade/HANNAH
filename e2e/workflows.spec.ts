@@ -94,7 +94,7 @@ test("build a workflow in the editor, test-run it, and see real data on the canv
 
   // Undo removes the last edit; redo brings it back.
   await page.getByRole("button", { name: "Close step settings" }).click();
-  await expect(page.getByRole("button", { name: /Valid/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Valid", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Test run", exact: true }).click();
   const run = page.getByRole("region", { name: "Run details" });
@@ -118,7 +118,7 @@ test("the invoice template runs from a real webhook: extraction, AI review, a br
   await page.getByText("Save to database").click();
   await page.getByLabel("Skip this step (pass items through unchanged)").check();
   await page.getByRole("button", { name: "Close step settings" }).click();
-  await expect(page.getByRole("button", { name: /Valid/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "Valid", exact: true })).toBeVisible({ timeout: 10_000 });
 
   await page.getByRole("button", { name: "Publish" }).click();
   const secretDialog = page.getByRole("dialog", { name: "Save your webhook secret" });
