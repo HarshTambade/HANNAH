@@ -311,7 +311,7 @@ test("a template opens ready to save", async ({ page }) => {
 test("the memory center records sources, refuses secrets, and chat sends only related memories", async ({ page }) => {
   await connectAsGuest(page);
   const sentMemories: string[][] = [];
-  await page.route(/\/api\/(providers|models|agent)$/, async (route) => {
+  await page.route(/\/api\/(providers|models|agent)(\?.*)?$/, async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/providers") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ defaultProvider: "groq", providers: [{ id: "groq", label: "Groq", local: false, configured: true }] }) });
     if (url.pathname === "/api/models") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ provider: "Groq", defaultModel: "openai/gpt-oss-120b", models: ["openai/gpt-oss-120b"] }) });

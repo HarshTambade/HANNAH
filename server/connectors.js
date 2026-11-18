@@ -21,7 +21,6 @@
  * the server's own metadata, never ones the browser names. Redirect URIs must be
  * this site's /connectors/callback.
  */
-const crypto = require("node:crypto");
 const express = require("express");
 const { McpHttpClient } = require("./mcp-client");
 const { RequestBlockedError, checkUrl, safeRequest } = require("./workflows/http");

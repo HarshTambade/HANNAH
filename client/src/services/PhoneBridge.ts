@@ -289,7 +289,6 @@ export function startPhoneBridge(): () => void {
   if (!isPhoneApp()) return () => {};
   let stopped = false;
   let busy = false;
-  let timer: number | undefined;
   const tick = async () => {
     const settings = phoneSettings();
     if (stopped || busy || !settings.phoneId || !settings.enabled || !getAccountHint() || document.visibilityState !== "visible") return;
@@ -317,12 +316,12 @@ export function startPhoneBridge(): () => void {
     }
   };
   void updateThisPhone({});
-  timer = window.setInterval(() => void tick(), 3000);
+  const timer = window.setInterval(() => void tick(), 3000);
   const onVisible = () => { if (document.visibilityState === "visible") { void updateThisPhone({}); void tick(); } };
   document.addEventListener("visibilitychange", onVisible);
   return () => {
     stopped = true;
-    if (timer) window.clearInterval(timer);
+    window.clearInterval(timer);
     document.removeEventListener("visibilitychange", onVisible);
   };
 }

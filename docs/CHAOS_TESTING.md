@@ -6,7 +6,7 @@ Chaos injection is compiled into development and test builds only. The developer
 | --- | --- | --- |
 | Network drop | Before a cloud agent request | The cloud request fails immediately, AgentRuntime switches to WebLLM/on-device inference, the turn completes, and the UI reports degraded mode until cloud succeeds or the banner is dismissed. |
 | Tool timeout | Before an allow-listed tool executes | No tool side effect occurs; a timeout result is returned to the agent. The circuit breaker records failures and opens after three failures for that tool in the session. |
-| Corrupted memory | During memory resolution | MemoryResolutionService returns `abstained`; the caller must continue without retrieved memory. |
+| Corrupted memory | When memories are chosen for a message | MemoryResolutionService abstains and no memory is sent with that message; the reply continues without them. |
 | HITL denial | Before tool execution | The tool is not run; AgentRuntime returns a calm cancellation response and stops the multi-step turn. |
 
 Run `npm run test:chaos --prefix client` for deterministic AgentRuntime fallback, timeout, memory-abstention, and approval-denial checks. The tests stub the provider and tools; run a separate staging drill before enabling real infrastructure fault injection.

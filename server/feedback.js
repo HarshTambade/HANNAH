@@ -15,7 +15,6 @@ const { randomUUID } = require("node:crypto");
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_APP_VERSION_LENGTH = 64;
 const PLATFORMS = new Set(["iOS", "Android", "Web", "Desktop"]);
-const INFERENCE_MODES = new Set(["Cloud", "Local"]);
 const CATEGORIES = new Set(["bug", "idea", "privacy", "other"]);
 const MODE_DETAIL_PATTERN = /^[a-z][a-z0-9_-]{0,39}$/;
 const MAX_DIAGNOSTIC_ENTRIES = 100;

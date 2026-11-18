@@ -20,7 +20,7 @@ header, or local file path is sent to a third party.
 | HITL audit trail | `scripts/audit_monitor.py` | Verified daily summary |
 | Agent readiness | `GET /api/health/agent` | Python fallback + Ollama probes |
 | User feedback | `POST /api/feedback` | Discord webhook and/or MongoDB |
-| First-run setup | `client/src/components/Onboarding.tsx` | Three-step setup, then chat |
+| First-run setup | `client/src/components/AppWelcome.tsx` | Welcome and connection, then chat |
 
 ## Sentry
 
@@ -175,22 +175,9 @@ feedback collection. The stored document contains `schemaVersion`, `id`,
 `receivedAt`, `message`, `appVersion`, `platform`, `inferenceMode`, optional
 `modeDetail`, `category`, and `source: "in-app"`.
 
-## First-run onboarding and mode selection
+## First run
 
-On first launch, `App.tsx` checks `localStorage["hannah.onboarding.v1"]` and
-shows `Onboarding.tsx` before the landing page. The three steps are:
-
-1. **Privacy architecture** — local vs cloud inference, in-memory keys, no
-   training on chats, HITL control.
-2. **Inference setup** — Groq key and optional server token, or a local path
-   (native GGUF download, browser WebLLM, or Ollama).
-3. **HITL explanation** — proposals, approve/reject, expiry, audit trail.
-
-Completing setup starts the companion directly with the chosen
-`initialMode`; skipping marks onboarding as seen and returns to the landing
-page. Either way the flag is written, so setup does not nag on every visit.
-Clearing site storage re-enables onboarding. Credentials remain in page memory
-only; they are never written to `localStorage`.
+The website opens on its landing page; **Open HANNAH** asks you to connect (a Groq key, a server token, or an account) before any app screen. The desktop and mobile apps open on `AppWelcome.tsx`, which goes straight to connecting and then to chat. The landing page has a short tour of the app (`AppTour.tsx`), and an empty chat shows starter suggestions (`FirstSessionCoach.tsx`). On the website, a Groq key lives in `sessionStorage` (or, with “Remember on this browser”, in an HttpOnly cookie the page can't read); in the apps, in the app's own storage until you disconnect.
 
 ## Launch checklist
 

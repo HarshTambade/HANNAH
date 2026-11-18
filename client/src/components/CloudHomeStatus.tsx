@@ -10,12 +10,14 @@ export default function CloudHomeStatus() {
   }, []);
 
   if (!home) {
-    return <div className="text-[8px] text-slate-500">Cloud home not provisioned.</div>;
+    return <div className="text-[8px] text-slate-500">No HANNAH server checked yet.</div>;
   }
 
   return (
     <div className="text-[8px] text-slate-500">
-      Home: {home.region} ({home.provider}) · {home.status} · uptime {home.uptimeSince ? Math.round((Date.now() - home.uptimeSince) / 1000) + "s" : "n/a"} · connections {home.connections.length}
+      Server: {home.region} ({home.provider}) · {home.status}
+      {home.health?.error ? ` · ${home.health.error}` : home.health ? ` · AI ${home.health.ready ? "ready" : "not set up"} · accounts ${home.health.accounts ? "on" : "off"} · ${home.health.latencyMs} ms` : ""}
+      {" "}· connections {home.connections.length}
     </div>
   );
 }

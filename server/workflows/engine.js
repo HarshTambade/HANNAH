@@ -348,7 +348,6 @@ function permanent(error) {
 async function execute({ definition, execution, workflow, services, now = () => Date.now(), signal, onCheckpoint = async () => {}, resume, sleep = delay, inlineWaitMs = RATE_LIMIT.inlineMs, shouldPause = async () => false, shouldYield = () => false }) {
   const nodes = (definition.nodes || []).filter((node) => REGISTRY.has(node.type));
   const byId = new Map(nodes.map((node) => [node.id, node]));
-  const byName = new Map(nodes.map((node) => [node.name, node]));
   const connections = (definition.connections || []).filter((connection) => byId.has(connection.source) && byId.has(connection.target));
   const order = topologicalOrder(nodes.map((node) => node.id), connections);
   if (!order) throw new Error("The workflow's connections form a loop.");

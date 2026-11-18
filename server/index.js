@@ -324,9 +324,9 @@ app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/transcribe", createRateLimiter(rateLimits.chat));
 app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
 app.post("/api/vision/describe", createRateLimiter(rateLimits.desktop));
-app.post("/api/feedback", createAddressRateLimiter(rateLimits.feedbackPerAddress), createRateLimiter(rateLimits.feedback));
-app.post("/api/report-content", createAddressRateLimiter(rateLimits.contentReportPerAddress), createRateLimiter(rateLimits.contentReport));
-app.post("/api/events", createAddressRateLimiter(rateLimits.eventsPerAddress), createRateLimiter(rateLimits.events));
+app.post("/api/feedback", createAddressRateLimiter({ ...rateLimits.feedbackPerAddress, name: "feedback" }), createRateLimiter(rateLimits.feedback));
+app.post("/api/report-content", createAddressRateLimiter({ ...rateLimits.contentReportPerAddress, name: "content-report" }), createRateLimiter(rateLimits.contentReport));
+app.post("/api/events", createAddressRateLimiter({ ...rateLimits.eventsPerAddress, name: "events" }), createRateLimiter(rateLimits.events));
 app.post("/api/account/mail/send", createRateLimiter(rateLimits.chat));
 app.post("/api/account/mail/drafts", createRateLimiter(rateLimits.chat));
 app.post("/api/account/calendar/events", createRateLimiter(rateLimits.chat));
@@ -624,19 +624,6 @@ async function requestCloud(messages, models = cloudModels, apiKey = cloudApiKey
   return parseAssistantOutput(message.content || "");
 }
 
-async function requestOllama(messages) {
-  const provider = resolveProvider({ id: "ollama" });
-  const message = await requestWithProviderFallback({
-    provider,
-    apiKey: providerKey(provider),
-    requestedModel: defaultModelFor(provider),
-    messages,
-    systemPrompt,
-    timeoutMs: 120_000,
-  });
-  return parseAssistantOutput(message.content || "");
-}
-
 function isValidAgentMessage(message) {
   if (!message || !["user", "assistant", "tool"].includes(message.role)) return false;
   // Tool results (a page, a file, a transcript) may be longer than what people type.
@@ -672,19 +659,6 @@ async function requestCloudAgent(messages, tools, models = cloudModels, apiKey =
     tools,
     systemPrompt,
     timeoutMs: cloudRequestTimeout,
-  });
-}
-
-async function requestOllamaAgent(messages, tools) {
-  const provider = resolveProvider({ id: "ollama" });
-  return requestWithProviderFallback({
-    provider,
-    apiKey: providerKey(provider),
-    requestedModel: defaultModelFor(provider),
-    messages,
-    tools,
-    systemPrompt,
-    timeoutMs: 120_000,
   });
 }
 

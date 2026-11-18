@@ -204,7 +204,6 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
     window.addEventListener(DIAGNOSTICS_EVENT, refresh);
     return () => window.removeEventListener(DIAGNOSTICS_EVENT, refresh);
   }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const diagnosticEntries = diagnosticVersion >= 0 ? Diagnostics.list({ query: diagnosticQuery, level: diagnosticLevel }) : [];
   const diagnosticCounts = Diagnostics.counts();
 

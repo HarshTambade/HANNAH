@@ -1,10 +1,12 @@
-import {
-  HardwareAdapter,
-  HardwareCharacteristics,
-  HardwareModality,
-  BaseHardwareAdapter,
-} from "./HardwareAdapter";
+import { WebSocketHardwareAdapter, type HardwareAdapter, type HardwareCharacteristics, type HardwareModality } from "./HardwareAdapter";
 
+/**
+ * The kinds of hardware HANNAH can work with, each with an adapter that
+ * really connects. Today that's any device speaking the HANNAH device
+ * protocol over WebSocket (see HardwareAdapter.ts): DIY companions, an ESP32
+ * or Raspberry Pi, or a vendor that implements it. A device family is listed
+ * only once its adapter works; nothing here is announced ahead of time.
+ */
 export type PartneredDevice = {
   id: string;
   name: string;
@@ -44,73 +46,14 @@ export const HardwarePartnershipRegistry = {
   },
 };
 
-// Adapter stubs for device families
-class AppleTabletopAdapter extends BaseHardwareAdapter {
-  family = "apple";
-  name = "Apple Tabletop Robot";
-  characteristics: HardwareCharacteristics = {
-    supportedModalities: ["audio", "vision", "expression", "sensor"],
-    latencyMs: { audio: 150, vision: 300, actuation: 400, expression: 80 },
-    safetyConstraints: ["no camera after 10pm", "no facial recognition without consent"],
-    mTLSRequired: true,
-    pairingMethod: "bluetooth",
-  };
-}
-
-class SomniaLabAdapter extends BaseHardwareAdapter {
-  family = "somnia";
-  name = "Somnia Lab Intimate Humanoid";
-  characteristics: HardwareCharacteristics = {
-    supportedModalities: ["audio", "vision", "actuation", "expression", "thermal", "sensor"],
-    latencyMs: { audio: 180, vision: 350, actuation: 250, expression: 60 },
-    safetyConstraints: ["no actuation during sleep mode", "thermal limit 45C"],
-    mTLSRequired: true,
-    pairingMethod: "nfc",
-  };
-}
-
-class DLinkAdapter extends BaseHardwareAdapter {
-  family = "dlink";
-  name = "D-Link Companion";
-  characteristics: HardwareCharacteristics = {
-    supportedModalities: ["audio", "vision", "sensor"],
-    latencyMs: { audio: 200, vision: 400, actuation: 500, expression: 120 },
-    safetyConstraints: ["no recording without LED indicator", "local storage only"],
-    mTLSRequired: true,
-    pairingMethod: "wifi",
-  };
-}
-
-// Register known 2027 companion device families as stubs
+const protocolAdapter = new WebSocketHardwareAdapter();
 HardwarePartnershipRegistry.register({
-  name: "Apple Tabletop Robot",
-  manufacturer: "Apple",
-  model: "T2027",
-  protocol: "mTLS WebSocket + HomeKit",
-  characteristics: new AppleTabletopAdapter().characteristics,
-  adapter: new AppleTabletopAdapter(),
+  name: "HANNAH-compatible device",
+  manufacturer: "Any",
+  model: "HANNAH device protocol v1",
+  protocol: "JSON over WebSocket (wss://; ws:// on the local network), pairing code, acknowledged commands",
+  characteristics: protocolAdapter.characteristics,
+  adapter: protocolAdapter,
   status: "available",
-  notes: "Expected 2027 release; SiriKit integration anticipated.",
-});
-
-HardwarePartnershipRegistry.register({
-  name: "Somnia Lab Intimate Humanoid",
-  manufacturer: "Somnia Lab",
-  model: "SL-1",
-  protocol: "mTLS WebSocket + proprietary binary",
-  characteristics: new SomniaLabAdapter().characteristics,
-  adapter: new SomniaLabAdapter(),
-  status: "available",
-  notes: "Intimate companion form factor; strict privacy constraints.",
-});
-
-HardwarePartnershipRegistry.register({
-  name: "D-Link Companion",
-  manufacturer: "D-Link",
-  model: "DCH-2027",
-  protocol: "mTLS WebSocket + ONVIF",
-  characteristics: new DLinkAdapter().characteristics,
-  adapter: new DLinkAdapter(),
-  status: "available",
-  notes: "Home security-adjacent companion; ONVIF camera profile.",
+  notes: "Pair with the device's address and pairing code, e.g. wss://speaker.local:8765#4821. The protocol is in services/HardwareAdapter.ts.",
 });

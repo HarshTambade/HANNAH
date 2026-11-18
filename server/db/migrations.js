@@ -470,6 +470,21 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_content_reports_created ON hannah_content_reports (created_at)",
     ],
   },
+  {
+    version: 15,
+    name: "shared rate limits",
+    // On serverless hosts each instance has its own memory, so per-address
+    // limits for public write routes are counted here instead (one row per
+    // limit and address, reset when its window ends).
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_rate_limits (
+        key TEXT PRIMARY KEY,
+        count INTEGER NOT NULL,
+        reset_at BIGINT NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_rate_limits_reset ON hannah_rate_limits (reset_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

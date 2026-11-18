@@ -6,8 +6,10 @@ const clientRoot = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   testDir: resolve(clientRoot, "../e2e"),
-  timeout: process.env.CI ? 60000 : 30000,
-  expect: { timeout: process.env.CI ? 10000 : 5000 },
+  // Headless Chromium renders the 3D avatar on a software GPU (SwiftShader), which takes several
+  // seconds of main-thread time per page load; the same limit as CI keeps busy local runs from flaking.
+  timeout: 60000,
+  expect: { timeout: 10000 },
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

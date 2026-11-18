@@ -4,16 +4,19 @@
  * (account id, IP, chat text) is stored.
  */
 const assert = require("node:assert/strict");
-const { test, after } = require("node:test");
+const { test, before, after } = require("node:test");
 
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL = "sqlite::memory:";
+process.env.DATABASE_URL = process.env.HANNAH_TEST_DB === "pglite" ? "postgres://pglite.local/hannah" : "sqlite::memory:";
 process.env.HANNAH_VAULT_KEY = "c".repeat(64);
 
 const { getDatabase, resetDatabase } = require("./db");
 const { createFeedbackHandler } = require("./feedback");
 const { createContentReportHandler } = require("./content-reports");
 
+before(async () => {
+  if (process.env.HANNAH_TEST_DB === "pglite") await require("./db").useDatabase(await require("./db/pglite-adapter").createPgliteAdapter());
+});
 after(async () => { await resetDatabase(); });
 
 function invoke(handler, body) {
@@ -102,4 +105,22 @@ test("the address table stays bounded under a flood of new addresses", async () 
     await new Promise((resolve) => limiter({ get: () => undefined, socket: { remoteAddress: `198.18.${index >> 8}.${index & 255}` } }, { setHeader() {}, status() { return this; }, json: resolve }, resolve));
   }
   assert.ok(Date.now() - started < 2_000, "no full rescan on every request");
+});
+
+test("on serverless hosts two instances share one per-address count through the database", async () => {
+  const { createAddressRateLimiter } = require("./api-security");
+  const options = { limit: 3, windowMs: 60_000, name: "feedback-test", shared: () => true };
+  const instanceA = createAddressRateLimiter(options);
+  const instanceB = createAddressRateLimiter(options);
+  const run = (limiter) => new Promise((resolve) => {
+    const res = { statusCode: 200, setHeader() {}, status(code) { this.statusCode = code; return this; }, json() { resolve(this.statusCode); } };
+    limiter({ get: () => undefined, socket: { remoteAddress: "198.51.100.77" } }, res, () => resolve(200));
+  });
+  assert.deepEqual([await run(instanceA), await run(instanceB), await run(instanceA), await run(instanceB)], [200, 200, 200, 429]);
+  const db = await getDatabase();
+  const { rows } = await db.query("SELECT count FROM hannah_rate_limits WHERE key = $1", ["feedback-test:198.51.100.77"]);
+  assert.equal(Number(rows[0].count), 4);
+  // A database error falls back to counting in memory rather than refusing everyone.
+  const broken = createAddressRateLimiter({ ...options, name: "broken", database: async () => { throw new Error("down"); } });
+  assert.equal(await run(broken), 200);
 });

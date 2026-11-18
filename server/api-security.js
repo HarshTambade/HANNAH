@@ -192,17 +192,32 @@ function clientAddress(req) {
   return peer;
 }
 
+/** One shared count in the database: an atomic upsert per request. Returns { count, resetAt }. */
+async function countInDatabase(db, key, windowMs, now) {
+  await db.query(
+    `INSERT INTO hannah_rate_limits (key, count, reset_at) VALUES ($1, 1, $2)
+     ON CONFLICT (key) DO UPDATE SET
+       count = CASE WHEN hannah_rate_limits.reset_at <= $3 THEN 1 ELSE hannah_rate_limits.count + 1 END,
+       reset_at = CASE WHEN hannah_rate_limits.reset_at <= $3 THEN excluded.reset_at ELSE hannah_rate_limits.reset_at END`,
+    [key, now + windowMs, now],
+  );
+  const { rows: [row] } = await db.query("SELECT count, reset_at FROM hannah_rate_limits WHERE key = $1", [key]);
+  // Now and then, clear finished windows so the table stays small.
+  if (Math.random() < 0.01) await db.query("DELETE FROM hannah_rate_limits WHERE reset_at <= $1", [now]).catch(() => {});
+  return { count: Number(row?.count) || 1, resetAt: Number(row?.reset_at) || now + windowMs };
+}
+
 /**
  * A limit per network address, for public write routes where credentials can
- * be made up. Kept in this process's memory: on serverless hosts each instance
- * counts on its own, so the limit there is per instance (the per-credential
- * limit and the routes' own validation still apply).
+ * be made up.
+ * - On a serverless host with a database (Vercel), the count is shared in the
+ *   database, so every instance enforces the same limit. If the database
+ *   errors, this request is counted in memory instead.
+ * - Otherwise it's kept in this process's memory (one long-running server).
  */
-function createAddressRateLimiter({ limit, windowMs, maxBuckets = 10_000 }) {
+function createAddressRateLimiter({ limit, windowMs, maxBuckets = 10_000, name = "address", shared = () => Boolean(process.env.VERCEL) && require("./db").databaseConfigured(), database = () => require("./db").getDatabase() }) {
   const buckets = new Map();
-  return function rateLimitByAddress(req, res, next) {
-    const now = Date.now();
-    const key = addressKey(clientAddress(req));
+  const inMemory = (key, now) => {
     let bucket = buckets.get(key);
     if (!bucket || now >= bucket.resetAt) {
       bucket = { count: 0, resetAt: now + windowMs };
@@ -217,11 +232,26 @@ function createAddressRateLimiter({ limit, windowMs, maxBuckets = 10_000 }) {
         if (address !== key) buckets.delete(address);
       }
     }
-    if (bucket.count >= limit) {
-      res.setHeader("Retry-After", String(Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))));
+    if (bucket.count < limit) bucket.count += 1;
+    else return { count: limit + 1, resetAt: bucket.resetAt };
+    return bucket;
+  };
+  return async function rateLimitByAddress(req, res, next) {
+    const now = Date.now();
+    const key = addressKey(clientAddress(req));
+    let counted;
+    if (shared()) {
+      try {
+        counted = await countInDatabase(await database(), `${name}:${key}`, windowMs, now);
+      } catch {
+        counted = null;
+      }
+    }
+    counted ??= inMemory(key, now);
+    if (counted.count > limit) {
+      res.setHeader("Retry-After", String(Math.max(1, Math.ceil((counted.resetAt - now) / 1000))));
       return res.status(429).json({ error: "Too many requests from this network. Try again later." });
     }
-    bucket.count += 1;
     return next();
   };
 }

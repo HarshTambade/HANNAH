@@ -22,7 +22,8 @@ const dracoLoader = new DRACOLoader();
 const publicBaseUrl = import.meta.env.BASE_URL;
 dracoLoader.setDecoderPath(`${publicBaseUrl}draco/`);
 const configuredAvatarModelUrl = import.meta.env.VITE_AVATAR_MODEL_URL?.trim();
-const avatarModelUrl = configuredAvatarModelUrl || `${publicBaseUrl}models/uruha_rushia_-_hololive_vtuber.glb`;
+// The Draco-compressed model (2.6 MB instead of 7.4 MB, decoded in a worker) unless a build chooses another.
+const avatarModelUrl = configuredAvatarModelUrl || `${publicBaseUrl}models/avatar.draco.glb`;
 const uncompressedAvatarModelUrl = `${publicBaseUrl}models/avatar.glb`;
 const cachedSceneUsers = new WeakMap<Group, number>();
 

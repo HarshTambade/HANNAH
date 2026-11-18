@@ -32,7 +32,7 @@ const { getProvider, listProviders, providerKey, defaultModelFor } = require("..
 const { requestWithProviderFallback } = require("../providers/runtime");
 const { addressBlocked } = require("./http");
 const engine = require("./engine");
-const { REGISTRY, looksSecret } = require("./nodes");
+const { REGISTRY } = require("./nodes");
 const { tokens: memoryTokens } = require("./text");
 
 // A running execution's lease; a worker that disappears loses it after this long and the run is recovered.

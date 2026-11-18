@@ -45,12 +45,28 @@
 | Secret scan, permission audit, versions, brand assets | Pass |
 | Shipped dependencies | No moderate or higher advisories |
 
-### Still open
+### Follow-up, same day: the open items
 
-- **The live database (#1)**, and everything that needs a physical device or a real account: KI-24, KI-26 to KI-31 in [KNOWN_ISSUES.md](architecture/KNOWN_ISSUES.md).
-- **85 of the 238 client source files aren't loaded by the app.** They're the experimental modules listed in the README: CRDT sync, hardware bridge, `AgentOrchestrator`'s simulated execution, `SyncService`'s base64 "encryption" and similar. None reaches users, but they're misleading to read. Removing them, or moving them to `experimental/`, is the owner's call.
-- **Per-address limits are kept in each process's memory.** On serverless hosts they count per instance; a shared limit needs a store such as the database or a KV service.
-- **No linter is configured.** The strict TypeScript build is the only static check.
+- **Unused code:** fixed by making it work, not by deleting it (the owner asked to keep the feature set whole). The 85 modules no screen loads stay. The ones that faked their work now do it for real, tested in `RestoredModules.test.ts`:
+  - `SyncService`: base64 "encryption" became AES-256-GCM.
+  - `CRDTSyncProvider`: a re-queue became a converging vector-clock CRDT.
+  - `memorySync`: deletes are now kept.
+  - `AgentOrchestrator`: a timer became real agent turns and reviews.
+  - `ResearchAgent` and `FreelanceAgent`: echoes became web research and model turns.
+  - `AgentNativeHomeService`: fake provisioning became a real server check.
+  - `PAPAdapter`: the code stored as a token became a PKCE token exchange.
+  - `AgentInteropService`: a hard-coded profile became the real tools and A2A card.
+  - Hardware: fictional vendor devices became the HANNAH device protocol.
+  - The "corrupted memory" chaos fault now drives a real integrity check on memories before they reach the model.
+
+  Docs that described unwired modules as active safety features were corrected: the "CredentialBroker" and "EgressPolicy" claims and the onboarding description.
+- **Linter:** fixed. ESLint now runs on the app (`client/eslint.config.js`: hooks, unreachable code, duplicate keys and cases, self-comparison, constant conditions, unsafe `finally`, `==`) and on the server (`server/eslint.config.js`). Both are clean, and CI's quality job runs them, plus the app's typecheck, before the tests. The first run found one real issue (`prefer-const` in `PhoneBridge.ts`) and dead server code: two unused Ollama helpers, unused imports and constants, and a raw non-breaking space in a regular expression.
+- **Shared rate limits on serverless:** fixed. With a database on Vercel, per-address counts for feedback, reports and events are kept in `hannah_rate_limits` (migration 15, one atomic upsert per request), so every instance enforces the same limit. A database error falls back to counting in memory. Tested on SQLite and Postgres.
+
+### Still open (needs the owner)
+
+- **The live database (#1).** Connect Supabase in Settings → Account → set up hosting, or set `DATABASE_URL`, `HANNAH_VAULT_KEY` and `CRON_SECRET` in Vercel. This needs your Vercel and Supabase tokens, which only you hold.
+- **Physical devices and real accounts:** KI-24, KI-26 to KI-31 in [KNOWN_ISSUES.md](architecture/KNOWN_ISSUES.md).
 
 ---
 

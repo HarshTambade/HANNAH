@@ -44,7 +44,7 @@ function htmlToText(html) {
     .replace(/<li\b[^>]*>/gi, "\n• ")
     .replace(/<h([1-6])\b[^>]*>/gi, (_m, level) => `\n${"#".repeat(Number(level))} `)
     .replace(/<[^>]+>/g, " ");
-  const text = decode(body).split("\n").map((line) => line.replace(/[ \t\f\v ]+/g, " ").trim()).filter(Boolean).join("\n").replace(/\n{3,}/g, "\n\n");
+  const text = decode(body).split("\n").map((line) => line.replace(/[ \t\f\v\u00a0]+/g, " ").trim()).filter(Boolean).join("\n").replace(/\n{3,}/g, "\n\n");
   return { title, text };
 }
 

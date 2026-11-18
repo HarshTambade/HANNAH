@@ -38,6 +38,10 @@ async function startServer(env: Record<string, string>) {
 
 let api = "";
 
+// One worker for the whole file: the crawl presses hundreds of controls on software-rendered
+// pages, and running both setups at once starved the rest of the suite of CPU.
+test.describe.configure({ mode: "serial" });
+
 async function proxy(page: Page) {
   await page.route(/\/(api|v1)\//, async (route) => {
     const url = new URL(route.request().url());

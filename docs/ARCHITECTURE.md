@@ -71,7 +71,7 @@ The desktop installers shipped Electron's icon (electron-builder had no icon con
 
 ### Experimental modules (not in the app)
 
-`client/src/services` contains about 60 research modules with unit tests that no screen uses, for example `SyncService`, `KillSwitch`, `PolicyEnforcementLayer`, `HardwareBridgeService`, `CastOrchestrator` and `PAPAdapter`. Treat them as prototypes. Each one is either wired in with a real end-to-end path and tests, or deleted. None is counted as a feature above.
+`client/src` holds about 85 modules that no screen loads yet: CRDT sync, a hardware bridge, a kill switch, a policy layer, a credential broker, multi-agent prototypes and others. In 1.5.0 the ones that simulated their work were rebuilt to do it for real (`RestoredModules.test.ts`): encrypted sync and CRDT merge, real orchestration and research agents, a real server check, PAP with PKCE, and the HANNAH device protocol. None is counted as an app feature above until a screen uses it.
 
 ## 2. Architecture decisions
 

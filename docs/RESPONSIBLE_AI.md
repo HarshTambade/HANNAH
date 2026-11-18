@@ -40,9 +40,9 @@ HANNAH is a privacy-first, governed AI companion. This document outlines our tra
 - Explicit allow-list entries required for each destination and request shape.
 - All outbound calls validated against the policy before execution.
 
-### Credential Broker
-- Provider API keys held by CredentialBroker, never exposed to AgentRuntime.
-- Credentials injected at network boundary and redacted from responses.
+### Provider keys
+- Account keys are encrypted in the server's vault and sent only to that provider's own HTTPS API; a visitor's Groq key only to Groq.
+- The agent loop in the app never handles a key: the server adds it to the provider request.
 
 ### Permission Monotonic Attenuation
 - Once a permission is revoked during a session, it cannot be re-granted without new explicit user approval.

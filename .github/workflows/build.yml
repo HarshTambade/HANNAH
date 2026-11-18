@@ -87,6 +87,13 @@ jobs:
         with:
           name: hannah-sbom
           path: sbom
+      - name: Lint (bug rules; errors fail the build)
+        run: |
+          npm run lint --prefix client
+          npm run lint --prefix server
+      - name: Typecheck the app
+        run: npx tsc --noEmit -p .
+        working-directory: client
       - run: npm test
         working-directory: client
       - name: Server tests (API, accounts on SQLite and Postgres, routing)

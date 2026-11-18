@@ -3,6 +3,8 @@
  * change notifications, choosing what goes with a message, and clearing.
  */
 import { MemoryService } from "./MemoryService";
+import { MemoryResolutionService } from "./MemoryResolutionService";
+import { secretIn } from "./MemoryModel";
 
 const KEY = "hannah.memory.v1";
 export const MEMORY_EVENT = "hannah:memory";
@@ -23,7 +25,12 @@ export function notifyMemoryChanged() {
  * are marked as used, so the memory panel can show when each last helped.
  */
 export function selectMemoriesForPrompt(query: string, options: { allowSensitive?: boolean } = {}) {
-  const { picked, hiddenSensitive } = MemoryService.forMessage(query, { allowSensitive: options.allowSensitive });
+  const chosen = MemoryService.forMessage(query, { allowSensitive: options.allowSensitive });
+  // Checked again on the way out: each memory must still be valid text with no secret in it (storage can be edited).
+  // If the set as a whole fails its integrity check (chaos mode's "corrupted memory"), none is sent.
+  const resolution = MemoryResolutionService.resolve(chosen.picked.filter((item) => typeof item.memory.content === "string" && item.memory.content.trim().length > 0 && item.memory.content.length <= 2_000 && !secretIn(item.memory.content)));
+  const picked = resolution.status === "resolved" ? resolution.value : [];
+  const { hiddenSensitive } = chosen;
   if (picked.length) MemoryService.access(...picked.map((item) => item.memory.id));
   return {
     texts: picked.map((item) => item.memory.content.replace(/[\r\n]+/g, " ").slice(0, 300)),

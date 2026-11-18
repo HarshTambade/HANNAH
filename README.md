@@ -669,7 +669,7 @@ The image runs as an unprivileged user, and its health check calls `/api/health`
 | `VITE_AGENT_TOOL_DENY_LIST` | Extra tool names to deny, added to the built-in shell and terminal deny list. |
 | `VITE_AGENT_OUTPUT_DENY_SUBSTRINGS` | Comma-separated phrases blocked in assistant output. |
 | `VITE_OFFLINE_MODEL_URL` | HTTPS URL of a GGUF model for on-device AI on iOS and Android. |
-| `VITE_AVATAR_MODEL_URL` | Avatar asset. When blank, the app loads the uncompressed 7.4 MB `uruha_rushia_-_hololive_vtuber.glb`; set `/models/avatar.draco.glb` (2.6 MB, what CI's web build uses) after `npm run models:draco`. |
+| `VITE_AVATAR_MODEL_URL` | Avatar asset. When blank, the app loads the Draco-compressed `/models/avatar.draco.glb` (2.6 MB, decoded in a worker). Point it at another `.glb` to use your own avatar. |
 | `VITE_HANNAH_ANTHROPIC_MODEL` | Model for the optional native MobileClaw agent. |
 | `VITE_PINECALL_AGENT_ID` | Public Pinecall agent slug for voice calls. |
 | `VITE_AGE_GATE_18_PLUS` | `true` shows an 18+ consent gate. |
@@ -1382,10 +1382,12 @@ curl -s http://localhost:3001/api/chat \
 | root | `npm run build` | Install client dependencies and build. |
 | root | `npm run mcp:stdio` | Run the MCP stdio server. |
 | client | `npm run build` | `tsc -b && vite build` (strict, with no unused locals or parameters). |
+| client | `npm run lint` | ESLint: bug rules only (hooks misuse, unreachable code, duplicate keys…); errors fail CI. |
 | client | `npm test` / `test:watch` / `test:chaos` | Vitest. |
 | client | `npm run test:e2e` | Playwright. |
 | client | `npm run preview` | Serve the production build. |
 | client | `npm run models:draco` | Compress the avatar. |
+| server | `npm run lint` | ESLint for the server's plain JavaScript (no type checker there); errors fail CI. |
 | server | `npm test` | `node --test`. |
 | server | `npm start` | Run the API. |
 | server | `node scripts/workflow-proof.mjs` | Workflows against real services (GitHub, httpbin), including a killed and restarted server. |
@@ -1404,11 +1406,13 @@ curl -s http://localhost:3001/api/chat \
 ## Testing
 
 ```bash
+npm run lint --prefix client             # ESLint (bug rules), also run by CI
+npm run lint --prefix server
 npm test --prefix client                 # Vitest: safety chain, router, guardrails, stores
 npm test --prefix server                 # API auth, accounts (SQLite + Postgres), gateway, team, voice, MCP client, A2A, SDK
 python3 -m pip install -r backend/requirements-test.txt
 python3 -m pytest -q backend/tests       # Python fallback, approvals, audit chain
-npm run test:e2e --prefix client         # Playwright with a mocked API (no provider key)
+npm run test:e2e --prefix client         # Playwright against real local servers (AI is a local stand-in): every screen and every control, signed in and as a guest
 npm run build --prefix client
 ```
 
@@ -1445,16 +1449,18 @@ Not covered automatically: physical-device permissions, speech, calls, app resum
 - desktop computer use, only in a desktop app you build with the bridge set up;
 - the native and desktop builds, the `hannah` command-line tool and Docker self-hosting.
 
-**Experimental modules (in the repo, not wired into the app).** [`client/src/services`](./client/src/services) also contains research modules with unit tests that no screen uses yet. Among them:
+**Library modules not on a screen yet.** [`client/src/services`](./client/src/services) also holds modules that no screen uses yet. In 1.5.0 the ones that faked their work were made to work for real, with tests (`RestoredModules.test.ts`):
 
-- Cross-device CRDT sync: `SyncService`, `CRDTSyncProvider`, `SyncStatus`.
-- Hardware bridge and ambient presence: `HardwareBridgeService`, `AmbientPresenceService`, `PresenceManifestationManager`.
-- Policy and control: `PolicyEnforcementLayer`, `KillSwitch`, `EgressPolicy`, `CredentialBroker`, `PermissionState`.
-- Advanced memory: `MemoryRouter`, `MemoryEvolutionEngine`, `MemoryExportService`.
-- Multi-agent work: `CastOrchestrator`, `GovernedCollectiveIntelligence`, `TypedRails`, `KYBERNETES`.
-- Interoperability: `PAPAdapter`, `AgentInteropService`, `IdentityInteropLayer`, `AAIF*`.
+- **Encrypted sync:** `SyncService` (AES-256-GCM under a passphrase, PBKDF2) and `CRDTSyncProvider` (vector-clock registers that converge, with tombstones).
+- **Merged memory sync:** `memorySync` (last-write-wins with deletes kept).
+- **Orchestration:** `AgentOrchestrator`, where each planned step is a real agent turn, with real skeptic and devil's-advocate reviews.
+- **Delegated agents:** `ResearchAgent` (parallel web workers with sources) and `FreelanceAgent`.
+- **Home server:** `AgentNativeHomeService`, which really checks the HANNAH server's health.
+- **PAP:** `PAPAdapter`, with OAuth and PKCE and confirmed actions.
+- **Agent card:** `AgentInteropService`, built from the real tool list and A2A card.
+- **Hardware:** the HANNAH device protocol over WebSocket (`WebSocketHardwareAdapter`, `HardwareBridgeService`), with paired-device answers and acknowledged commands.
 
-Treat these as design work in progress, not features. Account sync (see [Accounts and your own database](#accounts-and-your-own-database)) is the shipped sync. The CRDT and end-to-end encrypted sync modules above aren't active.
+Others (`KillSwitch`, `PolicyEnforcementLayer`, `EgressPolicy`, `CredentialBroker`, `MemoryRouter`, `CastOrchestrator` and more) work as libraries with unit tests, but the app doesn't route through them. Account sync (see [Accounts and your own database](#accounts-and-your-own-database)) is the sync the app uses.
 
 **Known gaps:**
 
@@ -1488,7 +1494,8 @@ Treat these as design work in progress, not features. Account sync (see [Account
 - The router's measured latency and provider health are per server process, and Fastest mode needs three real replies before it uses measurements.
 - The Marketplace has no third-party listings.
 - iOS needs Apple signing for an installable build.
-- With `VITE_AVATAR_MODEL_URL` unset, the 7.4 MB avatar can stall slow devices on first load.
+- The 3D avatar still takes a few seconds of work on slow devices when it first loads (2.6 MB, compressed).
+- **The bundled avatar model is a fan-made model of a commercial VTuber character** (`client/public/models`). Replace it with an original or properly licensed avatar before distributing HANNAH commercially.
 
 The current plan, with each brief area marked done, partial or missing, is in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md). Open debt is in [`docs/TECHNICAL_DEBT.md`](./docs/TECHNICAL_DEBT.md).
 

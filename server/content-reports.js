@@ -16,7 +16,6 @@ const path = require("node:path");
 const MAX_APP_VERSION_LENGTH = 64;
 const MAX_REPORTS = new Set(["harmful", "sexual", "misinformation", "other"]);
 const PLATFORMS = new Set(["iOS", "Android", "Web", "Desktop"]);
-const INFERENCE_MODES = new Set(["Cloud", "Local"]);
 const MODE_DETAIL_PATTERN = /^[a-z][a-z0-9_-]{0,39}$/;
 const MESSAGE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 

@@ -114,6 +114,19 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 - **Knowledge.** Memory & trust → Knowledge: add text files or paste text (in the desktop app, index a shared folder's text files), and HANNAH answers questions from them with citations such as `[Trip notes §3]`, through the new `knowledge_search` and `knowledge_documents` tools (also given to the Research specialist). Passages are ranked with BM25 in any script, kept on this device within a 2 MB budget, included in backups, and never synced. PDFs and Office files aren't read yet.
 - **Setup check.** Settings → Setup check runs one pass over the server, your AI model (including Ollama through the server), account, calendar and email, voice, microphone, notifications, storage, the desktop app's tray and shortcut, the briefing's place and recent errors, with a verdict and a fix for each.
 
+### Changed
+
+- **Placeholder modules now work.** The library modules that faked their work now do it:
+  - **Encrypted sync** (AES-256-GCM under a passphrase) and a CRDT that really merges.
+  - **Memory sync** that keeps deletes.
+  - **Orchestration and research agents** that make real model and web calls.
+  - **A real server check**, PAP sign-in with PKCE, and a working hardware device protocol.
+  - **Memory integrity:** memories are checked again before they reach the model.
+
+  Docs that called unwired modules active safety features were corrected.
+- **Linting in CI.** ESLint (bug rules only) now checks the app and the server on every build, alongside the app's typecheck.
+- **Shared rate limits on Vercel.** Limits for feedback, reports and events are counted in the database when there is one, so every serverless instance enforces the same limit.
+
 ### Fixed
 
 - **Feedback and Report didn't work for anyone but the server operator.** The Feedback form and the button for reporting an AI reply answered "Add your Groq API key or a HANNAH access token" for every guest and signed-in user. They now work for everyone using the app. They're validated and limited per credential and per network address. Reports and feedback are kept in the server's database (on Vercel, a local file was lost).

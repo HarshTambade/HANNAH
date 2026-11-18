@@ -46,7 +46,7 @@ How the subsystems connect, which exist, and what each one depends on. Paths are
 | Vision & Action Engine | `client/plugins/desktop-tools` (screen, apps, browser, PDF), `DesktopAgent.ts` | Desktop runtime, vision models through the Gateway | Partial: no accessibility-tree app control yet |
 | Desktop Runtime | `client/electron-main.ts`, `plugins/desktop-tools/electron/dist/*` | Electron; OS permissions | macOS tested; Windows and Linux CI-built only |
 | Phone Bridge | `server/phone-bridge.js`, `client/src/services/PhoneBridge.ts`, `PhoneTools.ts`, `HannahPhonePlugin.swift` | Account database (pairing, relay), native plugins | Unverified on devices; off in production (no database) |
-| Memory Manager | `MemoryService.ts`, `MemoryStore.ts`, `MemoryRouter.ts`; `capacitor-lancedb` | Local storage; account sync | Partial |
+| Memory Manager | `MemoryService.ts`, `MemoryStore.ts`, `MemoryModel.ts`; `capacitor-lancedb` | Local storage; account sync | Partial |
 | Integration Manager | `server/connections.js`, `mcp-client.js`, `mcp-http.mjs`, `webhooks.js`, workflow credentials | Vault key, OAuth client ids, account database | Tested with stand-ins |
 | Mobile apps | `client/android`, `client/ios` | Capacitor plugins | CI-built; unverified on devices |
 | Web app | `client/` (Vite) on Vercel | Server API | Tested |
