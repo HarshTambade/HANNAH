@@ -42,6 +42,8 @@ const USER_CONCURRENCY = Math.max(1, Number(process.env.WORKFLOW_USER_CONCURRENC
 const WORKER_CONCURRENCY = Math.max(1, Number(process.env.WORKFLOW_WORKER_CONCURRENCY) || 4);
 const DAILY_EXECUTIONS = Math.max(10, Number(process.env.WORKFLOW_DAILY_EXECUTIONS) || 500);
 const KEEP_EXECUTIONS_MS = 30 * 86_400_000;
+// Serverless requests should end quickly, so rate-limit waits there park the run sooner (see engine.execute).
+const INLINE_WAIT_MS = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME ? 5_000 : 20_000;
 const AUTO_ORDER = ["groq", "openai", "anthropic", "gemini", "openrouter", "mistral", "deepseek", "together", "cerebras", "xai", "fireworks"];
 
 const workerId = `w-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
@@ -51,6 +53,27 @@ const parse = (text, fallback = null) => { try { return text ? JSON.parse(text) 
 const fail = (status, message, reason, extra = {}) => Object.assign(new Error(message), { status, reason, ...extra });
 
 const FINAL = new Set(["completed", "failed", "cancelled", "timed-out"]);
+
+/**
+ * A provider's error as something a person can act on. Rate limits keep the
+ * provider's Retry-After (as `retryAfterMs`) and are marked `rateLimited`;
+ * rejected keys and over-size requests are permanent (retrying won't help).
+ * Exported for tests.
+ */
+function explainProviderError(error, provider) {
+  const status = Number(error?.status) || 0;
+  const label = provider?.label || "The AI provider";
+  if (status === 429) {
+    const seconds = Number(error.retryAfter);
+    return Object.assign(new Error(`${label} is rate-limiting your key right now (too many requests or tokens per minute).`), {
+      status, rateLimited: true, retryable: true, provider: label, ...(Number.isFinite(seconds) && seconds > 0 ? { retryAfterMs: Math.min(300, seconds) * 1000 } : {}),
+    });
+  }
+  if (status === 401 || status === 403) return Object.assign(new Error(`${label} rejected the API key saved in your account. Check it in Settings → Account → Provider keys.`), { status, retryable: false, provider: label });
+  if (status === 413) return Object.assign(new Error(`This step sends ${label} more text than your plan accepts in one request. Send less (use Limit, Map fields or a shorter prompt) or choose a model with a bigger limit.`), { status, retryable: false, provider: label });
+  if (status >= 500) return Object.assign(new Error(`${label} had a problem on its side (HTTP ${status}).`), { status, retryable: true, provider: label });
+  return error;
+}
 
 function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Date.now(), db: injectedDb, emit = async () => {}, connections = require("../connections") } = {}) {
   const database = async () => injectedDb || getDatabase();
@@ -62,40 +85,61 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     let keysPromise;
     const keys = () => (keysPromise ??= database().then((db) => loadAccountKeys(db, userId)));
 
-    async function pickProvider(modelChoice) {
+    /** The providers to try, in order: the chosen one, or (Auto) every provider with a key. */
+    async function pickProviders(modelChoice) {
       const userKeys = await keys();
       const keyFor = (provider) => userKeys.get(provider.id) || (accountsUseServerKeys() ? providerKey(provider) : "");
       const choice = String(modelChoice || "auto");
       if (choice !== "auto") {
         const [providerId, ...rest] = choice.split(":");
         const provider = getProvider(providerId);
-        if (!provider) throw fail(400, `Unknown AI provider “${providerId}”.`, "bad-model");
+        if (!provider) throw fail(400, `Unknown AI provider “${providerId}”.`, "bad-model", { retryable: false });
         const apiKey = keyFor(provider);
         if (!apiKey && !provider.local) throw fail(400, `No ${provider.label} key is saved in your account. Add it in Settings → Account, or choose Auto.`, "no-key", { retryable: false });
-        return { provider, apiKey, model: rest.join(":") || defaultModelFor(provider) };
+        return [{ provider, apiKey, model: rest.join(":") || defaultModelFor(provider) }];
       }
       const known = new Set(listProviders().map((item) => item.id));
-      for (const id of [...AUTO_ORDER, ...userKeys.keys()]) {
+      const chosen = [];
+      for (const id of new Set([...AUTO_ORDER, ...userKeys.keys()])) {
         if (!known.has(id)) continue;
         const provider = getProvider(id);
         const apiKey = provider && keyFor(provider);
-        if (apiKey) return { provider, apiKey, model: defaultModelFor(provider) };
+        if (apiKey) chosen.push({ provider, apiKey, model: defaultModelFor(provider) });
       }
-      throw fail(400, "No AI provider key is saved in your account, so AI steps can't run on the server. Save your Groq key (free) in Settings → Account → Provider keys.", "no-key", { retryable: false });
+      if (!chosen.length) throw fail(400, "No AI provider key is saved in your account, so AI steps can't run on the server. Save your Groq key (free) in Settings → Account → Provider keys.", "no-key", { retryable: false });
+      return chosen;
     }
 
     return {
+      /**
+       * One AI answer. In Auto, a provider that is rate-limiting or failing
+       * hands over to the next provider with a key. Provider errors become
+       * messages that say what happened; a rate limit carries `rateLimited`
+       * and `retryAfterMs`, so the engine waits and tries again instead of
+       * failing the run.
+       */
       async ai({ model, system, prompt, temperature = 0.3, json = false, maxTokens = 1200 }) {
-        const { provider, apiKey, model: chosen } = await pickProvider(model);
-        const message = await requestWithProviderFallback({
-          provider, apiKey, requestedModel: chosen, singleModel: model !== "auto",
-          messages: [{ role: "user", content: String(prompt).slice(0, 60_000) }],
-          tools: [], systemPrompt: `${system || ""}${json ? " Respond with JSON only." : ""}`.trim(),
-          timeoutMs: 60_000, maxTokens, temperature,
-        });
-        const text = typeof message?.content === "string" ? message.content : "";
-        if (!text.trim()) throw Object.assign(new Error(`${provider.label} returned an empty answer.`), { retryable: true });
-        return { text, provider: provider.label, model: message.model || chosen, usage: message.usage || null };
+        const candidates = await pickProviders(model);
+        let busy = null;
+        let lastError = null;
+        for (const { provider, apiKey, model: chosen } of candidates) {
+          try {
+            const message = await requestWithProviderFallback({
+              provider, apiKey, requestedModel: chosen, singleModel: model !== "auto",
+              messages: [{ role: "user", content: String(prompt).slice(0, 60_000) }],
+              tools: [], systemPrompt: `${system || ""}${json ? " Respond with JSON only." : ""}`.trim(),
+              timeoutMs: 60_000, maxTokens, temperature,
+            });
+            const text = typeof message?.content === "string" ? message.content : "";
+            if (!text.trim()) throw Object.assign(new Error(`${provider.label} returned an empty answer.`), { retryable: true });
+            return { text, provider: provider.label, model: message.model || chosen, usage: message.usage || null };
+          } catch (error) {
+            lastError = explainProviderError(error, provider);
+            if (lastError.rateLimited && (!busy || (lastError.retryAfterMs ?? Infinity) < (busy.retryAfterMs ?? Infinity))) busy = lastError;
+          }
+        }
+        // Every provider failed. If any was only busy, say so: the engine waits for it and tries again.
+        throw busy || lastError;
       },
 
       async notify({ title, body }) {
@@ -298,6 +342,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         now,
         signal: controller.signal,
         resume: resume || undefined,
+        inlineWaitMs: INLINE_WAIT_MS,
         onCheckpoint: async (state, event) => {
           const at = now();
           await db.query("UPDATE hannah_workflow_executions SET state = $1, updated_at = $2, resume = NULL WHERE id = $3", [JSON.stringify(state), at, id]);
@@ -614,4 +659,4 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
   return { cancel, claim, emitEvent, enqueue, publishedDefinition, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
 }
 
-module.exports = { FINAL, createRuntime, sha256 };
+module.exports = { FINAL, createRuntime, explainProviderError, sha256 };

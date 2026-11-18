@@ -8,7 +8,6 @@ This is the release handoff checklist for HANNAH. Repository configuration is pr
 - [ ] Capture current screenshots on real devices for every required phone, tablet, and desktop listing size. Remove personal data and developer tools from screenshots.
 - [ ] Publish a public privacy policy URL and add it to every store listing. The draft in [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) describes cloud-provider message processing, the optional Anthropic integration, microphone/speech processing, device actions, on-device memory, retention, deletion, and contact details. Replace the operator placeholders before publishing.
 - [ ] Publish terms of service and a support/contact URL. Confirm the legal entity, contact details, jurisdiction, and effective date with the owner. Use [TERMS_OF_SERVICE.md](./TERMS_OF_SERVICE.md) as the starting draft.
-- [ ] Replace the placeholder domain, contact addresses, dateline, and pricing/billing status in [LAUNCH_KIT.md](./LAUNCH_KIT.md) and [PRESS_RELEASE.md](./PRESS_RELEASE.md) with launch-day values.
 - [ ] Complete each store's content/age-rating questionnaire and provide accurate short and long descriptions, category, keywords, and release notes.
 - [ ] Review every SDK and enabled provider's privacy, retention, data residency, and acceptable-use terms. Complete a data inventory before filling in store privacy disclosures.
 - [ ] Verify accessibility, localized listing copy, icon/splash appearance, and permission prompts on actual target hardware.

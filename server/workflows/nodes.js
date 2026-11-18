@@ -671,9 +671,15 @@ const NODES = [
   },
   {
     type: "logic.aggregate", category: "logic", label: "Aggregate", icon: "Group", status: STATUS.available,
-    description: "Collects all items into one: a list, a count, and optional sums of number fields.",
+    description: "Collects all items into one: a list, a count, and optional sums of number fields. Set “When nothing arrives” to Continue to still run the next steps with an empty list (count 0), for example to be told there's nothing today.",
     inputs: ["main"], outputs: ["main"], permissions: [],
-    params: [{ name: "field", label: "Output list field", type: "string", default: "items" }, { name: "sum", label: "Sum fields (comma-separated)", type: "string", default: "" }],
+    params: [
+      { name: "field", label: "Output list field", type: "string", default: "items" },
+      { name: "sum", label: "Sum fields (comma-separated)", type: "string", default: "" },
+      { name: "whenEmpty", label: "When nothing arrives", type: "select", default: "skip", options: [{ value: "skip", label: "Skip the steps after it" }, { value: "continue", label: "Continue with an empty list" }] },
+    ],
+    // With “continue”, the engine runs this step even when the step before it produced no items (but not when that step itself was skipped).
+    runsOnEmpty: (params) => params.whenEmpty === "continue",
     execute: async (ctx) => {
       const result = { [ctx.node.params.field || "items"]: ctx.items.map((item) => item.json), count: ctx.items.length };
       for (const field of toText(ctx.node.params.sum).split(",").map((value) => value.trim()).filter(Boolean)) {
@@ -1016,7 +1022,7 @@ const CREDENTIAL_TYPES = {
 /** The catalog the editor shows: definitions without handlers. */
 function catalog() {
   return {
-    nodes: NODES.map(({ execute: _execute, outputs, approvalFor: _approval, ...rest }) => ({ ...rest, outputs: typeof outputs === "function" ? "dynamic" : outputs, dynamicOutputs: typeof outputs === "function" })),
+    nodes: NODES.map(({ execute: _execute, outputs, approvalFor: _approval, runsOnEmpty: _runsOnEmpty, ...rest }) => ({ ...rest, outputs: typeof outputs === "function" ? "dynamic" : outputs, dynamicOutputs: typeof outputs === "function" })),
     operators: Object.fromEntries(Object.entries(OPERATORS).map(([key, value]) => [key, { label: value.label, unary: Boolean(value.unary) }])),
     credentialTypes: CREDENTIAL_TYPES,
   };

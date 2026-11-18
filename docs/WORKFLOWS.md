@@ -44,7 +44,7 @@ The editor never runs a workflow. It saves a draft, asks the server to validate,
 - **Workflow**: a draft (edited, versioned with optimistic concurrency) and published versions (immutable history; one is live). Definition: `{ format: "hannah-workflow", version: 2, nodes, connections, settings: { timezone, timeoutMs } }`.
 - **Node**: `{ id, name, type, params, position, credentialId?, disabled?, settings: { retries, retryDelayMs, timeoutMs, continueOnFail } }`.
 - **Connection**: `{ source, sourceOutput, target, targetInput }`. Ports are named: If has `true`/`false`, Switch `case0…`/`otherwise`, Approval `approved`/`denied`, Merge inputs `input1`/`input2`.
-- **Items**: data moves as a list of items `{ json }`. A node gets every item from its input and returns items per output port; parameters are resolved per item. A node that receives no items is skipped, and so is everything after it: that's how branches work. Loops are item-based (Split into items), so graphs are acyclic.
+- **Items**: data moves as a list of items `{ json }`. A node gets every item from its input and returns items per output port; parameters are resolved per item. A node that receives no items is skipped, and so is everything after it: that's how branches work. Loops are item-based (Split into items), so graphs are acyclic. To carry on when a list comes back empty (for example "tell me even if there's no mail"), put an Aggregate step after it with **When nothing arrives: Continue with an empty list**; it then runs with `count: 0`. A branch not taken by If or Switch still stays skipped. A completed run whose steps stopped this way says so on its run page, naming the step that returned nothing.
 
 ### Expressions
 
@@ -65,6 +65,14 @@ Statuses: workflows are **draft**, **published** and **active** or **paused**; v
 - **At-least-once per node, at-most-once for finished nodes.** A run that stops (worker crash, serverless freeze, wait, approval) continues from its last checkpoint; finished nodes never run again. The node that was mid-call when a worker died runs again, so HTTP steps can send an `Idempotency-Key` (`<execution>:<node>:<item>`). Exactly-once external effects are not claimed.
 - **Recovery and dead-letter.** An expired lease puts the run back in the queue. After 3 recoveries it is marked failed as "dead-lettered" and never retried silently.
 - **No silent success.** A failed node fails the run, unless that node is set to "continue on error"; then its error becomes its output and the run reads "completed with errors".
+- **AI rate limits are waited out, not failed.** When the AI provider says "too many requests" (HTTP 429), the step doesn't fail. This doesn't use up the step's own retries.
+  - **Auto model:** it first tries the account's other providers.
+  - **Waits:** HANNAH waits for the provider's Retry-After, or 10 seconds doubling, plus jitter so parallel runs don't all return together. It keeps trying for up to 30 minutes (12 tries at most).
+  - **Short waits** happen in place: up to 20 seconds on a long-running server, 5 seconds on serverless hosting.
+  - **Longer waits** park the run as a timed wait. It survives restarts, the run page says why it's waiting, and the worker (or the next tick) continues it.
+  - **After 30 minutes** the step fails with what happened and what to do.
+  - **Rejected keys and over-size requests** fail at once, with a message saying what to change.
+  - **AI drafting** ("Describe it"): short limits are waited out twice; otherwise the reply says how long to wait.
 - **New mail starts one run per message.** Each check lists the newest matching messages and queues one execution per message that arrived since the last check, with the idempotency key `mail:<trigger>:<message id>`. The trigger's cursor (newest arrival seen plus recent message ids) lives in `hannah_workflow_triggers.state`. The first check after activation only records where the mailbox is, so old mail never starts runs; reactivating starts from that moment again. A failed check keeps the cursor and shows the error on the workflow.
 - **Schedules fire once per slot.** Moving `next_run_at` forward is a conditional update, and each slot's execution has an idempotency key `sched:<trigger>:<slot>`. Missed runs: "run once when back" or "skip".
 - **Webhooks don't run twice for one delivery.** `X-Hannah-Delivery` (or the HMAC signature) is recorded; a repeat returns `200 {duplicate: true}`.

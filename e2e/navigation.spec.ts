@@ -92,4 +92,13 @@ test("landing scroll keeps the navbar available and About has a built route", as
   await expect(page.getByRole("heading", { name: /Meet HANNAH, an AI companion/ })).toBeVisible();
   await page.getByRole("link", { name: "Features" }).click();
   await expect(page.locator("#features")).toBeInViewport();
+  // In-page links on About scroll without putting "#features" in the address bar.
+  await expect(page).toHaveURL(/\/about\/$/);
+  expect(new URL(page.url()).hash).toBe("");
+
+  // About's "home page" link goes to /#features: the landing page scrolls there and drops the hash.
+  await page.getByRole("link", { name: "home page" }).click();
+  await expect(page.locator("#features")).toBeInViewport();
+  await expect(page).toHaveURL(/\/$/);
+  expect(new URL(page.url()).hash).toBe("");
 });

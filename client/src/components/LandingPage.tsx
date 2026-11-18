@@ -93,10 +93,14 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
   };
   const sectionLink = (id: string) => ({ href: `#${id}`, onClick: (event: MouseEvent<HTMLAnchorElement>) => scrollToSection(event, id) });
 
-  // A link to /#privacy (for example from the About page) still lands on that section.
+  // A link to /#privacy (for example from the About page) still lands on that section, and the address bar drops the "#privacy".
   useEffect(() => {
     const id = window.location.hash.slice(1);
-    if (id && !id.startsWith("/")) document.getElementById(id)?.scrollIntoView({ block: "start" });
+    if (!id || id.startsWith("/")) return;
+    const target = document.getElementById(id);
+    if (!target) return;
+    target.scrollIntoView({ block: "start" });
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
   }, []);
 
   const openKeyDialog = () => {

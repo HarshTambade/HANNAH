@@ -4,6 +4,19 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ## Unreleased
 
+### Fixed
+
+- **Workflows no longer fail when the AI provider is busy.**
+  - **Before:** with a free Groq key, 4 of 6 workflows started together failed at their first AI step with "Provider returned HTTP 429."
+  - **Waiting:** a rate-limited AI step now waits for the provider and keeps trying for up to 30 minutes. Long waits pause the run, and the run page says why; nothing is lost if the server restarts.
+  - **Other keys:** with the Auto model, HANNAH first tries your other saved provider keys.
+  - **Clear errors:** a rejected key or an over-size request says what to change.
+  - **Drafting:** describing a workflow while the provider is busy waits briefly, then says how long to wait.
+- **"Completed" runs that did nothing now say why.** When a step finds nothing (no reminders today, no new mail), the steps after it are skipped; the run page now names that step. The Aggregate step has a new option, **When nothing arrives: Continue with an empty list**, for workflows that should still tell you there's nothing. The morning mail template uses it.
+- **No `#features` or `#download` in the address bar.** Links from the About page to sections of the home page, and the About page's own section links, scroll without leaving a hash in the address bar.
+- **Workflow runs show how many tokens an AI step used.** Token counts were hidden as if they were secrets; real tokens and passwords still are.
+- **The Windows desktop build passes its dependency audit again.** The audit gate compared Windows paths (`client\electron`) with the recorded exceptions (`client/electron`), so every Windows build since 2026-11-17 failed.
+
 ### New
 
 - **HANNAH's browser, YouTube study notes and PDF notes (desktop app).**
@@ -45,7 +58,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
   - **No restricted permissions:** no `CALL_PHONE` or `SEND_SMS`, only Contacts when you first look up a name.
   - **Verified:** run end to end on Android in the emulator.
 - **A redesigned website.** New sections for AI models (providers and Auto routing), AI agents (how Team works, and what runs on your computer, labelled by status), developers, a what-works-where table, the roadmap with Available, Beta and Coming labels, and help and support. The About page is rewritten to match the product. Every link, download and anchor was checked, and pages are checked for horizontal overflow at four widths.
-- **HANNAH's own icon on every platform.** The desktop apps (macOS, Windows, Linux, the Windows installer), Android (legacy, round and adaptive icons, plus a monochrome layer for themed icons) and iOS shipped framework default icons; they're now generated from the official mark by `client/scripts/generate-brand-assets.mjs`, with a CI check that refuses default icons. The web app gains favicon.ico and a maskable PWA icon.
+- **HANNAH's own icon on every platform.** The desktop apps (macOS, Windows, Linux, the Windows installer), Android (legacy, round and adaptive icons, plus a monochrome layer for themed icons) and iOS shipped framework default icons; they're now generated from the official mark by `client/scripts/generate-brand-assets.mjs`, with a CI check that refuses default icons. The web app gains favicon.ico and a maskable PWA icon. v1.4.0's downloads still have Electron's icon on macOS and Capacitor's on Android (checked in the released files); a second CI check now opens the packaged macOS app and Linux package and fails if the icon isn't HANNAH's.
 - **Website: an automation section** with screenshots of a real workflow run, the steps and integrations with their status (available, beta, coming), and a FAQ on where workflows run.
 
 - **Daily briefing.** Say "good morning" in chat, use the new **Daily briefing** automation step (the **Morning briefing** template runs it at 07:30 and speaks it), or press **Preview today's briefing** in Settings → Daily briefing. HANNAH collects today's calendar and the newest mail (once an account is connected), reminders due today, the routines she remembers and, if you turn them on, the weather (Open-Meteo, for a place you choose by name) and the Hacker News front page, then has your AI narrate them in a short spoken style. Mail and headlines are marked as other people's content; sensitive memories are left out; weather and news are off by default and send nothing about you.

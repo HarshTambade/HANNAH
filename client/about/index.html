@@ -177,5 +177,26 @@
         <span><a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/docs/CHANGELOG.md">Changelog</a> · <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/blob/main/LICENSE">License</a></span>
       </footer>
     </div>
+    <script>
+      // In-page links scroll to their section without putting "#section" in the address bar.
+      // Without JavaScript they still work as ordinary anchors.
+      (function () {
+        var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        document.addEventListener("click", function (event) {
+          var link = event.target.closest && event.target.closest('a[href^="#"]');
+          if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          var target = document.getElementById(link.getAttribute("href").slice(1));
+          if (!target) return;
+          event.preventDefault();
+          target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+          if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+          target.focus({ preventScroll: true });
+        });
+        if (location.hash && document.getElementById(location.hash.slice(1))) {
+          document.getElementById(location.hash.slice(1)).scrollIntoView({ block: "start" });
+          history.replaceState(history.state, "", location.pathname + location.search);
+        }
+      })();
+    </script>
   </body>
 </html>

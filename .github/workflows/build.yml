@@ -288,6 +288,11 @@ jobs:
             echo "::error::The packaged desktop app didn't start and load its page."
             exit 1
           fi
+      # The source brand check can pass while packaging still ships Electron's icon
+      # (v1.4.0's macOS app did). Look inside what was built. Windows embeds the icon in the .exe, which this doesn't parse.
+      - name: Check the packaged app's icon
+        if: runner.os != 'Windows'
+        run: node scripts/check-packaged-icons.mjs client/electron/dist
       - name: Enforce renderer and installer size targets
         working-directory: client/electron
         run: node ../scripts/check-bundle-size.mjs --strict --package-dir dist

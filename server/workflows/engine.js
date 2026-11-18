@@ -40,6 +40,14 @@ const LIMITS = {
   workflowTimeoutMs: { default: 15 * 60_000, max: 60 * 60_000 },
   retries: { max: 5 },
 };
+/** Waiting out an AI provider's rate limit (see execute). */
+const RATE_LIMIT = { waits: 12, windowMs: 30 * 60_000, firstMs: 10_000, maxMs: 5 * 60_000, inlineMs: 20_000 };
+
+/** How long to wait before rate-limit try `wait` (1-based): the provider's Retry-After, or 10 s doubling, with jitter so parallel runs don't all return at once. */
+function rateLimitDelay(error, wait, random = Math.random) {
+  const base = Number(error?.retryAfterMs) > 0 ? Number(error.retryAfterMs) : RATE_LIMIT.firstMs * 2 ** (wait - 1);
+  return Math.round(Math.min(RATE_LIMIT.maxMs, Math.max(1000, base)) * (1 + random() * 0.25));
+}
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 // ---------- validation ----------
@@ -280,6 +288,9 @@ class CancelledError extends Error {
 }
 
 const SENSITIVE_KEY = /authorization|password|passwd|secret|token|api[-_]?key|cookie|set-cookie|private[-_]?key|connectionstring/i;
+// Token counts (an AI step's usage: promptTokens, total_tokens, maxTokens …) are numbers, not secrets.
+const TOKEN_COUNT_KEY = /^(prompt|completion|total|input|output|max|reasoning|cached)[-_]?tokens?$|tokens$/i;
+const masked = (key, item) => SENSITIVE_KEY.test(key) && !(TOKEN_COUNT_KEY.test(key) && typeof item === "number");
 
 /** A copy that's safe to show: secret-looking keys masked, long text and lists cut. */
 function sanitize(value, depth = 0) {
@@ -287,7 +298,7 @@ function sanitize(value, depth = 0) {
   if (depth > 8) return "[…]";
   if (typeof value === "string") return looksSecret(value) ? "[redacted]" : value.length > 4000 ? `${value.slice(0, 4000)}… (${value.length} characters)` : value;
   if (Array.isArray(value)) return value.length > 50 ? [...value.slice(0, 50).map((item) => sanitize(item, depth + 1)), `… ${value.length - 50} more`] : value.map((item) => sanitize(item, depth + 1));
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).slice(0, 100).map(([key, item]) => [key, SENSITIVE_KEY.test(key) ? "[redacted]" : sanitize(item, depth + 1)]));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).slice(0, 100).map(([key, item]) => [key, masked(key, item) ? "[redacted]" : sanitize(item, depth + 1)]));
   return value;
 }
 
@@ -317,10 +328,18 @@ function permanent(error) {
  * Run (or continue) an execution.
  *
  * input: { definition, execution: { id, mode, triggerNodeId, triggerData, state, startedAt }, workflow: { id, name, timezone },
- *          services, now, signal (AbortSignal for cancel), onCheckpoint(state, event), resume?: { nodeId, approved?, data? } }
+ *          services, now, signal (AbortSignal for cancel), onCheckpoint(state, event), resume?: { nodeId, approved?, data? },
+ *          inlineWaitMs? (longest rate-limit wait done in place; longer ones park the run) }
  * returns { status: completed | failed | waiting | waiting-approval | cancelled | timed-out, state, error?, errorNode?, waiting?, warnings }
+ *
+ * Rate limits. An AI provider that is rate-limiting (an error with
+ * `rateLimited`) doesn't fail the step: the engine waits for the provider's
+ * Retry-After (or a growing delay) and tries again, for up to 30 minutes and
+ * 12 tries (RATE_LIMIT), separately from the step's own retries. Short waits happen in place;
+ * longer ones park the run as a timed wait, which survives restarts and, on
+ * serverless hosting, is woken by the next tick.
  */
-async function execute({ definition, execution, workflow, services, now = () => Date.now(), signal, onCheckpoint = async () => {}, resume, sleep = delay }) {
+async function execute({ definition, execution, workflow, services, now = () => Date.now(), signal, onCheckpoint = async () => {}, resume, sleep = delay, inlineWaitMs = RATE_LIMIT.inlineMs }) {
   const nodes = (definition.nodes || []).filter((node) => REGISTRY.has(node.type));
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byName = new Map(nodes.map((node) => [node.name, node]));
@@ -375,7 +394,12 @@ async function execute({ definition, execution, workflow, services, now = () => 
       inputs[connection.targetInput || "main"] = [...(inputs[connection.targetInput || "main"] || []), ...items];
     }
     const total = Object.values(inputs).reduce((sum, items) => sum + items.length, 0);
-    if (definitionOf.category === "trigger" ? !isStart : total === 0) {
+    // A step that may run on nothing (Aggregate set to continue) runs when a step before it ran and produced no items at all.
+    // A branch not taken stays skipped: when If or Switch sent the items down another output, this step doesn't run.
+    const producedNothing = (source) => ["done", "failed-continued"].includes(state.nodes[source]?.status) && Object.values(state.nodes[source].outputs || {}).every((items) => !items.length);
+    const runsEmpty = total === 0 && definitionOf.category !== "trigger" && Boolean(definitionOf.runsOnEmpty?.(withDefaults(definitionOf, node.params)))
+      && connections.some((connection) => connection.target === id && producedNothing(connection.source));
+    if (definitionOf.category === "trigger" ? !isStart : total === 0 && !runsEmpty) {
       state.nodes[id] = { status: "skipped", reason: definitionOf.category === "trigger" ? "Another trigger started this run." : "No items reached this step.", at: now() };
       await onCheckpoint(state, { nodeId: id, status: "skipped" });
       continue;
@@ -450,6 +474,9 @@ async function execute({ definition, execution, workflow, services, now = () => 
 
     let lastError = null;
     let result = null;
+    let parkUntil = null;
+    // A step parked for a rate limit runs again from the start, not as a resumed wait.
+    const retryingAfterPark = Boolean(previous?.waiting?.retry);
     for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
       state.nodes[id].attempts = attempt;
       const controller = new AbortController();
@@ -462,7 +489,7 @@ async function execute({ definition, execution, workflow, services, now = () => 
         const ctx = {
           node: { ...node, params }, params, items, inputs, credential, services, signal: controller.signal, timeoutMs: limit,
           execution: { id: execution.id, mode: execution.mode }, workflow, triggerData: isStart ? execution.triggerData : undefined,
-          resumed: resumed && !previous?.gate ? resumed : null, now, resolve, resolveOnce, scopeFor, throwIfCancelled: () => { if (controller.signal.aborted) throw controller.signal.reason instanceof Error ? controller.signal.reason : new CancelledError(); },
+          resumed: resumed && !previous?.gate && !retryingAfterPark ? resumed : null, now, resolve, resolveOnce, scopeFor, throwIfCancelled: () => { if (controller.signal.aborted) throw controller.signal.reason instanceof Error ? controller.signal.reason : new CancelledError(); },
         };
         result = await Promise.race([
           definitionOf.execute(ctx),
@@ -473,6 +500,29 @@ async function execute({ definition, execution, workflow, services, now = () => 
       } catch (error) {
         lastError = error;
         if (isCancelled()) break;
+        if (error?.rateLimited) {
+          const waits = (state.nodes[id].rateLimitWaits || 0) + 1;
+          const since = state.nodes[id].rateLimitedSince ?? now();
+          const waitMs = rateLimitDelay(error, waits);
+          // Keep trying for up to RATE_LIMIT.windowMs from the first refusal (and at most RATE_LIMIT.waits times).
+          if (waits <= RATE_LIMIT.waits && now() + waitMs - since <= RATE_LIMIT.windowMs) {
+            state.nodes[id].rateLimitWaits = waits;
+            state.nodes[id].rateLimitedSince = since;
+            state.nodes[id].lastError = error.message;
+            if (waitMs <= inlineWaitMs && now() + waitMs < deadline) {
+              await onCheckpoint(state, { nodeId: id, status: "retrying", error: error.message, attempt });
+              await sleep(waitMs, signal);
+              attempt -= 1; // a rate limit doesn't use up the step's own retries
+              continue;
+            }
+            parkUntil = now() + waitMs;
+            lastError = null;
+            break;
+          }
+          const minutes = Math.max(1, Math.round((now() - since) / 60_000));
+          lastError = Object.assign(new Error(`${error.message} HANNAH kept trying for ${minutes} minute${minutes === 1 ? "" : "s"} (${waits} tries). Free plans allow only a few requests or tokens a minute or day: run this less often, send less text, or save another provider's key so Auto can use it.`), { rateLimited: true });
+          break;
+        }
         if (permanent(error) || attempt > retries) break;
         const backoff = Math.min(60_000, retryDelayMs * 2 ** (attempt - 1)) * (0.8 + Math.random() * 0.4);
         state.nodes[id].lastError = error.message;
@@ -488,6 +538,13 @@ async function execute({ definition, execution, workflow, services, now = () => 
       state.nodes[id] = { ...state.nodes[id], status: "cancelled", finishedAt: now() };
       await onCheckpoint(state, { nodeId: id, status: "cancelled" });
       return { status: "cancelled", state, error: signal.reason?.message || "Cancelled.", errorNode: id, warnings };
+    }
+
+    if (parkUntil !== null) {
+      const waiting = { kind: "time", until: parkUntil, retry: true, message: `“${node.name}”: ${state.nodes[id].lastError} HANNAH waits and tries again (for up to ${Math.round(RATE_LIMIT.windowMs / 60_000)} minutes).` };
+      state.nodes[id] = { ...state.nodes[id], status: "waiting", waiting, resumed: undefined };
+      await onCheckpoint(state, { nodeId: id, status: "waiting" });
+      return { status: "waiting", state, waiting: { nodeId: id, ...waiting }, warnings };
     }
 
     if (lastError) {

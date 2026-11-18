@@ -4,7 +4,7 @@ import {
   Hourglass, ListEnd, ListTree, Mail, MailOpen, Merge, MessageSquare, MessagesSquare, MousePointerClick, NotebookPen, PenLine, Radio, Repeat, ScanText, Search, ShieldCheck, Sparkles,
   Split, SquareTerminal, TableProperties, Tags, Unplug, Webhook, Workflow, type LucideIcon,
 } from "lucide-react";
-import type { NodeCategory, WorkflowConnection, WorkflowDefinition, WorkflowNode } from "../../services/WorkflowApi";
+import type { NodeCategory, NodeRun, WorkflowConnection, WorkflowDefinition, WorkflowNode } from "../../services/WorkflowApi";
 
 const ICONS: Record<string, LucideIcon> = {
   AlarmClock, AppWindow, ArrowLeftRight, BadgeCheck, Bell, Bot, BrainCircuit, Braces, CalendarClock, CalendarPlus, Database, FileText, FileUp, Filter, GitBranch, Github, Globe, Group,
@@ -141,4 +141,18 @@ export function duration(ms: number | null | undefined) {
 export function when(at: number | null | undefined) {
   if (!at) return "—";
   return new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/**
+ * Steps that finished with nothing at all (no items on any output) while steps
+ * after them were skipped: the reason a "completed" run did less than
+ * expected. A branch not taken (If sent its items elsewhere) isn't listed.
+ */
+export function emptyStops(definition: WorkflowDefinition, nodes: NodeRun[]) {
+  const byId = new Map(nodes.map((node) => [node.nodeId, node]));
+  return nodes.filter((node) => {
+    if (node.status !== "done" || !node.output) return false;
+    if (Object.values(node.output).some((port) => port.count > 0)) return false;
+    return definition.connections.some((connection) => connection.source === node.nodeId && byId.get(connection.target)?.status === "skipped");
+  }).map((node) => ({ nodeId: node.nodeId, name: node.name, skipped: nodes.filter((other) => other.status === "skipped" && reaches(definition.connections, node.nodeId, other.nodeId)).length }));
 }

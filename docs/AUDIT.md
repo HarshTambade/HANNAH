@@ -8,7 +8,7 @@
 
 ### M1.5 security hotfix follow-up
 
-After the b81a527 baseline below, M1.5 added Express bearer authentication for every /api route except /api/health, production startup validation, and configurable per-token fixed-window limits on chat, agent, and desktop-computer requests. The primary client collects the bearer from the user in page memory; it is not compiled into the Vite bundle or stored in browser storage. See server/api-security.js:15-40,49-90; server/index.js:114-120; client/src/services/api.ts:1-21; and MILESTONE_1.5.md. The limits are process-local, so multi-instance deployments need a shared or upstream limiter.
+After the b81a527 baseline below, M1.5 added Express bearer authentication for every /api route except /api/health, production startup validation, and configurable per-token fixed-window limits on chat, agent, and desktop-computer requests. The primary client collects the bearer from the user in page memory; it is not compiled into the Vite bundle or stored in browser storage. See server/api-security.js:15-40,49-90; server/index.js:114-120; client/src/services/api.ts:1-21. The limits are process-local, so multi-instance deployments need a shared or upstream limiter.
 
 HANNAH is an existing multi-surface assistant with a primary React/Capacitor client, an Express provider API, a separate Python agent/backend, native memory and voice dependencies, a small eBPF metadata sensor, and two additional app shells. Several capabilities are real, but the repository does not yet behave as one unified autonomous system.
 
@@ -39,7 +39,6 @@ This maps tracked paths by file and actual role. Generated resources are grouped
 - vercel.json — defines separate client and Express services and rewrites /api/* and /mcp.
 - .github/workflows/build.yml — builds web/PWA on Ubuntu, client-generated Electron on macOS/Windows/Linux, Android on Ubuntu, and iOS archive on macOS; includes packaging/release jobs. It has no test, lint, or format job and does not build apps/frontend.
 - docs/API-INTEGRATION.md — REST/MCP integration guide.
-- docs/QA-AUDIT-2026-11-11.md — prior QA report. It records a successful primary build/release pipeline, a then-failing secondary frontend TypeScript build, no API authentication/rate limiting, and client production dependency advisories. Those results are dated and have not been re-run for this audit.
 
 ### Primary client: client/
 
@@ -216,7 +215,7 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 - CI packages primary web/PWA, client-generated Electron for macOS/Windows/Linux, Android, and iOS archive (.github/workflows/build.yml:30-260). It does not build the alternate frontend or separate apps/desktop package.
 - No tracked unit, provider integration, golden-loop, or cassette test suite was found. No CI lint/formatter enforcement exists.
 - The root build script only builds the primary client (package.json:10-20). The README quickstart has multiple dependency-install/configuration steps (README.md:325-400); it is not a demonstrated under-60-second first turn from clone.
-- The prior QA document records 75 client production dependency advisories (6 critical, 27 high, 42 moderate) and a secondary frontend TypeScript error, but both findings are dated 2026-11-11 and need a fresh check before acting on them (docs/QA-AUDIT-2026-11-11.md:24-25,40-50).
+- The prior QA document records 75 client production dependency advisories (6 critical, 27 high, 42 moderate) and a secondary frontend TypeScript error, but both findings are dated 2026-11-11 and need a fresh check before acting on them.
 
 ## 4. Duplicated or conflicting responsibilities
 
@@ -237,7 +236,7 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 5. **Provider/runtime divergence can ignore user intent or fail inconsistently.** Node is primary but Python maintains a separate catalog and is only conditionally called for Groq failures; mobile selects Anthropic directly. Model defaults, fallback and adapter behavior are not shared.
 6. **No session-level limits or unified trace leave cost and cancellation unbounded.** Eight tool rounds are bounded, but total wall time, spend, and tokens are not. There is no shared client/server trace or agent kill switch.
 7. **Audit logger integrity failure can stop Python startup.** The logger verifies on import/initialization and refuses to append if the log is partial or invalid (backend/audit_logger.py:50-95,126). This is intentional fail-closed behavior, but startup recovery/repair procedure is not documented.
-8. **Native capabilities lack current device verification.** LanceDB, voice, offline llama.cpp, permissions, and app lifecycle rely on native plugins; source wiring exists, but no physical iOS/Android validation was performed here. The historical QA explicitly says those checks were not performed (docs/QA-AUDIT-2026-11-11.md:60-65).
+8. **Native capabilities lack current device verification.** LanceDB, voice, offline llama.cpp, permissions, and app lifecycle rely on native plugins; source wiring exists, but no physical iOS/Android validation was performed here.
 9. **Historical dependency/build findings need revalidation.** The prior QA reported critical/high client dependency advisories and a failing alternate frontend build. No current package audit or build was run for this audit.
 
 ## 6. Clarifying questions for the milestone plan
@@ -249,4 +248,4 @@ Statuses describe tracked source/configuration, not successful runtime verificat
 
 ## 7. Proposed sequence after approval
 
-M1.5 is implemented and recorded in MILESTONE_1.5.md. Proceed with the brief's milestone order after review checkpoint M2: document that Python fallback is client→Python (not Python→Express); settle supported app surfaces and routing authority; include MobileClaw/desktop capability adapters in M3; verify both outbound and inbound MCP and the Vercel mount in M7; expose only metadata retained by the bounded event buffer and document its privacy boundary in M8.
+Proceed with the brief's milestone order after review checkpoint M2: document that Python fallback is client→Python (not Python→Express); settle supported app surfaces and routing authority; include MobileClaw/desktop capability adapters in M3; verify both outbound and inbound MCP and the Vercel mount in M7; expose only metadata retained by the bounded event buffer and document its privacy boundary in M8.

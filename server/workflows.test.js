@@ -28,8 +28,20 @@ let runtime;
 // The AI provider stand-in: every call to api.groq.com lands here.
 const aiCalls = [];
 const realFetch = globalThis.fetch;
+// Rate limits: the next `groqBusy` Groq calls answer 429 with Retry-After `groqRetryAfter` seconds.
+let groqBusy = 0;
+let groqRetryAfter = "1";
+const openaiCalls = [];
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input.url;
+  if (url.startsWith("https://api.groq.com/") && groqBusy > 0) {
+    groqBusy -= 1;
+    return new Response(JSON.stringify({ error: { message: "Rate limit reached for model in organization on tokens per minute (TPM)", type: "tokens", code: "rate_limit_exceeded" } }), { status: 429, headers: { "content-type": "application/json", "retry-after": groqRetryAfter } });
+  }
+  if (url.startsWith("https://api.openai.com/")) {
+    openaiCalls.push(JSON.parse(init.body || "{}").model);
+    return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Answer from OpenAI" } }], usage: { prompt_tokens: 5, completion_tokens: 5 } }), { status: 200, headers: { "content-type": "application/json" } });
+  }
   if (url.startsWith("https://api.groq.com/")) {
     const body = JSON.parse(init.body || "{}");
     const prompt = body.messages?.find((message) => message.role === "user")?.content || "";
@@ -142,11 +154,11 @@ async function runToEnd(api, executionId, rounds = 20) {
   return (await api.get(`/workflows/executions/${executionId}`)).body;
 }
 
-async function saveGroqKey(email) {
+async function saveGroqKey(email, providerId = "groq", key = "gsk_workflowTestKey0123456789abcdefghijkl") {
   const db = await require("./db").getDatabase();
   const { rows: [user] } = await db.query("SELECT id FROM hannah_users WHERE email = $1", [email]);
-  const sealed = require("./vault").encryptSecret("gsk_workflowTestKey0123456789abcdefghijkl", { userId: user.id, providerId: "groq" });
-  await db.query("INSERT INTO hannah_credentials (user_id, provider_id, key_id, wrapped_key, ciphertext, hint, created_at, updated_at) VALUES ($1, 'groq', $2, $3, $4, 'gsk_…ijkl', $5, $5)", [user.id, sealed.keyId, sealed.wrappedKey, sealed.ciphertext, Date.now()]);
+  const sealed = require("./vault").encryptSecret(key, { userId: user.id, providerId });
+  await db.query("INSERT INTO hannah_credentials (user_id, provider_id, key_id, wrapped_key, ciphertext, hint, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, 'key…ijkl', $6, $6)", [user.id, providerId, sealed.keyId, sealed.wrappedKey, sealed.ciphertext, Date.now()]);
 }
 
 test("a draft is saved with version checks, validated, and runs with real data passing between nodes", async () => {
@@ -672,4 +684,64 @@ test("desktop steps: the run waits for a job; one device claims it; its result r
   await runToEnd(api, codingRun.body.executionId);
   const codingJob = (await api.get("/workflows/device-jobs")).body.jobs.find((entry) => entry.executionId === codingRun.body.executionId);
   assert.deepEqual(codingJob.input, { folder: "hannah", task: "Find why: CI is red", allowCommands: false });
+});
+
+test("AI rate limits: short waits are waited out, long ones park the run and it finishes later; Auto moves to another provider's key", async () => {
+  const email = "busy@example.com";
+  const api = client(await signUp(email));
+  await saveGroqKey(email);
+  const id = await createWorkflow(api, "Busy AI", definition([
+    { id: "t", name: "Start", type: "trigger.manual", params: { sample: { text: "a short note" } } },
+    { id: "a", name: "Summarize", type: "ai.prompt", params: { prompt: "Summarize {{ $json.text }}" } },
+    { id: "n", name: "Tell me", type: "action.notify", params: { title: "Summary", body: "{{ $json.answer }}" } },
+  ], [["t", "a"], ["a", "n"]]));
+
+  // Busy for a moment: every Groq model in the chain says 429 once, with Retry-After 1 s. The run waits and finishes.
+  const { getProvider, modelChain, defaultModelFor } = require("./providers/catalog");
+  const groq = getProvider("groq");
+  // Each try goes through Groq's model chain; two whole tries are refused, the third gets through.
+  groqBusy = modelChain(groq, defaultModelFor(groq)).length * 2;
+  groqRetryAfter = "1";
+  const quick = await api.post(`/workflows/${id}/run`, {});
+  const done = await runToEnd(api, quick.body.executionId);
+  assert.equal(done.execution.status, "completed", JSON.stringify(done.execution));
+  assert.match(done.nodes.find((node) => node.nodeId === "a").output.main.items[0].answer, /Summary of/);
+
+  // Busy for two minutes: the run parks as a timed wait that says why, instead of failing.
+  groqBusy = 1000;
+  groqRetryAfter = "120";
+  const slow = await api.post(`/workflows/${id}/run`, {});
+  const parked = await runToEnd(api, slow.body.executionId, 3);
+  assert.equal(parked.execution.status, "waiting", JSON.stringify(parked.execution));
+  assert.match(parked.execution.waiting.message, /Groq is rate-limiting your key/);
+  // Two minutes later the provider has room again: the worker wakes the run and it finishes.
+  groqBusy = 0;
+  const db = await require("./db").getDatabase();
+  await db.query("UPDATE hannah_workflow_executions SET wait_until = $1 WHERE id = $2", [Date.now() - 1, slow.body.executionId]);
+  const finished = await runToEnd(api, slow.body.executionId);
+  assert.equal(finished.execution.status, "completed", JSON.stringify(finished.execution));
+  assert.equal(finished.nodes.find((node) => node.nodeId === "n").status, "done");
+
+  // With an OpenAI key saved too, Auto uses it while Groq is busy.
+  await saveGroqKey(email, "openai", "sk-workflowTestKey0123456789abcdefghijkl");
+  groqBusy = 1000;
+  const fallback = await api.post(`/workflows/${id}/run`, {});
+  const viaOpenAi = await runToEnd(api, fallback.body.executionId);
+  groqBusy = 0;
+  assert.equal(viaOpenAi.execution.status, "completed", JSON.stringify(viaOpenAi.execution));
+  assert.equal(viaOpenAi.nodes.find((node) => node.nodeId === "a").output.main.items[0].answer, "Answer from OpenAI");
+  assert.ok(openaiCalls.length >= 1);
+});
+
+test("drafting from a description reports a rate limit clearly, with Retry-After", async () => {
+  const email = "draft-busy@example.com";
+  const api = client(await signUp(email));
+  await saveGroqKey(email);
+  groqBusy = 1000;
+  groqRetryAfter = "90";
+  const drafted = await api.post("/workflows/from-text", { description: "Every morning summarize my newest mail and notify me." });
+  groqBusy = 0;
+  assert.equal(drafted.status, 429);
+  assert.equal(drafted.body.reason, "rate-limited");
+  assert.match(drafted.body.error, /Groq is rate-limiting your key.*Try again in 90 seconds/);
 });

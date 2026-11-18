@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, RotateCcw, Square, X } from "lucide-react";
 import { WorkflowApi, type ExecutionDetail as Detail, type NodeRun } from "../../services/WorkflowApi";
-import { STATUS_STYLE, duration, when } from "./support";
+import { STATUS_STYLE, duration, emptyStops, when } from "./support";
 
 const LIVE = new Set(["queued", "running"]);
 export const FINAL = new Set(["completed", "failed", "cancelled", "timed-out"]);
@@ -140,6 +140,13 @@ export default function ExecutionDetail({ executionId, onOpenExecution, onClose,
         </div>
       )}
 
+      {execution.status === "completed" && emptyStops(detail.definition, nodes).map((stop) => (
+        <div key={stop.nodeId} role="note" className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <p>“{stop.name}” returned nothing, so the {stop.skipped === 1 ? "step" : `${stop.skipped} steps`} after it didn't run.</p>
+          <p className="mt-0.5 text-xs">That's expected when there was nothing to do. To run them anyway (for example to be told there's nothing today), use an Aggregate step right after it with “When nothing arrives” set to “Continue with an empty list”.</p>
+        </div>
+      ))}
+
       {execution.status === "waiting-approval" && execution.waiting && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-sm font-semibold text-amber-900">{execution.waiting.message ?? "This run is waiting for your approval."}</p>
@@ -153,7 +160,7 @@ export default function ExecutionDetail({ executionId, onOpenExecution, onClose,
       )}
       {execution.status === "waiting" && execution.waiting && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          {execution.waiting.kind === "time" ? <>Waiting until {when(execution.waiting.until)}, then it continues on its own.</> : execution.waiting.kind === "device" ? (
+          {execution.waiting.kind === "time" ? <>{execution.waiting.message && <span className="block font-semibold">{execution.waiting.message}</span>}Waiting until {when(execution.waiting.until)}, then it continues on its own.</> : execution.waiting.kind === "device" ? (
             <>
               <span className="block font-semibold">{execution.waiting.message ?? "Waiting for your desktop app."}</span>
               <span className="mt-1 block text-xs">It runs when the HANNAH desktop app is open and signed in to this account, with “Run workflow tasks” on in Settings → Desktop access; it asks you there first. If no desktop picks it up by {when(execution.waiting.until)}, the run stops.</span>

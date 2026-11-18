@@ -146,6 +146,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
     } catch (error) {
       const status = error.status || 500;
       if (status >= 500 && !error.reason) console.error(`Workflow API error (${error?.code || error?.name || "error"}): ${error.message}`);
+      if (status === 429 && Number(error.retryAfterMs) > 0) res.setHeader("Retry-After", String(Math.ceil(Number(error.retryAfterMs) / 1000)));
       res.status(status).json({ error: status >= 500 && !error.reason ? "Something went wrong on the server." : error.message, reason: error.reason, ...(error.validation ? { validation: error.validation } : {}) });
     }
   };
@@ -745,7 +746,25 @@ function createHookRouter({ runtime }) {
 
 // ----- natural language → workflow draft -----
 
-async function draftFromText(services, description, timezone) {
+/**
+ * An AI answer for a request someone is waiting on: a short rate limit is
+ * waited out (twice at most, 15 seconds each); a longer one is reported with
+ * its Retry-After. Exported for tests.
+ */
+async function aiWithShortWaits(services, request, { waits = 2, maxWaitMs = 15_000, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  for (let wait = 0; ; wait += 1) {
+    try {
+      return await services.ai(request);
+    } catch (error) {
+      if (!error?.rateLimited) throw error;
+      const ms = Number(error.retryAfterMs) > 0 ? Number(error.retryAfterMs) : 5000 * 2 ** wait;
+      if (wait >= waits || ms > maxWaitMs) throw Object.assign(error, { status: 429, reason: "rate-limited", message: `${error.message} Try again in ${Math.max(1, Math.ceil(ms / 1000))} seconds.` });
+      await sleep(ms);
+    }
+  }
+}
+
+async function draftFromText(services, description, timezone, { sleep } = {}) {
   const { nodes } = catalog();
   const available = nodes.filter((node) => node.status !== "upcoming").map((node) => `${node.type}: ${node.label} — ${node.description} Params: ${node.params.map((param) => `${param.name}${param.options ? ` (${param.options.map((option) => option.value).join("|")})` : ""}`).join(", ") || "none"}. Outputs: ${node.dynamicOutputs ? "dynamic" : node.outputs.join(", ")}.`).join("\n");
   const system = [
@@ -753,9 +772,10 @@ async function draftFromText(services, description, timezone) {
     '{"name": string, "notes": string, "nodes": [{"id": string, "name": string, "type": string, "params": object}], "connections": [{"source": id, "target": id, "sourceOutput": string, "targetInput": string}]}',
     "Rules: exactly one trigger first. Use only the node types listed. Node names are unique and short. Read data from earlier steps with expressions like {{ $json.field }} or {{ $node[\"Step name\"].json.field }}.",
     "Prefer email mode \"draft\" over \"send\". Never put credentials or secrets in params; steps that need a credential leave it unset. In notes, say in one or two sentences what the user must still set up (credentials, connected accounts).",
+    "A step that receives no items is skipped, and so is everything after it. When the user wants a message even if a list step (reminders, mail, search, HTTP results) finds nothing, put a logic.aggregate step after that list with whenEmpty \"continue\".",
     "The description is the user's request: build what it asks, nothing more.",
   ].join(" ");
-  const result = await services.ai({ model: "auto", json: true, temperature: 0.2, maxTokens: 2500, system, prompt: `Available nodes:\n${available}\n\nTime zone: ${timezone || "UTC"}\n\nDescription:\n"""${description}"""` });
+  const result = await aiWithShortWaits(services, { model: "auto", json: true, temperature: 0.2, maxTokens: 2500, system, prompt: `Available nodes:\n${available}\n\nTime zone: ${timezone || "UTC"}\n\nDescription:\n"""${description}"""` }, sleep ? { sleep } : {});
   let draft;
   try {
     draft = JSON.parse(String(result.text).replace(/^```(?:json)?\s*|\s*```$/g, ""));
@@ -782,4 +802,4 @@ async function draftFromText(services, description, timezone) {
   };
 }
 
-module.exports = { createHookRouter, createWorkflowRouter, draftFromText };
+module.exports = { aiWithShortWaits, createHookRouter, createWorkflowRouter, draftFromText };

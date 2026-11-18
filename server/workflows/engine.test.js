@@ -39,6 +39,7 @@ const run = (definition, options = {}) => execute({
   resume: options.resume,
   sleep: options.sleep ?? (async () => {}),
   onCheckpoint: options.onCheckpoint,
+  inlineWaitMs: options.inlineWaitMs,
 });
 
 describe("expressions", () => {
@@ -251,5 +252,114 @@ describe("execution", () => {
 
   it("hides secrets in what it shows", () => {
     assert.deepEqual(sanitize({ headers: { authorization: "Bearer x" }, apiKey: "abc", note: "gsk_abcdefghijklmnopqrstuvwxyz0123", ok: "fine" }), { headers: { authorization: "[redacted]" }, apiKey: "[redacted]", note: "[redacted]", ok: "fine" });
+  });
+
+  it("shows an AI step's token counts but still hides tokens and numeric passwords", () => {
+    assert.deepEqual(
+      sanitize({ usage: { promptTokens: 412, completionTokens: 96, total_tokens: 508 }, maxTokens: 1200, token: "abc123", accessToken: 42, password: 1234, refreshTokens: "rt_secret" }),
+      { usage: { promptTokens: 412, completionTokens: 96, total_tokens: 508 }, maxTokens: 1200, token: "[redacted]", accessToken: "[redacted]", password: "[redacted]", refreshTokens: "[redacted]" },
+    );
+  });
+});
+
+describe("AI provider rate limits", () => {
+  const rateLimited = (retryAfterMs) => Object.assign(new Error("Groq is rate-limiting your key right now (too many requests or tokens per minute)."), { status: 429, rateLimited: true, retryable: true, ...(retryAfterMs ? { retryAfterMs } : {}) });
+  const askFlow = () => base([
+    { id: "t", name: "Start", type: "trigger.manual", params: { sample: { text: "hello" } } },
+    { id: "a", name: "Ask", type: "ai.prompt", params: { prompt: "Say hi to {{ $json.text }}" } },
+    { id: "n", name: "Tell me", type: "action.notify", params: { title: "AI", body: "{{ $json.answer }}" } },
+  ], [connect("t", "a"), connect("a", "n")]);
+
+  it("waits for the provider's Retry-After and tries again, without using the step's own retries", async () => {
+    let calls = 0;
+    const { services, calls: seen } = fakeServices({ ai: async () => { calls += 1; if (calls <= 2) throw rateLimited(3000); return { text: "hi", model: "m", provider: "fake" }; } });
+    const sleeps = [];
+    const result = await run(askFlow(), { services, sleep: async (ms) => sleeps.push(ms) });
+    assert.equal(result.status, "completed");
+    assert.equal(calls, 3);
+    assert.equal(sleeps.length, 2);
+    assert.ok(sleeps.every((ms) => ms >= 3000 && ms <= 3750), `waited about Retry-After: ${sleeps}`);
+    assert.equal(result.state.nodes.a.rateLimitWaits, 2);
+    assert.equal(seen.notify.length, 1);
+  });
+
+  it("parks the run as a timed wait when the provider asks for a long wait, then runs the step again from the start", async () => {
+    let calls = 0;
+    const { services } = fakeServices({ ai: async () => { calls += 1; if (calls === 1) throw rateLimited(60_000); return { text: "hi", model: "m", provider: "fake" }; } });
+    const parked = await run(askFlow(), { services, inlineWaitMs: 5000 });
+    assert.equal(parked.status, "waiting");
+    assert.equal(parked.waiting.kind, "time");
+    assert.equal(parked.waiting.nodeId, "a");
+    assert.ok(parked.waiting.until - Date.now() >= 55_000, "waits about a minute");
+    assert.match(parked.waiting.message, /rate-limiting.*tries again \(for up to 30 minutes\)/);
+    assert.equal(parked.state.nodes.n, undefined, "nothing after it ran");
+    // The worker wakes it (resume at that node): the step runs again and the run finishes.
+    const resumed = await run(askFlow(), { services, state: parked.state, resume: { nodeId: "a" } });
+    assert.equal(resumed.status, "completed");
+    assert.equal(calls, 2);
+    assert.equal(resumed.state.nodes.a.outputs.main[0].json.answer, "hi");
+  });
+
+  it("fails with an explanation after 12 waits", async () => {
+    let calls = 0;
+    const { services } = fakeServices({ ai: async () => { calls += 1; throw rateLimited(1000); } });
+    const result = await run(askFlow(), { services });
+    assert.equal(result.status, "failed");
+    assert.equal(result.errorNode, "a");
+    assert.equal(calls, 13);
+    assert.match(result.error, /rate-limiting.*kept trying for 1 minute \(13 tries\).*another provider's key/);
+  });
+
+  it("stops waiting 30 minutes after the first refusal", async () => {
+    const { services } = fakeServices({ ai: async () => { throw rateLimited(4 * 60_000); } });
+    const parked = await run(askFlow(), { services });
+    assert.equal(parked.status, "waiting");
+    // 28 minutes later it's still refused; another 4-minute wait would pass the 30 minutes, so the step fails.
+    parked.state.nodes.a.rateLimitedSince = Date.now() - 28 * 60_000;
+    const result = await run(askFlow(), { services, state: parked.state, resume: { nodeId: "a" } });
+    assert.equal(result.status, "failed");
+    assert.match(result.error, /kept trying for 28 minutes \(2 tries\)/);
+  });
+
+  it("still fails at once on a rejected key", async () => {
+    let calls = 0;
+    const { services } = fakeServices({ ai: async () => { calls += 1; throw Object.assign(new Error("Groq rejected the API key saved in your account."), { status: 401, retryable: false }); } });
+    const result = await run(askFlow(), { services });
+    assert.equal(result.status, "failed");
+    assert.equal(calls, 1);
+  });
+});
+
+describe("Aggregate when nothing arrives", () => {
+  const flow = (whenEmpty, keep) => base([
+    { id: "t", name: "Start", type: "trigger.manual", params: { sample: { tasks: [{ text: "a", done: true }] } } },
+    { id: "sp", name: "Each task", type: "logic.split", params: { field: "tasks" } },
+    { id: "f", name: "Open", type: "logic.filter", params: { conditions: [{ left: "{{ $json.done }}", operator: "eq", right: keep }] } },
+    { id: "ag", name: "Collect", type: "logic.aggregate", params: { field: "tasks", ...(whenEmpty ? { whenEmpty } : {}) } },
+    { id: "n", name: "Tell me", type: "action.notify", params: { title: "Open tasks", body: "{{ $json.count }}" } },
+  ], [connect("t", "sp"), connect("sp", "f"), connect("f", "ag"), connect("ag", "n")]);
+
+  it("skips the rest by default, as before", async () => {
+    const result = await run(flow(undefined, "false"));
+    assert.equal(result.state.nodes.ag.status, "skipped");
+    assert.equal(result.state.nodes.n.status, "skipped");
+  });
+
+  it("continues with an empty list when set to continue", async () => {
+    const { services, calls } = fakeServices();
+    const result = await run(flow("continue", "false"), { services });
+    assert.equal(result.status, "completed");
+    assert.deepEqual(result.state.nodes.ag.outputs.main[0].json, { tasks: [], count: 0 });
+    assert.equal(calls.notify[0].body, "0");
+  });
+
+  it("doesn't run on a branch that wasn't taken", async () => {
+    const definition = base([
+      { id: "t", name: "Start", type: "trigger.manual", params: { sample: { amount: 5 } } },
+      { id: "if", name: "Big?", type: "logic.if", params: { conditions: [{ left: "{{ $json.amount }}", operator: "gt", right: "100" }] } },
+      { id: "ag", name: "Collect", type: "logic.aggregate", params: { whenEmpty: "continue" } },
+    ], [connect("t", "if"), connect("if", "ag", "true")]);
+    const result = await run(definition);
+    assert.equal(result.state.nodes.ag.status, "skipped");
   });
 });
