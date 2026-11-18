@@ -19,7 +19,15 @@ Three rules shape the product:
 2. **Bring your own key (BYOK).** Paste your own free Groq key and start talking: no account, no sign-up. An operator access token is optional. Keys are kept for the browser tab session only.
 3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
-> **Status:** active development. The latest published release is [v1.4.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.4.0). `main` is ahead of it with the unreleased work listed under [Unreleased in the changelog](./docs/CHANGELOG.md) (daily briefing, Knowledge, Setup check, crash diagnostics and more). See [Project status](#project-status) for what is finished and what is experimental.
+> **Status:** active development. The latest published release is [v1.4.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.4.0). `main` is version **1.5.0**, which isn't released yet. It's listed under [1.5.0 in the changelog](./docs/CHANGELOG.md):
+> - connectors to 33 services and chat apps (Telegram, Slack, Discord, Google Chat, Teams, WhatsApp, and iMessage and Signal on the desktop);
+> - web search on every platform;
+> - HANNAH using your Mac's apps;
+> - setting up Vercel and Supabase from the app;
+> - a command sandbox, a `hannah` command-line tool, Docker self-hosting and a plugin kit;
+> - reliable phone reminders.
+>
+> See [Project status](#project-status) for what is finished, what is experimental, and what still needs a real-device run.
 
 ---
 
@@ -37,11 +45,15 @@ Three rules shape the product:
 - [Model routing](#model-routing)
 - [Agent runtime and tools](#agent-runtime-and-tools)
 - [Agent team](#agent-team)
+- [Connectors, web search and chat apps](#connectors-web-search-and-chat-apps)
 - [Accounts and your own database](#accounts-and-your-own-database)
 - [Marketplace: agents and skills](#marketplace-agents-and-skills)
 - [Automations](#automations)
 - [MCP integration](#mcp-integration)
+- [Desktop files and terminal](#desktop-files-and-terminal)
+- [HANNAH uses your apps (macOS)](#hannah-uses-your-apps-macos)
 - [Desktop computer use](#desktop-computer-use)
+- [Command-line tool](#command-line-tool)
 - [Voice and calls](#voice-and-calls)
 - [Mobile, desktop and PWA builds](#mobile-desktop-and-pwa-builds)
 - [Deployment](#deployment)
@@ -87,7 +99,7 @@ Every screen has its own address, so refresh, bookmarks and the back button work
 | **Models** | `/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
 | **Memory & trust** | `/memory` | The accountability page: an **Agent runs** log (every request with each tool step and how it ended, which survives reloads), Guardian strictness and its decision log (allowed and blocked, with reasons), the memory center (search, filter by category, edit, mark sensitive, export, switch kinds of memory or all memory off; each memory shows where it came from and when it was last used), **Knowledge** (your own documents, indexed on the device so HANNAH answers from them with citations; see [Knowledge](#knowledge)), personalization examples, the active persona, and installed plugins. |
 | **Automations** | `/automations` | Routines built from trigger, agent-task, daily-briefing, action and output steps that run on a schedule while HANNAH is open, with approval before every action and a run history. See [Automations](#automations). |
-| **Marketplace** | `/marketplace` | First-party agents and skills that change how HANNAH replies, plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
+| **Marketplace** | `/marketplace` | **Connectors**: 33 services (GitHub, Linear, Notion, Atlassian, Stripe, Vercel, Supabase, Figma and more) with their official icons, or any MCP server by URL. **Chat apps**: talk to HANNAH from Telegram, Slack, Discord, Google Chat, Teams or WhatsApp, and in the desktop app iMessage and Signal. **Agents and skills**: first-party agents and skills that change how HANNAH replies, plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
 | **Integrations** | `/integrations` | REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
 | **Settings** | `/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Calendar and email**: connect Google or Microsoft with their own sign-in. **Voice**: speaking and listening engines, voice choice, interrupt-by-talking and the **“Hey HANNAH”** wake word. **Daily briefing**: which sections, the place for the weather, and a preview (see [Daily briefing](#daily-briefing)). **Setup check**: one pass over the server, model, account, connections, voice, microphone, notifications, storage, desktop app and recent errors, with a verdict and a fix for each. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. Also **Appearance** (text size), **Desktop app** (update channel, check for updates, update history, shortcut and `hannah://` links; desktop only), **Backup and restore** (one file with your data and choices, never your keys; optional passphrase; merge or replace on restore) and **Diagnostics** (what went wrong on this device, redacted, searchable, exportable). |
 
@@ -601,13 +613,19 @@ On a physical phone, set `VITE_API_BASE_URL` to a reachable HTTPS API or your co
 
 ### 10. Docker self-hosting
 
+The [`Dockerfile`](./Dockerfile) builds one image with the API server and the web app, which the server serves when `HANNAH_SERVE_CLIENT` is set. [`docker-compose.yml`](./docker-compose.yml) adds a Postgres 16 database, and the workflow worker runs inside the server.
+
 ```bash
-cp .env.example .env   # or create server/.env values at the project root
+# .env next to docker-compose.yml (never commit it)
+POSTGRES_PASSWORD=<a long random password>
+HANNAH_VAULT_KEY=<openssl rand -hex 32>   # keep a copy: losing it makes saved keys unreadable
+CRON_SECRET=<openssl rand -hex 32>
+
 docker compose up -d --build
-curl http://localhost:3001/api/health
+curl http://localhost:3001/api/health      # then open http://localhost:3001
 ```
 
-The compose file persists data in the `hannah-data` volume and runs the health check every 30 seconds.
+The image runs as an unprivileged user, and its health check calls `/api/health`. The image and the compose stack haven't been built in CI yet; see [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
 
 ### 11. Vercel deployment
 
@@ -616,6 +634,11 @@ The compose file persists data in the `hannah-data` volume and runs the health c
 3. Set `HANNAH_API_TOKEN`, `GROQ_API_KEY` and other provider keys in the server service for operator features.
 4. Set `VITE_SITE_URL` to your production origin.
 5. Deploy and check `curl https://your-domain/api/health`.
+6. **Database, vault and scheduler** (for accounts, workflows and chat apps), either way:
+   - in the app: Settings → Account → **Set up HANNAH on Vercel and Supabase**, with a Vercel token and a Supabase token;
+   - by hand: follow [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md).
+
+   Then set the GitHub secrets `CRON_SECRET` and `HANNAH_PRODUCTION_URL`, so the scheduled workflow tick runs every 5 minutes.
 
 ### 12. Setup verification checklist
 
@@ -789,10 +812,54 @@ On the **Agents** screen you can turn specialists off, pick a model for each, an
 
 ## Connectors, web search and chat apps
 
-- **Connectors** (Marketplace → Connectors): 33 services, each the vendor's own MCP server. Connect with your own sign-in (OAuth with PKCE), a token (GitHub), or no sign-in (docs search). Your tokens stay in your browser; HANNAH asks before every action a connector takes. You can also add any remote MCP server by URL. The directory and its checks are in `server/connectors.js`.
-- **Web search** on every platform: HANNAH searches with Groq's browser search (your own Groq key) and reads public pages through HANNAH's server (`server/web.js`). The desktop app also has its own visible browser.
-- **Telegram** (Marketplace → Chat apps, signed-in accounts): connect a bot from @BotFather and pair your own chat with a one-time link; nobody else gets answers (`server/channels.js`).
-- **Setting up hosting from the app:** Settings → Account → “Set up HANNAH on Vercel and Supabase” creates the database, saves the settings in your Vercel project and redeploys, from a Vercel and a Supabase token (`server/hosting-setup.js`).
+### Connectors
+
+Marketplace → Connectors lists 33 services, each the vendor's own MCP server, shown with its official icon.
+- **Connecting:** with your own sign-in (OAuth with PKCE), a token (GitHub), or no sign-in at all (docs search). You can also add any remote MCP server by URL.
+- **Safety:** your tokens stay in your browser, and HANNAH asks before every action a connector takes.
+- **Code:** the directory and its checks are in `server/connectors.js`.
+
+### Web search
+
+HANNAH searches on every platform with Groq's browser search, using your own Groq key, and cites her sources. She reads public pages through HANNAH's server (`server/web.js`). The desktop app also has its own visible browser.
+
+### Chat apps
+
+Marketplace → Chat apps lets you talk to HANNAH from the apps you already use. It needs a signed-in account.
+
+| App | How it connects | What you paste |
+| --- | --- | --- |
+| Telegram | Bot API; HANNAH sets the webhook herself | Bot token from @BotFather |
+| Slack | Events API; requests signed with your signing secret | Bot token (`xoxb-…`) and signing secret |
+| Discord | Interactions endpoint; Ed25519-signed; HANNAH registers `/hannah` | Bot token |
+| Google Chat | HTTP endpoint app; Google-signed tokens for your project | Google Cloud project number |
+| Microsoft Teams | Azure Bot (Bot Framework); Microsoft-signed tokens | App ID and client secret (tenant ID for single-tenant bots) |
+| WhatsApp | Meta's official **Cloud API** (not the unofficial WhatsApp Web protocol); signed webhooks | Phone number ID, permanent access token, app secret |
+
+- **Connecting:** HANNAH checks the credentials with the platform itself and seals them in the vault. She then shows the webhook URL, plus WhatsApp's verify token once, to paste where the platform needs it.
+- **Checking every request:** each one is verified the platform's own way before anything is read.
+- **Pairing:** you pair your own chat with a one-time code.
+- **New people:** anyone else is told the bot is private and listed for you to **approve** or **deny**, like OpenClaw's pairing requests. Approved people get answers too, each with their own short history.
+- **Groups:** group chats and channels are ignored.
+- **Replies:** they use your account's AI key.
+- **Code:** [`server/channels.js`](./server/channels.js) and [`server/channel-drivers.js`](./server/channel-drivers.js).
+
+**iMessage and Signal (desktop app):** these read messages on your computer.
+- **iMessage (macOS):** HANNAH reads Messages read-only (with Full Disk Access) and replies through the Messages app. Use a separate Apple ID on that Mac for HANNAH, so your own conversations aren't involved.
+- **Signal (any desktop):** it works through [`signal-cli`](https://github.com/AsamK/signal-cli), linked with `signal-cli link -n HANNAH`.
+- **Rules for both:**
+  - off until you turn them on in a system dialog;
+  - only people you approve are read, and anyone else is listed as asking;
+  - HANNAH can only reply, once, to a message someone sent in the last 15 minutes. She never starts a conversation.
+- **Code:** [`messages.mjs`](./client/plugins/desktop-tools/electron/dist/messages.mjs).
+
+### Plugins
+
+A HANNAH plugin is a remote MCP server, added as a custom connector. [`examples/hannah-plugin`](./examples/hannah-plugin) is a complete, dependency-free example with tests. The guide is in [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md#build-a-plugin).
+
+### Setting up hosting from the app
+
+Settings → Account → **Set up HANNAH on Vercel and Supabase** works from a Vercel token and a Supabase token. It creates the database, saves the settings in your Vercel project and redeploys (`server/hosting-setup.js`).
 
 ## Accounts and your own database
 
@@ -966,6 +1033,12 @@ The rules live in the `HannahDesktop` plugin ([`client/plugins/desktop-tools`](.
 - **Writes ask first.** Writing needs a read-write folder and your yes in a native dialog that shows the path and the start of the content.
 - **Commands ask first.** Each command shows the exact command line and folder in a native dialog: **Run once**, **Always allow this exact command here**, or **Cancel**. Commands run one program without a shell (no pipes, redirects, `&&` or variables), with a minimal environment, a 60-second limit and 100 KB of output. `sudo`, shells, disk tools and system-service tools are never run.
 - **Your record.** Recent reads, writes and commands are listed in Settings, and removing a folder revokes its access and its always-allowed commands.
+- **Optional sandbox.** Turn on **Run commands in a Docker sandbox** for a folder, and its approved commands run in a throwaway container instead of on your computer.
+  - **What it sees:** only that folder, read-only if you shared it read-only.
+  - **Network:** none unless you allow it.
+  - **Limits:** no added privileges, your user ID, and memory, CPU and process limits.
+  - **Image:** your choice, `node:22-bookworm-slim` by default.
+  - **Needs:** Docker Desktop or Docker Engine.
 
 On Windows, `.cmd` and `.bat` programs (such as `npm`) can't run without a shell; run `node`, `git` or `python` directly instead.
 
@@ -976,11 +1049,11 @@ The desktop app can do three more things, also from **Settings → Desktop acces
 - **Look at your screen when you ask.** Ask "what's on my screen?" or "explain this error".
   - HANNAH asks first: **Look once** or **Allow for 15 minutes**. While allowed, the menu bar or tray and an in-app banner show it, with **Pause** and **Stop**.
   - One screenshot goes through the server to a vision model you can use, and only the answer comes back. Private mode keeps it on self-hosted models.
-  - Nothing is saved, and HANNAH can only look, not click or type.
+  - Nothing is saved, and this tool only looks. Using your apps is separate and needs its own permission; see [HANNAH uses your apps](#hannah-uses-your-apps-macos).
   - On macOS, turn on HANNAH in **System Settings → Privacy & Security → Screen & System Audio Recording**.
 - **Open apps:** say "open VS Code with my project".
   - HANNAH finds the app from your system's launchers and asks first, unless you chose "always".
-  - She says it's open only when she sees its process running.
+  - She says it's open only when she sees its process running. With a project folder, she also checks that the app's window shows that folder (this needs Accessibility permission on macOS).
 - **Startup routine:** apps, links and waits, run in order when you sign in, with a history.
   - It's off until you turn on **Start HANNAH when I sign in**, which adds HANNAH to your system's login items.
   - Saving a routine shows every step first.
@@ -998,9 +1071,36 @@ Design and verification: [`docs/DEVICE_INTELLIGENCE.md`](./docs/DEVICE_INTELLIGE
 
 ---
 
+## HANNAH uses your apps (macOS)
+
+In the macOS desktop app (beta), ask HANNAH to use the app in front of you. For example: "press Save", "fill in this form", "switch to my browser and scroll down", "minimize this window", or "close this app".
+
+- **How she sees:** through macOS's Accessibility API she reads the window in front: its buttons, fields, menus, tables, text, dialogs and error messages. She acts on those elements (press, set text, focus, select).
+- **Fallbacks:** real mouse and keyboard events (click, double-click, right-click, scroll, drag, typing and shortcuts) are used only where there's no element to act on.
+- **Apps and windows:** she can switch apps, raise, minimize, move, resize and close windows, and quit apps.
+- **Fresh observations only:** every action names what she just observed, at most 30 seconds earlier. If the element or window changed in the meantime, she stops and looks again instead of acting blindly.
+- **Checking her work:** after each action she looks again. An action counts as confirmed only when the app shows it, and a task is finished as completed only when its last action was confirmed.
+- **Your control:**
+  - **Session:** it starts with your yes in a system dialog and lasts 10 to 30 minutes.
+  - **Indicator:** the menu bar shows **Controlling**.
+  - **Stop:** **Stop Controlling Now** in the HANNAH menu, or **Control+Option+Shift+Escape** from anywhere, stops at once, even while she's waiting for your answer to a question.
+- **What she asks first, and what she never does:**
+  - **Asks first:** before pressing anything that sends, deletes, buys or posts; before quitting or closing; before typing in an app for the first time in a session; and before every action in a terminal or System Settings.
+  - **Never:** password fields, paying, HANNAH's own dialogs, macOS security prompts, Keychain, or password managers. Text on screen is data, and can never grant her permissions.
+- **Record:** every task keeps its request, plan, and each action with its target, result and verification. The activity log keeps it too.
+- **Setup:** System Settings → Privacy & Security → **Accessibility** → turn on HANNAH. She can't grant it to herself.
+- **Windows and Linux:** they report that this isn't available yet; UI Automation and AT-SPI adapters are planned.
+- **Code:**
+  - the rules: [`control.mjs`](./client/plugins/desktop-tools/electron/dist/control.mjs);
+  - the native helper: [`HannahControl.swift`](./client/native/macos-control/HannahControl.swift), signed and packaged with the app;
+  - a real-Mac check: `node client/scripts/macos-control-check.mjs`.
+- **Verified so far:** the rules are tested, and on a real Mac the helper builds, answers, and refuses to act without the permission. The full check on a real app needs Accessibility switched on and hasn't been run yet (see [Project status](#project-status)).
+
+---
+
 ## Desktop computer use
 
-The `/api/desktop/computer` route uses Anthropic's computer toolset on the server, and an Electron bridge performs the returned actions. Setup:
+This is a separate, optional bridge for desktop apps you build yourself; the built-in way is [HANNAH uses your apps](#hannah-uses-your-apps-macos). The `/api/desktop/computer` route uses Anthropic's computer toolset on the server, and an Electron bridge performs the returned actions. Setup:
 
 1. Run `npm run cap:add:electron --prefix client`.
 2. Copy [`electron-agent-preload.example.cjs`](./client/electron-agent-preload.example.cjs) and [`electron-agent-main.example.cjs`](./client/electron-agent-main.example.cjs) into `client/electron/`.
@@ -1008,6 +1108,27 @@ The `/api/desktop/computer` route uses Anthropic's computer toolset on the serve
 4. In `client/electron`, install `screenshot-desktop sharp @nut-tree/nut-js esbuild` and bundle the preload with esbuild.
 
 Each screenshot and action is reviewed by the Guardian, then confirmed in a native dialog that issues a one-use token. The renderer never sees the Anthropic key. Screenshots and task text go to Anthropic.
+
+---
+
+## Command-line tool
+
+[`cli/`](./cli) is `hannah`, a dependency-free tool for using HANNAH from a terminal (Node 20+).
+
+```bash
+node cli/hannah.mjs login --server https://hannah.eliteforums.in --email you@example.com   # asks for the password
+node cli/hannah.mjs status                  # server health and your account
+node cli/hannah.mjs ask "What's on my agenda?"
+node cli/hannah.mjs chat                    # streamed conversation; /clear starts over, /exit leaves
+node cli/hannah.mjs workflows               # list your workflows
+node cli/hannah.mjs run <workflowId>        # run one and watch each step finish
+node cli/hannah.mjs channels                # your chat apps
+node cli/hannah.mjs logout
+```
+
+- **Other ways to log in:** `login --groq-key …` (chat only) or `--token …`.
+- **Credentials:** saved in `~/.config/hannah/config.json` (or `$HANNAH_CONFIG`) with owner-only permissions (0600), and never printed.
+- **Tests:** `cd cli && npm test` runs the tool against the real server.
 
 ---
 
@@ -1093,6 +1214,9 @@ To release: `git tag vX.Y.Z && git push origin vX.Y.Z`, or run the workflow manu
 2. Nothing is required for bring-your-own-key visitors. To offer your own models or voice and desktop features, set `HANNAH_API_TOKEN` and provider keys such as `GROQ_API_KEY` in the server service. Leave `VITE_API_BASE_URL` empty.
 3. Set `VITE_SITE_URL` to your production origin for SEO metadata.
 4. Deploy, then check with `curl https://your-domain/api/health`.
+5. **For accounts, workflows, chat apps and device pairing:** add the database, vault key and scheduler, from the app or by hand.
+   - The full guide is [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md). It covers the three ways to connect a database, the scheduler secrets, and how to check it works.
+   - Signing the Android, iOS, macOS, Windows and Linux apps is covered there too.
 
 Use `vercel dev` to test both services locally.
 
@@ -1100,7 +1224,7 @@ Use `vercel dev` to test both services locally.
 
 - **API:** Node 20+, `npm install --prefix server`, set `NODE_ENV=production` and your environment, then run `npm start --prefix server` behind HTTPS.
 - **Client:** run `npm run build`, publish `client/dist` to any static host with SPA fallback, and set `VITE_API_BASE_URL` at build time if the API is on another origin.
-- **Docker:** a [`Dockerfile`](./Dockerfile) and [`docker-compose.yml`](./docker-compose.yml) are included.
+- **Docker:** the [`Dockerfile`](./Dockerfile) builds the server and the web app into one image, and [`docker-compose.yml`](./docker-compose.yml) runs it with Postgres 16 ([setup](#10-docker-self-hosting)).
 
 ### Production checklist
 
@@ -1198,9 +1322,18 @@ curl -s http://localhost:3001/api/chat \
 │   │   └── index.css           # Design tokens (deck cards, tones, glass tiles)
 │   ├── public/models/          # Avatar GLB files
 │   ├── android/ · ios/         # Checked-in native projects
-│   ├── scripts/                # Avatar compression, native patches, size checks
+│   ├── native/macos-control/   # Swift helper: Accessibility API + mouse and keyboard (computer control)
+│   ├── plugins/desktop-tools/  # Desktop rules in Electron's main process: files, commands, sandbox,
+│   │                           #   screen, apps, browser, computer control, iMessage and Signal
+│   ├── scripts/                # Avatar compression, native patches, size checks, macOS control build and check
 │   └── playwright.config.ts
+├── cli/                        # `hannah` command-line tool
+├── examples/hannah-plugin/     # Example plugin (an MCP server) with tests
 ├── server/                     # Express API, providers, MCP, sync, feedback
+│   ├── channels.js · channel-drivers.js  # Chat apps: Telegram, Slack, Discord, Google Chat, Teams, WhatsApp
+│   ├── connectors.js · web.js  # Connector directory and sign-in, web search and page reading
+│   ├── hosting-setup.js        # "Set up HANNAH on Vercel and Supabase"
+│   ├── workflows/              # Workflow engine, runtime and router
 │   ├── providers/              # Provider catalog and runtime adapters
 │   ├── db/                     # Bring-your-own database: adapters and migrations
 │   ├── accounts.js · vault.js  # Accounts, sessions, encrypted key vault, sync
@@ -1209,7 +1342,7 @@ curl -s http://localhost:3001/api/chat \
 │   ├── voice.js                # Hosted voice engines
 │   ├── mcp-client.js · a2a.js  # MCP client and Agent2Agent endpoint
 │   ├── webhooks.js             # Signed account webhooks
-│   ├── scripts/                # db:check / db:migrate, skill signing
+│   ├── scripts/                # db:check / db:migrate, skill signing, workflow and trigger proofs
 │   └── *.test.js               # node:test suites
 ├── sdk/js/                     # Dependency-free JavaScript SDK
 ├── shared/                     # Marketplace catalog, model profiles, trusted skill publishers
@@ -1243,6 +1376,12 @@ curl -s http://localhost:3001/api/chat \
 | client | `npm run models:draco` | Compress the avatar. |
 | server | `npm test` | `node --test`. |
 | server | `npm start` | Run the API. |
+| server | `node scripts/workflow-proof.mjs` | Workflows against real services (GitHub, httpbin), including a killed and restarted server. |
+| server | `node scripts/triggers-proof.mjs` | Webhooks, HMAC, events, credentials and schedules, run the way Vercel runs them (about 2 minutes). |
+| client | `node scripts/macos-control-check.mjs [--vscode]` | Computer control on a real Mac (needs Accessibility; takes the focus for about 20 seconds). |
+| client | `node scripts/build-macos-control.mjs` | Build the macOS control helper (universal binary). |
+| cli | `npm test` | The command-line tool against the real server. |
+| examples/hannah-plugin | `npm test` | The example plugin through HANNAH's MCP client. |
 
 **Adding a provider:** add a preset to [`catalog.js`](./server/providers/catalog.js), reuse or add an adapter in [`runtime.js`](./server/providers/runtime.js), document its variables in `server/.env.example`, and keep its key server-side.
 
@@ -1265,7 +1404,18 @@ The suites cover:
 
 - **Safety chain:** Guardian blocks before any prompt, decline and approve paths, Strict mode blocking deletes, and failing closed.
 - **Agent loop:** the tool-result loop, iteration caps and prompt-injection flags.
-- **Server:** token checks and rate limits; accounts, vault, sync, developer keys and webhooks on SQLite and on real Postgres (PGlite); team planning and verification; voice routes; the MCP client against a real MCP server; A2A; and the SDK end to end.
+- **Server:**
+  - token checks and rate limits;
+  - accounts, vault, sync, developer keys and webhooks on SQLite and on real Postgres (PGlite);
+  - team planning and verification, voice routes, the MCP client against a real MCP server, A2A, and the SDK end to end;
+  - connectors' OAuth flow;
+  - every chat app, using real signatures (HMAC, Ed25519, RS256 tokens) against stand-in platform APIs;
+  - the hosting setup, and serving the web app in Docker.
+- **Desktop rules** (`node --test` in `client/plugins/desktop-tools`):
+  - folders, commands and the sandbox;
+  - the browser;
+  - computer control: consent, stale and changed interfaces, verification, refusals, and the emergency stop during an approval;
+  - iMessage and Signal.
 - **End to end:** sending a message, avatar emotion, the approval card (declining changes nothing), a rejected token, navigation, Marketplace actions, mobile navigation, a full Team run shown on the Agents screen, account sign-in, voice settings and the database setup card.
 
 If e2e tests time out on a slow machine, run them with `--workers=1`, because the avatar load is heavy under software WebGL.
@@ -1276,7 +1426,12 @@ Not covered automatically: physical-device permissions, speech, calls, app resum
 
 ## Project status
 
-**Shipped in the app:** everything described above under [What you can do](#what-you-can-do), the safety chain, all six inference modes, device tools, Marketplace, MCP, voice, Pinecall integration, desktop files and terminal, desktop computer use (only in a desktop app you build with the bridge set up), and the native and desktop builds.
+**Shipped in the app:**
+- everything described above under [What you can do](#what-you-can-do), the safety chain, and all six inference modes;
+- device tools, Marketplace (connectors, chat apps, agents and skills), MCP, web search, voice and the Pinecall integration;
+- desktop files and terminal (with the optional Docker sandbox), and HANNAH using your apps on macOS (beta);
+- desktop computer use, only in a desktop app you build with the bridge set up;
+- the native and desktop builds, the `hannah` command-line tool and Docker self-hosting.
 
 **Experimental modules (in the repo, not wired into the app).** [`client/src/services`](./client/src/services) also contains research modules with unit tests that no screen uses yet. Among them:
 
@@ -1292,14 +1447,25 @@ Treat these as design work in progress, not features. Account sync (see [Account
 **Known gaps:**
 
 - Automations run only while HANNAH is open (a missed run happens once when it reopens).
-- On the web, reminders alert only while HANNAH is open. The Android and iOS apps use system notifications.
+- On the web, reminders alert only while HANNAH is open. The Android and iOS apps hand each reminder to the phone as a notification.
+  - **Android 14:** it doesn't allow exact alarms by default. HANNAH then schedules an inexact one, which may arrive a few minutes late, and the Reminders card offers **Allow exact alarms**.
+  - **Not yet verified:** this fix hasn't been run on a phone yet.
 - **Stop** takes effect before the next step; a model request already in flight finishes first.
 - Without a database, spending budgets live in server memory and reset on restart.
 - Accounts use email and password only. There's no OAuth sign-in to HANNAH itself or password-reset email yet (connecting Google or Microsoft for calendar and email is separate).
 - Tasks across devices and the wake word work while HANNAH is open; there's no push notification to a closed app (use the `approval.requested` webhook).
 - Calendar and email need the operator's Google and Microsoft sign-in apps; Gmail for the public needs Google's verification.
-- The Research agent has no web access.
-- The Marketplace has no public registry, and executable plugins aren't supported (they need sandboxing).
+- The Marketplace has no public registry. Plugins are remote MCP servers that you add yourself; code from the Marketplace never runs inside HANNAH.
+- **Computer control:** macOS only, and not yet run with Accessibility switched on. Windows and Linux adapters aren't built.
+- **New integrations not yet tried with real accounts:**
+  - the chat apps (Slack, Discord, Google Chat, Teams, WhatsApp);
+  - iMessage and Signal;
+  - connectors' vendor sign-in;
+  - Groq browser search;
+  - the Vercel and Supabase setup;
+  - the Docker image and the command sandbox (no Docker on the test machine).
+
+  Each is tested against the platform's protocol, and its real endpoints were checked. [`KNOWN_ISSUES.md`](./docs/architecture/KNOWN_ISSUES.md) tracks each one.
 - Webhooks are delivered once, with no retries.
 - No price in `shared/model-prices.json` has a verification date yet, so the app shows no dollar estimates until an operator verifies them.
 - The router's measured latency and provider health are per server process, and Fastest mode needs three real replies before it uses measurements.
@@ -1353,7 +1519,11 @@ To report a security issue, use GitHub's private vulnerability reporting or cont
 | Topic | Document |
 | --- | --- |
 | Architecture, decisions and roadmap | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
-| API and MCP integration | [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md) |
+| Deploying: database, Vercel, scheduler, Docker, signed apps | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) |
+| API, MCP, the command-line tool and plugins | [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md) |
+| Desktop and phone features: screen, apps, computer control, browser, Phone Bridge | [`docs/DEVICE_INTELLIGENCE.md`](./docs/DEVICE_INTELLIGENCE.md) |
+| Workflows | [`docs/WORKFLOWS.md`](./docs/WORKFLOWS.md) |
+| Known issues and what's verified | [`docs/architecture/KNOWN_ISSUES.md`](./docs/architecture/KNOWN_ISSUES.md), [`docs/architecture/PLATFORM_COMPATIBILITY.md`](./docs/architecture/PLATFORM_COMPATIBILITY.md) |
 | Platform audit | [`AUDIT.md`](./docs/AUDIT.md) |
 | Safety governance and maturity | [`docs/SAFETY_GOVERNANCE.md`](./docs/SAFETY_GOVERNANCE.md), [`docs/SAFETY_MATURITY.md`](./docs/SAFETY_MATURITY.md), [`RESPONSIBLE_AI.md`](./docs/RESPONSIBLE_AI.md) |
 | Regulatory notes | [`docs/REGULATORY_COMPLIANCE.md`](./docs/REGULATORY_COMPLIANCE.md), [`docs/COMPLIANCE_STATUS.md`](./docs/COMPLIANCE_STATUS.md) |

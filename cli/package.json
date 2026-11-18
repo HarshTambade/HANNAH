@@ -13,5 +13,5 @@
   "scripts": {
     "test": "node --test --test-timeout=120000 hannah.test.mjs"
   },
-  "license": "MIT"
+  "license": "SEE LICENSE IN ../LICENSE"
 }
