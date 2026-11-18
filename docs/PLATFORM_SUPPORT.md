@@ -68,6 +68,13 @@ A stable release needs no class-5 cell in a row that the release notes advertise
 | Accessibility (axe, WCAG 2.1 AA) | ✅ T (eight screens at desktop and phone widths, no serious or critical findings) | ✅ D (same screens in the app's web view) | ✅ D | ✅ D | ✅ D | ✅ D |
 | Error and offline states | ✅ T | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 
+## What was actually run for 1.5.0
+
+- **Android, locally:** the debug APK built with JDK 21 (Temurin 21.0.13), including the native wake-word service (`HannahWakeService`, Vosk). It was installed on an Android 16 (API 36, arm64) emulator, launched, and drew the onboarding screen with no crash. That run found the offline service worker failing to install inside the app (the app shell answers `/favicon.ico` with an empty response), which 1.5.0 fixes by not registering the website's worker in the native and desktop apps.
+- **Not run:** the wake word with a real microphone, cellular calls and SMS, Siri, and real Google or Microsoft accounts. These need a physical phone and your own accounts. iOS still has no simulator runtime here; CI builds it.
+- **Browser (Chromium, Playwright):** the full end-to-end suite, 82 tests.
+- **Unit and API tests:** 353 client, 295 server (1 skipped) and 43 desktop tests.
+
 ## What was actually run for 1.3.0
 
 - **Browser (Chromium, Playwright):** 25 end-to-end tests at desktop and phone sizes. They cover routing (direct links, refresh, back and forward, old `#/` links, 404), landing-page links and version, chat, Team mode, routing preview, Models and "Use in chat", account sign-in and the Marketplace. WebLLM was separately downloaded (about 13 minutes) and answered a message. After the engine moved into its worker, a second run on the production build confirmed progress reporting through the new worker protocol (32% of the download in 15 minutes on a slow connection); the reply step was not re-run on that build.
@@ -75,7 +82,7 @@ A stable release needs no class-5 cell in a row that the release notes advertise
 - **Desktop security policy:** the built app was served under the Electron runtime's default policy and under HANNAH's policy. The default left the avatar blank and blocked the fonts; HANNAH's policy rendered both, with no violations.
 - **Desktop main process:** compiled with the generated Electron project (TypeScript, no errors).
 - **Native projects:** versions synced (1.3.0, build 10300); `npx cap sync` for iOS and Android succeeded.
-- **Not run in this release:** the packaged apps on macOS, Windows and Linux; Android on a device or emulator; iOS on a device or simulator. No iOS simulator runtime is installed here, and the local Android build needs a JDK 17+ that wasn't available. CI builds every package; the release notes and this page will be updated when someone runs them.
+- **Not run in this release:** the packaged apps on macOS, Windows and Linux; Android on a device or emulator; iOS on a device or simulator. No iOS simulator runtime is installed here, and the local Android build needed a JDK 21 that wasn't installed yet (1.5.0 ran it; see above). CI builds every package; the release notes and this page will be updated when someone runs them.
 
 ## Credentials needed for signed releases
 

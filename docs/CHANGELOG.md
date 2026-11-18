@@ -129,6 +129,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **The Android, iOS and desktop apps no longer register the website's offline service worker.** On Android its install failed (the app shell answers `/favicon.ico` with an empty response), and in any app it could keep serving the previous version's files after an update. The apps now remove a worker an older version left; the website keeps it.
 - **Feedback and Report didn't work for anyone but the server operator.** The Feedback form and the button for reporting an AI reply answered "Add your Groq API key or a HANNAH access token" for every guest and signed-in user. They now work for everyone using the app. They're validated and limited per credential and per network address. Reports and feedback are kept in the server's database (on Vercel, a local file was lost).
 - **Stop really stops.** Pressing Stop now cancels the AI request in flight, and an answer that arrives afterwards is no longer shown or spoken.
 - **Long agent tasks no longer fail partway.** Trimming a long run could separate tool results from the step that asked for them, which Groq rejects. When one step reads several pages, all of them now reach the model whole.
