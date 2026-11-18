@@ -20,6 +20,7 @@
 import type { SpeechLanguage } from "../types";
 import { apiFetch, apiUrl } from "./api";
 import { SpeechService } from "./SpeechService";
+import { chunkForSpeech, speakableText } from "./SpeakableText";
 import { VoiceService, type TranscriptListener } from "./VoiceService";
 
 export type TtsEngine = "auto" | "system" | "openai";
@@ -96,34 +97,56 @@ async function playBlob(blob: Blob) {
   }
 }
 
+async function openaiSpeech(text: string, voice: string) {
+  const response = await apiFetch(apiUrl("/api/voice/speak"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, voice }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error || "OpenAI voice is unavailable.");
+  }
+  return response.blob();
+}
+
 export const VoiceOut = {
-  /** Speak with the chosen engine. Resolves with the voice used, or "interrupted". */
+  /**
+   * Speak with the chosen engine: the reply without Markdown or code, piece
+   * by piece, so long replies are read to the end. Resolves with the voice
+   * used, or "interrupted".
+   */
   async speak(text: string, language: SpeechLanguage): Promise<string> {
     const settings = readVoiceSettings();
     interrupted = false;
+    const say = speakableText(text) || text;
     if (settings.tts === "openai") {
+      // OpenAI takes up to 4,096 characters; fetch the next piece while this one plays.
+      const pieces = chunkForSpeech(say, 1500);
+      let played = 0;
       try {
-        const response = await apiFetch(apiUrl("/api/voice/speak"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: text.slice(0, 4000), voice: settings.openaiVoice }),
-          signal: AbortSignal.timeout(30_000),
-        });
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({})) as { error?: string };
-          throw new Error(body.error || "OpenAI voice is unavailable.");
+        let next = pieces.length ? openaiSpeech(pieces[0], settings.openaiVoice) : null;
+        for (let index = 0; index < pieces.length && next; index += 1) {
+          const blob = await next;
+          next = index + 1 < pieces.length ? openaiSpeech(pieces[index + 1], settings.openaiVoice) : null;
+          next?.catch(() => undefined);
+          if (interrupted) return "interrupted";
+          await playBlob(blob);
+          played += 1;
+          if (interrupted) return "interrupted";
         }
-        await playBlob(await response.blob());
-        return interrupted ? "interrupted" : `OpenAI · ${settings.openaiVoice}`;
+        return `OpenAI · ${settings.openaiVoice}`;
       } catch (error) {
         if (interrupted) return "interrupted";
-        // Fall back to the device voice so the reply is still heard.
-        const name = await SpeechService.speak(text, language, { systemOnly: true, voiceName: settings.systemVoice });
-        return `${name} (OpenAI voice unavailable: ${error instanceof Error ? error.message : "error"})`;
+        // Fall back to the device voice for what's left, so the reply is still heard.
+        const name = await SpeechService.speak(pieces.slice(played).join(" "), language, { systemOnly: true, voiceName: settings.systemVoice });
+        return interrupted ? "interrupted" : `${name} (OpenAI voice unavailable: ${error instanceof Error ? error.message : "error"})`;
       }
     }
     try {
-      return await SpeechService.speak(text, language, { systemOnly: settings.tts === "system", voiceName: settings.systemVoice });
+      const name = await SpeechService.speak(say, language, { systemOnly: settings.tts === "system", voiceName: settings.systemVoice });
+      return interrupted ? "interrupted" : name;
     } catch (error) {
       if (interrupted) return "interrupted";
       throw error;
@@ -292,8 +315,48 @@ export const VoiceIn = {
 };
 
 /**
+ * Barge-in detection while HANNAH speaks. The microphone also hears HANNAH:
+ * echo cancellation removes only audio the page itself plays through WebRTC,
+ * not the device's speech voice, so her own voice can be as loud as the
+ * person's. This detector learns her level at the microphone first (for
+ * `learnMs` after her voice is first heard, since server voices can start a
+ * second or two late), keeps following it (a slowly fading peak), and
+ * reports the person only when the sound stays well above her own for
+ * `startMs`. Exported for tests.
+ */
+export function createEchoAwareVad({ floor = 0.03, minThreshold = 0.08, ratio = 1.8, learnMs = 1500, maxWaitMs = 5000, startMs = 400, frameMs = 50, decay = 0.995 } = {}) {
+  let elapsed = 0;
+  let heardAt = -1;
+  let echoPeak = 0;
+  let loudMs = 0;
+  let fired = false;
+  return (level: number): "learning" | "idle" | "speech-start" => {
+    elapsed += frameMs;
+    if (heardAt < 0 && level > floor) heardAt = elapsed;
+    const learning = heardAt < 0 ? elapsed < maxWaitMs : elapsed - heardAt < learnMs;
+    if (learning) {
+      echoPeak = Math.max(echoPeak, level);
+      return "learning";
+    }
+    const threshold = Math.max(minThreshold, echoPeak * ratio);
+    if (level > threshold) {
+      loudMs += frameMs;
+      if (!fired && loudMs >= startMs) {
+        fired = true;
+        return "speech-start";
+      }
+      return "idle";
+    }
+    loudMs = 0;
+    // Her voice gets louder and softer; follow it, fading slowly.
+    echoPeak = Math.max(echoPeak * decay, level);
+    return "idle";
+  };
+}
+
+/**
  * Listen for the user's voice while HANNAH speaks and call onSpeech once when
- * they start talking. Resolves to a stop function (a no-op if the mic is unavailable).
+ * they start talking over her. Resolves to a stop function (a no-op if the mic is unavailable).
  */
 export async function startBargeInMonitor(onSpeech: () => void): Promise<() => void> {
   let stream: MediaStream;
@@ -303,8 +366,7 @@ export async function startBargeInMonitor(onSpeech: () => void): Promise<() => v
     return () => undefined;
   }
   const meter = levelMeter(stream);
-  // Higher bar than normal listening, so residual echo of HANNAH's own voice doesn't trigger it.
-  const vad = createVad({ minThreshold: 0.06, startMs: 300 });
+  const vad = createEchoAwareVad();
   let fired = false;
   const timer = window.setInterval(() => {
     if (!fired && vad(meter.level()) === "speech-start") {

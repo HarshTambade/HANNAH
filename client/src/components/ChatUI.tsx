@@ -9,6 +9,10 @@ import {
 import { runTeamTask } from "../services/Orchestrator";
 import { readVoiceSettings, startBargeInMonitor, VoiceIn, VoiceOut } from "../services/VoiceEngines";
 import { isRecentEcho, type SpokenReply } from "../services/EchoGuard";
+import { speakableText } from "../services/SpeakableText";
+
+/** How long after HANNAH finishes speaking the microphone reopens. */
+const RESUME_AFTER_SPEAKING_MS = 900;
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
 import { MemoryService, TEMPORARY_CHAT_EVENT } from "../services/MemoryService";
@@ -634,7 +638,8 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       if (speakReply) {
         setVoiceStatus("HANNAH is speaking…");
         setIsSpeaking(true);
-        const spoken: SpokenReply = { text: result.reply, endedAt: Number.POSITIVE_INFINITY };
+        // What she actually says (no Markdown, code or links), so the echo guard compares like with like.
+        const spoken: SpokenReply = { text: speakableText(result.reply) || result.reply, endedAt: Number.POSITIVE_INFINITY };
         lastSpokenRef.current = spoken;
         // Barge-in: start talking and HANNAH stops speaking.
         const bargeIn = readVoiceSettings().bargeIn ? startBargeInMonitor(() => { void VoiceOut.cancel(); }) : null;
@@ -669,7 +674,8 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
         }
       };
       if (canResumeVoice) {
-        if (spokenReply) void spokenReply.then(() => window.setTimeout(resumeListening, 350));
+        // Speakers (Bluetooth most of all) are still playing her last words when speech reports done; wait them out.
+        if (spokenReply) void spokenReply.then(() => window.setTimeout(resumeListening, RESUME_AFTER_SPEAKING_MS));
         else window.setTimeout(resumeListening, 350);
       } else {
         voiceTurnPendingRef.current = false;
@@ -767,6 +773,12 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
 
   const startVoiceInputSession = async () => {
     if (voiceSessionRef.current || voiceStartPendingRef.current || voiceTurnPendingRef.current || !voiceInputEnabledRef.current || isLoading || isSpeaking) return;
+    // Whichever path asks, the microphone never opens while her last words may still be playing.
+    const sinceSpoken = Date.now() - (lastSpokenRef.current?.endedAt ?? 0);
+    if (sinceSpoken >= 0 && sinceSpoken < RESUME_AFTER_SPEAKING_MS) {
+      window.setTimeout(() => startCallListeningRef.current(), RESUME_AFTER_SPEAKING_MS - sinceSpoken);
+      return;
+    }
     voiceStartPendingRef.current = true;
     setError("");
     try {

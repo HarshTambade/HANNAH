@@ -3,6 +3,12 @@ import { SpeechSynthesis } from "@capgo/capacitor-speech-synthesis";
 import type { SpeechLanguage } from "../types";
 import { apiFetch, apiUrl } from "./api";
 import { getNetworkStatus } from "./AIService";
+import { chunkForSpeech } from "./SpeakableText";
+
+/** Bumped by cancel(): a reply being spoken piece by piece stops before its next piece. */
+let generation = 0;
+/** The server voice's audio element while it plays, so cancel() can stop it too. */
+let currentAudio: HTMLAudioElement | null = null;
 
 const voiceNames: Record<SpeechLanguage, string[]> = {
   "en-US": ["charvi", "zoe", "ava", "aria", "allison", "samantha", "victoria", "serena", "female", "woman"],
@@ -20,7 +26,12 @@ function preferredVoice<T extends { name: string }>(voices: T[], language: Speec
   return undefined;
 }
 
-function speakInBrowser(text: string, language: SpeechLanguage, voiceName = "") {
+/**
+ * One piece in the browser. Chrome sometimes stops an utterance and never
+ * fires onend; the watchdog (well past the time the piece takes to say)
+ * ends the wait so HANNAH isn't stuck "speaking". Exported for tests.
+ */
+export function speakInBrowser(text: string, language: SpeechLanguage, voiceName = "", { first = true, watchdogMs }: { first?: boolean; watchdogMs?: number } = {}) {
   const synthesis = typeof window !== "undefined" ? window.speechSynthesis : undefined;
   if (!synthesis || typeof SpeechSynthesisUtterance === "undefined") {
     throw new Error(`Speech output is unavailable for ${language} on this device.`);
@@ -44,13 +55,35 @@ function speakInBrowser(text: string, language: SpeechLanguage, voiceName = "") 
     utterance.pitch = softVoiceStyle.pitch;
     utterance.rate = softVoiceStyle.rate;
     utterance.volume = softVoiceStyle.volume;
-    utterance.onend = () => resolve(voice?.name || `${language} system voice`);
-    utterance.onerror = (event) => reject(new Error(event.error === "not-allowed"
-      ? "Allow speech output in your browser and try again."
-      : `Browser speech output failed (${event.error}).`));
-    synthesis.cancel();
+    const name = voice?.name || `${language} system voice`;
+    let settled = false;
+    const finish = (done: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      done();
+    };
+    const limit = watchdogMs ?? 8_000 + text.length * 160;
+    const watchdog = setTimeout(() => finish(() => resolve(name)), limit);
+    utterance.onend = () => finish(() => resolve(name));
+    utterance.onerror = (event) => finish(() => (event.error === "interrupted" || event.error === "canceled"
+      ? resolve(name)
+      : reject(new Error(event.error === "not-allowed" ? "Allow speech output in your browser and try again." : `Browser speech output failed (${event.error}).`))));
+    // Only the first piece clears what was playing; later pieces follow it.
+    if (first) synthesis.cancel();
     synthesis.speak(utterance);
   });
+}
+
+/** Say every piece in the browser, in order, until cancel(). */
+async function speakAllInBrowser(text: string, language: SpeechLanguage, voiceName: string, run: number) {
+  let name = `${language} system voice`;
+  const pieces = chunkForSpeech(text, 200);
+  for (let index = 0; index < pieces.length; index += 1) {
+    if (run !== generation) break;
+    name = await speakInBrowser(pieces[index], language, voiceName, { first: index === 0 });
+  }
+  return name;
 }
 
 type NativeSpeakOptions = Parameters<typeof SpeechSynthesis.speak>[0];
@@ -108,6 +141,31 @@ export async function speakNativeUntilDone(plugin: NativeSpeechPlugin, options: 
   }
 }
 
+/** Play one piece of the server voice to the end (or until cancel() pauses it). */
+async function playServerAudio(blob: Blob) {
+  const audioUrl = URL.createObjectURL(blob);
+  const audio = new Audio(audioUrl);
+  currentAudio = audio;
+  try {
+    audio.playbackRate = 0.96;
+    await new Promise<void>((resolve, reject) => {
+      audio.onended = () => resolve();
+      audio.onpause = () => resolve();
+      audio.onerror = () => reject(new Error("Mithi audio playback failed."));
+      void audio.play().catch(reject);
+    });
+  } finally {
+    if (currentAudio === audio) currentAudio = null;
+    audio.onended = null;
+    audio.onpause = null;
+    audio.onerror = null;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    URL.revokeObjectURL(audioUrl);
+  }
+}
+
 export type SpeakOptions = {
   /** Skip the optional Mithi server voice and use the device's own voices. */
   systemOnly?: boolean;
@@ -117,44 +175,37 @@ export type SpeakOptions = {
 
 export class SpeechService {
   static async speak(text: string, language: SpeechLanguage, options: SpeakOptions = {}) {
+    const run = ++generation;
     const network = await getNetworkStatus().catch(() => ({ connected: typeof navigator === "undefined" || navigator.onLine }));
-    try {
-      if (options.systemOnly) throw new Error("System voice selected.");
-      if (!network.connected) throw new Error("Use the installed device voice while offline.");
-      const response = await apiFetch(apiUrl("/api/tts"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.slice(0, 5000), language }),
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (response.ok) {
-        const audioBlob = await response.blob();
-        if (audioBlob.size > 0) {
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl);
-          try {
-            audio.playbackRate = 0.96;
-            await new Promise<void>((resolve, reject) => {
-              audio.onended = () => resolve();
-              audio.onerror = () => reject(new Error("Mithi audio playback failed."));
-              void audio.play().catch(reject);
-            });
-            return "Charvi · Mithi v1 Flash";
-          } finally {
-            audio.pause();
-            audio.onended = null;
-            audio.onerror = null;
-            audio.removeAttribute("src");
-            audio.load();
-            URL.revokeObjectURL(audioUrl);
-          }
+    // The server voice, piece by piece (it cuts text past 5,000 characters). If a piece fails, the device voice says the rest.
+    let remaining = text;
+    if (!options.systemOnly && network.connected) {
+      const pieces = chunkForSpeech(text, 1500);
+      let spoken = 0;
+      try {
+        for (const piece of pieces) {
+          if (run !== generation) return "Charvi · Mithi v1 Flash";
+          const response = await apiFetch(apiUrl("/api/tts"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: piece, language }),
+            signal: AbortSignal.timeout(30_000),
+          });
+          if (!response.ok) break;
+          const audioBlob = await response.blob();
+          if (!audioBlob.size) break;
+          await playServerAudio(audioBlob);
+          spoken += 1;
         }
+      } catch {
+        // The Mithi service is optional; continue with a voice installed on the device.
       }
-    } catch {
-      // The Mithi service is optional; continue with a voice installed on the device.
+      if (run !== generation) return "Charvi · Mithi v1 Flash";
+      if (spoken === pieces.length && spoken > 0) return "Charvi · Mithi v1 Flash";
+      remaining = pieces.slice(spoken).join(" ");
     }
 
-    if (Capacitor.getPlatform() === "web") return speakInBrowser(text, language, options.voiceName);
+    if (Capacitor.getPlatform() === "web") return speakAllInBrowser(remaining, language, options.voiceName ?? "", run);
 
     try {
       const { voices } = await SpeechSynthesis.getVoices();
@@ -173,24 +224,31 @@ export class SpeechService {
         throw new Error(`No offline ${language} voice is installed. Download a native voice in your device language settings.`);
       }
 
-      await speakNativeUntilDone(SpeechSynthesis as unknown as NativeSpeechPlugin, {
-        text,
-        language,
-        voiceId: voice.id,
-        pitch: softVoiceStyle.pitch,
-        rate: softVoiceStyle.rate,
-        volume: softVoiceStyle.volume,
-        queueStrategy: "Flush",
-      });
+      // Android's TextToSpeech refuses more than 4,000 characters at once.
+      for (const piece of chunkForSpeech(remaining, 3000)) {
+        if (run !== generation) break;
+        await speakNativeUntilDone(SpeechSynthesis as unknown as NativeSpeechPlugin, {
+          text: piece,
+          language,
+          voiceId: voice.id,
+          pitch: softVoiceStyle.pitch,
+          rate: softVoiceStyle.rate,
+          volume: softVoiceStyle.volume,
+          queueStrategy: "Flush",
+        });
+      }
       return voice.name;
     } catch (error) {
-      if (typeof window !== "undefined" && window.speechSynthesis) return speakInBrowser(text, language, options.voiceName);
+      if (run !== generation) return "interrupted";
+      if (typeof window !== "undefined" && window.speechSynthesis) return speakAllInBrowser(remaining, language, options.voiceName ?? "", run);
       throw error;
     }
   }
 
   static async cancel() {
+    generation += 1;
     releaseNativeWait?.();
+    currentAudio?.pause();
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     try {
       await SpeechSynthesis.cancel();

@@ -32,10 +32,46 @@ export function isEchoOf(heard: string, spoken: string) {
   return matching / heardPairs.length >= 0.6;
 }
 
+/** How long after HANNAH stops her last words may still be coming out of the speaker (Bluetooth adds up to a second or so). */
+const TAIL_WINDOW_MS = 4_000;
+const STOP_WORDS = new Set("the a an and or but to of in on at for with is are was were be been it its this that these those i you he she we they me my your our their him her them do does did so if as by from not no yes ok okay just".split(" "));
+
+/**
+ * The microphone reopened while the end of the reply was still playing and
+ * caught a few of its last words ("you today"). Too short for isEchoOf, so:
+ * a run of words that appears, in order, among the last dozen words she said.
+ */
+export function isTailEcho(heard: string, spoken: string) {
+  const heardWords = words(heard);
+  if (!heardWords.length || heardWords.length > 6) return false;
+  const tail = words(spoken).slice(-12);
+  for (let start = 0; start + heardWords.length <= tail.length; start += 1) {
+    if (heardWords.every((word, index) => tail[start + index] === word)) return true;
+  }
+  return false;
+}
+
+/**
+ * Recognition of her voice from a speaker garbles word order and small words.
+ * When most of what was heard is her reply's meaningful words (4 or more),
+ * it's her, not the person.
+ */
+export function isContentEcho(heard: string, spoken: string) {
+  const content = (list: string[]) => list.filter((word) => word.length >= 3 && !STOP_WORDS.has(word));
+  const heardContent = content(words(heard));
+  if (heardContent.length < 4) return false;
+  const spokenSet = new Set(content(words(spoken)));
+  const matching = heardContent.filter((word) => spokenSet.has(word)).length;
+  return matching / heardContent.length >= 0.8;
+}
+
 export type SpokenReply = { text: string; endedAt: number };
 
 /** Echo only counts while HANNAH is speaking or shortly after she stops. */
 export function isRecentEcho(heard: string, reply: SpokenReply | null, now = Date.now()) {
   if (!reply) return false;
-  return now - reply.endedAt <= ECHO_WINDOW_MS && isEchoOf(heard, reply.text);
+  const since = now - reply.endedAt;
+  if (since > ECHO_WINDOW_MS) return false;
+  if (isEchoOf(heard, reply.text) || isContentEcho(heard, reply.text)) return true;
+  return since <= TAIL_WINDOW_MS && isTailEcho(heard, reply.text);
 }

@@ -116,6 +116,11 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **HANNAH stopped partway through speaking, and answered her own words in a loop.**
+  - **Cutting off:** interrupting by talking (barge-in) calibrated on a moment of room noise and then treated anything louder as you, including her own voice from the speakers, which echo cancellation doesn't remove. It now learns her level at the microphone once she starts and stops only for sound well above it.
+  - **Long replies:** Chrome stops long speech partway and never says so, Android refuses more than 4,000 characters, and the server voices cut long text. Every voice now reads the reply sentence by sentence to the end, without Markdown, code or links, and a stalled piece can't leave her stuck "speaking".
+  - **The loop:** the microphone reopened 0.35 seconds after she finished, while speakers (Bluetooth especially) were still playing her last words. A short fragment like "you today" got past the echo check and was sent as your message. Listening now waits 0.9 seconds, and her last words heard within 4 seconds of her stopping count as echo, however short. Garbled recognitions of her reply are caught too.
+  - **Stop:** it now also stops the server voice.
 - **Memory export no longer claims encryption.** The profile export added a base64 copy of the data labelled as encrypted. Base64 isn't encryption, so the field is gone, and the export is plainly a readable file. Sync still encrypts on its own.
 - **Reminders on Android could stop reaching the phone.**
   - **Cause:** Android 12 and later must allow "exact alarms", and Android 14 doesn't by default. Without that permission, every time HANNAH handed reminders to the phone, the notifications plugin opened the "Alarms & reminders" settings screen and waited. HANNAH queues each hand-over behind the last, so one unanswered screen held up every reminder after it.
