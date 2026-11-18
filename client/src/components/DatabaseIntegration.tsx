@@ -2,11 +2,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Check, Clipboard, Database, ExternalLink, PlugZap, RefreshCw } from "lucide-react";
 import { apiFetch, apiUrl, getApiAccessToken } from "../services/api";
 import { databaseLabel } from "../services/Account";
+import { VERCEL_SUPABASE_URL } from "../config/project";
 
 type DbStatus = { database: { configured: boolean; ready: boolean; kind: string | null; provider: string | null; source?: "DATABASE_URL" | "POSTGRES_URL" | null; schemaVersion?: number; error?: string }; vault: boolean };
-
-/** Vercel's Supabase integration: it creates (or links) a Supabase project and adds POSTGRES_URL to the Vercel project, which HANNAH reads. */
-const VERCEL_SUPABASE = "https://vercel.com/marketplace/supabase";
 
 /** A random secret made in this browser (never sent anywhere): 32 bytes as hex. */
 function randomHex(bytes = 32) {
@@ -136,7 +134,7 @@ export default function DatabaseIntegration() {
               <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm leading-6 text-slate-600">
                 {oneClick.steps.map((step) => <li key={step}>{step}</li>)}
               </ol>
-              <a href={VERCEL_SUPABASE} target="_blank" rel="noreferrer" className="btn-primary mt-3 inline-flex items-center gap-1.5">Connect Supabase on Vercel <ExternalLink size={13} /></a>
+              <a href={VERCEL_SUPABASE_URL} target="_blank" rel="noreferrer" className="btn-primary mt-3 inline-flex items-center gap-1.5">Connect Supabase on Vercel <ExternalLink size={13} /></a>
               <details className="mt-4 text-sm text-slate-600">
                 <summary className="cursor-pointer text-xs font-semibold text-slate-700">Self-hosted, or another host</summary>
                 <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-6">

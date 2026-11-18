@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Check, Copy, Database, Download, KeyRound, LogOut, RefreshCw, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Check, Copy, Database, Download, ExternalLink, KeyRound, LogOut, RefreshCw, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { Account, databaseLabel, type AccountStatus, type AuditEvent, type DeveloperKey, type StoredCredential, type Webhook } from "../services/Account";
 import { lastSyncStatus, resetSyncState, SYNC_EVENT, SYNC_NAMESPACES, syncNow, type SyncStatus } from "../services/AccountSync";
 import { ACCOUNT_EVENT, isGroqKey } from "../services/api";
+import { VERCEL_SUPABASE_URL } from "../config/project";
+import DatabaseIntegration from "./DatabaseIntegration";
 
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-slate-400 focus:border-sky-400 sm:text-sm";
 
@@ -363,13 +365,24 @@ export default function AccountPanel({ onSignedOut, onTabGroqKey }: { onSignedOu
   if (!status) return <p className="text-sm text-slate-500">Couldn't reach the server to check accounts.</p>;
   if (!status.accounts.enabled) {
     return (
-      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-        <Database size={18} className="mt-0.5 shrink-0 text-slate-400" />
-        <p className="text-slate-600">
-          {status.database.configured
-            ? `This server's database isn't reachable: ${status.database.error || "unknown error"}.`
-            : "Accounts aren't turned on for this server. The operator can connect Supabase, Neon or any Postgres database in Integrations → Database. Until then everything stays on this device."}
-        </p>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+        <div className="flex items-start gap-3">
+          <Database size={18} className="mt-0.5 shrink-0 text-slate-400" />
+          <div>
+            <p className="text-slate-600">
+              {status.database.configured
+                ? `This server's database isn't reachable: ${status.database.error || "unknown error"}.`
+                : "Accounts aren't turned on for this server yet. Until the server's operator connects a database, everything stays on this device."}
+            </p>
+            {!status.database.configured && (
+              <a href={VERCEL_SUPABASE_URL} target="_blank" rel="noreferrer" className="btn-primary mt-3 inline-flex items-center gap-1.5">Connect Supabase on Vercel <ExternalLink size={13} /></a>
+            )}
+          </div>
+        </div>
+        <details className="mt-3 [&>section]:mt-3" open={status.database.configured}>
+          <summary className="cursor-pointer text-xs font-semibold text-slate-700">For the server's operator: database setup</summary>
+          <DatabaseIntegration />
+        </details>
       </div>
     );
   }

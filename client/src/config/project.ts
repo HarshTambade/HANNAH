@@ -5,6 +5,9 @@ import { getAppVersion } from "../services/appInfo";
 export const REPOSITORY_URL = "https://github.com/HarshTambade/HANNAH";
 export const RELEASES_URL = `${REPOSITORY_URL}/releases`;
 
+/** Vercel's Supabase integration: creates or links a Supabase project and adds POSTGRES_URL to the Vercel project, which the server reads. */
+export const VERCEL_SUPABASE_URL = "https://vercel.com/marketplace/supabase";
+
 /** The version this build was made from, for example "1.3.0". */
 export const APP_VERSION = getAppVersion();
 export const RELEASE_NOTES_URL = `${RELEASES_URL}/tag/v${APP_VERSION}`;

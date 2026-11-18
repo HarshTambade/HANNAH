@@ -33,7 +33,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### New
 
-- **Connect Supabase in one step on Vercel.** Create or link a Supabase database from the Vercel project's Storage tab, and HANNAH finds it: it reads `POSTGRES_URL`, which the integration adds, when `DATABASE_URL` isn't set. Integrations → Database leads through it and generates the vault key and cron secret in your browser.
+- **Connect Supabase in one step on Vercel.** Create or link a Supabase database from the Vercel project's Storage tab, and HANNAH finds it: it reads `POSTGRES_URL`, which the integration adds, when `DATABASE_URL` isn't set. The button is in Settings → Account (shown while the server has no database) and in Integrations → Database, which lead through it and generate the vault key and cron secret in your browser.
 - **HANNAH's browser, YouTube study notes and PDF notes (desktop app).**
   - **HANNAH's browser:** "find a GATE lecture on YouTube" or "look this up" opens HANNAH's own browser window, visible and signed out of everything.
     - She can search, open pages, read, scroll, follow links, click and look.

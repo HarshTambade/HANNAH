@@ -475,3 +475,23 @@ test("the Morning briefing template opens with a Daily briefing step and saves",
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("list", { name: "Saved automations" })).toContainText("Every day at 07:30 · 2 steps");
 });
+
+test("with no database, Settings → Account offers Supabase on Vercel and the setup steps", async ({ page }) => {
+  await connectAsGuest(page);
+  // What production answers today: no database, no vault.
+  const noDatabase = { database: { configured: false, ready: false, kind: null, provider: null }, vault: false };
+  await page.route("**/api/account/status", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ accounts: { enabled: false, signup: false, serverKeys: false }, ...noDatabase, user: null }) }));
+  await page.route("**/api/db/status", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(noDatabase) }));
+  await page.goto("/settings");
+  const connect = page.getByRole("link", { name: "Connect Supabase on Vercel" }).first();
+  await connect.scrollIntoViewIfNeeded();
+  await expect(connect).toBeVisible();
+  await expect(connect).toHaveAttribute("href", "https://vercel.com/marketplace/supabase");
+  await expect(connect).toHaveAttribute("target", "_blank");
+  await page.getByText("For the server's operator: database setup").click();
+  const setup = page.getByRole("region", { name: "Database" });
+  await expect(setup).toContainText("Hosted on Vercel: connect in one step");
+  await expect(setup).toContainText(/HANNAH_VAULT_KEY=[0-9a-f]{64}/);
+  await expect(setup).toContainText(/CRON_SECRET=[0-9a-f]{48}/);
+  if (process.env.HANNAH_SHOT_DIR) await page.screenshot({ path: `${process.env.HANNAH_SHOT_DIR}/settings-account.png`, fullPage: false });
+});
