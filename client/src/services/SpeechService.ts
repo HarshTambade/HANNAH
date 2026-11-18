@@ -53,6 +53,61 @@ function speakInBrowser(text: string, language: SpeechLanguage, voiceName = "") 
   });
 }
 
+type NativeSpeakOptions = Parameters<typeof SpeechSynthesis.speak>[0];
+type UtteranceEvent = { utteranceId: string };
+export type NativeSpeechPlugin = {
+  speak: (options: NativeSpeakOptions) => Promise<{ utteranceId: string }>;
+  isSpeaking: () => Promise<{ isSpeaking: boolean }>;
+  addListener: (event: "end" | "error", listener: (event: UtteranceEvent) => void) => Promise<{ remove: () => Promise<void> }>;
+};
+
+let releaseNativeWait: (() => void) | null = null;
+
+/**
+ * The native plugins resolve speak() as soon as the text is queued, not when
+ * it has been said. Wait for the device to report this utterance finished
+ * (its "end" or "error" event), so the microphone doesn't reopen while
+ * HANNAH is still talking and hear her own reply. If an event is missed,
+ * isSpeaking() polling ends the wait; cancel() ends it at once, since
+ * Android's stop() sends no event.
+ */
+export async function speakNativeUntilDone(plugin: NativeSpeechPlugin, options: NativeSpeakOptions, { pollMs = 400, startGraceMs = 5_000, now = () => Date.now() } = {}) {
+  const finished = new Set<string>();
+  let wake: (() => void) | null = null;
+  let released = false;
+  const onDone = (event: UtteranceEvent) => { finished.add(event.utteranceId); wake?.(); };
+  const handles = await Promise.all([plugin.addListener("end", onDone), plugin.addListener("error", onDone)]);
+  const release = () => { released = true; wake?.(); };
+  releaseNativeWait?.();
+  releaseNativeWait = release;
+  try {
+    const { utteranceId } = await plugin.speak(options);
+    const startedAt = now();
+    const deadline = startedAt + Math.min(10 * 60_000, 15_000 + options.text.length * 150);
+    let heardSpeaking = false;
+    let quietPolls = 0;
+    while (!released && !finished.has(utteranceId) && now() < deadline) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, pollMs);
+        wake = () => { clearTimeout(timer); resolve(); };
+      });
+      wake = null;
+      if (released || finished.has(utteranceId)) break;
+      const { isSpeaking } = await plugin.isSpeaking().catch(() => ({ isSpeaking: true }));
+      if (isSpeaking) {
+        heardSpeaking = true;
+        quietPolls = 0;
+        continue;
+      }
+      quietPolls += 1;
+      if ((heardSpeaking && quietPolls >= 2) || (!heardSpeaking && now() - startedAt > startGraceMs)) break;
+    }
+  } finally {
+    if (releaseNativeWait === release) releaseNativeWait = null;
+    await Promise.allSettled(handles.map((handle) => handle.remove()));
+  }
+}
+
 export type SpeakOptions = {
   /** Skip the optional Mithi server voice and use the device's own voices. */
   systemOnly?: boolean;
@@ -118,7 +173,7 @@ export class SpeechService {
         throw new Error(`No offline ${language} voice is installed. Download a native voice in your device language settings.`);
       }
 
-      await SpeechSynthesis.speak({
+      await speakNativeUntilDone(SpeechSynthesis as unknown as NativeSpeechPlugin, {
         text,
         language,
         voiceId: voice.id,
@@ -135,6 +190,7 @@ export class SpeechService {
   }
 
   static async cancel() {
+    releaseNativeWait?.();
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     try {
       await SpeechSynthesis.cancel();

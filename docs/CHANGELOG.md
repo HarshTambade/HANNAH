@@ -35,6 +35,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **In voice conversations HANNAH could answer herself in a loop.** On Android and iOS the device voice reported "done" as soon as a reply was queued, not when it had been said, so the microphone reopened while HANNAH was still talking, heard her reply and sent it back as your next message. HANNAH now waits until the phone reports the reply was spoken (or stops on its own, or you interrupt), and on every platform a sentence that is mostly her own reply from the last few seconds is ignored and the microphone keeps listening. Short answers like "yes" always get through.
 - **Automations failed at their first AI step.** The server rejected agent turns with no tools ("The agent tool schemas are invalid."), which is exactly what automation steps, the daily briefing and tool-less specialists send, so every cloud automation failed. Fixed, with a regression test.
 - **CI failed its dependency audit.** New advisories hit build tooling: minimatch (fixed by an override) and picomatch (no fixed release exists). Audits now go through `scripts/audit-gate.mjs`: high and critical findings still fail unless recorded in `.audit-exceptions.json` with a reason, an exposure analysis and an expiry date; production dependencies are audited separately at moderate level with no exceptions.
 

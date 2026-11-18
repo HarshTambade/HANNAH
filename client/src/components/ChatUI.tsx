@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { runTeamTask } from "../services/Orchestrator";
 import { readVoiceSettings, startBargeInMonitor, VoiceIn, VoiceOut } from "../services/VoiceEngines";
+import { isRecentEcho, type SpokenReply } from "../services/EchoGuard";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
 import { MemoryService } from "../services/MemoryService";
@@ -274,6 +275,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const voiceStartPendingRef = useRef(false);
   const isSubmittingTurnRef = useRef(false);
   voiceEnabledRef.current = voiceEnabled;
+  const lastSpokenRef = useRef<SpokenReply | null>(null);
   const isOnline = useConnectivity();
   const platform = Capacitor.getPlatform();
   const isNative = platform === "ios" || platform === "android";
@@ -623,12 +625,15 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       if (speakReply) {
         setVoiceStatus("HANNAH is speaking…");
         setIsSpeaking(true);
+        const spoken: SpokenReply = { text: result.reply, endedAt: Number.POSITIVE_INFINITY };
+        lastSpokenRef.current = spoken;
         // Barge-in: start talking and HANNAH stops speaking.
         const bargeIn = readVoiceSettings().bargeIn ? startBargeInMonitor(() => { void VoiceOut.cancel(); }) : null;
         spokenReply = VoiceOut.speak(result.reply, speechLanguage)
           .then((voiceName) => setVoiceStatus(voiceName === "interrupted" ? "You started talking, so HANNAH stopped." : `Speaking with ${voiceName}`))
           .catch((speechError) => setVoiceStatus(speechError instanceof Error ? speechError.message : "Offline voice unavailable."))
           .finally(() => {
+            spoken.endedAt = Date.now();
             setIsSpeaking(false);
             void bargeIn?.then((stop) => stop());
           });
@@ -758,6 +763,12 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     try {
       const stop = await VoiceIn.startSession(speechLanguage, (transcript, isFinal) => {
         if (voiceTurnPendingRef.current) return;
+        // HANNAH's own reply picked up from the speaker: ignore it and keep
+        // listening, so she never answers herself in a loop.
+        if (isRecentEcho(transcript, lastSpokenRef.current)) {
+          setInput("");
+          return;
+        }
         setInput(transcript);
         if (!isFinal) return;
 
