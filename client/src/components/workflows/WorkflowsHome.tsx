@@ -237,7 +237,7 @@ function CredentialsManager({ catalog }: { catalog: Catalog }) {
         )}
       </Card>
       <Card title="Add a credential" label="Add a credential">
-        {!vault && <p role="alert" className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">This server has no vault key (HANNAH_VAULT_KEY), so it can't store credentials.</p>}
+        {!vault && <p role="alert" className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">This server has no vault key, so it can't store credentials. The operator can connect Supabase through Vercel, or set HANNAH_VAULT_KEY.</p>}
         <form onSubmit={save} className="space-y-3">
           <label className="block text-xs font-semibold text-slate-700">Type
             <select value={type} onChange={(event) => { setType(event.target.value); setValues({}); }} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">

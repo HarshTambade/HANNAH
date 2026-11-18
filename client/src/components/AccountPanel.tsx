@@ -141,7 +141,7 @@ function ProviderKeys({ vault }: { vault: boolean }) {
     <div>
       <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink"><KeyRound size={14} /> Provider keys</h3>
       <p className="mt-1 text-xs leading-5 text-slate-500">Encrypted on the server with a key only the server holds, and sent only to that provider's own API. HANNAH never shows a saved key again.</p>
-      {!vault && <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Key storage is off: the server operator needs to set HANNAH_VAULT_KEY.</p>}
+      {!vault && <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Key storage is off: the server operator needs to connect Supabase through Vercel, or set HANNAH_VAULT_KEY.</p>}
       {items.length > 0 && (
         <ul className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white" aria-label="Saved provider keys">
           {items.map((item) => (

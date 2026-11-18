@@ -17,7 +17,7 @@ const express = require("express");
 const { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } = require("node:crypto");
 const { promisify } = require("node:util");
 const { databaseConfigured, databaseSource, databaseUrl, describeDatabaseError, getDatabase, parseDatabaseUrl, testDatabaseUrl } = require("./db");
-const { decryptSecret, encryptSecret, secretHint, vaultConfigured } = require("./vault");
+const { decryptSecret, encryptSecret, secretHint, vaultConfigured, vaultSource } = require("./vault");
 const { getProvider } = require("./providers/catalog");
 
 const scryptAsync = promisify(scrypt);
@@ -265,7 +265,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
   }
 
   router.get("/db/status", async (_req, res) => {
-    res.json({ database: await databaseStatus(), vault: vaultConfigured() });
+    res.json({ database: await databaseStatus(), vault: vaultConfigured(), vaultSource: vaultSource() });
   });
 
   router.post("/db/test", async (req, res) => {
@@ -286,6 +286,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
       accounts: { enabled: database.ready, signup: database.ready && signupAllowed(), serverKeys: accountsUseServerKeys() },
       database,
       vault: vaultConfigured(),
+      vaultSource: vaultSource(),
       user: account ? { id: account.id, email: account.email, displayName: account.displayName, via: account.via, providers: [...account.keys.keys()] } : null,
       ...(res.locals.hannahAccountInvalid ? { sessionError: res.locals.hannahAccountInvalid } : {}),
     });
@@ -351,7 +352,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
   router.put("/account/credentials/:providerId", requireSession(async (req, res, db, account) => {
     const provider = storableProvider(req.params.providerId);
     if (!provider) return res.status(400).json({ error: "Keys can be saved for hosted providers only." });
-    if (!vaultConfigured()) return res.status(503).json({ error: "Key storage is off on this server. The operator needs to set HANNAH_VAULT_KEY.", reason: "vault-unconfigured" });
+    if (!vaultConfigured()) return res.status(503).json({ error: "Key storage is off on this server. The operator needs to connect Supabase through Vercel or set HANNAH_VAULT_KEY.", reason: "vault-unconfigured" });
     const apiKey = typeof req.body?.apiKey === "string" ? req.body.apiKey.trim() : "";
     if (apiKey.length < 8 || apiKey.length > 512 || /\s/.test(apiKey)) return res.status(400).json({ error: "That doesn't look like an API key." });
     const verdict = await verifyProviderKey(provider, apiKey).catch(() => null);

@@ -364,7 +364,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
   }
 
   router.post("/workflows/credentials", json, withAccount(async (req, res, db, account) => {
-    if (!vaultConfigured()) throw fail(503, "Saving credentials needs the server's vault key (HANNAH_VAULT_KEY).", "vault-required");
+    if (!vaultConfigured()) throw fail(503, "Saving credentials needs the server's vault key: connect Supabase through Vercel, or set HANNAH_VAULT_KEY.", "vault-required");
     const { rows: [count] } = await db.query("SELECT COUNT(*) AS n FROM hannah_workflow_credentials WHERE user_id = $1", [account.id]);
     if (Number(count.n) >= 100) throw fail(400, "You can save up to 100 credentials.", "limit");
     const name = clean(req.body?.name, 80);
@@ -379,7 +379,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
   }));
 
   router.put("/workflows/credentials/:id", json, withAccount(async (req, res, db, account) => {
-    if (!vaultConfigured()) throw fail(503, "Saving credentials needs the server's vault key (HANNAH_VAULT_KEY).", "vault-required");
+    if (!vaultConfigured()) throw fail(503, "Saving credentials needs the server's vault key: connect Supabase through Vercel, or set HANNAH_VAULT_KEY.", "vault-required");
     const id = String(req.params.id);
     const { rows: [row] } = await db.query("SELECT type FROM hannah_workflow_credentials WHERE user_id = $1 AND id = $2", [account.id, id]);
     if (!row) throw fail(404, "That credential doesn't exist.", "not-found");

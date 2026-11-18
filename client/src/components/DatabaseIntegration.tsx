@@ -4,7 +4,7 @@ import { apiFetch, apiUrl, getApiAccessToken } from "../services/api";
 import { databaseLabel } from "../services/Account";
 import { VERCEL_SUPABASE_URL } from "../config/project";
 
-type DbStatus = { database: { configured: boolean; ready: boolean; kind: string | null; provider: string | null; source?: "DATABASE_URL" | "POSTGRES_URL" | null; schemaVersion?: number; error?: string }; vault: boolean };
+type DbStatus = { database: { configured: boolean; ready: boolean; kind: string | null; provider: string | null; source?: "DATABASE_URL" | "POSTGRES_URL" | null; schemaVersion?: number; error?: string }; vault: boolean; vaultSource?: string | null };
 
 /** A random secret made in this browser (never sent anywhere): 32 bytes as hex. */
 function randomHex(bytes = 32) {
@@ -17,12 +17,7 @@ const PRESETS = [
   {
     id: "supabase",
     label: "Supabase",
-    oneClick: {
-      steps: [
-        "Press Connect Supabase on Vercel, pick this HANNAH project, and create a Supabase project (the free plan works) or link one you have. Vercel adds its connection to the project; nothing to copy.",
-        "Add the two secrets below to the same Vercel project (Settings → Environment Variables), then redeploy. HANNAH finds the database by itself and creates its tables.",
-      ],
-    },
+    oneClick: true,
     steps: [
       "Create a project at supabase.com (the free plan works).",
       "Open Connect (or Project Settings → Database) and copy the connection string. On serverless hosts use the pooler (port 6543): the direct host is IPv6-only.",
@@ -119,6 +114,7 @@ export default function DatabaseIntegration() {
       </div>
       {db?.configured && !db.ready && db.error && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{db.error}</p>}
       {db?.ready && !status?.vault && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Accounts work, but saved provider keys are off until HANNAH_VAULT_KEY is set.</p>}
+      {db?.ready && status?.vault && status.vaultSource && status.vaultSource !== "HANNAH_VAULT_KEY" && <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-900">Saved keys are encrypted with a key derived from your Supabase project's secret ({status.vaultSource}), which never goes in the database. To keep them readable if you ever rotate that secret, set your own HANNAH_VAULT_KEY.</p>}
 
       <div className="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Database provider">
         {PRESETS.map((item) => (
@@ -126,41 +122,49 @@ export default function DatabaseIntegration() {
         ))}
       </div>
 
-      <div className="mt-4 grid gap-5 lg:grid-cols-2">
-        <div>
-          {oneClick ? (
-            <>
-              <p className="text-sm font-semibold text-ink">Hosted on Vercel: connect in one step</p>
-              <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm leading-6 text-slate-600">
-                {oneClick.steps.map((step) => <li key={step}>{step}</li>)}
-              </ol>
-              <a href={VERCEL_SUPABASE_URL} target="_blank" rel="noreferrer" className="btn-primary mt-3 inline-flex items-center gap-1.5">Connect Supabase on Vercel <ExternalLink size={13} /></a>
-              <details className="mt-4 text-sm text-slate-600">
-                <summary className="cursor-pointer text-xs font-semibold text-slate-700">Self-hosted, or another host</summary>
-                <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-6">
-                  {active.steps.map((step) => <li key={step}>{step}</li>)}
-                  <li>Set <code className="font-mono text-xs">DATABASE_URL</code> to it, with the two secrets, in <code className="font-mono text-xs">server/.env</code> or your host's environment, and restart.</li>
-                </ol>
-                <pre className="mt-2 whitespace-pre-wrap break-all rounded-xl bg-slate-100 p-2 font-mono text-[11px] text-slate-700">DATABASE_URL={active.url}</pre>
-              </details>
-            </>
-          ) : (
+      {oneClick ? (
+        <div className="mt-4 max-w-2xl">
+          <p className="text-sm font-semibold text-ink">Hosted on Vercel: connect in one click</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">Approve Supabase for this HANNAH project on Vercel, and create a free Supabase project or pick one you have. Vercel hands HANNAH the connection; there's nothing to copy. HANNAH creates its tables and turns on encrypted key storage by itself.</p>
+          <a href={VERCEL_SUPABASE_URL} target="_blank" rel="noreferrer" className="btn-primary mt-3 inline-flex items-center gap-1.5">Connect Supabase on Vercel <ExternalLink size={13} /></a>
+          <p className="mt-3 text-xs leading-5 text-slate-500">Vercel applies a new connection on the next deployment: when it offers to redeploy, accept (or push any change). {active.note}</p>
+          <details className="mt-4 text-sm text-slate-600">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-700">Optional: your own vault key, and scheduled workflows</summary>
+            <p className="mt-2 text-xs leading-5">Add these in Vercel (Settings → Environment Variables) if you want them. HANNAH_VAULT_KEY pins the key that encrypts saved keys instead of deriving it from Supabase's secret; keep a copy. CRON_SECRET lets a scheduler run schedules and long workflows (see the workflows guide). Made in this browser; not sent anywhere.</p>
+            <div className="mt-2"><div className="relative rounded-2xl bg-slate-950 p-4 pr-12 font-mono text-xs leading-6 text-slate-100">
+            <pre className="whitespace-pre-wrap break-all">{envBlock}</pre>
+            <button type="button" aria-label="Copy environment variables" onClick={() => { void navigator.clipboard?.writeText(envBlock).then(() => setCopied(true)); }} className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">{copied ? <Check size={14} /> : <Clipboard size={14} />}</button>
+            <button type="button" aria-label="Make new secrets" onClick={() => { setSecrets({ vault: randomHex(), cron: randomHex(24) }); setCopied(false); }} className="absolute right-3 top-10 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"><RefreshCw size={14} /></button>
+            </div></div>
+          </details>
+          <details className="mt-3 text-sm text-slate-600">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-700">Self-hosted, or another host</summary>
+            <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-6">
+              {active.steps.map((step) => <li key={step}>{step}</li>)}
+              <li>Set <code className="font-mono text-xs">DATABASE_URL</code> to it, with a <code className="font-mono text-xs">HANNAH_VAULT_KEY</code> (above), in <code className="font-mono text-xs">server/.env</code> or your host's environment, and restart.</li>
+            </ol>
+            <pre className="mt-2 whitespace-pre-wrap break-all rounded-xl bg-slate-100 p-2 font-mono text-[11px] text-slate-700">DATABASE_URL={active.url}</pre>
+          </details>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-5 lg:grid-cols-2">
+          <div>
             <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-6 text-slate-600">
               {active.steps.map((step) => <li key={step}>{step}</li>)}
               <li>Add these to the server environment (<code className="font-mono text-xs">server/.env</code>, or your host's environment variables) and redeploy. Tables are created automatically.</li>
             </ol>
-          )}
-          <p className="mt-3 text-xs leading-5 text-slate-500">{active.note}</p>
-        </div>
-        <div>
-          <div className="relative rounded-2xl bg-slate-950 p-4 pr-12 font-mono text-xs leading-6 text-slate-100">
+            <p className="mt-3 text-xs leading-5 text-slate-500">{active.note}</p>
+          </div>
+          <div>
+            <div className="relative rounded-2xl bg-slate-950 p-4 pr-12 font-mono text-xs leading-6 text-slate-100">
             <pre className="whitespace-pre-wrap break-all">{envBlock}</pre>
             <button type="button" aria-label="Copy environment variables" onClick={() => { void navigator.clipboard?.writeText(envBlock).then(() => setCopied(true)); }} className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">{copied ? <Check size={14} /> : <Clipboard size={14} />}</button>
             <button type="button" aria-label="Make new secrets" onClick={() => { setSecrets({ vault: randomHex(), cron: randomHex(24) }); setCopied(false); }} className="absolute right-3 top-10 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"><RefreshCw size={14} /></button>
           </div>
-          <p className="mt-2 text-xs leading-5 text-slate-500">These secrets were made in this browser and aren't sent anywhere. HANNAH_VAULT_KEY encrypts saved keys: keep a copy, because losing it makes them unreadable. CRON_SECRET lets a scheduler run workflows on serverless hosting (see the workflows guide). Self-hosted: run <code className="font-mono">npm run db:check</code> in <code className="font-mono">server/</code> to confirm.</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">These secrets were made in this browser and aren't sent anywhere. HANNAH_VAULT_KEY encrypts saved keys: keep a copy, because losing it makes them unreadable. CRON_SECRET lets a scheduler run workflows on serverless hosting (see the workflows guide). Self-hosted: run <code className="font-mono">npm run db:check</code> in <code className="font-mono">server/</code> to confirm.</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <form onSubmit={test} className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <label htmlFor="db-test-url" className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><PlugZap size={13} /> Test a connection string</label>

@@ -33,7 +33,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### New
 
-- **Connect Supabase in one step on Vercel.** Create or link a Supabase database from the Vercel project's Storage tab, and HANNAH finds it: it reads `POSTGRES_URL`, which the integration adds, when `DATABASE_URL` isn't set. The button is in Settings → Account (shown while the server has no database) and in Integrations → Database, which lead through it and generate the vault key and cron secret in your browser.
+- **Connect Supabase in one click on Vercel.** Press **Connect Supabase on Vercel** (Settings → Account while the server has no database, or Integrations → Database) and approve it for the HANNAH project. After Vercel's redeploy, accounts and encrypted key storage are on, with nothing to copy: HANNAH reads `POSTGRES_URL`, which the integration adds, and derives its vault key from the Supabase secret it adds (`SUPABASE_JWT_SECRET`). That secret is never stored in the database. Setting your own `HANNAH_VAULT_KEY` still works, and it takes over and re-encrypts saved keys as they're read.
 - **HANNAH's browser, YouTube study notes and PDF notes (desktop app).**
   - **HANNAH's browser:** "find a GATE lecture on YouTube" or "look this up" opens HANNAH's own browser window, visible and signed out of everything.
     - She can search, open pages, read, scroll, follow links, click and look.

@@ -12,9 +12,41 @@
  * Rotation: set the new key in HANNAH_VAULT_KEY and list previous keys in
  * HANNAH_VAULT_PREVIOUS_KEYS (comma-separated). Rows wrapped with an old key
  * still decrypt and are re-wrapped with the new key the next time they're read.
+ *
+ * Without HANNAH_VAULT_KEY, the master key is derived (HKDF-SHA256) from a
+ * server secret that Vercel's Supabase integration adds to the project
+ * (SUPABASE_JWT_SECRET, else SUPABASE_SECRET_KEY, else the legacy
+ * SUPABASE_SERVICE_ROLE_KEY), so connecting Supabase there turns on key storage
+ * with nothing to set. That secret is never stored in the database, so a copy
+ * of the database alone still reveals nothing. Every key derived from a secret
+ * that's present can decrypt, so setting HANNAH_VAULT_KEY later re-wraps rows
+ * as they're read. Rotating the Supabase secret it was derived from makes rows
+ * sealed with it unreadable (people re-enter those keys); set HANNAH_VAULT_KEY
+ * for a key that never changes.
  */
 
-const { createCipheriv, createDecipheriv, createHash, randomBytes } = require("node:crypto");
+const { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } = require("node:crypto");
+
+/** Server secrets the master key can be derived from, most stable first. */
+const DERIVED_FROM = ["SUPABASE_JWT_SECRET", "SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
+
+function keyFromBytes(bytes) {
+  return { id: createHash("sha256").update(bytes).digest("hex").slice(0, 12), bytes };
+}
+
+/** Keys derived from the server secrets present, in DERIVED_FROM order (one per distinct secret). */
+function derivedKeys() {
+  const seen = new Set();
+  const keys = [];
+  for (const name of DERIVED_FROM) {
+    const secret = String(process.env[name] || "").trim();
+    // Only real secrets: a short value isn't one.
+    if (secret.length < 32 || seen.has(secret)) continue;
+    seen.add(secret);
+    keys.push({ ...keyFromBytes(Buffer.from(hkdfSync("sha256", secret, "hannah-vault", "HANNAH vault master key v1", 32))), source: name });
+  }
+  return keys;
+}
 
 function parseKey(raw) {
   const value = String(raw || "").trim();
@@ -32,13 +64,24 @@ function parseKey(raw) {
   if (!bytes || bytes.length !== 32) {
     throw new Error("HANNAH_VAULT_KEY must be 32 bytes as 64 hex characters or base64 (generate one with: openssl rand -hex 32).");
   }
-  return { id: createHash("sha256").update(bytes).digest("hex").slice(0, 12), bytes };
+  return keyFromBytes(bytes);
 }
 
 function loadKeys() {
-  const primary = parseKey(process.env.HANNAH_VAULT_KEY);
+  const explicit = parseKey(process.env.HANNAH_VAULT_KEY);
   const previous = String(process.env.HANNAH_VAULT_PREVIOUS_KEYS || "").split(",").map((item) => item.trim()).filter(Boolean).map(parseKey);
-  return { primary, byId: new Map([primary, ...previous].filter(Boolean).map((key) => [key.id, key])) };
+  const derived = derivedKeys();
+  const primary = explicit ? { ...explicit, source: "HANNAH_VAULT_KEY" } : derived[0] || null;
+  return { primary, byId: new Map([primary, ...previous, ...derived].filter(Boolean).map((key) => [key.id, key])) };
+}
+
+/** Which variable the vault's key comes from (a name, never a value), or null when key storage is off. */
+function vaultSource() {
+  try {
+    return loadKeys().primary?.source || null;
+  } catch {
+    return null;
+  }
 }
 
 function vaultConfigured() {
@@ -97,4 +140,4 @@ function secretHint(secret) {
   return `${prefix}…${value.slice(-4)}`;
 }
 
-module.exports = { decryptSecret, encryptSecret, secretHint, vaultConfigured };
+module.exports = { decryptSecret, encryptSecret, secretHint, vaultConfigured, vaultSource };

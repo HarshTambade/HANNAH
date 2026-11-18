@@ -476,7 +476,7 @@ test("the Morning briefing template opens with a Daily briefing step and saves",
   await expect(page.getByRole("list", { name: "Saved automations" })).toContainText("Every day at 07:30 · 2 steps");
 });
 
-test("with no database, Settings → Account offers Supabase on Vercel and the setup steps", async ({ page }) => {
+test("with no database, Settings → Account offers a one-click Supabase connection on Vercel", async ({ page }) => {
   await connectAsGuest(page);
   // What production answers today: no database, no vault.
   const noDatabase = { database: { configured: false, ready: false, kind: null, provider: null }, vault: false };
@@ -490,7 +490,12 @@ test("with no database, Settings → Account offers Supabase on Vercel and the s
   await expect(connect).toHaveAttribute("target", "_blank");
   await page.getByText("For the server's operator: database setup").click();
   const setup = page.getByRole("region", { name: "Database" });
-  await expect(setup).toContainText("Hosted on Vercel: connect in one step");
+  await expect(setup).toContainText("Hosted on Vercel: connect in one click");
+  await expect(setup).toContainText("there's nothing to copy");
+  // Your own vault key and the cron secret are optional extras, folded away.
+  const extras = setup.getByText("Optional: your own vault key, and scheduled workflows");
+  await expect(setup.getByText(/HANNAH_VAULT_KEY=[0-9a-f]{64}/)).toBeHidden();
+  await extras.click();
   await expect(setup).toContainText(/HANNAH_VAULT_KEY=[0-9a-f]{64}/);
   await expect(setup).toContainText(/CRON_SECRET=[0-9a-f]{48}/);
   if (process.env.HANNAH_SHOT_DIR) await page.screenshot({ path: `${process.env.HANNAH_SHOT_DIR}/settings-account.png`, fullPage: false });

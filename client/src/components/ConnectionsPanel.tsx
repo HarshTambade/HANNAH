@@ -121,7 +121,7 @@ export default function ConnectionsPanel() {
         <span className="inline-flex items-center gap-1.5"><Mail size={13} /> Searches and reads mail when you ask; drafts and sends only after you approve.</span>
         <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => void refresh()}><RefreshCw size={12} /> Check again</button>
       </div>
-      {!vault && <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">This server can't store sign-ins yet: the operator needs to set HANNAH_VAULT_KEY.</p>}
+      {!vault && <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">This server can't store sign-ins yet: the operator needs to connect Supabase through Vercel, or set HANNAH_VAULT_KEY.</p>}
       {notice && <p role="status" className="rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-900">{notice}</p>}
       {error && <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-800">{error}</p>}
     </div>

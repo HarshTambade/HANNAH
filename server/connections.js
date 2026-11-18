@@ -402,7 +402,7 @@ function createConnectionsRouter({ fetchImpl = (...args) => fetch(...args), now 
     const provider = providerFrom(req.params.provider);
     const creds = credentials(provider);
     if (!creds) throw fail(503, `${provider.label} sign-in isn't set up on this server. The operator needs to set ${provider.env.join(" and ")}.`, "provider-unconfigured");
-    if (!vaultConfigured()) throw fail(503, "Connecting accounts needs encrypted storage. The operator needs to set HANNAH_VAULT_KEY.", "vault-unconfigured");
+    if (!vaultConfigured()) throw fail(503, "Connecting accounts needs encrypted storage. The operator needs to connect Supabase through Vercel or set HANNAH_VAULT_KEY.", "vault-unconfigured");
     let returnTo = null;
     try {
       const url = new URL(String(req.body?.returnTo || ""));

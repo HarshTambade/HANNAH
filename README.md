@@ -791,7 +791,7 @@ On the **Agents** screen you can turn specialists off, pick a model for each, an
 
 Accounts are optional, and they use **a database you choose**. Set `DATABASE_URL` on the server.
 
-**On Vercel, Supabase connects in one step:** open the project's Storage tab (or [Supabase on the Vercel Marketplace](https://vercel.com/marketplace/supabase)), then create or link a Supabase project for this deployment. The integration adds `POSTGRES_URL`, and HANNAH uses it when `DATABASE_URL` is empty. Add `HANNAH_VAULT_KEY` and `CRON_SECRET` (Integrations → Database makes both in your browser), then redeploy.
+**On Vercel, Supabase connects in one click:** press **Connect Supabase on Vercel** in Settings → Account (or open [Supabase on the Vercel Marketplace](https://vercel.com/marketplace/supabase)) and approve it for this project, then accept Vercel's redeploy. HANNAH uses the integration's `POSTGRES_URL` when `DATABASE_URL` is empty, and derives its vault key from the integration's `SUPABASE_JWT_SECRET` when `HANNAH_VAULT_KEY` is empty. Set your own `HANNAH_VAULT_KEY` if you might rotate Supabase's secret: rotating it makes keys saved with the derived key unreadable.
 
 | Database | `DATABASE_URL` | Notes |
 | --- | --- | --- |
