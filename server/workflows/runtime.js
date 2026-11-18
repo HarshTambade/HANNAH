@@ -312,7 +312,8 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     return rowCount === 1;
   }
 
-  async function runClaimed(id) {
+  /** Run a claimed execution. yieldAt (a time): hand it back as queued before the next step after then. */
+  async function runClaimed(id, { yieldAt = null } = {}) {
     const db = await database();
     const { rows } = await db.query("SELECT * FROM hannah_workflow_executions WHERE id = $1", [id]);
     const row = rows[0];
@@ -346,6 +347,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         resume: resume || undefined,
         inlineWaitMs: INLINE_WAIT_MS,
         shouldPause: async () => Number((await db.query("SELECT pause_requested FROM hannah_workflow_executions WHERE id = $1", [id])).rows[0]?.pause_requested) === 1,
+        shouldYield: () => yieldAt !== null && now() >= yieldAt,
         onCheckpoint: async (state, event) => {
           const at = now();
           await db.query("UPDATE hannah_workflow_executions SET state = $1, updated_at = $2, resume = NULL WHERE id = $3", [JSON.stringify(state), at, id]);
@@ -397,8 +399,13 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     return { id: row.id, status };
   }
 
-  /** Recover expired leases, wake due waits, fire due schedules, then run queued executions. */
-  async function tick({ budgetMs = 25_000, only = null } = {}) {
+  /**
+   * Recover expired leases, wake due waits, fire due schedules, then run queued executions.
+   * budgetMs limits which runs start. preempt (serverless hosting, where the function is stopped
+   * at its time limit) also makes runs hand themselves back, as queued with their checkpoint, before
+   * the next step once the budget is used, instead of being cut off mid-step and counted as a crash.
+   */
+  async function tick({ budgetMs = 25_000, only = null, preempt = false } = {}) {
     const db = await database();
     const started = now();
     const report = { recovered: 0, deadLettered: 0, woke: 0, expired: 0, scheduled: 0, mail: 0, ran: [] };
@@ -447,7 +454,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
       const { rows: [load] } = await db.query("SELECT COUNT(*) AS n FROM hannah_workflow_executions WHERE user_id = $1 AND status = 'running'", [row.user_id]);
       if (Number(load.n) >= USER_CONCURRENCY) continue;
       if (!(await claim(row.id))) continue;
-      active.push(runClaimed(row.id).then((done) => report.ran.push(done)).catch((error) => report.ran.push({ id: row.id, status: "failed", error: error.message })));
+      active.push(runClaimed(row.id, { yieldAt: preempt ? started + budgetMs : null }).then((done) => report.ran.push(done)).catch((error) => report.ran.push({ id: row.id, status: "failed", error: error.message })));
     }
     await Promise.all(active);
     return report;

@@ -17,7 +17,7 @@
  */
 const express = require("express");
 
-const REPOSITORY = (process.env.HANNAH_RELEASES_REPOSITORY || "HarshTambade/Shanaya-Your-AI-companion").trim();
+const REPOSITORY = (process.env.HANNAH_RELEASES_REPOSITORY || "HarshTambade/HANNAH").trim();
 const CACHE_MS = 10 * 60 * 1000;
 const FAILURE_CACHE_MS = 60 * 1000;
 const RELEASE_LOOKBACK = 10;

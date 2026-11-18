@@ -41,6 +41,8 @@ const run = (definition, options = {}) => execute({
   onCheckpoint: options.onCheckpoint,
   inlineWaitMs: options.inlineWaitMs,
   shouldPause: options.shouldPause,
+  shouldYield: options.shouldYield,
+  ...(options.now ? { now: options.now } : {}),
 });
 
 describe("expressions", () => {
@@ -382,5 +384,59 @@ describe("pause", () => {
     const resumed = await run(definition, { services, state: paused.state, resume: { nodeId: "n2" }, shouldPause: async () => false });
     assert.equal(resumed.status, "completed");
     assert.deepEqual(calls.notify.map((note) => note.title), ["one", "two"]);
+  });
+});
+
+describe("yielding (serverless time budgets)", () => {
+  const twoSteps = () => base([
+    { id: "t", name: "Start", type: "trigger.manual" },
+    { id: "n1", name: "First", type: "action.notify", params: { title: "one", body: "1" } },
+    { id: "n2", name: "Second", type: "action.notify", params: { title: "two", body: "2" } },
+  ], [connect("t", "n1"), connect("n1", "n2")]);
+
+  it("hands the run back before a step that hasn't started, and the next call continues without repeating steps", async () => {
+    const { services, calls } = fakeServices();
+    const definition = twoSteps();
+    const yielded = await run(definition, { services, shouldYield: () => calls.notify.length === 1 });
+    assert.equal(yielded.status, "queued");
+    assert.equal(yielded.waiting, undefined);
+    assert.equal(yielded.state.nodes.n1.status, "done");
+    assert.equal(yielded.state.nodes.n2, undefined, "the step after the yield hasn't started");
+    const rest = await run(definition, { services, state: yielded.state, shouldYield: () => false });
+    assert.equal(rest.status, "completed");
+    assert.deepEqual(calls.notify.map((note) => note.title), ["one", "two"]);
+  });
+
+  it("always runs at least one step per call, so a run makes progress even with no budget", async () => {
+    const { services, calls } = fakeServices();
+    const definition = twoSteps();
+    let state;
+    const statuses = [];
+    for (let call = 0; call < 5; call += 1) {
+      const result = await run(definition, { services, state, shouldYield: () => true });
+      statuses.push(result.status);
+      state = result.state;
+      if (result.status !== "queued") break;
+    }
+    assert.deepEqual(statuses, ["queued", "queued", "completed"]);
+    assert.deepEqual(calls.notify.map((note) => note.title), ["one", "two"]);
+  });
+
+  it("counts active time across calls towards the workflow's time limit", async () => {
+    let clock = 1_000_000;
+    const { services } = fakeServices({ notify: async () => { clock += 4_000; return { id: "n" }; } });
+    const definition = { ...twoSteps(), settings: { timeoutMs: 10_000 } };
+    const first = await run(definition, { services, now: () => clock, shouldYield: () => clock > 1_000_000 });
+    assert.equal(first.status, "queued");
+    assert.ok(first.state.activeMs >= 4_000, `active time is kept (${first.state.activeMs} ms)`);
+    // Hours pass between calls (waiting for the next tick); that time doesn't count.
+    clock += 3 * 60 * 60_000;
+    const second = await run(definition, { services, now: () => clock, state: first.state, shouldYield: () => true });
+    assert.equal(second.status, "completed");
+    assert.ok(second.state.activeMs >= 8_000 && second.state.activeMs < 10_000, `${second.state.activeMs} ms`);
+    // A run that has already used its limit times out at the next step instead of getting a fresh limit.
+    const spent = await run(definition, { services, now: () => clock, state: { nodes: { t: first.state.nodes.t }, activeMs: 10_001 } });
+    assert.equal(spent.status, "timed-out");
+    assert.match(spent.error, /limit/);
   });
 });

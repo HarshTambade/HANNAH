@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml"><img src="https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
-  <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest"><img src="https://img.shields.io/github/v/release/HarshTambade/Shanaya-Your-AI-companion" alt="Latest release"></a>
-  <a href="https://github.com/HarshTambade/Shanaya-Your-AI-companion/issues"><img src="https://img.shields.io/github/issues/HarshTambade/Shanaya-Your-AI-companion" alt="Open issues"></a>
+  <a href="https://github.com/HarshTambade/HANNAH/actions/workflows/build.yml"><img src="https://github.com/HarshTambade/HANNAH/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
+  <a href="https://github.com/HarshTambade/HANNAH/releases/latest"><img src="https://img.shields.io/github/v/release/HarshTambade/HANNAH" alt="Latest release"></a>
+  <a href="https://github.com/HarshTambade/HANNAH/issues"><img src="https://img.shields.io/github/issues/HarshTambade/HANNAH" alt="Open issues"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-source--available-orange" alt="Source-available license"></a>
 </p>
 
@@ -19,7 +19,7 @@ Three rules shape the product:
 2. **Bring your own key (BYOK).** Paste your own free Groq key and start talking: no account, no sign-up. An operator access token is optional. Keys are kept for the browser tab session only.
 3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
-> **Status:** active development. The latest published release is [v1.4.0](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/tag/v1.4.0). `main` is ahead of it with the unreleased work listed under [Unreleased in the changelog](./docs/CHANGELOG.md) (daily briefing, Knowledge, Setup check, crash diagnostics and more). See [Project status](#project-status) for what is finished and what is experimental.
+> **Status:** active development. The latest published release is [v1.4.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.4.0). `main` is ahead of it with the unreleased work listed under [Unreleased in the changelog](./docs/CHANGELOG.md) (daily briefing, Knowledge, Setup check, crash diagnostics and more). See [Project status](#project-status) for what is finished and what is experimental.
 
 ---
 
@@ -59,18 +59,18 @@ Three rules shape the product:
 
 ## Downloads
 
-Installers for **HANNAH 1.4.0** are attached to the [latest release](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest), with a `SHA256SUMS` file to check them. The links below always point at the newest release.
+Installers for **HANNAH 1.4.0** are attached to the [latest release](https://github.com/HarshTambade/HANNAH/releases/latest), with a `SHA256SUMS` file to check them. The links below always point at the newest release.
 
 | Platform | Download | Before you install |
 | --- | --- | --- |
-| macOS | [Apple silicon](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest/download/HANNAH-macOS-AppleSilicon.dmg) · [Intel](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest/download/HANNAH-macOS-Intel.dmg) | Not notarized yet. The first time, Control-click HANNAH in Applications and choose **Open**. |
-| Windows | [Installer](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest/download/HANNAH-Windows.exe) | Not code-signed yet, so SmartScreen may warn: choose **More info → Run anyway**. Uninstall from Settings → Apps. |
-| Linux | [AppImage](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest/download/HANNAH-Linux.AppImage) · [.deb](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest/download/HANNAH-Linux.deb) | x86-64. `chmod +x` the AppImage and run it, or install the `.deb`. |
-| Android | [APK](https://github.com/HarshTambade/Shanaya-Your-AI-companion/releases/latest/download/HANNAH-Android.apk) | A debug-signed test build for sideloading until a Play signing key is configured. |
+| macOS | [Apple silicon](https://github.com/HarshTambade/HANNAH/releases/latest/download/HANNAH-macOS-AppleSilicon.dmg) · [Intel](https://github.com/HarshTambade/HANNAH/releases/latest/download/HANNAH-macOS-Intel.dmg) | Not notarized yet. The first time, Control-click HANNAH in Applications and choose **Open**. |
+| Windows | [Installer](https://github.com/HarshTambade/HANNAH/releases/latest/download/HANNAH-Windows.exe) | Not code-signed yet, so SmartScreen may warn: choose **More info → Run anyway**. Uninstall from Settings → Apps. |
+| Linux | [AppImage](https://github.com/HarshTambade/HANNAH/releases/latest/download/HANNAH-Linux.AppImage) · [.deb](https://github.com/HarshTambade/HANNAH/releases/latest/download/HANNAH-Linux.deb) | x86-64. `chmod +x` the AppImage and run it, or install the `.deb`. |
+| Android | [APK](https://github.com/HarshTambade/HANNAH/releases/latest/download/HANNAH-Android.apk) | A debug-signed test build for sideloading until a Play signing key is configured. |
 | iOS | Not distributed yet | iOS apps need an Apple Developer signing identity. Build from source with Xcode ([Mobile, desktop and PWA builds](#mobile-desktop-and-pwa-builds)) or use the web app in Safari. |
 | Web / PWA | Deploy it yourself; see [Deployment](#deployment). | Installable from a supported browser. |
 
-What changed in each version is in [CHANGELOG.md](./docs/CHANGELOG.md). [Platform support](./docs/PLATFORM_SUPPORT.md) lists what works on each operating system and what was verified. Builds on `main` upload temporary [Actions artifacts](https://github.com/HarshTambade/Shanaya-Your-AI-companion/actions/workflows/build.yml) without creating a release.
+What changed in each version is in [CHANGELOG.md](./docs/CHANGELOG.md). [Platform support](./docs/PLATFORM_SUPPORT.md) lists what works on each operating system and what was verified. Builds on `main` upload temporary [Actions artifacts](https://github.com/HarshTambade/HANNAH/actions/workflows/build.yml) without creating a release.
 
 ---
 
@@ -423,8 +423,8 @@ See [`docs/PRIVACY_POLICY.md`](./docs/PRIVACY_POLICY.md) and [`RESPONSIBLE_AI.md
 ### 1. Install
 
 ```bash
-git clone https://github.com/HarshTambade/Shanaya-Your-AI-companion.git
-cd Shanaya-Your-AI-companion
+git clone https://github.com/HarshTambade/HANNAH.git
+cd HANNAH
 npm install
 npm install --prefix client --ignore-scripts
 npm install --prefix server
@@ -506,8 +506,8 @@ This section expands the [Quick start](#quick-start) with the choices you usuall
 ### 2. Clone and install
 
 ```bash
-git clone https://github.com/HarshTambade/Shanaya-Your-AI-companion.git
-cd Shanaya-Your-AI-companion
+git clone https://github.com/HarshTambade/HANNAH.git
+cd HANNAH
 npm install
 npm install --prefix client --ignore-scripts
 npm install --prefix server

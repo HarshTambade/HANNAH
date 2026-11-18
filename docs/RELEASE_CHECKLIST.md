@@ -7,7 +7,7 @@
 5. Build desktop (macOS, Windows, Linux) via GitHub Actions Electron matrix.
 6. Build mobile (Android, iOS) via GitHub Actions.
 7. Sign artifacts with configured secrets (macOS notarization, Windows cert, Android keystore).
-8. Let the release job publish: it adds the CycloneDX SBOMs (client and server), inspects every staged package (`scripts/inspect-release-assets.sh`: checksums match, no signing material inside archives, release notes pass the secret scan), attests build provenance for each file, then uploads. Afterwards verify one package: `gh attestation verify HANNAH-Linux.AppImage --repo HarshTambade/Shanaya-Your-AI-companion`.
+8. Let the release job publish: it adds the CycloneDX SBOMs (client and server), inspects every staged package (`scripts/inspect-release-assets.sh`: checksums match, no signing material inside archives, release notes pass the secret scan), attests build provenance for each file, then uploads. Afterwards verify one package: `gh attestation verify HANNAH-Linux.AppImage --repo HarshTambade/HANNAH`.
 9. Write release notes (features, fixes, breaking changes).
 10. Submit to App Store / Google Play with updated metadata.
 11. Verify auto-update (Electron: Stable channel sees the release, Beta sees pre-releases) and OTA (Capacitor) flows post-release. For a pre-release, tag it `vX.Y.Z-beta.N` and mark it as a pre-release on GitHub so only the Beta channel installs it.

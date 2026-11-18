@@ -330,8 +330,13 @@ function permanent(error) {
  * input: { definition, execution: { id, mode, triggerNodeId, triggerData, state, startedAt }, workflow: { id, name, timezone },
  *          services, now, signal (AbortSignal for cancel), onCheckpoint(state, event), resume?: { nodeId, approved?, data? },
  *          inlineWaitMs? (longest rate-limit wait done in place; longer ones park the run),
- *          shouldPause? (async; true stops the run before the next step as a "paused" wait) }
- * returns { status: completed | failed | waiting | waiting-approval | cancelled | timed-out, state, error?, errorNode?, waiting?, warnings }
+ *          shouldPause? (async; true stops the run before the next step as a "paused" wait),
+ *          shouldYield? (true hands the run back before the next step that hasn't started, as "queued", for
+ *          hosting where one call has a time budget: serverless functions are stopped at their limit) }
+ * returns { status: completed | failed | waiting | waiting-approval | cancelled | timed-out | queued, state, error?, errorNode?, waiting?, warnings }
+ *
+ * The workflow's time limit counts active time across calls (state.activeMs), not
+ * time spent waiting between them, so yielding or recovering doesn't reset it.
  *
  * Rate limits. An AI provider that is rate-limiting (an error with
  * `rateLimited`) doesn't fail the step: the engine waits for the provider's
@@ -340,7 +345,7 @@ function permanent(error) {
  * longer ones park the run as a timed wait, which survives restarts and, on
  * serverless hosting, is woken by the next tick.
  */
-async function execute({ definition, execution, workflow, services, now = () => Date.now(), signal, onCheckpoint = async () => {}, resume, sleep = delay, inlineWaitMs = RATE_LIMIT.inlineMs, shouldPause = async () => false }) {
+async function execute({ definition, execution, workflow, services, now = () => Date.now(), signal, onCheckpoint = async () => {}, resume, sleep = delay, inlineWaitMs = RATE_LIMIT.inlineMs, shouldPause = async () => false, shouldYield = () => false }) {
   const nodes = (definition.nodes || []).filter((node) => REGISTRY.has(node.type));
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byName = new Map(nodes.map((node) => [node.name, node]));
@@ -350,8 +355,14 @@ async function execute({ definition, execution, workflow, services, now = () => 
   const state = execution.state && typeof execution.state === "object" ? execution.state : { nodes: {} };
   state.nodes = state.nodes || {};
   const timeoutMs = Math.min(LIMITS.workflowTimeoutMs.max, Number(definition.settings?.timeoutMs) || LIMITS.workflowTimeoutMs.default);
-  const deadline = now() + timeoutMs;
+  const activeBefore = Math.max(0, Number(state.activeMs) || 0);
+  const startedAt = now();
+  const deadline = startedAt + timeoutMs - activeBefore;
+  const activeNow = () => activeBefore + Math.max(0, now() - startedAt);
+  const save = onCheckpoint;
+  onCheckpoint = (checkpointState, event) => { checkpointState.activeMs = activeNow(); return save(checkpointState, event); };
   let warnings = 0;
+  let started = 0;
 
   const isCancelled = () => Boolean(signal?.aborted);
   const throwIfCancelled = () => { if (isCancelled()) throw new CancelledError(signal.reason?.message || "Cancelled."); };
@@ -391,6 +402,12 @@ async function execute({ definition, execution, workflow, services, now = () => 
       await onCheckpoint(state, { nodeId: id, status: "waiting" });
       return { status: "waiting", state, waiting: { nodeId: id, ...waiting }, warnings };
     }
+    // Out of time for this call: hand the run back before a step that hasn't started. At least one step runs per call.
+    if (!previous && started > 0 && shouldYield()) {
+      state.activeMs = activeNow();
+      return { status: "queued", state, warnings };
+    }
+    started += 1;
 
     // Gather this node's input items.
     const isStart = id === execution.triggerNodeId;

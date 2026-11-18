@@ -24,6 +24,8 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 | KI-16 | Workflow control | No way to pause a running execution | P1 | Fixed (Milestone 1) |
 | KI-17 | Workflow loops | An HTTP step calling a webhook could re-trigger workflows without end | P1 | Fixed (Milestone 1) |
 | KI-18 | Run page | Stopped updating while a run waited; no "now running" step or retry status | P2 | Fixed (Milestone 1) |
+| KI-19 | Workflows on Vercel | Runs executed inside one request with no time budget: cut off mid-step at the function's limit, counted as crashes | P0 | Fixed (not yet deployed) |
+| KI-20 | Branding, updater | Site, app, updater feed and downloads used the old repository name (worked only through GitHub's rename redirect) | P2 | Fixed (not yet deployed) |
 
 ## Details
 
@@ -50,16 +52,18 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 ### KI-2: production has no account database, vault key or tick (P0, owner action)
 
 - **Subsystem:** deployment (Vercel), accounts, workflows, Phone Bridge, sync.
-- **Evidence:** read-only requests to production on 2026-11-18:
+- **Evidence:** read-only requests to production on 2026-11-18, re-checked the same day with production serving `main` at adf9585 (its workflow page has strings first added in that commit):
   - `GET /api/account/status` → `{"accounts":{"enabled":false,"signup":false},"database":{"configured":false},"vault":false}`;
+  - `POST /api/account/register` → 503 `database-unconfigured`;
   - `GET /api/workflows/tick` → 401 (no `CRON_SECRET`);
-  - `vercel.json` has no `crons`.
+  - `vercel.json` has no `crons`; `.github/workflows/workflow-tick.yml` exists but hasn't run yet, and skips until the repository secrets `HANNAH_PRODUCTION_URL` and `CRON_SECRET` are set.
+- **Code or configuration:** configuration. The same code runs end to end in the serverless setup (`workflows.serverless.test.js`) once a database, vault key and `CRON_SECRET` are set.
 - **Effect:** no one can sign up, so nothing durable runs. That covers server workflows, schedules, webhooks, sync and Phone Bridge pairing. People get device routines only, which run while HANNAH is open.
 - **Fix (needs the owner's secrets; not done by the agent):**
   1. Create a Postgres database (Supabase, Neon or similar). Set `DATABASE_URL` on the Vercel project. Migrations run on start.
   2. Set `HANNAH_VAULT_KEY` (64 hex characters; keep a copy, or saved keys can't be decrypted).
   3. Set `CRON_SECRET` (16+ characters).
-  4. Call `GET https://hannah.eliteforums.in/api/workflows/tick` with `Authorization: Bearer $CRON_SECRET` every few minutes. Vercel Hobby only allows daily crons, so use an external scheduler or a scheduled GitHub Actions workflow; on Pro, add `"crons": [{ "path": "/api/workflows/tick", "schedule": "*/5 * * * *" }]` to `vercel.json`.
+  4. Call `GET https://hannah.eliteforums.in/api/workflows/tick` with `Authorization: Bearer $CRON_SECRET` every few minutes. Vercel Hobby only allows daily crons. The repository's `workflow-tick.yml` does this every 5 minutes once the repository secrets `HANNAH_PRODUCTION_URL` (`https://hannah.eliteforums.in`) and `CRON_SECRET` (the same value as on Vercel) are set. GitHub's schedules are best-effort and can start late; cron-job.org is more punctual. On Pro, add `"crons": [{ "path": "/api/workflows/tick", "schedule": "*/5 * * * *" }]` to `vercel.json` instead.
   5. Check: `/api/account/status` shows `database.configured: true`; sign up; run a template.
 - **Dependencies:** blocks every durable feature for real users.
 
@@ -211,3 +215,31 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
   - The header shows elapsed time while running, and the canvas highlights the running step.
   - A note appears when the server stopped during the run and it continued from a checkpoint.
 - **Tests:** `WorkflowRunNotes.test.ts` "what a live run is doing now" (a finished run never shows as live); the e2e pause test sees "Running “Slow one”".
+
+### KI-19: workflow runs on Vercel cut off mid-step (P0, fixed, not yet deployed)
+
+- **Evidence:**
+  - On serverless hosting, Run, webhooks, retries and the tick ran an execution inside the request. The time budget only limited which runs *started*: `tick` then awaited each run to the end (a workflow may run 15 minutes by default, up to 60), and Run answered only after the whole run.
+  - A Vercel function is stopped at its time limit (at most 300 s on Hobby). A longer run was then stopped mid-step. Its lease expired and the next tick recovered it as a crash, and after 4 such stops it was dead-lettered although every pass made progress. Meanwhile the Run request hung or failed with a timeout.
+  - `workflows.serverless.test.js` reproduces it: on the old code, Run returned only once the run had `completed`, instead of handing it back.
+- **Fix:**
+  - Serverless requests and ticks pass a deadline. Before each step that hasn't started, a run past the deadline hands itself back as `queued` with its checkpoint; the next poll or tick continues it. At least one step runs per call.
+  - Handing back doesn't count as a recovery.
+  - The workflow time limit now counts active time across calls (`state.activeMs`), so it isn't reset by handing back or recovering.
+  - `WORKFLOW_REQUEST_BUDGET_MS` and `WORKFLOW_TICK_BUDGET_MS` set the budgets (defaults 20 s and 50 s).
+- **Tests:**
+  - `engine.test.js` "yielding": hand-back and continuation, progress with no budget, active time across calls.
+  - `workflows.serverless.test.js` runs the real server as on Vercel (`VERCEL=1`, no worker):
+    - a long run is handed back and finished by the tick, with no steps repeated and recoveries 0;
+    - the tick refuses requests without the secret;
+    - watching the run keeps it going;
+    - webhook and scheduled runs work;
+    - a failing step is retried and reported with its attempts;
+    - a function killed mid-step is recovered by a later tick.
+
+### KI-20: old repository name in the site, app and updater (P2, fixed, not yet deployed)
+
+- **Evidence:** the repository was renamed to `HarshTambade/HANNAH`, but the website (source, licence, changelog, platform support, privacy policy and issue links), the About page, the desktop app, the server's release lookup, the README and the desktop auto-updater's feed (`electron-builder.yml`) still named `Shanaya-Your-AI-companion`. They worked only because GitHub redirects renamed repositories.
+- **Fix:** all of them use `HarshTambade/HANNAH`; `HANNAH_RELEASES_REPOSITORY` still overrides the server's default. Installed v1.4.0 apps keep the old name in their update feed and rely on the redirect until they update.
+- **Tests:** `e2e/routing.spec.ts` checks every GitHub link on the landing page.
+

@@ -19,7 +19,7 @@ import { CAPABILITIES, FAQS } from "../src/content/landing";
 
 const brandName = "HANNAH";
 const DEFAULT_SITE = "https://hannah.eliteforums.in";
-const REPOSITORY_URL = "https://github.com/HarshTambade/Shanaya-Your-AI-companion";
+const REPOSITORY_URL = "https://github.com/HarshTambade/HANNAH";
 
 type PublicPage = {
   path: string;

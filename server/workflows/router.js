@@ -71,6 +71,12 @@ function describeFile(buffer, name, givenType) {
   return { name, type, size: buffer.length, sha256: crypto.createHash("sha256").update(buffer).digest("hex"), uploadedAt: new Date().toISOString(), ...(text === null ? { base64: buffer.toString("base64") } : { text }) };
 }
 const SERVERLESS = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+// On serverless hosting, how long one request (Run, a webhook, opening a run) and one cron tick
+// may spend running steps before handing the run back. Keep them under the function's time limit,
+// minus the longest step (a step that has started finishes first; up to its own time limit).
+const budget = (name, fallback) => Math.max(1_000, Number(process.env[name]) || fallback);
+const REQUEST_BUDGET_MS = budget("WORKFLOW_REQUEST_BUDGET_MS", 20_000);
+const TICK_BUDGET_MS = budget("WORKFLOW_TICK_BUDGET_MS", 50_000);
 const parse = (text, fallback = null) => { try { return text ? JSON.parse(text) : fallback; } catch { return fallback; } };
 const clean = (value, max) => String(value ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max);
 const fail = (status, message, reason, extra = {}) => Object.assign(new Error(message), { status, reason, ...extra });
@@ -173,9 +179,9 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
   }
 
   /** On serverless hosting nothing runs in the background: run this execution now, within a time budget. */
-  async function drive(executionId, budgetMs = 20_000) {
+  async function drive(executionId, budgetMs = REQUEST_BUDGET_MS) {
     if (!SERVERLESS) return;
-    await runtime.tick({ budgetMs, only: executionId }).catch(() => {});
+    await runtime.tick({ budgetMs, only: executionId, preempt: true }).catch(() => {});
   }
 
   // ----- catalog (public) -----
@@ -187,7 +193,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
     const given = /^Bearer\s+(.+)$/i.exec(req.get("authorization") || "")?.[1] || "";
     if (secret.length < 16 || given.length !== secret.length || !crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret))) return res.status(401).json({ error: "Set CRON_SECRET (16+ characters) on the server and send it as a bearer token." });
     if (!databaseConfigured()) return res.status(503).json({ error: "Workflows need DATABASE_URL." });
-    res.json(await runtime.tick({ budgetMs: 50_000 }));
+    res.json(await runtime.tick({ budgetMs: TICK_BUDGET_MS, preempt: SERVERLESS }));
   };
   router.get("/workflows/tick", tickHandler);
   router.post("/workflows/tick", tickHandler);
@@ -277,7 +283,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
     const load = async () => (await db.query("SELECT * FROM hannah_workflow_executions WHERE id = $1 AND user_id = $2", [String(req.params.id), account.id])).rows[0];
     let row = await load();
     if (!row) throw fail(404, "That run doesn't exist.", "not-found");
-    if (row.status === "queued") { await drive(row.id, 8_000); row = await load(); }
+    if (row.status === "queued") { await drive(row.id, Math.min(8_000, REQUEST_BUDGET_MS)); row = await load(); }
     const { rows: nodes } = await db.query("SELECT * FROM hannah_workflow_node_runs WHERE execution_id = $1", [row.id]);
     const definition = parse(row.definition, {});
     const order = new Map((definition.nodes || []).map((node, index) => [node.id, index]));
@@ -741,7 +747,7 @@ function createHookRouter({ runtime }) {
         triggerData: { body, query, headers, method: req.method, receivedAt: new Date().toISOString(), ...(hops ? { $hops: hops } : {}) },
         idempotencyKey: deliveryId ? `hook:${trigger.id}:${deliveryId}` : null,
       });
-      if (SERVERLESS && !queued.duplicate) await runtime.tick({ budgetMs: 15_000, only: queued.id }).catch(() => {});
+      if (SERVERLESS && !queued.duplicate) await runtime.tick({ budgetMs: Math.min(15_000, REQUEST_BUDGET_MS), only: queued.id, preempt: true }).catch(() => {});
       res.status(202).json({ executionId: queued.id, ...(queued.duplicate ? { duplicate: true } : {}) });
     } catch (error) {
       res.status(error.status || 500).json({ error: error.status ? error.message : "The webhook couldn't be processed." });

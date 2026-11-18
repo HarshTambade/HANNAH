@@ -150,16 +150,21 @@ Workflows need the account database.
 | `WORKFLOW_USER_CONCURRENCY`, `WORKFLOW_WORKER_CONCURRENCY`, `WORKFLOW_DAILY_EXECUTIONS` | Limits (defaults 3, 4, 500). |
 | `WORKFLOW_ALLOW_PRIVATE_NETWORK=true` | Self-hosting only: let workflows reach your own network. |
 | `HANNAH_PUBLIC_URL` | The public origin used in webhook URLs, when the server sits behind a proxy. |
+| `WORKFLOW_REQUEST_BUDGET_MS`, `WORKFLOW_TICK_BUDGET_MS` | Serverless only: how long one request (Run, a webhook, opening a run) and one tick may spend starting steps (defaults 20 s and 50 s). Keep each under the function's time limit minus your longest step. |
 
 **Long-running server** (self-hosted, Docker, the desktop dev server): the worker runs inside the server every 5 seconds. Nothing else is needed.
 
-**Vercel** has no background process. Three things drive work instead: (1) a webhook runs its execution inside the request before answering (up to about 15 seconds); (2) an open execution page drives its own run while you watch; (3) a cron calls `GET /api/workflows/tick` with `Authorization: Bearer $CRON_SECRET` to fire schedules, wake waits and recover stalled runs. Add to `vercel.json`:
+**Vercel** has no background process. Three things drive work instead: (1) Run, a webhook or a retry runs the execution inside its own request, within the request budget; (2) an open execution page drives its own run while you watch (each poll of a queued run runs its next steps); (3) a cron calls `GET /api/workflows/tick` with `Authorization: Bearer $CRON_SECRET` to fire schedules, wake waits, continue handed-back runs and recover stalled ones.
+
+When a request's budget is used up, the run hands itself back before its next step: it goes back to `queued` with its checkpoint, finished steps never run again, and the next poll or tick continues it. A step that has started always finishes first (up to its own time limit), and at least one step runs per request, so every call makes progress. Handing back isn't a crash: it doesn't count towards dead-lettering. If the function is stopped mid-step anyway (its time limit is shorter than the budget plus the step), the lease expires and the next tick recovers the run, which does count. The workflow's own time limit counts active time across requests, not the time between them. `server/workflows.serverless.test.js` runs the real server this way.
+
+On Vercel Pro, add to `vercel.json`:
 
 ```json
 "crons": [{ "path": "/api/workflows/tick", "schedule": "*/5 * * * *" }]
 ```
 
-Vercel's Hobby plan allows only daily cron jobs (a more frequent schedule fails the deployment), so on Hobby use an external scheduler (for example cron-job.org or a GitHub Actions schedule) to call the tick URL every few minutes with the bearer header. Runs longer than the function's time limit continue across ticks from their checkpoints.
+Vercel's Hobby plan allows only daily cron jobs (a more frequent schedule fails the deployment), so on Hobby use an external scheduler to call the tick URL every few minutes with the bearer header. This repository has one: `.github/workflows/workflow-tick.yml` calls the tick every 5 minutes once the repository secrets `HANNAH_PRODUCTION_URL` and `CRON_SECRET` are set (it skips otherwise). GitHub runs scheduled workflows on a best-effort basis: they can start late under load, and GitHub turns them off in a public repository after 60 days without activity. A dedicated scheduler such as cron-job.org is more punctual if schedules must be on time.
 
 ## 7. Testing
 

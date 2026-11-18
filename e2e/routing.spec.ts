@@ -119,7 +119,7 @@ test("the landing page shows the app version and working download links", async 
   await expect(download.getByRole("link", { name: "Installer (64-bit)" })).toHaveAttribute("href", /\/download\/windows$/);
   await expect(download.getByRole("link", { name: "Apple silicon (M1 and later)" })).toHaveAttribute("href", /\/download\/macos-arm64$/);
   for (const href of await page.locator("a[href^='https://github.com/']").evaluateAll((links) => links.map((link) => (link as HTMLAnchorElement).href))) {
-    expect(href).toContain("github.com/HarshTambade/Shanaya-Your-AI-companion");
+    expect(href).toContain("github.com/HarshTambade/HANNAH");
   }
 });
 

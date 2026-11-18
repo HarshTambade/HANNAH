@@ -6,6 +6,12 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Long workflow runs on Vercel finish instead of being cut off.**
+  - **Before:** on serverless hosting a run executed inside one request until it ended. A run longer than the function's time limit was stopped mid-step and treated as a crash, and after four stops it was given up. Meanwhile the Run button waited for the whole run.
+  - **Now:** a run hands itself back between steps when the request's time budget is used up, and the next tick, or the open run page, continues it from there. Finished steps never run again, and handing back isn't counted as a crash. The workflow's time limit counts the time it actually ran.
+  - **Settings:** `WORKFLOW_REQUEST_BUDGET_MS` and `WORKFLOW_TICK_BUDGET_MS` set the budgets.
+  - **Scheduler:** the repository's scheduled tick (`workflow-tick.yml`) now has a timeout and never overlaps itself.
+- **Links use the repository's current name, HANNAH.** The website, the app, downloads and the desktop updater's feed no longer depend on GitHub redirecting the old name.
 - **Workflows: pause, resume, and recovery you can trust.**
   - **Pause:** runs can be paused (before their next step) and resumed from that step. Finished steps never run again.
   - **Recovery:** a run was dead-lettered the first time its server stopped if it had already waited or been approved a few times, with a wrong "the worker stopped N times" message. Only real restarts count now. The run page says when a run continued after a restart.

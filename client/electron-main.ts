@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createCapacitorElectronApp } from "@capawesome/capacitor-electron";
 import config from "./capacitor.electron.config";
-const REPOSITORY = "https://github.com/HarshTambade/Shanaya-Your-AI-companion";
+const REPOSITORY = "https://github.com/HarshTambade/HANNAH";
 const isMac = process.platform === "darwin";
 /** The one global shortcut: bring HANNAH to the front on the chat screen. */
 const TALK_SHORTCUT = "CommandOrControl+Shift+H";

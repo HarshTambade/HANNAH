@@ -2,7 +2,7 @@ import { IS_WEBSITE, SITE_URL } from "./site";
 import { getAppVersion } from "../services/appInfo";
 
 /** The public source repository. Every GitHub link in the app comes from here. */
-export const REPOSITORY_URL = "https://github.com/HarshTambade/Shanaya-Your-AI-companion";
+export const REPOSITORY_URL = "https://github.com/HarshTambade/HANNAH";
 export const RELEASES_URL = `${REPOSITORY_URL}/releases`;
 
 /** The version this build was made from, for example "1.3.0". */

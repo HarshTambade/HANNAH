@@ -23,7 +23,7 @@ protocols:
 publish:
   - provider: github
     owner: HarshTambade
-    repo: Shanaya-Your-AI-companion
+    repo: HANNAH
 # App icons: generated from public/icon.svg by scripts/generate-brand-assets.mjs and copied to
 # build-resources/ by scripts/prepare-electron-release.mjs. Without these, electron-builder ships Electron's icon.
 win:
