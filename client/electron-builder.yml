@@ -2,6 +2,9 @@ appId: com.hannah.companion
 productName: HANNAH
 artifactName: "${productName}-${os}-${arch}.${ext}"
 asar: true
+# The macOS control helper (scripts/build-macos-control.mjs) must run as its own program, so it stays outside app.asar.
+asarUnpack:
+  - assets/hannah-control
 compression: maximum
 directories:
   output: dist

@@ -21,7 +21,7 @@ User-facing support statements are in `docs/PLATFORM_SUPPORT.md`; this table is 
 | Screen viewing (on request) | — | Verified | Unit | Unit | — | — |
 | Open apps, startup routine | — | Verified | Unit | Unit | — | — |
 | HANNAH's browser, YouTube notes, PDF | — | Verified | Unit | Unit | — | — |
-| Accessibility-tree app control | — | Missing | Missing | Missing | — | — |
+| Accessibility-tree app control (observe, act, verify) | — | Built; rules unit-tested; real run blocked on Accessibility permission (KI-24) | Missing (KI-25) | Missing (KI-25) | — | — |
 | Phone Bridge (calls/SMS handoff) | — | — | — | — | Unit, no device run | Unit, no device run |
 | Native vector memory (LanceDB) | — | — | — | — | Plugin wired, no device run | Plugin wired, no device run |
 | Reminders and notifications | Verified | Unit | Unit | Unit | Plugin wired | Plugin wired |

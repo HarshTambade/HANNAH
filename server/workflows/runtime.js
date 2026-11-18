@@ -383,10 +383,16 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
       waiting.tokenHash = sha256(waiting.token);
     }
     const status = result.status;
+    // The checkpoint holds every step's full, unmasked data so a run can resume
+    // or be retried from its failed step. A completed run can only be run again
+    // from the start, so keep just each step's status and masked logs.
+    const state = status === "completed" && result.state?.nodes
+      ? { nodes: Object.fromEntries(Object.entries(result.state.nodes).map(([nodeId, node]) => [nodeId, { status: node?.status, ...(Array.isArray(node?.logs) ? { logs: engine.sanitize(node.logs) } : {}) }])) }
+      : result.state || {};
     await db.query(
       `UPDATE hannah_workflow_executions SET status = $1, state = $2, error = $3, error_node = $4, waiting = $5, wait_until = $6,
          lease_owner = NULL, lease_expires_at = NULL, finished_at = $7, updated_at = $8 WHERE id = $9`,
-      [status, JSON.stringify(result.state || {}), result.error || null, result.errorNode || null, waiting ? JSON.stringify(waiting) : null, waiting?.until ?? null, FINAL.has(status) ? at : null, at, row.id],
+      [status, JSON.stringify(state), result.error || null, result.errorNode || null, waiting ? JSON.stringify(waiting) : null, waiting?.until ?? null, FINAL.has(status) ? at : null, at, row.id],
     );
     // A pause request is used up when the run pauses (or ends before it could).
     if (FINAL.has(status) || waiting?.kind === "paused") await db.query("UPDATE hannah_workflow_executions SET pause_requested = 0 WHERE id = $1", [row.id]);

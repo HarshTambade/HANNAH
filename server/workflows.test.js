@@ -192,6 +192,14 @@ test("a draft is saved with version checks, validated, and runs with real data p
   assert.equal(byName["Large?"].output.true.count, 1);
   assert.ok(byName["Fetch rates"].durationMs >= 0);
   assert.equal(targetHits.filter((hit) => hit.url === "/rates").length, 1);
+
+  // A completed run's checkpoint keeps step statuses, not the unmasked step data (that stays only in the masked step records).
+  const db = await require("./db").getDatabase();
+  const { rows: [row] } = await db.query("SELECT state FROM hannah_workflow_executions WHERE id = $1", [started.body.executionId]);
+  const state = JSON.parse(row.state);
+  assert.deepEqual(Object.keys(state.nodes).sort(), ["h", "i", "s", "t"]);
+  assert.ok(Object.values(state.nodes).every((node) => node.status === "done"));
+  assert.ok(!row.state.includes("83.2") && !row.state.includes("A-17"), "no step data in a completed run's checkpoint");
 });
 
 test("invalid workflows can't be run, published or activated, and the reasons point at the node", async () => {

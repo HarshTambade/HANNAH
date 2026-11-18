@@ -6,6 +6,14 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### New
 
+- **HANNAH Desktop can use your apps (macOS, beta).** Ask her to press a button, fill in a field, type, use a shortcut, scroll, switch apps, arrange windows or quit an app.
+  - **How she sees:** she reads the window in front through macOS's Accessibility API (its buttons, fields, menus, text and errors) and acts on those elements; a mouse click at a point is only the fallback.
+  - **Checking her work:** after each action she looks again, and calls it done only when the app shows it.
+  - **Control session:** it starts with your yes in a system dialog, shows "Controlling" in the menu bar, and stops at once from the HANNAH menu or with Control+Option+Shift+Escape.
+  - **Rules:** she asks before sending, deleting, posting, quitting or closing, and before anything in a terminal or System Settings. She never types passwords, never pays, and can't touch HANNAH's own dialogs, security prompts or password managers.
+  - **Record:** every task keeps its plan and each action with its result.
+  - **Setup:** needs Accessibility permission (System Settings → Privacy & Security → Accessibility → HANNAH).
+  - **Other systems:** Windows and Linux say control isn't available yet.
 - **Connectors (Marketplace → Connectors).** 33 services you connect with your own account, each one the vendor's own MCP server, shown with its official icon: GitHub, Linear, Notion, Atlassian (Jira and Confluence), Sentry, Stripe, PayPal, Square, Vercel, Supabase, Neon, Netlify, Cloudflare, Figma, Canva, Airtable, monday.com, Zapier, Intercom, Webflow, Wix, Fireflies, Hugging Face, Context7, DeepWiki, Microsoft Learn, AWS Knowledge and more. Search them, filter by category, or add any remote MCP server by URL.
   - **Signing in:** sign-in is OAuth with PKCE and self-registration (the MCP authorization standard), on the service's own page.
   - **Your tokens:** they stay in your browser; HANNAH's server stores none of them.
@@ -71,6 +79,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Finished workflow runs no longer keep unmasked step data.** Each run's checkpoint, used to resume and to retry from a failed step, held every step's full data for the 30 days runs are kept. That included values a service echoed back, such as a token. The masked step records were the only part the privacy policy described. A completed run now keeps only its steps' statuses and masked logs. Failed and stopped runs keep their checkpoint so they can be retried, and the privacy policy now says so. Found by a new real-network proof of webhooks, schedules, events and credentials in serverless mode (`server/scripts/triggers-proof.mjs`).
 - **Supabase connections no longer fail TLS verification.** Supabase's certificates come from its own certificate authority, so verified connections failed with "self-signed certificate in certificate chain", and the advice was to turn verification off. HANNAH now has Supabase's root built in and verifies against it, whatever `sslmode` the URL asks for.
 - **Long workflow runs on Vercel finish instead of being cut off.**
   - **Before:** on serverless hosting a run executed inside one request until it ended. A run longer than the function's time limit was stopped mid-step and treated as a crash, and after four stops it was given up. Meanwhile the Run button waited for the whole run.

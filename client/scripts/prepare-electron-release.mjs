@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -67,6 +68,8 @@ mkdirSync(resolve(electronRoot, "build-resources", "png"), { recursive: true });
 for (const name of ["icon.icns", "icon.ico", "icon.png"]) copyFileSync(resolve(iconSource, name), resolve(electronRoot, "build-resources", name));
 for (const size of [16, 32, 48, 64, 128, 256, 512, 1024]) copyFileSync(resolve(iconSource, "png", `${size}x${size}.png`), resolve(electronRoot, "build-resources", "png", `${size}x${size}.png`));
 copyFileSync(resolve(iconSource, "icon.png"), resolve(electronRoot, "assets", "icon.png"));
+// Computer control on macOS: the Accessibility + CoreGraphics helper (scripts/build-macos-control.mjs).
+if (process.platform === "darwin") execFileSync(process.execPath, [resolve(clientRoot, "scripts", "build-macos-control.mjs"), resolve(electronRoot, "assets", "hannah-control")], { stdio: "inherit" });
 const signingAvailable = Boolean(process.env.CSC_LINK || process.env.WIN_CSC_LINK);
 let builderConfig = readFileSync(resolve(clientRoot, "electron-builder.yml"), "utf8");
 builderConfig = builderConfig.replace(/^  notarize: false$/m, `  notarize: ${releaseRequested && signingAvailable ? "true" : "false"}`);

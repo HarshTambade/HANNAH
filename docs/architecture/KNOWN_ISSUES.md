@@ -29,6 +29,8 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 | KI-21 | Web and phone apps | No web search or page reading outside the desktop app; HANNAH said she couldn't browse | P1 | Fixed (deployed 2026-11-18) |
 | KI-22 | New integrations | Connectors' OAuth with real vendors, Groq browser search, the Vercel + Supabase setup and the Telegram bot are tested against protocol fakes and read-only real endpoints, not yet end to end with real accounts | P1 | Needs a live run with the owner's accounts |
 | KI-23 | iOS build, toolchain | With Xcode 27 the LanceDB plugin's Swift bindings can't find their Rust module, so the iOS app doesn't build; CI's current Xcode builds it | P2 | Open (breaks CI when GitHub's macOS runners move to Xcode 27) |
+| KI-24 | Computer control (macOS) | Built and tested against its rules, but not yet run with Accessibility permission on: reading other apps, real clicks and typing, Test A (VS Code with a project) | P1 | Needs the owner to turn on Accessibility, then `node client/scripts/macos-control-check.mjs --vscode` |
+| KI-25 | Computer control (Windows, Linux) | No adapter yet (UI Automation, AT-SPI); the tools say so | P2 | Open |
 
 ## Details
 
@@ -272,3 +274,20 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 - **Evidence:** on 2026-11-18, `xcodebuild … -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO build` with Xcode 27.2 (after `npm run cap:patch:ios`, as CI does) fails in `node_modules/capacitor-lancedb/ios/Sources/LanceDBPlugin/Generated/lancedb_ffi.swift` with "cannot find type 'RustBuffer' in scope": the `#if canImport(lancedb_ffiFFI)` guard doesn't find the module inside `LanceDBFFI.xcframework`. CI's `macos-latest` image still builds and archives the app.
 - **Effect:** none today. When GitHub moves `macos-latest` to Xcode 27, the iOS job will fail.
 - **Options:** pin the iOS job to an Xcode version that works, until the plugin ships bindings that build with Xcode 27, or patch the module map in `scripts/patch-capacitor-ios.mjs`.
+
+### KI-24: computer control not yet run with Accessibility on (P1)
+
+- **Tested so far, on this Mac:**
+  - the helper builds as a universal binary and answers;
+  - without Accessibility permission, starting control and posting a click are refused with the permission message;
+  - the packaged app contains the helper outside `app.asar` and launches;
+  - the rules have 9 tests against a stand-in adapter.
+- **Not yet:** everything that needs Accessibility switched on. That means reading another app's interface, set-value, real clicks and key events, windows, quitting, and Test A. It also means confirming that macOS attributes the helper's permission to HANNAH.app when it runs inside the packaged app.
+- **Next:**
+  1. Turn on Accessibility for the app running the check (Terminal or VS Code), then run `node client/scripts/macos-control-check.mjs --vscode`. It takes the focus for about 20 seconds.
+  2. In the packaged app, turn on Accessibility for HANNAH and try "open TextEdit and write hello".
+
+### KI-25: no computer control on Windows and Linux (P2)
+
+- **State:** `createUnsupportedAdapter` answers every call with what's missing: Windows UI Automation and SendInput; Linux AT-SPI with X11 input, or on Wayland the desktop's remote-desktop portal. HANNAH says so instead of trying.
+- **Next:** one adapter per system behind the same interface (`control.mjs`), each tested on a real machine (KI-12).

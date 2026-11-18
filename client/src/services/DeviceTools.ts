@@ -22,7 +22,7 @@ import { getWorkflowTools } from "./WorkflowTools";
 
 export type ToolSchema = {
   type: "object";
-  properties: Record<string, { type: string; description?: string; enum?: string[] }>;
+  properties: Record<string, { type: string; description?: string; enum?: string[]; items?: { type: string } }>;
   required?: string[];
 };
 

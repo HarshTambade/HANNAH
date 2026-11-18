@@ -171,6 +171,16 @@ Vercel's Hobby plan allows only daily cron jobs (a more frequent schedule fails 
 - **Real services:**
   - `node server/scripts/workflow-proof.mjs` starts the real server and runs Manual → HTTP (GitHub's API) → Process JSON → IF → Notify → Create document.
   - It covers success, a real 404, retries on a real 503, cancellation, and a SIGKILL restart during a slow real request, then checks the run history afterwards. It needs network access.
+  - `node server/scripts/triggers-proof.mjs` runs the server as Vercel does: `VERCEL=1`, no worker, everything driven by the authenticated `/api/workflows/tick`. It checks:
+    - the tick's `CRON_SECRET`;
+    - webhooks with a token, including a repeated delivery;
+    - webhooks with HMAC, including a tampered body and an old signature;
+    - a HANNAH event;
+    - a saved credential used against a real service and never shown, including in database rows;
+    - a cron schedule firing from the tick alone;
+    - the run history.
+
+    It takes about two minutes.
 - **Restarts:** `server/workflows.restart.test.js` kills the real server process during an HTTP step and during a Wait, restarts it on the same database, and checks the runs finish from their checkpoints.
 
 - `server/workflows/engine.test.js`: expressions (including sandbox escapes), SSRF checks, validation, schedules across time zones, data passing, branching, retries with backoff, continue-on-error, cancellation, approvals, email approval and denial, resume without re-running, split, filter and aggregate, single-node tests, redaction.

@@ -213,6 +213,119 @@ All three are in the desktop app. The rules are enforced in Electron's main proc
 
 **Not run:** this whole flow inside the packaged app's chat window (the pieces were run in Electron and through the server, and the app's glue is unit-tested), on Windows and Linux, and on sites other than YouTube, GitHub and DuckDuckGo.
 
+## 2c. Built (macOS first): computer control — observe, act, verify
+
+HANNAH can read the interface of the app in front and use it: press buttons, put text in fields, type, use keys and shortcuts, scroll, click, drag, switch apps, manage windows and quit apps. Each action is checked against what's on screen afterwards. It reuses the pieces above: the same consent dialogs, activity log, app launcher, browser, files and terminal. There's no second screen-capture system and no second runtime.
+
+**Architecture**
+
+```
+chat / voice ─▶ desktop_* tools (client/src/services/DesktopActions.ts)
+                  │  Capacitor bridge: only the methods in BRIDGED_METHODS
+                  ▼
+Electron main process ─ plugins/desktop-tools/electron/dist/
+   core.mjs     folders, commands, screen, apps, browser (existing rules)
+   control.mjs  control rules: session, approvals, stale checks, verification, task history
+                  │  one adapter interface per platform
+                  ▼
+   macOS   hannah-control (client/native/macos-control/HannahControl.swift)
+           Accessibility API (AXUIElement) + CoreGraphics events, JSON on stdin/stdout
+   Windows not built: planned on UI Automation + SendInput
+   Linux   not built: planned on AT-SPI + X11 input (Wayland: the desktop's remote-desktop portal)
+```
+
+- **Isolation:** the web page never gets operating-system access. It can call only the named methods, and every rule is enforced in the main process. The helper is a separate signed program started per request as HANNAH's child process, so macOS attributes its permission to HANNAH. There's no network listener.
+- **From HANNAH Web:** web and phone sessions reach the desktop only through the existing paired-device jobs (`DesktopWorkflowJobs.ts`). Computer control isn't offered there yet, and nothing exposes it to network callers.
+
+**Screen intelligence** (`observe`)
+- **Semantic first:** the accessibility tree of the focused window, up to 300 elements. Each element has:
+  - its role, label (title, description or placeholder) and value;
+  - whether it's enabled, focused or selected;
+  - its frame in screen points;
+  - its actions;
+  - a path such as `0.3.1`.
+- **Also returned:** the app, its windows, the focused element, open sheets and dialogs, visible text (static text, headings, text areas and cells), and lines that look like errors.
+- **Chromium and Electron apps:** Chrome, VS Code and others build their tree when HANNAH asks (`AXManualAccessibility`).
+- **Visual fallback:** where an app exposes nothing, `desktop_look_at_screen` (section 2a) takes a screenshot for a vision model, and actions use coordinates.
+
+**Actions** (`desktop_act`)
+- **By element:** `press`, `show-menu`, `focus`, `set-value`, `select-text`, `increment`, `decrement`. Real accessibility actions, not synthesized clicks.
+- **By point:** `click`, `double-click`, `right-click`, `scroll`, `drag`, as real CoreGraphics mouse events. Points must be inside the observed window.
+- **Keyboard:** `type` (real key events with Unicode text) and `key` (named keys with cmd, shift, option and control).
+- **Apps and windows:** `desktop_switch_app`; `desktop_window` (raise, minimize, restore, fullscreen, move, resize, close); `desktop_quit_app`. `desktop_open_app` checks that a window shows the project folder.
+
+**Safeguards**
+- **Session:** nothing happens without a control session (`desktop_control_start`).
+  - It starts with a system dialog that lists what HANNAH may and may not do, and lasts 10 to 30 minutes.
+  - The menu bar shows "Controlling". The HANNAH menu has **Stop Controlling Now** and **Pause**.
+  - **Emergency stop:** Control+Option+Shift+Escape, a global shortcut. It ends the session, cancels the running task, and drops an action waiting for approval even if you then click yes.
+- **Fresh observations only:** an action must name the latest observation, at most 30 seconds old.
+  - For element actions, the expected role and label come from that observation, not from the model. The helper re-reads the element and stops with `CHANGED` if it differs.
+  - For points and keys, the app and window in front must still be the ones observed.
+- **Verification:** after each action HANNAH observes again.
+  - **`action-confirmed`:** the app's state shows the result: the field holds the text, focus moved there, the window or its contents changed, or the process is gone.
+  - **`action-attempted`:** nothing confirms it.
+  - A task can be finished as **completed** only when its last action was confirmed.
+- **Never:**
+  - password fields (listed without their value);
+  - pay, order, checkout or buy;
+  - HANNAH's own windows and dialogs, so she can't approve her own requests;
+  - macOS security prompts, Keychain, Passwords and password managers;
+  - Force Quit, signing out or locking.
+- **Asks every time:** buttons that send, delete, post, sign in or change something; quitting apps; closing windows; Cmd+Q, Cmd+W, Cmd+Delete; and every action in a terminal or System Settings, because typing there runs commands. Commands themselves go through `desktop_run_command`'s own approval.
+- **Asks once per app per session:** typing.
+- **Limits:** 60 actions a minute and 2,000 characters per text.
+- **Untrusted content:** screen text, web pages and documents are data. Nothing on screen can start a session or grant permissions; only the person can, in a system dialog.
+
+**Task record** (`control-tasks.json` in the app's data folder, last 30 tasks; plus the activity log)
+- **Each task:** an id, the request, the plan, and its status: planned, executing, waiting-approval, completed, failed or cancelled.
+- **Each step:** an observation (app, window, element count), or an action with its target (app, window, element and path or point), its result, its verification evidence and its status (action-attempted, action-confirmed, failed or denied).
+
+**Permissions (macOS)**
+- **Accessibility:** System Settings → Privacy & Security → Accessibility → HANNAH. Needed for reading other apps and for posting mouse and keyboard events. `requestControlAccess` shows macOS's own prompt; HANNAH can't grant it to herself.
+- **Screen Recording:** only for screenshots (section 2a).
+- **Unsigned builds:** macOS ties both permissions to the app's signature, so they may need granting again after each update.
+
+**Tool registry** (`DesktopActions.ts`; routed by `AgentRouter.ts` for "click / type / press / switch to / scroll / close / menu / button …")
+
+| Tool | Calls | Asks the user |
+| --- | --- | --- |
+| `desktop_control_start` | `controlStatus`, `requestControlAccess`, `startControl`, `startControlTask` | Yes, the session dialog |
+| `desktop_observe` | `observeScreen` | No (needs a session) |
+| `desktop_act` | `controlAct` | Per the rules above |
+| `desktop_switch_app` | `focusApp` | No (needs a session) |
+| `desktop_window` | `controlWindow` | Close only |
+| `desktop_quit_app` | `quitApp` | Always |
+| `desktop_control_finish` | `finishControlTask` | No |
+
+**Helper contract** (`hannah-control <command>`, a JSON object on stdin)
+- **Answers:** `{"ok": true, …}`, or `{"ok": false, "code", "error"}`.
+- **Commands:**
+  - `status`, `request-access`, `running`;
+  - `frontmost`, `observe` {pid?, maxNodes?};
+  - `press`, `show-menu`, `focus`, `increment`, `decrement` {pid, path, expect: {role, label}};
+  - `set-value` {…, value}, `select-text` {…, location, length};
+  - `click` {x, y, button, count}, `drag` {fromX, fromY, toX, toY}, `scroll` {dx, dy, x?, y?};
+  - `type` {text}, `key` {key, modifiers};
+  - `activate`, `quit` {pid};
+  - `window` {pid, index, expectTitle, action, x, y, width, height}.
+- **Refusals:** `ACCESSIBILITY_PERMISSION`, `CHANGED`, `SECURE_FIELD`, `DISABLED`, `NOT_SETTABLE`.
+
+**Build and packaging:** `client/scripts/build-macos-control.mjs` compiles a universal binary (arm64 and x86_64, macOS 12+) during `prepare-electron-release.mjs`. `electron-builder.yml` unpacks it from `app.asar` (`asarUnpack`). CI checks the packaged helper exists, has both architectures and answers.
+
+**Tests** (2026-11-18)
+
+| Check | Where | Result |
+| --- | --- | --- |
+| Rules: session, consent, stale and changed UI, verification, approvals, refusals, emergency stop during an approval, unsupported platforms (9 tests) | `plugins/desktop-tools/control.test.mjs`, stand-in adapter | Pass |
+| The helper compiles (Swift, universal binary) and answers `status` and `running` on this Mac | real macOS | Pass |
+| Without Accessibility permission, starting control and posting a click are refused with the permission message | real macOS, `scripts/macos-control-check.mjs` | Pass |
+| Packaged app: the helper is at `app.asar.unpacked/assets/hannah-control` (x86_64 and arm64) and answers; the app launches and loads (`HANNAH_SMOKE_OK 1.5.0`) | local `--dir` package | Pass |
+| With Accessibility on, on TextEdit: read the tree, set text (read back), click, type with real key events (read back), Cmd+S, and the file on disk has the text; scroll; minimize and restore; stale observation refused; quit confirmed; emergency stop | `scripts/macos-control-check.mjs` | **Not run yet:** needs Accessibility switched on for the app running it (KI-24) |
+| Test A: VS Code opens a project, confirmed by its window title | `scripts/macos-control-check.mjs --vscode` | Not run yet (same reason) |
+
+**Not built:** the Windows and Linux adapters (they report that clearly); computer control requested from HANNAH Web; continuous observation (observation is on request, during a session); drag and drop between apps beyond a straight drag.
+
 ## 3. Backlog, in dependency order
 
 ### Phase 2: Desktop vision and action
@@ -226,7 +339,7 @@ Items 1 to 3 are built (section 2a). Next are 4 and 5.
    - `app.setLoginItemSettings` starts HANNAH at login only if you turn it on, and the Login Items list shows it.
    - A "When the desktop app starts" trigger then opens your apps, folders and URLs in order, with a run history.
    - No hidden services.
-4. **Accessibility-first control:** macOS AX API, Windows UI Automation, Linux AT-SPI, through a native helper. Mouse and keyboard only where accessibility gives nothing.
+4. **Accessibility-first control** (built for macOS, section 2c; Windows UI Automation and Linux AT-SPI adapters still to build): macOS AX API, Windows UI Automation, Linux AT-SPI, through a native helper. Mouse and keyboard only where accessibility gives nothing.
    - Every action is summarized and approved, as `DesktopAgent.ts` does today.
    - The result is checked with a fresh observation before the next step.
 5. **Browser automation** (built in HANNAH's own signed-out browser, section 2b; using your own signed-in browser is still to come) beyond reading pages: navigation and form filling in a separate signed-out window. Signed-in sites only through the person's own browser with their go-ahead per step.

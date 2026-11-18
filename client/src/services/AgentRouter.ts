@@ -39,6 +39,8 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /\bnotes?\b|\bpdf\b|summar/i, tools: /^(desktop_save_notes_pdf|youtube_read_video|browser_search|browser_read)$/ },
   { match: /screen|this error|what('s| is) (happening|this)|looking at|window|display/i, tools: /^desktop_look_at_screen$/ },
   { match: /\b(open|launch|start|close|switch to)\b|\bapps?\b|application|vs ?code|vscode|chrome|terminal|spotify|slack/i, tools: /^(desktop_open_app|desktop_list_apps|open_app|desktop_folders)$/ },
+  // Using apps for the user: click, type, press keys, fill in, switch, windows (control.mjs).
+  { match: /\b(click|double[- ]?click|right[- ]?click|press|tap|type|fill (in|out)|enter (the|my|a)|select|scroll|drag|drop|switch to|bring up|minimi[sz]e|maximi[sz]e|full ?screen|close (this|the|that)|quit|go to the|in (this|the) (app|window)|on my (screen|computer|mac|pc)|control|for me in|menu|button|tab\b|dialog)\b/i, tools: /^desktop_(control_start|observe|act|switch_app|window|quit_app|control_finish)$/ },
   { match: /startup|start ?up|log ?in|sign ?in|boot|every (morning|day|time)|when(ever)? i (start|turn on|log|open)|(laptop|computer|pc|mac) (starts|boots|turns on)|routine/i, tools: /^desktop_(startup_routine|set_startup_routine|list_apps|folders)$/ },
   { match: /\bcall\b|dial|\bphone\b|\btext\b|\bsms\b|message|contact|whatsapp/i, tools: /^(phone_|make_call$|send_message$)/ },
   { match: /\bfiles?\b|folder|project|\bcode\b|\brun\b|\btest|build|repo|script|read|write|save/i, tools: /^(desktop_(folders|list_files|read_file|write_file|run_command)|list_app_files|read_app_file|write_app_file|delete_app_file)$/ },

@@ -293,6 +293,21 @@ jobs:
       - name: Check the packaged app's icon
         if: runner.os != 'Windows'
         run: node scripts/check-packaged-icons.mjs client/electron/dist
+      # Computer control on macOS needs the helper outside app.asar, for both architectures, and runnable.
+      - name: Check the packaged macOS control helper
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r helper; do
+            found=1
+            echo "$helper: $(lipo -archs "$helper")"
+            lipo -archs "$helper" | grep -q arm64
+            lipo -archs "$helper" | grep -q x86_64
+            # It answers (Accessibility is off on the runner, which it must report, not hide).
+            echo '{}' | "$helper" status | tee /dev/stderr | grep -q '"ok":true'
+          done < <(find client/electron/dist -path '*HANNAH.app/Contents/Resources/app.asar.unpacked/assets/hannah-control' -type f)
+          if [ "$found" = 0 ]; then echo "::error::The packaged app has no control helper (app.asar.unpacked/assets/hannah-control)."; exit 1; fi
       - name: Enforce renderer and installer size targets
         working-directory: client/electron
         run: node ../scripts/check-bundle-size.mjs --strict --package-dir dist

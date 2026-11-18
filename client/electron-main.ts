@@ -234,23 +234,49 @@ function brandWindows() {
 }
 
 type ScreenState = { state: "inactive" | "observing" | "paused"; expiresAt: number | null };
-type ScreenControls = { stopScreenSession: () => Promise<unknown>; pauseScreenSession: (options: { paused: boolean }) => Promise<unknown> };
+type ScreenControls = {
+  stopScreenSession: () => Promise<unknown>;
+  pauseScreenSession: (options: { paused: boolean }) => Promise<unknown>;
+  stopControl: (options: { emergency?: boolean }) => Promise<unknown>;
+  pauseControl: (options: { paused: boolean }) => Promise<unknown>;
+};
+type ControlState = { state: "inactive" | "controlling" | "paused"; expiresAt: number | null };
 let screenIndicator: ScreenState = { state: "inactive", expiresAt: null };
+let controlIndicator: ControlState = { state: "inactive", expiresAt: null };
 const screenControls = () => (globalThis as Record<string, unknown>).__hannahDesktopTools as ScreenControls | undefined;
+// Stops computer control at once, from anywhere (plugins/desktop-tools/electron/dist/plugin.mjs shows it in the consent dialog).
+const STOP_CONTROL_SHORTCUT = isMac ? "Control+Option+Shift+Escape" : "Ctrl+Alt+Shift+Escape";
 
-/** While HANNAH may look at the screen, the tray says so and offers Pause and Stop. */
+/** While HANNAH may look at the screen or control apps, the tray says so and offers Pause and Stop. */
+function refreshIndicator() {
+  if (!tray) return;
+  const until = (at: number | null) => (at ? new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
+  const controlling = controlIndicator.state === "controlling";
+  tray.setToolTip(controlling ? `HANNAH is controlling your computer until ${until(controlIndicator.expiresAt)}. ${STOP_CONTROL_SHORTCUT} stops her.`
+    : controlIndicator.state === "paused" ? "HANNAH: computer control paused"
+      : screenIndicator.state === "observing" ? `HANNAH can see your screen until ${until(screenIndicator.expiresAt)}` : screenIndicator.state === "paused" ? "HANNAH: screen viewing paused" : "HANNAH");
+  if (isMac) tray.setTitle(controlling ? " Controlling" : controlIndicator.state === "paused" ? " Control paused" : screenIndicator.state === "observing" ? " Seeing screen" : screenIndicator.state === "paused" ? " Paused" : "");
+  tray.setContextMenu(trayMenu());
+}
 function setScreenIndicator(state: ScreenState) {
   screenIndicator = state;
-  if (!tray) return;
-  const until = state.expiresAt ? new Date(state.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-  tray.setToolTip(state.state === "observing" ? `HANNAH can see your screen until ${until}` : state.state === "paused" ? "HANNAH: screen viewing paused" : "HANNAH");
-  if (isMac) tray.setTitle(state.state === "observing" ? " Seeing screen" : state.state === "paused" ? " Paused" : "");
-  tray.setContextMenu(trayMenu());
+  refreshIndicator();
+}
+function setControlIndicator(state: ControlState) {
+  controlIndicator = state;
+  refreshIndicator();
 }
 
 function trayMenu() {
   const watching = screenIndicator.state !== "inactive";
+  const controlling = controlIndicator.state !== "inactive";
   return Menu.buildFromTemplate([
+    ...(controlling ? [
+      { label: controlIndicator.state === "controlling" ? "HANNAH is controlling your computer" : "Computer control is paused", enabled: false },
+      { label: "Stop Controlling Now", accelerator: STOP_CONTROL_SHORTCUT, click: () => void screenControls()?.stopControl({ emergency: true }) },
+      { label: controlIndicator.state === "controlling" ? "Pause Control" : "Resume Control", click: () => void screenControls()?.pauseControl({ paused: controlIndicator.state === "controlling" }) },
+      { type: "separator" },
+    ] as MenuItemConstructorOptions[] : []),
     ...(watching ? [
       { label: screenIndicator.state === "observing" ? "HANNAH can see your screen" : "Screen viewing is paused", enabled: false },
       { label: screenIndicator.state === "observing" ? "Pause Screen Viewing" : "Resume Screen Viewing", click: () => void screenControls()?.pauseScreenSession({ paused: screenIndicator.state === "observing" }) },
@@ -379,6 +405,7 @@ function desktopInfo() {
   checkForUpdates,
   openDeepLink,
   setScreenIndicator,
+  setControlIndicator,
 };
 
 app.whenReady().then(() => {
@@ -394,6 +421,8 @@ app.whenReady().then(() => {
   buildTray();
   recordVersion();
   if (!globalShortcut.register(TALK_SHORTCUT, () => openScreen("/chat"))) console.error(`HANNAH couldn't register ${TALK_SHORTCUT}; another app holds it.`);
+  // The emergency stop works even when HANNAH's window is hidden or another app is in front.
+  if (!globalShortcut.register(STOP_CONTROL_SHORTCUT, () => void screenControls()?.stopControl({ emergency: true }))) console.error(`HANNAH couldn't register ${STOP_CONTROL_SHORTCUT} (emergency stop); use the HANNAH menu to stop control.`);
   // hannah:// links. Registered for the installed app only, so a development copy doesn't take over the scheme.
   if (app.isPackaged) app.setAsDefaultProtocolClient("hannah");
   const link = deepLinkFromArgs(process.argv);

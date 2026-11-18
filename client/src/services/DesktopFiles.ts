@@ -65,6 +65,24 @@ export interface HannahDesktopPlugin {
   /** Notes as a PDF in a read-write shared folder, after a system dialog; checked on disk. */
   saveNotesPdf(options: { folderId: string; fileName?: string; title: string; creator?: string; sourceUrl?: string; topic?: string; markdown: string }): Promise<SavedPdf>;
   revealNotes(options: { folderId: string; path: string }): Promise<void>;
+  /**
+   * Computer control (plugins/desktop-tools/electron/dist/control.mjs): a session the user starts in a
+   * system dialog, actions only on a fresh observation, each verified by observing again, in a task history.
+   */
+  controlStatus(): Promise<ControlStatus>;
+  requestControlAccess(): Promise<{ accessibility: boolean }>;
+  startControl(options: { reason: string; minutes?: number }): Promise<ControlSession>;
+  pauseControl(options: { paused: boolean }): Promise<ControlSession>;
+  stopControl(options?: { emergency?: boolean }): Promise<ControlSession>;
+  startControlTask(options: { request: string; plan: string[] }): Promise<ControlTask>;
+  finishControlTask(options: { taskId: string; status: "completed" | "failed"; summary?: string }): Promise<ControlTask>;
+  controlTasks(): Promise<{ tasks: ControlTask[]; session: ControlSession }>;
+  observeScreen(options: { taskId?: string; app?: string }): Promise<ControlObservation>;
+  controlAct(options: ControlActRequest): Promise<ControlActResult>;
+  runningApps(): Promise<{ apps: Array<{ name: string; bundleId: string; active: boolean }> }>;
+  focusApp(options: { app: string; taskId?: string }): Promise<{ app: string; frontmost: boolean }>;
+  quitApp(options: { app: string; taskId?: string }): Promise<{ app: string; quit: boolean; note?: string }>;
+  controlWindow(options: { app?: string; index?: number; action: "raise" | "minimize" | "restore" | "fullscreen" | "close" | "move" | "resize"; x?: number; y?: number; width?: number; height?: number; taskId?: string }): Promise<{ app: string; window: string; action: string; confirmed: boolean; windows: Array<{ index: number; title: string; minimized: boolean }> }>;
   /** The desktop app itself: version, update channel and checks, tray, shortcut, hannah:// links. */
   desktopInfo(): Promise<DesktopInfo>;
   setUpdateChannel(options: { channel: UpdateChannel }): Promise<DesktopInfo>;
@@ -78,7 +96,7 @@ export type ScreenStatus = ScreenSessionState & { permission: string; platform: 
 export type ScreenCapture = { image: string; mediaType: "image/jpeg" | "image/png"; width: number; height: number; windows: string[]; capturedAt: number; session: ScreenSessionState };
 export type InstalledApp = { id: string; name: string };
 export type AllowedApp = { id: string; name: string; addedAt: number };
-export type AppLaunch = { app: InstalledApp; folder: string | null; verified: boolean | null; alreadyRunning: boolean; outcome: string };
+export type AppLaunch = { app: InstalledApp; folder: string | null; verified: boolean | null; alreadyRunning: boolean; outcome: string; project?: { loaded: boolean | null; windowTitle?: string; windowTitles?: string[]; reason?: string } };
 export type StartupStep = { kind: "app"; app: InstalledApp; folderId?: string } | { kind: "url"; url: string } | { kind: "wait"; seconds: number };
 export type StartupRun = { at: number; trigger: "login" | "manual"; ok: boolean; steps: Array<{ label: string; ok: boolean; detail?: string }> };
 export type StartupSettings = { enabled: boolean; steps: Array<StartupStep & { label: string }>; history: StartupRun[]; loginItem: { openAtLogin: boolean; status: string; where: string } | null };
@@ -88,6 +106,23 @@ export type BrowserPage = { title: string; url: string; text: string; textTrunca
 export type YouTubeResults = { url: string; title: string; results: Array<{ title: string; url: string; channel: string; duration: string; details: string }> };
 export type YouTubeVideo = { url: string; title: string; channel: string; description: string; transcriptAvailable: boolean; transcript: string; transcriptTruncated: boolean; coveredUntil: string | null; videoLength: string | null; segments: number; timestamps: string[]; parts?: Array<{ from: string; to: string; text: string }>; reason?: string };
 export type SavedPdf = { folder: string; path: string; bytes: number; pages: number; verified: boolean; transcriptBased: boolean; outcome: string };
+
+export type ControlSession = { state: "inactive" | "controlling" | "paused"; startedAt: number | null; expiresAt: number | null; reason?: string; stopShortcut: string };
+export type ControlStatus = { platform: string; available: boolean; reason: string | null; accessibility: boolean | null; screenRecording: boolean | null; frontmost: { name: string } | null; session: ControlSession };
+export type ControlElement = { path: string; role: string; label?: string; value?: string; secure?: boolean; enabled?: boolean; focused?: boolean; selected?: boolean; actions?: string[]; frame?: { x: number; y: number; width: number; height: number } };
+export type ControlObservation = {
+  observationId: string; observedAt: number;
+  app: { name: string; bundleId: string } | null;
+  window: { title: string; index: number; frame?: { x: number; y: number; width: number; height: number } } | null;
+  windows: Array<{ index: number; title: string; minimized: boolean }>;
+  focused: { role: string; label?: string; secure?: boolean } | null;
+  dialogs: string[]; errors: string[]; text: string; elements: ControlElement[]; truncated: boolean; note?: string;
+};
+export type ControlAction = "press" | "show-menu" | "focus" | "set-value" | "select-text" | "increment" | "decrement" | "click" | "double-click" | "right-click" | "scroll" | "drag" | "type" | "key";
+export type ControlActRequest = { taskId: string; observationId: string; action: ControlAction; path?: string; text?: string; key?: string; modifiers?: string[]; x?: number; y?: number; dx?: number; dy?: number; fromX?: number; fromY?: number; toX?: number; toY?: number; location?: number; length?: number };
+export type ControlStep = { at: number; kind: "observation" | "action"; action?: string; status?: "action-attempted" | "action-confirmed" | "failed" | "denied"; target?: { app?: string; window?: string; element?: string | null }; verification?: { confirmed: boolean; evidence: string; changes?: string[] }; result?: unknown };
+export type ControlTask = { id: string; request: string; plan: string[]; status: "planned" | "executing" | "waiting-approval" | "completed" | "failed" | "cancelled"; createdAt: number; finishedAt: number | null; actions: ControlStep[]; observations: number; failure: string | null; summary: string | null };
+export type ControlActResult = Partial<ControlObservation> & { taskId: string; action: ControlAction; status: "action-attempted" | "action-confirmed"; verification?: { confirmed: boolean; evidence: string; changes?: string[] }; note: string };
 
 export type UpdateChannel = "stable" | "beta";
 export type DesktopInfo = {

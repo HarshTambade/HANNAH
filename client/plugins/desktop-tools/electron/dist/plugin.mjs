@@ -9,6 +9,11 @@ import { createAppLauncher } from "./apps.mjs";
 import { createPageLoader } from "./browse.mjs";
 import { createBrowser, createPdfRenderer } from "./browser.mjs";
 import { BRIDGED_METHODS, createDesktopTools } from "./core.mjs";
+import { createPlatformAdapter } from "./control.mjs";
+
+// The macOS control helper ships unpacked next to the app archive (it can't run from inside app.asar).
+const controlHelper = () => path.join(app.getAppPath().replace(/app\.asar$/, "app.asar.unpacked"), "assets", "hannah-control");
+const STOP_SHORTCUT = process.platform === "darwin" ? "Control+Option+Shift+Escape" : "Ctrl+Alt+Shift+Escape";
 
 const parentWindow = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
 const LOGIN_FLAG = "--hannah-login";
@@ -124,6 +129,12 @@ class HannahDesktopImpl {
       screenPermission,
       captureScreen,
       onScreenSession: (state) => globalThis.__hannahMain?.setScreenIndicator?.(state),
+      // Computer control (control.mjs): the platform adapter, its task history, and the menu bar indicator.
+      control: createPlatformAdapter({ platform: process.platform, helperPath: process.platform === "darwin" ? controlHelper() : undefined }),
+      controlStorePath: path.join(app.getPath("userData"), "control-tasks.json"),
+      ownPid: process.pid,
+      stopShortcut: STOP_SHORTCUT,
+      onControlSession: (state) => globalThis.__hannahMain?.setControlIndicator?.(state),
       openScreenSettings: async () => {
         if (process.platform === "darwin") await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
       },

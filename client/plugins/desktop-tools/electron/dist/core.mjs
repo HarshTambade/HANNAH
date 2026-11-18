@@ -20,6 +20,7 @@ import os from "node:os";
 import path from "node:path";
 import { findApps } from "./apps.mjs";
 import { inspectPdf, notesDocument, pdfFileName } from "./notes.mjs";
+import { CONTROL_METHODS, createControlTools, createUnsupportedAdapter } from "./control.mjs";
 
 export const LIMITS = Object.freeze({
   readBytes: 256 * 1024,
@@ -298,6 +299,21 @@ export function createDesktopTools(deps) {
     return { root, target, relative: clean, exists: false };
   }
 
+  // ----- computer control (control.mjs): its own session, rules and task history -----
+  const control = createControlTools({
+    adapter: deps.control ?? createUnsupportedAdapter(platform),
+    confirm: deps.confirm,
+    record,
+    storePath: deps.controlStorePath,
+    ownPid: deps.ownPid,
+    neverPress: NEVER_PRESS,
+    askBeforePress: ASK_BEFORE_PRESS,
+    onSession: deps.onControlSession,
+    now,
+    sleep: deps.sleep,
+    stopShortcut: deps.stopShortcut,
+  });
+
   const publicFolder = (folder) => ({ id: folder.id, name: folder.name, path: folder.path, access: folder.access, addedAt: folder.addedAt });
 
   // ----- screen: on request, with consent, visibly -----
@@ -419,6 +435,8 @@ export function createDesktopTools(deps) {
   }
 
   return {
+    ...control,
+
     async listFolders() {
       const state = await load();
       return { folders: state.folders.map(publicFolder), allowedCommands: state.allowedCommands, platform };
@@ -775,7 +793,16 @@ export function createDesktopTools(deps) {
       }
       const result = await deps.apps.launch(app, { folder });
       await record({ kind: "app-opened", detail: app.name, verified: result.verified });
-      return { app: publicApp(app), folder: folder ? path.basename(folder) : null, ...result, outcome: describeLaunch(app, result) };
+      // With a folder (a project), check the app really shows it: a window titled with the folder's name.
+      const folderName = folder ? path.basename(folder) : "";
+      const project = folder && result.verified !== false
+        ? await control.waitForWindow({ appName: app.name, text: folderName }).catch((error) => ({ checked: false, reason: error.message }))
+        : null;
+      const projectState = !project ? {} : !project.checked
+        ? { project: { loaded: null, reason: project.reason } }
+        : { project: project.found ? { loaded: true, windowTitle: project.windowTitle } : { loaded: false, windowTitles: project.windowTitles } };
+      const projectNote = project?.found ? ` Its window shows ${folderName}: “${project.windowTitle}”.` : project?.checked ? ` No ${app.name} window shows ${folderName} yet.` : "";
+      return { app: publicApp(app), folder: folder ? folderName : null, ...result, ...projectState, outcome: describeLaunch(app, result) + projectNote };
     },
 
     async forgetApp({ id } = {}) {
@@ -1118,4 +1145,5 @@ export const BRIDGED_METHODS = Object.freeze([
   "startupSettings", "saveStartupRoutine", "setStartupEnabled", "runStartupRoutine",
   "browserStatus", "browserOpen", "browserSearch", "browserRead", "browserScroll", "browserBack", "browserClick", "browserType", "browserScreenshot", "youtubeVideo", "browserClose",
   "saveNotesPdf", "revealNotes",
+  ...CONTROL_METHODS,
 ]);
