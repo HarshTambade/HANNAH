@@ -154,6 +154,65 @@ All three are in the desktop app. The rules are enforced in Electron's main proc
 - **Windows and Linux on real systems.** The Windows code path and Linux desktop sessions are covered by unit tests and fixture folders only.
 - **Unsigned macOS builds.** macOS ties Screen Recording permission to the app's signature, so it may need granting again after each update until builds are signed.
 
+## 2b. Built: HANNAH's browser, YouTube study notes, verified PDFs (desktop)
+
+**HANNAH's browser** (`browser.mjs` performs actions; `core.mjs` decides what's allowed)
+- **The window:** one visible window, titled "HANNAH browser (signed out)".
+  - Its session is in memory and new each time: none of your own browser's accounts or cookies, and nothing kept after it closes.
+  - Sandboxed, with context isolation and no Node.js.
+  - Pop-ups load in the same window. Downloads and permission requests are refused, and requests to this computer itself or to link-local and metadata addresses are cancelled.
+  - HANNAH's scripts run in an isolated world, so the page's scripts can't interfere with them.
+- **Actions:** open a page, search (web through DuckDuckGo's HTML page, or YouTube), read, scroll, go back, click, type, and look (a screenshot to the vision model).
+  - The model sees the page text and a list of controls, each with a ref (`e12 link "…" → url`).
+  - Clicks are real mouse events at the control's position. Some sites ignore scripted clicks: YouTube's "Show transcript" did.
+- **Rules:**
+  - **Asks once:** starting the browser.
+  - **Doesn't ask:** reading, scrolling, searching, following links, and buttons that only show things.
+  - **Asks each time:** typing anything other than a search (the dialog shows the text), and buttons that send, order, post, follow, subscribe, sign in, delete or change something.
+  - **Never:** typing into password, one-time code, PIN, card or bank fields, and pressing pay, place order, checkout or buy now. HANNAH tells you to do those yourself in the window.
+- **Closing the window** stops everything.
+
+**YouTube study notes**
+- `browser_search` (YouTube) returns the videos shown, with title, channel, length and link.
+- `youtube_read_video` opens the video, pauses it, reads the title, channel and description, and clicks **Show transcript**. It reads the same transcript panel anyone can open, in either of YouTube's current layouts, dropping the screen-reader time labels.
+- **Long transcripts:** a 2-hour lecture is about 100,000 characters, more than many models or free plans accept in one request.
+  - It's split into timed parts of about 9,000 characters.
+  - Each part is condensed in turn through `/v1/chat/completions`, using only what is said, with your routing, so Private mode stays self-hosted. HANNAH waits out rate limits using the provider's own `Retry-After`.
+  - The final notes are written from the condensed parts.
+- **No transcript:** the tool says so, and the model is told not to invent content.
+
+**PDF notes** (`notes.mjs`, `desktop_save_notes_pdf`)
+- **Rendering:** Markdown becomes escaped HTML. Headings, lists, tables, code and links (http and https only) carry over. Raw HTML from the model is shown as text.
+- **Printing:** in a hidden window with scripts off and network blocked, and a content security policy of `default-src 'none'`.
+- **Header:** title, creator, source link, topic and date.
+- **No transcript read:** if no transcript was read for the video, the first page says the notes come only from the title and description.
+- **Saving and checking:** saved only to a read-write shared folder after a system dialog. The bytes are checked as a complete PDF before writing, then read back from disk; size and page count must match. HANNAH says "saved" only when that check passes.
+
+**Fixes found while building this**
+- **Too many tools:** in the desktop app, the agent offered every tool for most requests, 28 before this work and 44 now, but the server accepts 20. Those requests failed. Signed-in web users with 23 tools were affected too.
+  - Tools are now chosen per request, from the tool families its words call for, plus the profile's tools and a small core, within 20.
+  - Research requests now get the browser instead of only the knowledge base.
+- **Long tool results:** results over 8,000 characters, such as a long file read or a page, made the whole agent turn fail.
+  - The server now accepts tool results up to 60,000 characters. The app clips results to fit, and shortens older ones once used.
+- **Provider limits:** a provider's "request too large" (413) is reported clearly, and its `Retry-After` is passed on to callers of `/v1`.
+
+**Verified on this Mac (Electron 45, live sites)**
+
+| Check | Result |
+| --- | --- |
+| Search YouTube for GATE operating-systems lectures: 12 real results with title, channel, length and link | Pass |
+| Open a 1 h 22 min lecture and read its transcript: 616 segments, about 80,000 characters, starting "Hello everyone, welcome to…" | Pass |
+| "Subscribe" on YouTube asks first; declining presses nothing | Pass |
+| GitHub sign-in: typing into the password field is refused; typing a username asks first and shows the text | Pass |
+| PDF saved to a shared folder after a yes, then read back and checked: Quick Look shows the header, lists, table and formulas, and a planted `<script>` appears as text | Pass |
+| A 1 h 57 min lecture condensed from its full transcript in 10 timed parts, waiting out the free Groq plan's rate limits (274 s) | Pass |
+| A real model (Groq `openai/gpt-oss-120b` through `/api/agent`) given "find a GATE operating systems lecture on YouTube about process synchronization and prepare PDF notes": searched YouTube, picked a 1 h 57 min GATE lecture, read and condensed its whole transcript, wrote notes under the requested headings, saved the PDF (2 pages, checked on disk, credited to the channel), and only then said it was saved | Pass |
+| The notes' worked examples (a shared X = 10 race, GATE 2013 with max x = 2 and min x = −4) appear in the lecture's own transcript | Pass |
+
+**Free plans and long lectures.** On Groq's free plan (8,000 tokens a minute for this model), condensing a 2-hour lecture takes about 4 to 5 minutes of waiting out rate limits. The final request may need another wait. Agent turns now wait out a provider's `Retry-After` up to three times before giving up. In one run the key was already busy (Groq reported 6,509 of 8,000 tokens used that minute), and the final turn only went through on a later try. Paid plans or other providers don't hit this.
+
+**Not run:** this whole flow inside the packaged app's chat window (the pieces were run in Electron and through the server, and the app's glue is unit-tested), on Windows and Linux, and on sites other than YouTube, GitHub and DuckDuckGo.
+
 ## 3. Backlog, in dependency order
 
 ### Phase 2: Desktop vision and action
@@ -170,14 +229,14 @@ Items 1 to 3 are built (section 2a). Next are 4 and 5.
 4. **Accessibility-first control:** macOS AX API, Windows UI Automation, Linux AT-SPI, through a native helper. Mouse and keyboard only where accessibility gives nothing.
    - Every action is summarized and approved, as `DesktopAgent.ts` does today.
    - The result is checked with a fresh observation before the next step.
-5. **Browser automation** beyond reading pages: navigation and form filling in a separate signed-out window. Signed-in sites only through the person's own browser with their go-ahead per step.
+5. **Browser automation** (built in HANNAH's own signed-out browser, section 2b; using your own signed-in browser is still to come) beyond reading pages: navigation and form filling in a separate signed-out window. Signed-in sites only through the person's own browser with their go-ahead per step.
 
-### Phase 3: Daily tasks on the desktop (Later: needs Phase 2)
-- **YouTube study notes.**
+### Phase 3: Daily tasks on the desktop
+- **YouTube study notes.** (Built, section 2b.)
   - Search and open a video. Read the transcript only where it's shown on the page or captions are publicly available; YouTube's caption download API is limited to the video's owner.
   - Generate notes, then a PDF (Markdown to PDF on the desktop), and verify the file.
   - If no transcript is accessible, say so; never invent a summary.
-- **Instagram and other social feeds:** read what's on screen and summarize, with scrolling you approve. HANNAH never likes, follows, comments or posts on its own, and doesn't bypass sign-in or CAPTCHAs.
+- **Instagram and other social feeds:** Instagram shows a sign-in wall to signed-out visitors, so HANNAH's signed-out browser can't read feeds, and HANNAH won't sign in for you. This needs your own browser (item 5's remainder) or screen reading. Then: read what's on screen and summarize, with scrolling you approve. HANNAH never likes, follows, comments or posts on its own, and doesn't bypass sign-in or CAPTCHAs.
 - **Food ordering (Swiggy, Zomato):** neither offers a public ordering API.
   - The only route is computer use in your own signed-in browser: prepare the cart, show restaurant, items, taxes, delivery fee, total and address, then **you** place the order.
   - HANNAH never authorizes payment.

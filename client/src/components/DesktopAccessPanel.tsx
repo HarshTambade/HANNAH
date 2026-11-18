@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { FolderLock, FolderOpen, FolderPlus, Terminal, Trash2 } from "lucide-react";
-import { AppsSection, ScreenSection, StartupSection } from "./DesktopControlSections";
+import { AppsSection, BrowserSection, ScreenSection, StartupSection } from "./DesktopControlSections";
 import { hannahDesktop, type AllowedCommand, type DesktopActivity, type FolderAccess, type SharedFolder } from "../services/DesktopFiles";
 
 const activityLabel: Record<string, string> = {
@@ -30,6 +30,20 @@ const activityLabel: Record<string, string> = {
   "startup-on": "Turned on start at sign-in",
   "startup-off": "Turned off start at sign-in",
   "startup-ran": "Ran the startup routine",
+  "browser-started": "Opened HANNAH's browser",
+  "browser-denied": "You declined HANNAH's browser",
+  "browser-closed": "Closed HANNAH's browser",
+  "browser-opened": "Opened a page",
+  "browser-searched": "Searched",
+  "browser-clicked": "Clicked",
+  "browser-click-denied": "You declined a click",
+  "browser-typed": "Typed into",
+  "browser-type-denied": "You declined typing into",
+  "browser-refused": "HANNAH refused (password, card or payment)",
+  "browser-looked": "Looked at a page",
+  "browser-video": "Read a YouTube video",
+  "pdf-saved": "Saved a PDF",
+  "pdf-denied": "You declined saving a PDF",
 };
 
 /** Settings → Desktop access. Only rendered in the desktop app. */
@@ -130,6 +144,7 @@ export default function DesktopAccessPanel() {
       </div>
 
       <ScreenSection />
+      <BrowserSection />
       <AppsSection />
       <StartupSection folders={folders} />
 

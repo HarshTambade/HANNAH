@@ -5,7 +5,7 @@ import { selectMemoriesForPrompt } from "./MemoryStore";
 import { readRoutingPreferences } from "./ModelRouting";
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
-import { RouterAgent, selectToolsForProfile, defaultAgentProfiles } from "./AgentRouter";
+import { MAX_TOOLS_PER_REQUEST, RouterAgent, selectToolsForProfile, selectToolsForRequest, defaultAgentProfiles } from "./AgentRouter";
 import { MarketplaceService } from "./MarketplaceService";
 import { DynamicFewShotInjector } from "./DynamicFewShotInjector";
 import { ChaosEngine } from "./ChaosEngine";
@@ -127,9 +127,27 @@ function formatToolName(name: string) {
   return name.replaceAll("_", " ");
 }
 
+/** The server accepts tool results up to 60,000 characters. */
+const MAX_TOOL_RESULT_CHARS = 59_000;
+
 function toolOutputText(output: unknown) {
-  if (output && typeof output === "object" && "message" in output && typeof output.message === "string") return output.message;
-  return typeof output === "string" ? output : JSON.stringify(output) ?? String(output);
+  const text = output && typeof output === "object" && "message" in output && typeof output.message === "string"
+    ? output.message
+    : typeof output === "string" ? output : JSON.stringify(output) ?? String(output);
+  return text.length > MAX_TOOL_RESULT_CHARS ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n… (the rest of this result was cut to fit)` : text;
+}
+
+/**
+ * Tool results the model has already used are shortened, so each request
+ * stays small (some providers and free plans cap tokens per minute). The
+ * latest two results stay whole.
+ */
+export function compactToolResults(messages: AgentMessage[], keepWhole = 2, shortTo = 1_500) {
+  const toolIndexes = messages.map((message, index) => (message.role === "tool" ? index : -1)).filter((index) => index >= 0);
+  for (const index of toolIndexes.slice(0, Math.max(0, toolIndexes.length - keepWhole))) {
+    const message = messages[index];
+    if (message.content.length > shortTo) messages[index] = { ...message, content: `${message.content.slice(0, shortTo)}\n… (shortened: you've already used this result)` };
+  }
 }
 
 function trimConversation(messages: AgentMessage[]) {
@@ -192,7 +210,13 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
   const allTools = [...(options.toolsOverride ?? getDeviceTools())].filter((tool) => !deniedTools.has(normalizeToolName(tool.name)));
   const profileTools = selectToolsForProfile(profile, allTools);
   const specialistTools = options.toolsOverride ? allTools : options.allowedTools ? allTools.filter((tool) => options.allowedTools!.includes(tool.name)) : null;
-  const tools = specialistTools ?? (profileTools.length ? profileTools : allTools);
+  // Choose by what was asked: the router's profile alone gave research
+  // requests no browser and gave plain requests every tool, more than the
+  // server accepts in one request.
+  const request = [...options.messages].reverse().find((message) => message.role === "user")?.content ?? "";
+  const tools = specialistTools
+    ? (specialistTools.length > MAX_TOOLS_PER_REQUEST ? selectToolsForRequest(specialistTools, request) : specialistTools)
+    : selectToolsForRequest(allTools, request, { preferred: profileTools.length < allTools.length ? profileTools : [] });
   const marketplaceItemIds = MarketplaceService.getActivePackageIds();
   const marketplaceInstructions = MarketplaceService.getRuntimeInstructions();
   const personalization = DynamicFewShotInjector.context();
@@ -241,6 +265,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
     const activeTools = specialistTools ? tools : selectRelevantTools(tools, conversation);
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
+      compactToolResults(conversation);
       try {
         const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memoriesFor(mode), { routeHint: options.routeHint });
         content = step.content;

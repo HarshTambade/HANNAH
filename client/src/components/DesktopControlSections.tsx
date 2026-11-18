@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AppWindow, Clock, Eye, EyeOff, Globe, Pause, Play, Plus, Power, Square, Trash2 } from "lucide-react";
+import { AppWindow, Clock, Eye, EyeOff, Globe, Pause, Play, Plus, Power, Square, Trash2, X } from "lucide-react";
 import { hannahDesktop, type AllowedApp, type InstalledApp, type ScreenStatus, type SharedFolder, type StartupSettings, type StartupStep } from "../services/DesktopFiles";
 
 const errorText = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -223,6 +223,28 @@ export function StartupSection({ folders }: { folders: SharedFolder[] }) {
           </ul>
         </details>
       )}
+      {error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">{error}</p>}
+    </section>
+  );
+}
+
+/** HANNAH's browser: whether it's open, and a way to close it. */
+export function BrowserSection() {
+  const [status, setStatus] = useState<{ open: boolean; actions: number; url: string | null } | null>(null);
+  const refresh = useCallback(async () => setStatus(await hannahDesktop().browserStatus()), []);
+  const { busy, error, act } = useAction(refresh);
+  useEffect(() => {
+    void refresh().catch(() => undefined);
+    const timer = window.setInterval(() => void refresh().catch(() => undefined), 3000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+  if (!status) return null;
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white px-4 py-3" aria-labelledby="browser-heading">
+      <h3 id="browser-heading" className="flex items-center gap-2 text-sm font-semibold text-ink"><Globe size={14} /> HANNAH's browser</h3>
+      <p className="mt-1 text-xs leading-5 text-slate-600">For “find a GATE lecture on YouTube and make notes” or “look this up”, HANNAH uses her own browser window: separate, visible and signed out of everything. Starting it asks you once. She asks before typing anything other than a search and before pressing buttons that send, order, post or change something. She never types passwords or card details and never pays.</p>
+      <p className="mt-2 text-xs text-slate-700" aria-live="polite">{status.open ? `Open${status.url ? ` · ${status.url}` : ""} · ${status.actions} actions` : "Closed"}</p>
+      {status.open && <button type="button" className="btn-outline mt-2 text-rose-700" disabled={busy} onClick={() => void act(() => hannahDesktop().browserClose())}><X size={14} /> Close the browser</button>}
       {error && <p role="alert" className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">{error}</p>}
     </section>
   );

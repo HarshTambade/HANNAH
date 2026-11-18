@@ -50,6 +50,21 @@ export interface HannahDesktopPlugin {
   saveStartupRoutine(options: { steps: StartupStep[] }): Promise<StartupSettings>;
   setStartupEnabled(options: { enabled: boolean }): Promise<StartupSettings>;
   runStartupRoutine(options: { trigger: "manual" }): Promise<{ ran: boolean } & Partial<StartupRun>>;
+  /** HANNAH's browser: a visible, signed-out window. Starting it asks once; typing and pressing buttons that change things ask each time. */
+  browserStatus(): Promise<{ open: boolean; startedAt: number | null; actions: number; url: string | null }>;
+  browserOpen(options: { url: string; reason?: string }): Promise<BrowserPage>;
+  browserSearch(options: { query: string; site?: "web" | "youtube" }): Promise<BrowserPage | YouTubeResults>;
+  browserRead(): Promise<BrowserPage>;
+  browserScroll(options: { direction: "down" | "up" | "top" }): Promise<BrowserPage>;
+  browserBack(): Promise<BrowserPage>;
+  browserClick(options: { ref: string }): Promise<BrowserPage>;
+  browserType(options: { ref: string; text: string; submit?: boolean }): Promise<BrowserPage>;
+  browserScreenshot(): Promise<{ image: string; mediaType: "image/jpeg"; width: number; height: number; url: string }>;
+  youtubeVideo(options?: { url?: string; maxChars?: number; partChars?: number }): Promise<YouTubeVideo>;
+  browserClose(): Promise<{ open: false }>;
+  /** Notes as a PDF in a read-write shared folder, after a system dialog; checked on disk. */
+  saveNotesPdf(options: { folderId: string; fileName?: string; title: string; creator?: string; sourceUrl?: string; topic?: string; markdown: string }): Promise<SavedPdf>;
+  revealNotes(options: { folderId: string; path: string }): Promise<void>;
   /** The desktop app itself: version, update channel and checks, tray, shortcut, hannah:// links. */
   desktopInfo(): Promise<DesktopInfo>;
   setUpdateChannel(options: { channel: UpdateChannel }): Promise<DesktopInfo>;
@@ -67,6 +82,12 @@ export type AppLaunch = { app: InstalledApp; folder: string | null; verified: bo
 export type StartupStep = { kind: "app"; app: InstalledApp; folderId?: string } | { kind: "url"; url: string } | { kind: "wait"; seconds: number };
 export type StartupRun = { at: number; trigger: "login" | "manual"; ok: boolean; steps: Array<{ label: string; ok: boolean; detail?: string }> };
 export type StartupSettings = { enabled: boolean; steps: Array<StartupStep & { label: string }>; history: StartupRun[]; loginItem: { openAtLogin: boolean; status: string; where: string } | null };
+
+export type BrowserElement = { ref: string; role: string; name: string; type?: string; href?: string; value?: string; submits?: boolean; search?: boolean; sensitive?: boolean; inView?: boolean };
+export type BrowserPage = { title: string; url: string; text: string; textTruncated: boolean; status?: number | null; navigated?: boolean; elements: BrowserElement[]; scrolledTo?: number; pageHeight?: number };
+export type YouTubeResults = { url: string; title: string; results: Array<{ title: string; url: string; channel: string; duration: string; details: string }> };
+export type YouTubeVideo = { url: string; title: string; channel: string; description: string; transcriptAvailable: boolean; transcript: string; transcriptTruncated: boolean; coveredUntil: string | null; videoLength: string | null; segments: number; timestamps: string[]; parts?: Array<{ from: string; to: string; text: string }>; reason?: string };
+export type SavedPdf = { folder: string; path: string; bytes: number; pages: number; verified: boolean; transcriptBased: boolean; outcome: string };
 
 export type UpdateChannel = "stable" | "beta";
 export type DesktopInfo = {

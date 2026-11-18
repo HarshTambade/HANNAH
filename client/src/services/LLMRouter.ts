@@ -33,6 +33,8 @@ function configuredPythonFallback() {
 }
 
 export class AgentApiError extends Error {
+  /** Set for a provider's rate limit: how long to wait before retrying. */
+  retryAfterMs?: number;
   constructor(message: string, readonly status?: number) {
     super(message);
     this.name = "AgentApiError";
@@ -85,7 +87,26 @@ function normalizeStep(data: any): AgentStep {
   };
 }
 
+/** How long to wait before trying again when the provider says it's busy (429). Exported for tests. */
+export function rateLimitWaitMs(retryAfter: string | null, attempt: number) {
+  const seconds = Number(retryAfter);
+  return (Number.isFinite(seconds) && seconds > 0 ? Math.min(60, seconds) : 10 * (attempt + 1)) * 1000;
+}
+
 async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 90_000, groqApiKey?: string, useApiToken = false): Promise<AgentStep> {
+  // A busy provider (429) is waited out a few times, so a long task (such as
+  // notes from a lecture) isn't lost to a per-minute limit.
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await requestAgentStepOnce(url, body, timeoutMs, groqApiKey, useApiToken);
+    } catch (error) {
+      if (!(error instanceof AgentApiError) || error.status !== 429 || attempt >= 3 || !error.retryAfterMs) throw error;
+      await new Promise((resolve) => setTimeout(resolve, error.retryAfterMs));
+    }
+  }
+}
+
+async function requestAgentStepOnce(url: string, body: Record<string, unknown>, timeoutMs: number, groqApiKey?: string, useApiToken = false): Promise<AgentStep> {
   let response: Response;
   try {
     const request = useApiToken ? apiFetch : fetch;
@@ -119,7 +140,10 @@ async function requestAgentStep(url: string, body: Record<string, unknown>, time
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = typeof data.error === "string" ? data.error : typeof data.detail === "string" ? data.detail : "The agent service could not complete the request.";
-    throw new AgentApiError(message, response.status);
+    const error = new AgentApiError(message, response.status);
+    // Only a provider's rate limit is retried, not HANNAH's own request cap.
+    if (response.status === 429 && data.code === "rate_limited") error.retryAfterMs = rateLimitWaitMs(response.headers.get("retry-after"), 0);
+    throw error;
   }
   if (!data.message || typeof data.message !== "object") throw new AgentApiError("The agent service returned an invalid response.");
   return normalizeStep(data);

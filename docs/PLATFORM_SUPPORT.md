@@ -47,6 +47,8 @@ A stable release needs no class-5 cell in a row that the release notes advertise
 | Agents and Team mode | ✅ T (mocked models) | ✅ D | ✅ D | ✅ D | ✅ D | ✅ D |
 | Desktop files and terminal | ❌ | ❌ | ❌ | ✅ T (HannahDesktop plugin; see below) | ✅ B | ✅ B |
 | Desktop tasks from workflows (beta: read a page, coding task) | ❌ | ❌ | ❌ | 🟡 T (page reader run in Electron 45 against a test page; job protocol and runner tested; not yet driven end to end with a person answering the dialogs) | 🟡 B | 🟡 B |
+| HANNAH's browser (signed out): search, read, click and type, with refusals for passwords, cards and paying | ❌ (the web app can't drive a browser) | ❌ | ❌ | ✅ T (live YouTube and GitHub) | 🟡 D (same Electron code; not run on Windows) | 🟡 D (same; not run on Linux) |
+| YouTube study notes and a verified PDF | ❌ | ❌ | ❌ | ✅ T (real transcripts, condensing, PDF checked on disk) | 🟡 D (same code) | 🟡 D (same code) |
 | Look at the screen on request (a screenshot, then a vision model answers) | ❌ (no access to the desktop) | ❌ | ❌ | 🟡 T (consent, session, indicator and the vision answer tested; a real capture needs Screen Recording permission, not granted on the test Mac) | 🟡 D (same code; not run on Windows) | 🟡 D (same code; Wayland may block capture) |
 | Open an app (and verify it's running) | ❌ | ❌ | ❌ | ✅ T (real launches confirmed by process ID) | 🟡 D (Start menu shortcuts; unit-tested) | 🟡 T (launcher path run with a real process; .desktop discovery unit-tested) |
 | Startup routine at sign-in | ❌ | ❌ | ❌ | ✅ T (login item registered and removed; a login-flag launch ran the routine) | 🟡 D (same login-item API) | 🟡 D (XDG autostart entry) |

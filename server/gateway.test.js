@@ -55,6 +55,11 @@ const gateway = require("./gateway");
 test("provider errors map to stable codes", () => {
   assert.equal(gateway.normalizeProviderError({ status: 401 }).code, "auth");
   assert.equal(gateway.normalizeProviderError({ status: 429 }).retryable, true);
+  const tooLarge = gateway.normalizeProviderError({ status: 413, providerMessage: "Request too large for model on tokens per minute (TPM)" }, "Groq");
+  assert.equal(tooLarge.code, "request_too_large");
+  assert.equal(tooLarge.status, 413);
+  assert.equal(tooLarge.retryable, false);
+  assert.match(tooLarge.message, /larger than Groq accepts on your plan/);
   assert.equal(gateway.normalizeProviderError({ status: 400, providerMessage: "Please reduce the length of the messages" }).code, "context_length");
   assert.equal(gateway.normalizeProviderError({ status: 400, providerMessage: "tool calling is not supported" }).code, "tools_unsupported");
   assert.equal(gateway.normalizeProviderError({ status: 404 }).code, "model_not_found");

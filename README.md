@@ -976,6 +976,15 @@ The desktop app can do three more things, also from **Settings → Desktop acces
   - It's off until you turn on **Start HANNAH when I sign in**, which adds HANNAH to your system's login items.
   - Saving a routine shows every step first.
 
+### HANNAH's browser and study notes
+
+- **HANNAH's browser:** ask "find a GATE operating systems lecture on YouTube and make PDF notes" or "look this up".
+  - HANNAH uses her own browser window, visible and signed out, after you allow it once.
+  - She asks before typing anything other than a search, and before pressing buttons that send, order, post or change something.
+  - She never types passwords or card details, and never pays or places orders. Close the window to stop.
+- **Study notes:** written from the transcript YouTube shows under the video. Long lectures are condensed part by part, and HANNAH says so when a video has no transcript.
+- **PDF:** saved to a folder you shared as Read and write, after you confirm, then checked on disk.
+
 Design and verification: [`docs/DEVICE_INTELLIGENCE.md`](./docs/DEVICE_INTELLIGENCE.md).
 
 ---

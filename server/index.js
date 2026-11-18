@@ -597,7 +597,8 @@ async function requestOllama(messages) {
 
 function isValidAgentMessage(message) {
   if (!message || !["user", "assistant", "tool"].includes(message.role)) return false;
-  if (typeof message.content !== "string" || message.content.length > 8000) return false;
+  // Tool results (a page, a file, a transcript) may be longer than what people type.
+  if (typeof message.content !== "string" || message.content.length > (message.role === "tool" ? 60_000 : 8000)) return false;
   if (message.role === "tool" && (typeof message.tool_call_id !== "string" || message.tool_call_id.length > 160)) return false;
   if (message.tool_calls !== undefined) {
     if (!Array.isArray(message.tool_calls) || message.tool_calls.length > 8) return false;
@@ -796,6 +797,7 @@ app.post("/api/agent", async (req, res) => {
       }
       // A rejected provider key keeps its 401/403 so the app can ask for a new key.
       const status = normalized.code === "auth" ? (error.status || 401) : normalized.status;
+      if (normalized.code === "rate_limited" && error.retryAfter) res.setHeader("Retry-After", String(error.retryAfter));
       return res.status(status).json({
         error: (mode === "ollama" || provider.local) && ["network", "timeout"].includes(normalized.code)
           ? `Could not reach ${provider.label}. Check that it's running and the model is available.`

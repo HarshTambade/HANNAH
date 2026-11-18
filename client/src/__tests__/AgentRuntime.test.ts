@@ -24,7 +24,7 @@ vi.mock("../services/LLMRouter", () => ({
   shouldUseLocalFallback: () => true,
 }));
 
-import { runAgentTurn } from "../services/AgentRuntime";
+import { compactToolResults, runAgentTurn } from "../services/AgentRuntime";
 
 describe("AgentRuntime tool loop", () => {
   beforeEach(() => {
@@ -124,5 +124,23 @@ describe("AgentRuntime tool loop", () => {
 
     expect(requestStep).toHaveBeenCalledTimes(2);
     expect(executeTool).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("keeping agent requests small", () => {
+  it("shortens tool results the model has already used, keeping the latest two whole", () => {
+    const long = (label: string) => `${label}:${"x".repeat(5_000)}`;
+    const messages = [
+      { role: "user" as const, content: "find a lecture" },
+      { role: "tool" as const, tool_call_id: "1", content: long("search") },
+      { role: "tool" as const, tool_call_id: "2", content: long("video") },
+      { role: "tool" as const, tool_call_id: "3", content: long("pdf") },
+    ];
+    compactToolResults(messages);
+    expect(messages[1].content.length).toBeLessThan(1_600);
+    expect(messages[1].content).toMatch(/^search:x+\n… \(shortened/);
+    expect(messages[2].content).toBe(long("video"));
+    expect(messages[3].content).toBe(long("pdf"));
+    expect(messages[0].content).toBe("find a lecture");
   });
 });

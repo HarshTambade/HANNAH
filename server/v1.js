@@ -252,6 +252,7 @@ function createV1Router({ getRequestProvider, allowedProviderIds = () => null, u
       });
     } catch (error) {
       const normalized = gateway.normalizeProviderError(error, error.providerLabel || target.provider.label);
+      if (normalized.status === 429 && error.retryAfter) res.setHeader("Retry-After", String(error.retryAfter));
       return openAiError(res, normalized.status, normalized.message, normalized.code, normalized.code === "auth" ? "authentication_error" : "api_error");
     }
   });

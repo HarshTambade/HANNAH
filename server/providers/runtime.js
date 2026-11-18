@@ -180,6 +180,9 @@ async function readProviderJson(response) {
     const error = new Error(`Provider returned HTTP ${response.status}.`);
     error.status = response.status;
     error.providerMessage = String(data?.error?.message || data?.message || "").slice(0, 500);
+    // How long the provider asks callers to wait (rate limits), so HANNAH can pass it on.
+    const retryAfter = Number(response.headers?.get?.("retry-after"));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) error.retryAfter = Math.min(300, Math.ceil(retryAfter));
     throw error;
   }
   return data;

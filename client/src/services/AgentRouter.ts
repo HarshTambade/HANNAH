@@ -26,6 +26,50 @@ export function selectToolsForProfile(profile: AgentProfile, allTools: HANNAHToo
   return allTools.filter((tool) => allowed.has(tool.name));
 }
 
+/** The server accepts at most this many tools in one agent request. */
+export const MAX_TOOLS_PER_REQUEST = 20;
+
+/**
+ * Tool families and the words that call for them. A request gets the
+ * families it mentions, so "find a GATE lecture on YouTube" gets the browser
+ * and notes tools and "call Aman" gets the phone tools.
+ */
+const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
+  { match: /youtube|video|lecture|tutorial|browse|browser|website|web ?page|\bweb\b|online|internet|google|look (it )?up|instagram|reels?|swiggy|zomato|blinkit|amazon|flipkart|food|restaurant|order|https?:\/\/|www\.|\.(com|org|in|io)\b|site\b|news|latest/i, tools: /^(browser_|youtube_read_video$|desktop_save_notes_pdf$)/ },
+  { match: /\bnotes?\b|\bpdf\b|summar/i, tools: /^(desktop_save_notes_pdf|youtube_read_video|browser_search|browser_read)$/ },
+  { match: /screen|this error|what('s| is) (happening|this)|looking at|window|display/i, tools: /^desktop_look_at_screen$/ },
+  { match: /\b(open|launch|start|close|switch to)\b|\bapps?\b|application|vs ?code|vscode|chrome|terminal|spotify|slack/i, tools: /^(desktop_open_app|desktop_list_apps|open_app|desktop_folders)$/ },
+  { match: /startup|start ?up|log ?in|sign ?in|boot|every (morning|day|time)|when(ever)? i (start|turn on|log|open)|(laptop|computer|pc|mac) (starts|boots|turns on)|routine/i, tools: /^desktop_(startup_routine|set_startup_routine|list_apps|folders)$/ },
+  { match: /\bcall\b|dial|\bphone\b|\btext\b|\bsms\b|message|contact|whatsapp/i, tools: /^(phone_|make_call$|send_message$)/ },
+  { match: /\bfiles?\b|folder|project|\bcode\b|\brun\b|\btest|build|repo|script|read|write|save/i, tools: /^(desktop_(folders|list_files|read_file|write_file|run_command)|list_app_files|read_app_file|write_app_file|delete_app_file)$/ },
+  { match: /remind|reminder|alarm|later|tomorrow|tonight|\bat \d/i, tools: /^(create_reminder|list_reminders|cancel_reminder)$/ },
+  { match: /remember|memory|memories|forget|my (favou?rite|preference)/i, tools: /^(search_memories|save_memory)$/ },
+  { match: /knowledge|document|uploaded|my notes/i, tools: /^knowledge_/ },
+  { match: /briefing|weather|agenda|my day/i, tools: /^daily_briefing$/ },
+  { match: /workflow|automat/i, tools: /^(create_workflow_draft|list_workflows)$/ },
+  { match: /battery|device|setting|wi-?fi|bluetooth|volume|brightness/i, tools: /^(get_device_status|get_battery_status|toggle_setting)$/ },
+  { match: /mail|e-?mail|inbox|gmail|outlook|calendar|meeting|event|schedule/i, tools: /^(email_|calendar_)/ },
+];
+const CORE_TOOLS = ["search_memories", "save_memory", "create_reminder"];
+
+/**
+ * Keep a request within the server's tool limit by choosing the tools it
+ * calls for: the families its words mention, then the profile's own tools,
+ * then a few core ones. A request that fits already is left alone.
+ */
+export function selectToolsForRequest(tools: HANNAHTool[], request: string, { preferred = [] as HANNAHTool[], limit = MAX_TOOLS_PER_REQUEST } = {}): HANNAHTool[] {
+  const wanted = new Set<string>();
+  for (const family of TOOL_FAMILIES) {
+    if (!family.match.test(request)) continue;
+    for (const tool of tools) if (family.tools.test(tool.name)) wanted.add(tool.name);
+  }
+  if (!wanted.size && tools.length <= limit) return tools;
+  for (const tool of preferred) wanted.add(tool.name);
+  for (const name of CORE_TOOLS) wanted.add(name);
+  const chosen = tools.filter((tool) => wanted.has(tool.name));
+  return chosen.slice(0, limit);
+}
+
 export class FreelanceAgent {
   profile: AgentProfile;
   constructor(profile: AgentProfile) { this.profile = profile; }

@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { createAppLauncher } from "./apps.mjs";
 import { createPageLoader } from "./browse.mjs";
+import { createBrowser, createPdfRenderer } from "./browser.mjs";
 import { BRIDGED_METHODS, createDesktopTools } from "./core.mjs";
 
 const parentWindow = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
@@ -134,6 +135,9 @@ class HannahDesktopImpl {
         openPath: (file) => shell.openPath(file),
       }),
       loginItem,
+      // HANNAH's visible, signed-out browser, and PDFs printed with scripts and network off.
+      browser: createBrowser({ BrowserWindow, session }),
+      renderPdf: createPdfRenderer({ BrowserWindow, session }),
       openUrl: (url) => shell.openExternal(url),
       notify: ({ title, body }) => { if (Notification.isSupported()) new Notification({ title, body }).show(); },
     });

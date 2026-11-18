@@ -6,6 +6,14 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### New
 
+- **HANNAH's browser, YouTube study notes and PDF notes (desktop app).**
+  - **HANNAH's browser:** "find a GATE lecture on YouTube" or "look this up" opens HANNAH's own browser window, visible and signed out of everything.
+    - She can search, open pages, read, scroll, follow links, click and look.
+    - She asks before typing anything other than a search, and before pressing buttons that send, order, post, follow or change something.
+    - She never types passwords or card details and never presses pay or place order.
+  - **YouTube study notes:** HANNAH reads the transcript YouTube shows under the video. Long lectures are condensed part by part from what is said, and she says plainly when a video has no transcript.
+  - **PDF notes:** saved to a shared folder after you confirm, then checked on disk. The PDF names the video, channel and link, and says on its first page if no transcript was available.
+- **Desktop chat requests no longer fail from too many tools.** The desktop app offered every tool (28, now 44) for most requests, but the server accepts 20, so those requests failed; signed-in web users were affected too. Tools are now chosen per request. Long tool results (a big file or page) no longer make a turn fail, and a provider's "too large for your plan" error is reported clearly.
 - **HANNAH Desktop can look at your screen, open apps, and run a startup routine.**
   - **"What's on my screen?" / "Explain this error":**
     - HANNAH takes one screenshot after you allow it, once or for 15 minutes, and a vision model answers.

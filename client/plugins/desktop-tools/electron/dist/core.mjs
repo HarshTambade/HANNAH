@@ -19,6 +19,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { findApps } from "./apps.mjs";
+import { inspectPdf, notesDocument, pdfFileName } from "./notes.mjs";
 
 export const LIMITS = Object.freeze({
   readBytes: 256 * 1024,
@@ -35,7 +36,18 @@ export const LIMITS = Object.freeze({
   startupSteps: 12,
   startupHistory: 20,
   startupWaitSeconds: 120,
+  typeChars: 500,
+  notesChars: 200_000,
+  pdfBytes: 20 * 1024 * 1024,
 });
+
+/**
+ * Buttons HANNAH never presses: paying and placing orders stay with you, in
+ * the window. Exported for tests.
+ */
+export const NEVER_PRESS = /\b(pay( now)?|place (your )?order|confirm (and pay|order|payment|purchase)|complete (purchase|order|payment)|buy now|checkout|check out|proceed to (pay|payment|checkout)|purchase|subscribe now|donate|transfer)\b/i;
+/** Buttons that change something for you elsewhere: asked about each time. Exported for tests. */
+export const ASK_BEFORE_PRESS = /\b(add to (cart|bag|basket)|order|book|reserve|send|post|publish|share|comment|reply|like|follow|subscribe|join|delete|remove|cancel|unsubscribe|sign ?(in|up|out)|log ?(in|out)|register|submit|save|apply|accept|agree|confirm|upload|report|block|message|call)\b/i;
 
 /** Programs HANNAH never runs, even with approval. */
 const BLOCKED_PROGRAMS = new Set([
@@ -337,6 +349,48 @@ export function createDesktopTools(deps) {
     : result.verified === true ? `${app.name} is open: its process is running.`
       : result.verified === null ? `${app.name} was asked to open; this system gives HANNAH no way to check it's running.`
         : `${app.name} was asked to open, but no ${app.name} process appeared within 10 seconds.`;
+
+  // ----- HANNAH's browser -----
+  let browsing = null; // { startedAt, actions }
+  const transcriptsRead = new Map(); // video id → title, for honest notes
+  const videoId = (url) => {
+    try {
+      const parsed = new URL(String(url || ""));
+      if (/(^|\.)youtube\.com$/.test(parsed.hostname)) return parsed.searchParams.get("v") || (parsed.pathname.startsWith("/shorts/") ? parsed.pathname.split("/")[2] : null);
+      if (parsed.hostname === "youtu.be") return parsed.pathname.slice(1) || null;
+    } catch {
+      return null;
+    }
+    return null;
+  };
+  function requireBrowser() {
+    if (!deps.browser) fail("UNAVAILABLE", "This build has no browser.");
+    if (!browsing || !deps.browser.isOpen()) {
+      browsing = null;
+      fail("BROWSER_CLOSED", "HANNAH's browser isn't open. Ask HANNAH to open a page to start it.");
+    }
+    browsing.actions += 1;
+    return deps.browser;
+  }
+  async function startBrowsing(why) {
+    if (!deps.browser) fail("UNAVAILABLE", "This build has no browser.");
+    if (browsing && deps.browser.isOpen()) return;
+    const choice = await deps.confirm({
+      title: "Let HANNAH use a browser for you?",
+      message: `HANNAH wants to open a browser window to ${why}.`,
+      detail: "It's a separate window you can watch, signed out of everything: none of your own browser's accounts or cookies, and nothing kept after it closes.\n\nHANNAH can open pages, search, read, scroll and follow links in it. She asks you before typing anything other than a search, and before pressing buttons that send, order, post or change something. She never types passwords or card details, and never pays or places orders.\n\nClose the window at any time to stop.",
+      buttons: ["Open the browser", "Don't allow"],
+    });
+    if (choice !== 0) {
+      await record({ kind: "browser-denied", detail: why });
+      fail("DENIED", "You declined. HANNAH didn't open a browser.");
+    }
+    await deps.browser.open({ onClosed: () => { browsing = null; void record({ kind: "browser-closed" }).catch(() => undefined); } });
+    browsing = { startedAt: now(), actions: 0 };
+    await record({ kind: "browser-started", detail: why });
+  }
+  const pageHost = (url) => { try { return new URL(url).host; } catch { return ""; } };
+  const withElements = async (page) => ({ ...page, elements: await deps.browser.elements().catch(() => []) });
 
   function cleanStep(step) {
     if (!step || typeof step !== "object") fail("INVALID", "A startup step is missing.");
@@ -731,6 +785,231 @@ export function createDesktopTools(deps) {
       return { allowedApps: state.allowedApps };
     },
 
+    // ----- HANNAH's browser -----
+    // A visible, signed-out window. Starting it asks once; reading, scrolling,
+    // searching and following links don't ask again. Typing (other than a
+    // search) and pressing buttons that change something ask each time;
+    // passwords, card details and paying are refused.
+
+    async browserStatus() {
+      const open = Boolean(browsing && deps.browser?.isOpen());
+      return { open, startedAt: open ? browsing.startedAt : null, actions: open ? browsing.actions : 0, url: open ? deps.browser.url() : null };
+    },
+
+    async browserOpen({ url, reason } = {}) {
+      const target = await checkPageUrl(url, deps.lookup);
+      await startBrowsing(String(reason || `open ${target.host}`).slice(0, 160));
+      if (target.localNetwork) {
+        const choice = await deps.confirm({ title: "Open a local-network page?", message: `${target.host} is on your local network.`, detail: `${target.url}\n\nOpen it only if you expect HANNAH to read it.`, buttons: ["Open it", "Don't open"] });
+        if (choice !== 0) fail("DENIED", "You declined. HANNAH didn't open the page.");
+      }
+      const browser = requireBrowser();
+      const page = await browser.navigate(target.url);
+      await record({ kind: "browser-opened", detail: target.host });
+      return withElements(page);
+    },
+
+    async browserSearch({ query, site } = {}) {
+      const words = String(query || "").replace(/\s+/g, " ").trim().slice(0, 300);
+      if (!words) fail("INVALID", "Say what to search for.");
+      const youtube = site === "youtube";
+      await startBrowsing(`search ${youtube ? "YouTube" : "the web"} for “${words.slice(0, 80)}”`);
+      const browser = requireBrowser();
+      const url = youtube ? `https://www.youtube.com/results?search_query=${encodeURIComponent(words)}` : `https://html.duckduckgo.com/html/?q=${encodeURIComponent(words)}`;
+      const page = await browser.navigate(url);
+      await record({ kind: "browser-searched", detail: `${youtube ? "YouTube" : "web"}: ${words.slice(0, 80)}` });
+      if (youtube) {
+        if (/consent\.youtube\.com|consent\.google/.test(page.url)) fail("CONSENT_PAGE", "YouTube is showing its cookie consent page in HANNAH's browser. Choose in the window, then ask again.");
+        return { url: page.url, title: page.title, results: await browser.youtubeResults() };
+      }
+      return withElements(page);
+    },
+
+    async browserRead() {
+      const browser = requireBrowser();
+      return withElements(await browser.read());
+    },
+
+    async browserScroll({ direction } = {}) {
+      const browser = requireBrowser();
+      const page = await browser.scroll(["up", "top"].includes(direction) ? direction : "down");
+      return withElements(page);
+    },
+
+    async browserBack() {
+      const browser = requireBrowser();
+      return withElements(await browser.back());
+    },
+
+    async browserClick({ ref } = {}) {
+      const browser = requireBrowser();
+      const element = await browser.describe(String(ref || ""));
+      if (!element) fail("NO_ELEMENT", `There's no element ${ref} on the page any more. Read the page again.`);
+      const host = pageHost(browser.url());
+      const label = element.name || element.href || element.role;
+      if (element.role !== "link" && NEVER_PRESS.test(label)) {
+        await record({ kind: "browser-refused", detail: `${label} on ${host}` });
+        fail("NEVER", `HANNAH doesn't press “${label}”. Paying and placing orders stay with you: review it in HANNAH's browser window and press it yourself if you want to.`);
+      }
+      const isPlainLink = element.role === "link" && element.href && /^https?:/.test(element.href) && !ASK_BEFORE_PRESS.test(label);
+      const risky = !isPlainLink && (element.submits || ASK_BEFORE_PRESS.test(label));
+      if (risky) {
+        const choice = await deps.confirm({
+          title: "Press a button?",
+          message: `HANNAH wants to press “${label}” on ${host}.`,
+          detail: "This may send, save or change something on that site.",
+          buttons: ["Press it", "Don't press"],
+        });
+        if (choice !== 0) {
+          await record({ kind: "browser-click-denied", detail: `${label} on ${host}` });
+          fail("DENIED", `You declined. HANNAH didn't press “${label}”.`);
+        }
+      }
+      const page = await browser.click(element.ref);
+      await record({ kind: "browser-clicked", detail: `${label.slice(0, 80)} on ${host}` });
+      return withElements(page);
+    },
+
+    async browserType({ ref, text, submit } = {}) {
+      const browser = requireBrowser();
+      const element = await browser.describe(String(ref || ""));
+      if (!element) fail("NO_ELEMENT", `There's no element ${ref} on the page any more. Read the page again.`);
+      if (element.sensitive) {
+        await record({ kind: "browser-refused", detail: `${element.name || "a sensitive field"} on ${pageHost(browser.url())}` });
+        fail("NEVER", "HANNAH never types passwords, one-time codes, PINs or card and bank details. Type them yourself in HANNAH's browser window if you want to.");
+      }
+      if (!["textbox", "searchbox", "select"].includes(element.role)) fail("INVALID", "That isn't a field you can type into.");
+      const value = String(text ?? "");
+      if (!value || value.length > LIMITS.typeChars) fail("INVALID", `Type 1 to ${LIMITS.typeChars} characters.`);
+      const host = pageHost(browser.url());
+      if (!element.search) {
+        const choice = await deps.confirm({
+          title: "Type on a website?",
+          message: `HANNAH wants to type into “${element.name || "a field"}” on ${host}${submit ? " and then press Enter" : ""}:`,
+          detail: value,
+          buttons: ["Type it", "Don't type"],
+        });
+        if (choice !== 0) {
+          await record({ kind: "browser-type-denied", detail: `${element.name || "field"} on ${host}` });
+          fail("DENIED", "You declined. HANNAH didn't type anything.");
+        }
+      }
+      const page = await browser.type(element.ref, value, { submit: submit === true });
+      await record({ kind: "browser-typed", detail: `${element.name || "field"} on ${host}${submit ? " (Enter)" : ""}` });
+      return withElements(page);
+    },
+
+    async browserScreenshot() {
+      const browser = requireBrowser();
+      const shot = await browser.screenshot();
+      await record({ kind: "browser-looked", detail: pageHost(browser.url()) });
+      return { ...shot, url: browser.url() };
+    },
+
+    /** The open YouTube video's details and, if YouTube shows one, its transcript. */
+    async youtubeVideo({ url, maxChars, partChars } = {}) {
+      if (url) {
+        const target = await checkPageUrl(url, deps.lookup);
+        if (!videoId(target.url)) fail("INVALID", "That isn't a YouTube video address.");
+        await startBrowsing("read a YouTube video");
+        await requireBrowser().navigate(target.url);
+      }
+      const browser = requireBrowser();
+      const id = videoId(browser.url());
+      if (!id) fail("NOT_A_VIDEO", "The browser isn't showing a YouTube video. Open one first.");
+      const video = await browser.youtubeVideo();
+      const transcript = Array.isArray(video.transcript) ? video.transcript : [];
+      const limit = Math.min(120_000, Math.max(1_000, Number(maxChars) || 50_000));
+      const partLimit = partChars ? Math.min(20_000, Math.max(2_000, Number(partChars))) : 0;
+      let text = "";
+      let coveredUntil = null;
+      const parts = [];
+      for (const segment of transcript) {
+        if (text.length + segment.text.length + 1 > limit) break;
+        text += (text ? " " : "") + segment.text;
+        coveredUntil = segment.time;
+        // Timed parts, for condensing a long lecture piece by piece.
+        const last = parts.at(-1);
+        if (partLimit && (!last || last.text.length + segment.text.length + 1 > partLimit)) parts.push({ from: segment.time, to: segment.time, text: segment.text });
+        else if (partLimit) { last.text += ` ${segment.text}`; last.to = segment.time; }
+      }
+      if (transcript.length) transcriptsRead.set(id, { title: video.title, channel: video.channel });
+      await record({ kind: "browser-video", detail: `${video.title?.slice(0, 80) || id}${transcript.length ? " (transcript)" : " (no transcript)"}` });
+      return {
+        url: `https://www.youtube.com/watch?v=${id}`,
+        title: video.title,
+        channel: video.channel,
+        description: video.description,
+        transcriptAvailable: transcript.length > 0,
+        transcript: text,
+        transcriptTruncated: transcript.length > 0 && coveredUntil !== transcript.at(-1).time,
+        coveredUntil,
+        videoLength: transcript.length ? transcript.at(-1).time : null,
+        ...(partLimit ? { parts } : {}),
+        segments: transcript.length,
+        timestamps: transcript.filter((_, index) => index % Math.max(1, Math.round(transcript.length / 40)) === 0).map((segment) => `${segment.time} ${segment.text.slice(0, 80)}`),
+        reason: transcript.length ? undefined : video.reason,
+      };
+    },
+
+    async browserClose() {
+      deps.browser?.close();
+      browsing = null;
+      return { open: false };
+    },
+
+    // ----- notes as a PDF -----
+
+    /**
+     * Save study notes as a PDF in a read-write shared folder. The file is
+     * written only after your yes, then read back and checked. Notes for a
+     * YouTube video say on the first page if no transcript was read.
+     */
+    async saveNotesPdf({ folderId, fileName, title, creator, sourceUrl, topic, markdown } = {}) {
+      if (!deps.renderPdf) fail("UNAVAILABLE", "This build can't make PDFs.");
+      const folder = await folderById(String(folderId || ""));
+      if (folder.access !== "read-write") fail("READ_ONLY", `“${folder.name}” is shared read-only. Change it to read-write in Settings → Desktop access first.`);
+      const notes = String(markdown || "");
+      if (!notes.trim()) fail("INVALID", "The notes are empty.");
+      if (notes.length > LIMITS.notesChars) fail("TOO_LARGE", "The notes are too long for one PDF.");
+      const heading = String(title || "Study notes").slice(0, 200);
+      const name = pdfFileName(fileName || heading);
+      const id = videoId(sourceUrl);
+      const transcriptBased = id ? transcriptsRead.has(id) : true;
+      // Credit the channel YouTube showed, not whatever name the model wrote.
+      const author = (id && transcriptsRead.get(id)?.channel) || (creator ? String(creator).slice(0, 200) : "");
+      const resolved = await resolveInside(folder, name, { mustExist: false });
+      const choice = await deps.confirm({
+        title: resolved.exists ? "Replace a PDF?" : "Save a PDF?",
+        message: `HANNAH wants to ${resolved.exists ? "replace" : "save"} “${name}” in ${folder.name}.`,
+        detail: `${path.join(folder.path, name)}\n\n${heading}${author ? ` — ${author}` : ""}${id && !transcriptBased ? "\n\nNo transcript was read for this video, so the PDF will say the notes come from the title and description only." : ""}\n\n${notes.split("\n").slice(0, 10).join("\n").slice(0, 600)}…`,
+        buttons: [resolved.exists ? "Replace" : "Save", "Cancel"],
+      });
+      if (choice !== 0) {
+        await record({ kind: "pdf-denied", folder: folder.name, detail: name });
+        fail("DENIED", "You declined. HANNAH didn't save the PDF.");
+      }
+      const html = notesDocument({ title: heading, creator: author, sourceUrl: sourceUrl ? String(sourceUrl).slice(0, 2048) : "", topic: topic ? String(topic).slice(0, 200) : "", markdown: notes, transcriptBased, generatedAt: new Date(now()) });
+      const pdf = Buffer.from(await deps.renderPdf(html));
+      const made = inspectPdf(pdf);
+      if (!made.valid || pdf.length > LIMITS.pdfBytes) fail("PDF_FAILED", "The PDF couldn't be made correctly, so nothing was saved.");
+      const parentReal = await fsp.realpath(path.dirname(resolved.target));
+      if (!isSameOrInside(resolved.root, parentReal)) fail("OUTSIDE", "That path leads outside the granted folder.");
+      await fsp.writeFile(resolved.target, pdf);
+      // Verify what's on disk, not what was meant to be written.
+      const onDisk = inspectPdf(await fsp.readFile(resolved.target));
+      const verified = onDisk.valid && onDisk.bytes === pdf.length && onDisk.pages === made.pages;
+      await record({ kind: "pdf-saved", folder: folder.name, detail: `${name} (${onDisk.pages} pages)` });
+      return { folder: folder.name, path: name, bytes: onDisk.bytes, pages: onDisk.pages, verified, transcriptBased, outcome: verified ? `Saved ${name} in ${folder.name}: ${onDisk.pages} page${onDisk.pages === 1 ? "" : "s"}, checked on disk.` : `${name} was written but didn't check out on disk; open it to see.` };
+    },
+
+    async revealNotes({ folderId, path: relative } = {}) {
+      const folder = await folderById(String(folderId || ""));
+      const { target } = await resolveInside(folder, relative);
+      await deps.reveal?.(target);
+      return {};
+    },
+
     // ----- startup routine -----
     // HANNAH starts at login only if you turn it on (it's then listed in the
     // system's Login Items or Startup apps). The routine itself is shown in a
@@ -837,4 +1116,6 @@ export const BRIDGED_METHODS = Object.freeze([
   "screenStatus", "captureScreen", "pauseScreenSession", "stopScreenSession", "openScreenSettings",
   "listApps", "openApp", "forgetApp",
   "startupSettings", "saveStartupRoutine", "setStartupEnabled", "runStartupRoutine",
+  "browserStatus", "browserOpen", "browserSearch", "browserRead", "browserScroll", "browserBack", "browserClick", "browserType", "browserScreenshot", "youtubeVideo", "browserClose",
+  "saveNotesPdf", "revealNotes",
 ]);

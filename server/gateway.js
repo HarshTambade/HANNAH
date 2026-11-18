@@ -24,6 +24,7 @@ const { knownPriceFor } = require("./cost-tracking");
 const ERROR_STATUS = {
   auth: 401,
   rate_limited: 429,
+  request_too_large: 413,
   budget_exceeded: 429,
   timeout: 504,
   network: 502,
@@ -43,6 +44,7 @@ function normalizeProviderError(error, providerLabel = "The provider") {
   if (error?.code === "budget_exceeded") code = "budget_exceeded";
   else if (status === 401 || status === 403) code = "auth";
   else if (status === 429) code = "rate_limited";
+  else if (status === 413) code = "request_too_large";
   else if (["TimeoutError", "AbortError"].includes(error?.name)) code = "timeout";
   else if (isNetworkFailure(error)) code = "network";
   else if (status === 404 || /model.{0,40}(not found|does not exist|decommissioned|not available)/i.test(detail)) code = "model_not_found";
@@ -54,6 +56,7 @@ function normalizeProviderError(error, providerLabel = "The provider") {
   const messages = {
     auth: `${providerLabel} rejected the API key. Check that it's valid and active.`,
     rate_limited: `${providerLabel} is rate limiting requests. Wait a moment and try again.`,
+    request_too_large: `This request is larger than ${providerLabel} accepts on your plan (often a per-minute token limit). Try a shorter request, or a provider or plan with higher limits.`,
     budget_exceeded: error?.message || "Today's spending budget has been reached.",
     timeout: `${providerLabel} took too long to answer.`,
     network: `Couldn't reach ${providerLabel}.`,
