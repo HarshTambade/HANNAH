@@ -414,6 +414,20 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_channels_user ON hannah_channels (user_id)",
     ],
   },
+  {
+    version: 12,
+    name: "more chat channels",
+    // Slack, Discord, Google Chat, Teams and WhatsApp (server/channel-drivers.js).
+    // config: the platform's non-secret settings (app id, public key, phone number id …).
+    // allowed: people the owner approved besides the paired chat; pending: who asked.
+    // seen: recent event ids, so a platform's retries are answered once.
+    statements: [
+      "ALTER TABLE hannah_channels ADD COLUMN config TEXT",
+      "ALTER TABLE hannah_channels ADD COLUMN allowed TEXT",
+      "ALTER TABLE hannah_channels ADD COLUMN pending TEXT",
+      "ALTER TABLE hannah_channels ADD COLUMN seen TEXT",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

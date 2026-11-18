@@ -262,6 +262,56 @@ const result: { reply: string; emotion: string } = await response.json();
 
 For a separate frontend origin, set `VITE_API_BASE_URL` and include that exact origin in `CLIENT_ORIGIN`.
 
+## The `hannah` command-line tool
+
+`cli/hannah.mjs` talks to any HANNAH server from a terminal. It has no dependencies (Node 20+). Run it with `node cli/hannah.mjs …`, or install it with `npm install -g ./cli` to get `hannah`.
+
+| Command | What it does |
+| --- | --- |
+| `hannah login --server https://… --email you@example.com` | Signs in to your account; it asks for the password, or reads it with `--password-stdin`. Uses `POST /api/account/login` with `x-hannah-session: bearer`. |
+| `hannah login --groq-key gsk_…` | Uses a Groq key for chat only. It's sent as `x-groq-api-key`, and the server sends it only to Groq. |
+| `hannah login --token hk_…` | Uses a developer key or the operator token. |
+| `hannah status` | Shows the server's health, who you're signed in as, and the database state. |
+| `hannah ask "…"` | Asks one question and streams the answer (`POST /v1/chat/completions`, `model: "auto"`, `stream: true`). |
+| `hannah chat` | Starts a conversation in the terminal. `/clear` starts over; `/exit` or Ctrl+D leaves. |
+| `hannah workflows` | Lists your workflows with their last run. |
+| `hannah run <id> [--published]` | Runs a workflow (the draft, or the published version) and prints each step as it finishes. It exits non-zero if the run fails. |
+| `hannah channels` | Lists your chat apps, who's paired, and who's asking to chat. |
+| `hannah logout` | Forgets the saved credentials. |
+
+Credentials are saved in `~/.config/hannah/config.json` (or `$HANNAH_CONFIG`), readable only by you (0600). They're never printed. `cd cli && npm test` runs the tool against the real server.
+
+## Build a plugin
+
+A HANNAH plugin is a **remote MCP server**: the same thing HANNAH's connectors are. Anything you can put behind an https URL that speaks the [Model Context Protocol](https://modelcontextprotocol.io) over Streamable HTTP becomes a set of tools HANNAH can use.
+
+- **The person adds it themselves:** Marketplace → Connectors → **Add a custom connector**, with its URL and, optionally, a token. HANNAH sends the token as `Authorization: Bearer …`.
+- **Where it runs:** each tool call goes through HANNAH's server (`server/connectors.js`, `POST /api/connectors/rpc`) using `server/mcp-client.js`.
+- **Approval:** every call asks the person first.
+- **Tokens:** they stay in that person's browser.
+- **Address:** it must be public https. Private and internal addresses are refused unless a self-hosted server sets `WORKFLOW_ALLOW_PRIVATE_NETWORK=true`.
+
+**Start from the example:** `examples/hannah-plugin/server.mjs` is a complete plugin with no dependencies, offering two tools, `word_count` and `current_time`.
+
+```sh
+cd examples/hannah-plugin
+PORT=8787 PLUGIN_TOKEN=$(openssl rand -hex 24) node server.mjs   # http://127.0.0.1:8787/mcp
+npm test   # HANNAH's own MCP client lists and calls its tools
+```
+
+**What a plugin must do:**
+1. **Accept the MCP messages** as JSON-RPC 2.0 over `POST` to one URL: `initialize`, the `notifications/initialized` notification, `tools/list` and `tools/call`.
+2. **Sessions (optional):** return an `Mcp-Session-Id` header from `initialize`. Answer **404** for an unknown session, so HANNAH starts a new one.
+3. **Describe each tool** with a `name`, a `description` and a JSON Schema `inputSchema` of type `object`. Mark tools that only read with `annotations.readOnlyHint: true`.
+4. **Report failures:** a tool that fails because of its input returns `isError: true` with a message, not a protocol error. HANNAH shows the message.
+5. **Authenticate:** require a bearer token. Compare it in constant time.
+6. **Check `Origin`:** if a request has an `Origin` header you don't expect, refuse it with 403. That stops web pages reaching a plugin on a private network (DNS rebinding), and the MCP specification requires it of HTTP servers.
+7. **Serve it over https:** behind any TLS proxy. HANNAH reads at most 50 tools and 8,000 characters of each result.
+
+**Signing in instead of a token:** plugins that need each person's own account can use OAuth, as the vendor connectors do (Linear, Notion…). Publish protected-resource metadata (RFC 9728) and authorization-server metadata (RFC 8414), with dynamic client registration and PKCE. HANNAH's connector sign-in follows the MCP authorization specification, so no HANNAH-side changes are needed.
+
+**For skills (instructions, not code):** marketplace packages in `shared/marketplace-catalog.json` are signed with `server/scripts/sign-skill.js`. A plugin is the way to add new *abilities*; a skill is the way to add new *instructions*.
+
 ## Security checklist
 
 - Keep `server/.env` out of Git and rotate any credential that has been pasted into chat, screenshots, commits, logs, or issue comments.

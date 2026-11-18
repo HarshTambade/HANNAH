@@ -1,3 +1,16 @@
+# HANNAH, self-hosted: the app (API + web app) and its Postgres database.
+#
+#   1. Create .env next to this file (never commit it), with at least:
+#        POSTGRES_PASSWORD=<a long random password>
+#        HANNAH_VAULT_KEY=<openssl rand -hex 32>   keep a copy: losing it makes saved keys unreadable
+#        CRON_SECRET=<openssl rand -hex 32>
+#      and optionally GROQ_API_KEY, HANNAH_PUBLIC_URL (https://your.domain), HANNAH_API_TOKEN …
+#      (every option: server/.env.example).
+#   2. docker compose up -d   →  http://localhost:3001
+#
+# The workflow worker runs inside the app (a long-running server needs no cron).
+# Put a TLS proxy (Caddy, nginx, Traefik) in front for a public address; chat
+# apps and calendar sign-in need https.
 services:
   hannah-backend:
     build:
@@ -6,6 +19,9 @@ services:
     image: hannah-backend:latest
     container_name: hannah-backend
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "${PORT:-3001}:3001"
     env_file:
@@ -14,6 +30,11 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3001
+      DATABASE_URL: postgresql://hannah:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/hannah
+      # The database is only reachable on this compose network, which has no TLS.
+      DATABASE_SSL: "off"
+      WORKFLOW_WORKER: "on"
+      HANNAH_SERVE_CLIENT: /app/client/dist
     volumes:
       - hannah-data:/app/data
     healthcheck:
@@ -23,5 +44,21 @@ services:
       retries: 3
       start_period: 20s
 
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hannah
+      POSTGRES_DB: hannah
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - hannah-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hannah -d hannah"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   hannah-data:
+  hannah-db:

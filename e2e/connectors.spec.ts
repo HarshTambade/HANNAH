@@ -104,12 +104,55 @@ test("Chat apps: connect a Telegram bot and get a one-time pairing link", async 
   await page.goto("/marketplace");
   const chat = page.getByRole("region", { name: "Chat apps" });
   await chat.scrollIntoViewIfNeeded();
-  await chat.getByLabel("Telegram bot token").fill("123456789:AAEhBOweik6ad9r_QXMENQjcrGbqCr4K-ra");
-  await chat.getByRole("button", { name: "Connect", exact: true }).click();
-  await expect(chat.getByRole("link", { name: /Open in Telegram/ })).toHaveAttribute("href", "https://t.me/hannah_test_bot?start=hnCODE12345");
+  await chat.getByLabel("Bot token").fill("123456789:AAEhBOweik6ad9r_QXMENQjcrGbqCr4K-ra");
+  await chat.getByRole("button", { name: "Connect Telegram" }).click();
+  await expect(chat.getByRole("link", { name: /Open the chat/ })).toHaveAttribute("href", "https://t.me/hannah_test_bot?start=hnCODE12345");
   await expect(chat.getByRole("list", { name: "Connected chat apps" })).toContainText("@hannah_test_bot");
   await expect(chat.getByRole("list", { name: "Connected chat apps" })).toContainText("Waiting for you to pair");
   expect(sentToken).toBe("123456789:AAEhBOweik6ad9r_QXMENQjcrGbqCr4K-ra");
   expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain("AAEhBOweik6ad9r");
   if (process.env.HANNAH_SHOT_DIR) await chat.screenshot({ path: `${process.env.HANNAH_SHOT_DIR}/chat-apps.png` });
+});
+
+test("Chat apps: Slack shows the webhook URL and steps to finish; someone asking to chat can be approved", async ({ page }) => {
+  const webhookUrl = "https://hannah.example/api/hooks/channel/ch_slack1234";
+  const steps = ["Paste the Request URL", "Subscribe to message.im"];
+  let sent: Record<string, string> = {};
+  let approved = "";
+  const slack = { id: "ch_slack1234", kind: "slack", label: "Slack", name: "Acme · @hannah", paired: true, pairedName: "Harsh", pairingOpen: false, webhookVerified: false, allowed: [], pending: [{ id: "U2", name: "Asha", preview: "hi!" }], setup: { webhookUrl, steps } };
+  await page.route("**/api/connectors/catalog", (route) => route.fulfill({ json: { connectors: catalog } }));
+  await page.route("**/api/channels**", async (route) => {
+    const request = route.request();
+    if (request.method() === "POST" && request.url().endsWith("/api/channels/slack")) {
+      sent = request.postDataJSON();
+      return route.fulfill({ status: 201, json: { channel: slack, pairing: { code: "hnSLACK12345", link: null, expiresAt: Date.now() + 900_000 }, setup: { webhookUrl, steps } } });
+    }
+    if (request.method() === "POST" && request.url().endsWith("/approve")) {
+      approved = request.postDataJSON().senderId;
+      return route.fulfill({ json: { channel: { ...slack, pending: [], allowed: [{ id: "U2", name: "Asha" }] } } });
+    }
+    return route.fulfill({ json: { channels: sent.botToken ? [approved ? { ...slack, pending: [], allowed: [{ id: "U2", name: "Asha" }] } : slack] : [] } });
+  });
+  await page.addInitScript((key) => {
+    sessionStorage.setItem("hannah.session.groqKey", key);
+    localStorage.setItem("hannah.account.v1", JSON.stringify({ email: "owner@example.com" }));
+  }, groqKey);
+  await page.goto("/marketplace");
+  const chat = page.getByRole("region", { name: "Chat apps" });
+  await chat.scrollIntoViewIfNeeded();
+  await chat.getByRole("radio", { name: /Slack/ }).click();
+  const connectButton = chat.getByRole("button", { name: "Connect Slack" });
+  await expect(connectButton).toBeDisabled();
+  await chat.getByLabel("Bot User OAuth Token").fill("xoxb-1111-2222-abcdefghijklmnopqrstuvwx");
+  await chat.getByLabel("Signing secret").fill("8f742231b10e8888abcd99aaaaaa85a5");
+  await connectButton.click();
+  await expect(chat.getByRole("status")).toContainText("hnSLACK12345");
+  await expect(chat.getByRole("status")).toContainText(webhookUrl);
+  await expect(chat.getByRole("status")).toContainText("Subscribe to message.im");
+  expect(sent).toEqual({ botToken: "xoxb-1111-2222-abcdefghijklmnopqrstuvwx", signingSecret: "8f742231b10e8888abcd99aaaaaa85a5" });
+  const asking = chat.getByRole("group", { name: /People asking to chat/ });
+  await expect(asking).toContainText("Asha");
+  await asking.getByRole("button", { name: "Approve Asha" }).click();
+  await expect.poll(() => approved).toBe("U2");
+  await expect(chat.getByRole("list", { name: "Connected chat apps" })).toContainText("Also approved: Asha");
 });

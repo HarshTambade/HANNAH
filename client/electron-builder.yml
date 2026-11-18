@@ -60,6 +60,7 @@ mac:
   # these descriptions voice input and local AI servers can't work.
   extendInfo:
     NSMicrophoneUsageDescription: HANNAH uses the microphone so you can talk with her. If you turn on "Hey HANNAH", it also listens for her name while the app is open; that listening happens on this Mac and the audio never leaves it.
+    NSAppleEventsUsageDescription: HANNAH sends iMessage replies through the Messages app, only to people you approved, after you turn iMessage on in Chat apps.
     NSLocalNetworkUsageDescription: HANNAH connects to AI models running on your network, such as Ollama, when you choose local AI.
   hardenedRuntime: true
   entitlements: ../config/entitlements.mac.plist

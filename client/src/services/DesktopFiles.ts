@@ -12,7 +12,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import type { HANNAHTool } from "./DeviceTools";
 
 export type FolderAccess = "read" | "read-write";
-export type SharedFolder = { id: string; name: string; path: string; access: FolderAccess; addedAt: number };
+export type SharedFolder = { id: string; name: string; path: string; access: FolderAccess; addedAt: number; sandbox?: { image: string; network: boolean } | null };
 export type AllowedCommand = { folderId: string; folder: string; command: string; addedAt: number };
 export type DesktopActivity = { at: number; kind: string; folder?: string; detail?: string; exitCode?: number | null };
 export type DirectoryEntry = { name: string; type: "file" | "directory" | "other"; size: number | null };
@@ -29,6 +29,8 @@ export interface HannahDesktopPlugin {
   writeFile(options: { folderId: string; path: string; content: string }): Promise<{ folder: string; path: string; bytesWritten: number; created: boolean }>;
   runCommand(options: { folderId: string; path?: string; command: string }): Promise<CommandResult>;
   forgetCommand(options: { folderId: string; command: string }): Promise<{ allowedCommands: AllowedCommand[] }>;
+  /** Run this folder's commands in a Docker sandbox; turning it off or adding network asks in a system dialog. */
+  setFolderSandbox(options: { id: string; enabled: boolean; image?: string; network?: boolean }): Promise<{ folder: SharedFolder }>;
   recentActivity(): Promise<{ activity: DesktopActivity[] }>;
   /** Tasks sent by server workflows: off until turned on (with a system dialog); each task asks again. */
   workflowTaskSettings(): Promise<{ enabled: boolean }>;
@@ -83,6 +85,14 @@ export interface HannahDesktopPlugin {
   focusApp(options: { app: string; taskId?: string }): Promise<{ app: string; frontmost: boolean }>;
   quitApp(options: { app: string; taskId?: string }): Promise<{ app: string; quit: boolean; note?: string }>;
   controlWindow(options: { app?: string; index?: number; action: "raise" | "minimize" | "restore" | "fullscreen" | "close" | "move" | "resize"; x?: number; y?: number; width?: number; height?: number; taskId?: string }): Promise<{ app: string; window: string; action: string; confirmed: boolean; windows: Array<{ index: number; title: string; minimized: boolean }> }>;
+  /** iMessage and Signal on this computer (messages.mjs): approved people only, replies only. */
+  localChannelsStatus(): Promise<{ channels: LocalChannel[] }>;
+  enableLocalChannel(options: { kind: LocalChannelKind; account?: string }): Promise<LocalChannel>;
+  disableLocalChannel(options: { kind: LocalChannelKind }): Promise<LocalChannel>;
+  allowLocalSender(options: { kind: LocalChannelKind; handle: string }): Promise<LocalChannel>;
+  removeLocalSender(options: { kind: LocalChannelKind; handle: string }): Promise<LocalChannel>;
+  pollLocalChannels(): Promise<{ messages: LocalMessage[] }>;
+  replyLocalChannel(options: { kind: LocalChannelKind; messageId: string; text: string }): Promise<{ sent: boolean; to: string }>;
   /** The desktop app itself: version, update channel and checks, tray, shortcut, hannah:// links. */
   desktopInfo(): Promise<DesktopInfo>;
   setUpdateChannel(options: { channel: UpdateChannel }): Promise<DesktopInfo>;
@@ -123,6 +133,10 @@ export type ControlActRequest = { taskId: string; observationId: string; action:
 export type ControlStep = { at: number; kind: "observation" | "action"; action?: string; status?: "action-attempted" | "action-confirmed" | "failed" | "denied"; target?: { app?: string; window?: string; element?: string | null }; verification?: { confirmed: boolean; evidence: string; changes?: string[] }; result?: unknown };
 export type ControlTask = { id: string; request: string; plan: string[]; status: "planned" | "executing" | "waiting-approval" | "completed" | "failed" | "cancelled"; createdAt: number; finishedAt: number | null; actions: ControlStep[]; observations: number; failure: string | null; summary: string | null };
 export type ControlActResult = Partial<ControlObservation> & { taskId: string; action: ControlAction; status: "action-attempted" | "action-confirmed"; verification?: { confirmed: boolean; evidence: string; changes?: string[] }; note: string };
+
+export type LocalChannelKind = "imessage" | "signal";
+export type LocalChannel = { kind: LocalChannelKind; label: string; available: boolean; reason: string | null; enabled: boolean; account: string | null; allowed: string[]; asking: Array<{ from: string; name: string | null; at: number; preview: string }>; lastError: string | null };
+export type LocalMessage = { kind: LocalChannelKind; id: string; from: string; name: string; text: string };
 
 export type UpdateChannel = "stable" | "beta";
 export type DesktopInfo = {

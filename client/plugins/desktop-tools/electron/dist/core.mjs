@@ -21,6 +21,7 @@ import path from "node:path";
 import { findApps } from "./apps.mjs";
 import { inspectPdf, notesDocument, pdfFileName } from "./notes.mjs";
 import { CONTROL_METHODS, createControlTools, createUnsupportedAdapter } from "./control.mjs";
+import { createLocalChannels, LOCAL_CHANNEL_METHODS } from "./messages.mjs";
 
 export const LIMITS = Object.freeze({
   readBytes: 256 * 1024,
@@ -155,6 +156,31 @@ function minimalEnv(env = process.env, platform = process.platform) {
   // Common install locations GUI apps don't inherit on macOS.
   if (platform === "darwin") result.PATH = [result.PATH, "/opt/homebrew/bin", "/usr/local/bin"].filter(Boolean).join(":");
   return result;
+}
+
+export const SANDBOX_IMAGE = "node:22-bookworm-slim";
+
+/**
+ * The docker command for a sandboxed run (OpenClaw-style tool sandboxing): a
+ * throwaway container with only the shared folder mounted (read-only for
+ * read-only folders), no network unless allowed, no added privileges, as this
+ * user, with memory, CPU and process limits. Exported for tests.
+ */
+export function sandboxCommand({ folder, root, clean = "", program, args = [], uid = process.getuid?.(), gid = process.getgid?.() }) {
+  const name = `hannah-sandbox-${randomUUID().slice(0, 12)}`;
+  const mount = `${root}:/work${folder.access === "read-write" ? "" : ":ro"}`;
+  return {
+    name,
+    args: [
+      "run", "--rm", "--name", name, "--init",
+      "--network", folder.sandbox?.network ? "bridge" : "none",
+      "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+      "--memory", "2g", "--cpus", "2", "--pids-limit", "512",
+      ...(Number.isInteger(uid) && Number.isInteger(gid) ? ["--user", `${uid}:${gid}`] : []),
+      "-e", "HOME=/tmp", "-v", mount, "-w", clean ? `/work/${clean}` : "/work",
+      folder.sandbox?.image || SANDBOX_IMAGE, program, ...args,
+    ],
+  };
 }
 
 /**
@@ -313,8 +339,18 @@ export function createDesktopTools(deps) {
     sleep: deps.sleep,
     stopShortcut: deps.stopShortcut,
   });
+  // ----- chat apps on this computer (messages.mjs): iMessage and Signal -----
+  const localChannels = createLocalChannels({
+    storePath: deps.localChannelsStorePath ?? path.join(path.dirname(deps.storePath), "local-channels.json"),
+    confirm: deps.confirm,
+    record,
+    adapters: deps.localChannelAdapters,
+    platform,
+    home,
+    now,
+  });
 
-  const publicFolder = (folder) => ({ id: folder.id, name: folder.name, path: folder.path, access: folder.access, addedAt: folder.addedAt });
+  const publicFolder = (folder) => ({ id: folder.id, name: folder.name, path: folder.path, access: folder.access, addedAt: folder.addedAt, sandbox: folder.sandbox?.enabled ? { image: folder.sandbox.image, network: folder.sandbox.network === true } : null });
 
   // ----- screen: on request, with consent, visibly -----
   // Seeing the screen is separate from acting on it: nothing here clicks or types.
@@ -436,6 +472,7 @@ export function createDesktopTools(deps) {
 
   return {
     ...control,
+    ...localChannels,
 
     async listFolders() {
       const state = await load();
@@ -557,7 +594,7 @@ export function createDesktopTools(deps) {
         const choice = await deps.confirm({
           title: "Run a command?",
           message: `HANNAH wants to run this command in ${folder.name}${clean ? `/${clean}` : ""}:`,
-          detail: `${text}\n\nFolder: ${cwd}\nIt runs without a shell, for up to ${LIMITS.commandMs / 1000} seconds.`,
+          detail: `${text}\n\nFolder: ${cwd}\n${folder.sandbox?.enabled ? `It runs in a Docker sandbox (${folder.sandbox.image}${folder.sandbox.network ? ", with network" : ", offline"}) that sees only this folder` : "It runs without a shell"}, for up to ${LIMITS.commandMs / 1000} seconds.`,
           buttons: ["Run once", "Always allow this exact command here", "Cancel"],
         });
         if (choice === 2 || choice < 0) {
@@ -570,6 +607,8 @@ export function createDesktopTools(deps) {
         }
       }
       const started = now();
+      // Sandboxed folders run the command in a throwaway Docker container (see sandboxCommand).
+      const sandbox = folder.sandbox?.enabled ? sandboxCommand({ folder, root: (await resolveInside(folder, "")).target, clean, program, args }) : null;
       const result = await new Promise((resolve) => {
         let stdout = "";
         let stderr = "";
@@ -577,7 +616,9 @@ export function createDesktopTools(deps) {
         let timedOut = false;
         let child;
         try {
-          child = spawn(program, args, { cwd, shell: false, windowsHide: true, env: minimalEnv(process.env, platform) });
+          child = sandbox
+            ? spawn("docker", sandbox.args, { shell: false, windowsHide: true, env: minimalEnv(process.env, platform) })
+            : spawn(program, args, { cwd, shell: false, windowsHide: true, env: minimalEnv(process.env, platform) });
         } catch (error) {
           resolve({ exitCode: null, stdout: "", stderr: String(error?.message ?? error), truncated: false, timedOut: false });
           return;
@@ -589,19 +630,48 @@ export function createDesktopTools(deps) {
         };
         child.stdout?.on("data", (chunk) => { stdout = take(stdout, chunk); });
         child.stderr?.on("data", (chunk) => { stderr = take(stderr, chunk); });
-        const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, LIMITS.commandMs);
+        const timer = setTimeout(() => {
+          timedOut = true;
+          child.kill("SIGKILL");
+          // Killing the docker client doesn't stop the container; stop it by name.
+          if (sandbox) spawn("docker", ["kill", sandbox.name], { shell: false, windowsHide: true, stdio: "ignore" }).on("error", () => {});
+        }, LIMITS.commandMs);
         child.on("error", (error) => {
           clearTimeout(timer);
           const missing = error?.code === "ENOENT";
-          resolve({ exitCode: null, stdout, stderr: missing ? `“${program}” wasn't found. Check it's installed and on your PATH.` : String(error?.message ?? error), truncated, timedOut });
+          resolve({ exitCode: null, stdout, stderr: missing ? (sandbox ? "Docker wasn't found. Install Docker Desktop (or turn the sandbox off for this folder)." : `“${program}” wasn't found. Check it's installed and on your PATH.`) : String(error?.message ?? error), truncated, timedOut });
         });
         child.on("close", (code) => {
           clearTimeout(timer);
           resolve({ exitCode: code, stdout, stderr, truncated, timedOut });
         });
       });
-      await record({ kind: "command", folder: folder.name, detail: text, exitCode: result.exitCode });
-      return { folder: folder.name, command: text, cwd: clean || ".", durationMs: now() - started, ...result };
+      await record({ kind: "command", folder: folder.name, detail: text, exitCode: result.exitCode, ...(sandbox ? { sandbox: folder.sandbox.image } : {}) });
+      return { folder: folder.name, command: text, cwd: clean || ".", durationMs: now() - started, ...(sandbox ? { sandbox: { image: folder.sandbox.image, network: folder.sandbox.network === true } } : {}), ...result };
+    },
+
+    /**
+     * Run this folder's commands in a Docker sandbox (or not). Turning it on
+     * only makes commands safer, so it doesn't ask; turning it off asks.
+     */
+    async setFolderSandbox({ id, enabled, image, network } = {}) {
+      const state = await load();
+      const folder = state.folders.find((item) => item.id === id);
+      if (!folder) fail("NO_FOLDER", "That folder isn't shared with HANNAH.");
+      const wanted = String(image || folder.sandbox?.image || SANDBOX_IMAGE).trim();
+      if (!/^[a-z0-9][a-z0-9._/:@-]{0,200}$/.test(wanted)) fail("INVALID", "That isn't a Docker image name (for example node:22-bookworm-slim or python:3.12-slim).");
+      if (!enabled && folder.sandbox?.enabled) {
+        const choice = await deps.confirm({ title: "Turn off the sandbox?", message: `Commands HANNAH runs in ${folder.name} will run directly on this computer again.`, detail: "Each command still asks you first.", buttons: ["Turn it off", "Keep the sandbox"] });
+        if (choice !== 0) fail("DENIED", "The sandbox stays on.");
+      }
+      if (enabled && network === true) {
+        const choice = await deps.confirm({ title: "Let sandboxed commands use the network?", message: `Commands in ${folder.name}'s sandbox could then reach the internet (to install packages, for example).`, detail: "They still can't see the rest of this computer.", buttons: ["Allow network", "Keep it offline"] });
+        if (choice !== 0) network = false;
+      }
+      folder.sandbox = { enabled: Boolean(enabled), image: wanted, network: Boolean(enabled && network === true) };
+      await save();
+      await record({ kind: "sandbox", folder: folder.name, detail: folder.sandbox.enabled ? `on (${wanted}${folder.sandbox.network ? ", network" : ""})` : "off" });
+      return { folder: publicFolder(folder) };
     },
 
     async forgetCommand({ folderId, command } = {}) {
@@ -1138,7 +1208,7 @@ export function createDesktopTools(deps) {
 /** Methods the web page may call. Everything else stays in the main process. */
 export const BRIDGED_METHODS = Object.freeze([
   "listFolders", "addFolder", "removeFolder", "setAccess", "revealFolder",
-  "listDirectory", "readFile", "writeFile", "runCommand", "forgetCommand", "recentActivity",
+  "listDirectory", "readFile", "writeFile", "runCommand", "forgetCommand", "recentActivity", "setFolderSandbox",
   "workflowTaskSettings", "setWorkflowTasks", "approveWorkflowTask", "readWebPage",
   "screenStatus", "captureScreen", "pauseScreenSession", "stopScreenSession", "openScreenSettings",
   "listApps", "openApp", "forgetApp",
@@ -1146,4 +1216,5 @@ export const BRIDGED_METHODS = Object.freeze([
   "browserStatus", "browserOpen", "browserSearch", "browserRead", "browserScroll", "browserBack", "browserClick", "browserType", "browserScreenshot", "youtubeVideo", "browserClose",
   "saveNotesPdf", "revealNotes",
   ...CONTROL_METHODS,
+  ...LOCAL_CHANNEL_METHODS,
 ]);

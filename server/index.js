@@ -35,7 +35,7 @@ const { createMcpClientRouter } = require("./mcp-client");
 const { createConnectorsRouter } = require("./connectors");
 const { createWebRouter } = require("./web");
 const { createHostingSetupRouter } = require("./hosting-setup");
-const { createChannelsRouter } = require("./channels");
+const { createChannelHookRouter, createChannelsRouter } = require("./channels");
 const { createA2ARouter } = require("./a2a");
 const { createWebhookRouter, emitUserEvent, onUserEvent } = require("./webhooks");
 const { createDownloadRouter } = require("./downloads");
@@ -334,6 +334,8 @@ const workflowRuntime = createRuntime({ emit: emitUserEvent });
 onUserEvent((userId, event, data) => (databaseConfigured() ? workflowRuntime.emitEvent(userId, event, data, { sourceWorkflowId: data?.workflowId || null, depth: Number(data?.$depth) || 0 }) : 0));
 // Public workflow webhooks read the raw body (HMAC signatures cover the exact bytes), so they're mounted before the JSON parser.
 app.use("/api", createHookRouter({ runtime: workflowRuntime }));
+// Chat apps (Slack, Discord, Google Chat, Teams, WhatsApp) sign the exact bytes of each request.
+app.use("/api", createChannelHookRouter({ runtime: workflowRuntime, publicBaseUrl }));
 app.use("/api", createRememberedKeyRouter());
 // Phone Bridge: a paired phone signs its requests over the exact body, so it parses its own.
 app.use("/api", createPhoneBridgeRouter());
@@ -985,6 +987,9 @@ app.post("/api/chat", async (req, res) => {
 // Sentry must see route errors before the final responder. Its Express error
 // middleware captures the event and forwards it; the response never includes
 // provider messages, stack traces, or user payloads.
+// Self-hosting (Docker): the built web app from this server (server/static-client.js), only when asked.
+if (process.env.HANNAH_SERVE_CLIENT) app.use(require("./static-client").serveClient(process.env.HANNAH_SERVE_CLIENT));
+
 setupSentryErrorHandler(app);
 app.use((error, _req, res, _next) => {
   if (res.headersSent) return;

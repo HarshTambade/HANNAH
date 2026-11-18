@@ -28,7 +28,21 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
   - deploys again.
 
   Nothing is stored, and existing settings are never replaced without asking.
-- **Talk to HANNAH on Telegram (Marketplace → Chat apps).** Connect a bot from @BotFather and pair your own chat with a one-time link. Only that chat gets answers, and anyone else is told it's private. Replies use your account's AI key.
+- **Talk to HANNAH from your chat apps (Marketplace → Chat apps):** Telegram, Slack, Discord, Google Chat, Microsoft Teams and WhatsApp.
+  - **Connecting:** each uses the platform's own official API. HANNAH checks your bot's credentials with the platform, seals them in the vault, and shows the webhook URL to paste where the platform needs it.
+  - **Checking every request:** HANNAH verifies each one the platform's way before reading it: Telegram's secret header, Slack's and WhatsApp's signatures, Discord's Ed25519 signature, Google's and Microsoft's signed tokens.
+  - **Pairing:** you pair your own chat with a one-time code.
+  - **New people:** anyone else is told it's private and listed for you to **approve** or **deny**, like OpenClaw's pairing requests. Approved people get answers, each with their own history.
+  - **Limits:** group chats are ignored, and replies use your account's AI key.
+  - **WhatsApp:** it uses Meta's official Cloud API, not the unofficial WhatsApp Web protocol.
+- **iMessage and Signal in the desktop app.**
+  - **iMessage (macOS):** HANNAH reads Messages on this Mac (with Full Disk Access) and replies through the Messages app.
+  - **Signal (any desktop):** it works through `signal-cli`.
+  - **Rules for both:** off until you turn them on in a system dialog. Only people you approve are read, and anyone else is listed as asking. HANNAH can only reply, once, to a message someone just sent; she can't start a conversation.
+- **Command sandbox (Settings → Desktop access).** A shared folder can run HANNAH's approved commands in a throwaway Docker container that sees only that folder. It's offline unless you allow network, has no extra privileges, and has memory, CPU and process limits.
+- **`hannah` command-line tool (`cli/`).** Sign in, ask, chat in the terminal with streamed answers, list and run workflows with live step status, and list chat apps. Credentials are stored with owner-only permissions (0600) and never printed.
+- **Docker self-hosting.** One image with the server and the web app (`HANNAH_SERVE_CLIENT`), plus a compose file with Postgres 16, with the workflow worker running in-process. See [DEPLOYMENT.md](./DEPLOYMENT.md).
+- **Build a plugin.** HANNAH plugins are remote MCP servers added as custom connectors. A documented, dependency-free example with tests is in `examples/hannah-plugin` ([API-INTEGRATION.md](./API-INTEGRATION.md)).
 - **“Remember on this browser” for your Groq key (website).** The key is kept for 30 days in a secure cookie that the page's scripts can't read, so you aren't asked again in every new tab. Disconnect forgets it.
 - **Connect Supabase in one click on Vercel.** Press **Connect Supabase on Vercel** (Settings → Account while the server has no database, or Integrations → Database) and approve it for the HANNAH project. After Vercel's redeploy, accounts and encrypted key storage are on, with nothing to copy: HANNAH reads `POSTGRES_URL`, which the integration adds, and derives its vault key from the Supabase secret it adds (`SUPABASE_JWT_SECRET`). That secret is never stored in the database. Setting your own `HANNAH_VAULT_KEY` still works, and it takes over and re-encrypts saved keys as they're read.
 - **HANNAH's browser, YouTube study notes and PDF notes (desktop app).**
@@ -79,6 +93,10 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Reminders on Android could stop reaching the phone.**
+  - **Cause:** Android 12 and later must allow "exact alarms", and Android 14 doesn't by default. Without that permission, every time HANNAH handed reminders to the phone, the notifications plugin opened the "Alarms & reminders" settings screen and waited. HANNAH queues each hand-over behind the last, so one unanswered screen held up every reminder after it.
+  - **Fix:** HANNAH checks the permission first and schedules an inexact reminder when it's missing. It's still delivered, perhaps a few minutes late. Each hand-over now has a time limit.
+  - **Visible state:** the Reminders card in the phone apps shows the phone's real state, with buttons to allow notifications and exact alarms. It used to show the browser's notification state, which doesn't exist in the apps, and wrongly said alerts only arrive while HANNAH is open.
 - **Finished workflow runs no longer keep unmasked step data.** Each run's checkpoint, used to resume and to retry from a failed step, held every step's full data for the 30 days runs are kept. That included values a service echoed back, such as a token. The masked step records were the only part the privacy policy described. A completed run now keeps only its steps' statuses and masked logs. Failed and stopped runs keep their checkpoint so they can be retried, and the privacy policy now says so. Found by a new real-network proof of webhooks, schedules, events and credentials in serverless mode (`server/scripts/triggers-proof.mjs`).
 - **Supabase connections no longer fail TLS verification.** Supabase's certificates come from its own certificate authority, so verified connections failed with "self-signed certificate in certificate chain", and the advice was to turn verification off. HANNAH now has Supabase's root built in and verifies against it, whatever `sslmode` the URL asks for.
 - **Long workflow runs on Vercel finish instead of being cut off.**

@@ -12,6 +12,7 @@ const activityLabel: Record<string, string> = {
   "write-denied": "You declined a write",
   command: "Ran",
   "command-denied": "You declined a command",
+  sandbox: "Changed the command sandbox",
   "workflow-tasks-on": "Turned on workflow tasks",
   "workflow-tasks-off": "Turned off workflow tasks",
   "workflow-page-read": "A workflow read a page",
@@ -45,6 +46,34 @@ const activityLabel: Record<string, string> = {
   "pdf-saved": "Saved a PDF",
   "pdf-denied": "You declined saving a PDF",
 };
+
+/**
+ * Per folder: run HANNAH's approved commands in a throwaway Docker container
+ * that sees only this folder (no network unless allowed). Needs Docker.
+ */
+function SandboxControls({ folder, busy, onChange }: { folder: SharedFolder; busy: boolean; onChange: (options: { enabled: boolean; image?: string; network?: boolean }) => void }) {
+  const [image, setImage] = useState(folder.sandbox?.image || "node:22-bookworm-slim");
+  const on = Boolean(folder.sandbox);
+  return (
+    <div className="flex w-full flex-wrap items-center gap-2 text-xs text-slate-700">
+      <label className="inline-flex items-center gap-1.5">
+        <input type="checkbox" checked={on} disabled={busy} onChange={(event) => onChange({ enabled: event.target.checked, image })} />
+        Run commands in a Docker sandbox
+      </label>
+      <label className="inline-flex items-center gap-1">
+        <span className="sr-only">Sandbox image for {folder.name}</span>
+        <input value={image} disabled={busy} onChange={(event) => setImage(event.target.value)} onBlur={() => { if (on && image !== folder.sandbox?.image) onChange({ enabled: true, image, network: folder.sandbox?.network }); }} placeholder="node:22-bookworm-slim" className="w-48 rounded-lg border border-slate-200 bg-white px-2 py-1 font-mono text-[11px]" />
+      </label>
+      {on && (
+        <label className="inline-flex items-center gap-1.5">
+          <input type="checkbox" checked={folder.sandbox?.network === true} disabled={busy} onChange={(event) => onChange({ enabled: true, image, network: event.target.checked })} />
+          Allow network
+        </label>
+      )}
+      <span className="text-[11px] text-slate-500">{on ? `Commands run in ${folder.sandbox?.image}, ${folder.sandbox?.network ? "with network" : "offline"}, seeing only this folder.` : "Commands run directly on this computer."}</span>
+    </div>
+  );
+}
 
 /** Settings → Desktop access. Only rendered in the desktop app. */
 export default function DesktopAccessPanel() {
@@ -113,6 +142,7 @@ export default function DesktopAccessPanel() {
                   <button type="button" className="btn-ghost" onClick={() => void act(() => hannahDesktop().revealFolder({ id: folder.id }))}>Open</button>
                   <button type="button" className="btn-ghost text-rose-700" disabled={busy} onClick={() => void act(() => hannahDesktop().removeFolder({ id: folder.id }))} aria-label={`Stop sharing ${folder.name}`}><Trash2 size={14} /></button>
                 </div>
+                <SandboxControls folder={folder} busy={busy} onChange={(options) => void act(() => hannahDesktop().setFolderSandbox({ id: folder.id, ...options }))} />
               </li>
             ))}
           </ul>

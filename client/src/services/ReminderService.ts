@@ -3,8 +3,8 @@
  *
  * Reminders persist in this browser's storage and fire while HANNAH is open:
  * a system notification when the user has allowed it, plus an in-app alert.
- * Background delivery with the app closed needs native local notifications,
- * which this build does not include yet.
+ * In the Android and iOS apps each reminder is also handed to the phone as a
+ * local notification (NativeReminders.ts), so it arrives with the app closed.
  */
 
 export type Reminder = {

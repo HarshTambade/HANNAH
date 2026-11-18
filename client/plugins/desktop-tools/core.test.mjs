@@ -4,7 +4,8 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { checkPageUrl, classifyAddress, createDesktopTools, parseCommand, tooBroad } from "./electron/dist/core.mjs";
+import { EventEmitter } from "node:events";
+import { checkPageUrl, classifyAddress, createDesktopTools, parseCommand, sandboxCommand, SANDBOX_IMAGE, tooBroad } from "./electron/dist/core.mjs";
 
 let sandbox;
 let project;
@@ -24,12 +25,13 @@ before(async () => {
 
 after(() => rm(sandbox, { recursive: true, force: true }));
 
-function tools({ answers = [], pick = project, loadPage, lookup } = {}) {
+function tools({ answers = [], pick = project, loadPage, lookup, spawn } = {}) {
   const asked = [];
   const queue = [...answers];
   const instance = createDesktopTools({
     loadPage,
     lookup,
+    ...(spawn ? { spawn } : {}),
     storePath: path.join(sandbox, `store-${Math.random()}.json`),
     chooseFolder: async () => pick,
     confirm: async (request) => { asked.push(request); return queue.length ? queue.shift() : 0; },
@@ -169,4 +171,61 @@ test("workflow tasks are off until allowed in a dialog; every page and coding ta
 
   assert.deepEqual(await instance.setWorkflowTasks({ enabled: false }), { enabled: false });
   await assert.rejects(instance.approveWorkflowTask({ workflowName: "x", folderId: folder.id }), /Workflow tasks are off/);
+});
+
+test("sandboxCommand: a throwaway container with only the folder, offline, unprivileged and limited", () => {
+  const readOnly = sandboxCommand({ folder: { access: "read", sandbox: { enabled: true, image: "python:3.12-slim" } }, root: "/work/p", clean: "src", program: "python", args: ["-V"], uid: 501, gid: 20 });
+  const args = readOnly.args;
+  const after = (flag) => args[args.indexOf(flag) + 1];
+  assert.equal(args[0], "run");
+  assert.ok(args.includes("--rm") && args.includes("--init"));
+  assert.equal(after("--name"), readOnly.name);
+  assert.match(readOnly.name, /^hannah-sandbox-[0-9a-f-]{12}$/);
+  assert.equal(after("--network"), "none", "offline by default");
+  assert.equal(after("--cap-drop"), "ALL");
+  assert.equal(after("--security-opt"), "no-new-privileges");
+  assert.deepEqual([after("--memory"), after("--cpus"), after("--pids-limit")], ["2g", "2", "512"]);
+  assert.equal(after("--user"), "501:20");
+  assert.equal(after("-v"), "/work/p:/work:ro", "a read-only folder is mounted read-only");
+  assert.equal(after("-w"), "/work/src");
+  assert.deepEqual(args.slice(-3), ["python:3.12-slim", "python", "-V"]);
+  const readWrite = sandboxCommand({ folder: { access: "read-write", sandbox: { enabled: true, network: true } }, root: "/work/p", program: "npm", args: ["test"], uid: 501, gid: 20 }).args;
+  assert.equal(readWrite[readWrite.indexOf("-v") + 1], "/work/p:/work");
+  assert.equal(readWrite[readWrite.indexOf("--network") + 1], "bridge");
+  assert.equal(readWrite[readWrite.indexOf("-w") + 1], "/work");
+  assert.deepEqual(readWrite.slice(-3), [SANDBOX_IMAGE, "npm", "test"]);
+});
+
+test("a sandboxed folder runs its approved commands in docker; turning the sandbox off or adding network asks", async () => {
+  const spawned = [];
+  const spawn = (program, args, options) => {
+    spawned.push({ program, args, options });
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = () => {};
+    setImmediate(() => { child.stdout.emit("data", Buffer.from("ok\n")); child.emit("close", 0); });
+    return child;
+  };
+  // Answers: (setFolderSandbox network) keep offline, (runCommand) run once, (turn off) keep the sandbox, (turn off) turn it off.
+  const { instance, asked } = tools({ spawn, answers: [1, 0, 1, 0] });
+  const { folder } = await instance.addFolder({ access: "read-write" });
+  await assert.rejects(instance.setFolderSandbox({ id: folder.id, enabled: true, image: "Bad Image!" }), /isn't a Docker image name/);
+  const on = await instance.setFolderSandbox({ id: folder.id, enabled: true, image: "node:22-bookworm-slim", network: true });
+  assert.match(asked.at(-1).title, /network/);
+  assert.deepEqual(on.folder.sandbox, { image: "node:22-bookworm-slim", network: false }, "declining network keeps it offline");
+  const result = await instance.runCommand({ folderId: folder.id, command: "npm test" });
+  assert.match(asked.at(-1).detail, /Docker sandbox \(node:22-bookworm-slim, offline\) that sees only this folder/);
+  assert.equal(spawned.at(-1).program, "docker");
+  const args = spawned.at(-1).args;
+  assert.equal(args[args.indexOf("--network") + 1], "none");
+  assert.match(args[args.indexOf("-v") + 1], /:\/work$/, "read-write folders are mounted writable");
+  assert.deepEqual(args.slice(-3), ["node:22-bookworm-slim", "npm", "test"]);
+  assert.deepEqual(result.sandbox, { image: "node:22-bookworm-slim", network: false });
+  assert.equal(result.stdout, "ok\n");
+  await assert.rejects(instance.setFolderSandbox({ id: folder.id, enabled: false }), /stays on/);
+  const off = await instance.setFolderSandbox({ id: folder.id, enabled: false });
+  assert.equal(off.folder.sandbox, null);
+  await instance.runCommand({ folderId: folder.id, command: "npm test" });
+  assert.equal(spawned.at(-1).program, "npm", "without the sandbox the command runs directly");
 });

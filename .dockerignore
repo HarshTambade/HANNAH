@@ -1,0 +1,30 @@
+# Secrets never go into an image.
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+vercel-env.txt
+
+# Built or installed inside the image.
+**/node_modules
+client/dist
+client/electron
+client/android
+client/ios
+**/__pycache__
+**/*.pyc
+
+# Not needed to run HANNAH.
+.git
+.github
+.vercel
+apps
+docs
+e2e
+cli
+examples
+**/coverage
+**/playwright-report
+**/test-results
+*.log

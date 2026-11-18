@@ -31,6 +31,8 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 | KI-23 | iOS build, toolchain | With Xcode 27 the LanceDB plugin's Swift bindings can't find their Rust module, so the iOS app doesn't build; CI's current Xcode builds it | P2 | Open (breaks CI when GitHub's macOS runners move to Xcode 27) |
 | KI-24 | Computer control (macOS) | Built and tested against its rules, but not yet run with Accessibility permission on: reading other apps, real clicks and typing, Test A (VS Code with a project) | P1 | Needs the owner to turn on Accessibility, then `node client/scripts/macos-control-check.mjs --vscode` |
 | KI-25 | Computer control (Windows, Linux) | No adapter yet (UI Automation, AT-SPI); the tools say so | P2 | Open |
+| KI-26 | Reminders on Android and iOS | Fixed on main (inexact alarms when Android denies exact ones; a time limit per hand-over; the card shows the phone's state), unit-tested against the plugin's real API; not yet run on a phone or the emulator (the CI APK download stalled) | P1 | Needs a run on a device: set a reminder 2 minutes ahead, close the app, wait |
+| KI-27 | New chat apps and desktop channels | Slack, Discord, Google Chat, Teams and WhatsApp are tested with real signatures against stand-in APIs, and every real endpoint answered as expected with dummy credentials. iMessage was refused for lack of Full Disk Access, and Signal for lack of signal-cli, on this Mac. None has been run with a real bot yet | P1 | Needs the owner's bots and accounts |
 
 ## Details
 

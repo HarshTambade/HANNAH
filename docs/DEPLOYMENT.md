@@ -12,6 +12,20 @@ How to run HANNAH in production: the website and its server on Vercel with a Pos
 
 Without part 1, the website still works for chat with a visitor's own AI key. Everything tied to an account is switched off: `/api/account/status` shows `"database":{"configured":false}`.
 
+**Self-hosting instead of Vercel:** the repository's `Dockerfile` builds one image with the API server and the web app. The server serves the built app when `HANNAH_SERVE_CLIENT` names it; see `server/static-client.js`. `docker-compose.yml` adds a Postgres 16 database.
+
+1. Create `.env` next to `docker-compose.yml`, and never commit it:
+   - `POSTGRES_PASSWORD`: a long random password.
+   - `HANNAH_VAULT_KEY`: `openssl rand -hex 32`. Keep a copy.
+   - `CRON_SECRET`: `openssl rand -hex 32`.
+   - Optional: `GROQ_API_KEY`, `HANNAH_PUBLIC_URL`, `HANNAH_API_TOKEN` and any other setting from `server/.env.example`.
+2. Run `docker compose up -d`, then open http://localhost:3001.
+
+**How it runs:**
+- The workflow worker runs inside the server, so part 2 (the scheduler) isn't needed.
+- The database is reached only on the compose network, without TLS (`DATABASE_SSL=off`).
+- For a public address, put a TLS proxy (Caddy, nginx, Traefik) in front. Chat apps and calendar sign-in need https.
+
 ## 1. Database and Vercel settings
 
 The server needs three settings:

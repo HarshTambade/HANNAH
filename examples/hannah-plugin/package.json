@@ -1,0 +1,16 @@
+{
+  "name": "hannah-example-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An example HANNAH plugin: a remote MCP server with two tools.",
+  "type": "module",
+  "main": "server.mjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test server.test.mjs"
+  },
+  "license": "MIT"
+}

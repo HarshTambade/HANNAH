@@ -24,6 +24,7 @@ import { Account } from "./services/Account";
 import { resetSyncState, startAccountSync } from "./services/AccountSync";
 import { refreshMcpTools } from "./services/McpTools";
 import { installConnectorTools } from "./services/Connectors";
+import { startLocalChannelLoop } from "./services/LocalChannels";
 import type { Emotion, InferenceMode } from "./types";
 import NotFoundPage from "./components/NotFoundPage";
 import { legacyHashRedirect, pathForScreen, ROUTE_TITLES, screenForLocation, type AppScreen, type Screen } from "./routes";
@@ -127,6 +128,8 @@ export default function App() {
   useEffect(() => {
     if (screen !== "landing") { void refreshMcpTools(); installConnectorTools(); }
   }, [screen]);
+  // iMessage and Signal replies (desktop app, only while a channel is on).
+  useEffect(() => startLocalChannelLoop(), []);
 
   useEffect(() => {
     const onPop = () => {

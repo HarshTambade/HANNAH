@@ -3,6 +3,7 @@ import { Bell, BellRing, Check, Clock, X } from "lucide-react";
 import {
   REMINDER_EVENT, REMINDER_FIRED_EVENT, ReminderService, notificationPermission, requestNotificationPermission, type Reminder,
 } from "../services/ReminderService";
+import { NATIVE_REMINDER_STATUS_EVENT, allowExactAlarms, allowReminderNotifications, nativeReminderStatus } from "../services/NativeReminders";
 
 function formatDue(time: number) {
   const date = new Date(time);
@@ -57,10 +58,14 @@ export function RemindersCard() {
   const [error, setError] = useState("");
   const [permission, setPermission] = useState(notificationPermission);
 
+  // In the Android and iOS apps reminders are handed to the phone (NativeReminders.ts); show its real state.
+  const [phone, setPhone] = useState(nativeReminderStatus);
   useEffect(() => {
     const refresh = () => setReminders(ReminderService.upcoming());
+    const refreshPhone = () => setPhone(nativeReminderStatus());
     window.addEventListener(REMINDER_EVENT, refresh);
-    return () => window.removeEventListener(REMINDER_EVENT, refresh);
+    window.addEventListener(NATIVE_REMINDER_STATUS_EVENT, refreshPhone);
+    return () => { window.removeEventListener(REMINDER_EVENT, refresh); window.removeEventListener(NATIVE_REMINDER_STATUS_EVENT, refreshPhone); };
   }, []);
 
   const add = (event: FormEvent) => {
@@ -79,11 +84,21 @@ export function RemindersCard() {
       <div className="deck-card tone-plain">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-lg font-medium tracking-tight text-ink">Reminders</h2>
-          {permission === "default" && (
+          {!phone.native && permission === "default" && (
             <button type="button" className="btn-outline !py-1.5 text-xs" onClick={async () => setPermission(await requestNotificationPermission())}><Bell size={13} /> Allow notifications</button>
           )}
-          {permission === "denied" && <span className="text-xs text-slate-500">Notifications are blocked; alerts show in the app.</span>}
+          {!phone.native && permission === "denied" && <span className="text-xs text-slate-500">Notifications are blocked; alerts show in the app.</span>}
+          {phone.native && phone.notifications === "denied" && (
+            <button type="button" className="btn-outline !py-1.5 text-xs" onClick={() => void allowReminderNotifications()}><Bell size={13} /> Allow notifications</button>
+          )}
         </div>
+        {phone.native && phone.notifications === "denied" && <p role="status" className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Notifications are off for HANNAH, so reminders can't arrive while the app is closed. Allow them here, or in the phone's Settings → Apps → HANNAH → Notifications.</p>}
+        {phone.native && phone.exactAlarms === "denied" && (
+          <p role="status" className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Android hasn't allowed HANNAH exact alarms, so a reminder can arrive a few minutes late. <button type="button" className="font-semibold underline" onClick={() => void allowExactAlarms()}>Allow exact alarms</button>
+          </p>
+        )}
+        {phone.error && <p role="alert" className="mt-2 text-xs text-rose-700">Reminders couldn't be handed to the phone: {phone.error}</p>}
         {reminders.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">No upcoming reminders. Add one here, or ask HANNAH: “remind me to call Mum at 6.”</p>
         ) : (
@@ -107,7 +122,9 @@ export function RemindersCard() {
           <button type="submit" className="btn-primary" disabled={!text.trim()}>Add</button>
         </form>
         {error && <p role="alert" className="mt-2 text-xs text-rose-700">{error}</p>}
-        <p className="mt-2 text-xs text-slate-500">Alerts arrive while HANNAH is open in a tab or the app.</p>
+        <p className="mt-2 text-xs text-slate-500">{phone.native
+          ? phone.notifications === "granted" ? `Reminders arrive as phone notifications, even when HANNAH is closed (${phone.scheduled} scheduled).` : "Reminders arrive as phone notifications once you allow them."
+          : "Alerts arrive while HANNAH is open in a tab or the app."}</p>
       </div>
     </section>
   );

@@ -118,13 +118,27 @@ test("connect a bot, pair your chat with the one-time code, and chat with HANNAH
   await deliver(id, secret, { chat: -5, type: "group", text: "hey bot" });
   await deliver(id, secret, { chat: 999, text: `/start ${code}` });
   assert.equal(aiPrompts.length, asked);
-  assert.equal(sentTo(999).at(-1), "This HANNAH bot is private.");
+  assert.match(sentTo(999).at(-1), /private\. I've asked its owner/);
   assert.deepEqual(sentTo(-5), []);
+
+  // The stranger is listed for the owner (OpenClaw-style pairing request); approved, they get answers with their own history.
+  const asking = (await api("GET", "/channels")).body.channels[0];
+  // (Their first message after pairing was the reused /start code, sent with the helper's default name.)
+  assert.deepEqual(asking.pending.map((person) => [person.id, person.name]), [["999", "Harsh"]]);
+  assert.equal((await api("POST", `/channels/${id}/approve`, { senderId: "nobody" })).status, 404);
+  assert.equal((await api("POST", `/channels/${id}/approve`, { senderId: "999" })).status, 200);
+  await deliver(id, secret, { chat: 999, text: "Hi, I'm a friend", name: "Stranger" });
+  assert.equal(sentTo(999).at(-1), "It's 4.");
+  assert.ok(!aiPrompts.at(-1).includes("What's 2+2"), "a different person has their own history");
+  assert.equal((await api("POST", `/channels/${id}/deny`, { senderId: "999" })).status, 200);
+  const promptsBefore = aiPrompts.length;
+  await deliver(id, secret, { chat: 999, text: "still me", name: "Stranger" });
+  assert.equal(aiPrompts.length, promptsBefore, "removed people get no answers");
 
   // Disconnect removes the webhook.
   assert.equal((await api("DELETE", `/channels/${id}`)).status, 200);
   assert.ok(telegramCalls.some((call) => call.method === "deleteWebhook" && call.token === BOT));
-  assert.equal((await deliver(id, secret, { text: "still there?" })).status, 401);
+  assert.equal((await deliver(id, secret, { text: "still there?" })).status, 404, "the channel is gone");
 });
 
 test("channels need a signed-in account", async () => {
