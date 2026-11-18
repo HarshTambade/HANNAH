@@ -3,6 +3,7 @@ import { Aperture, ClipboardCopy, Download, LogOut, RotateCcw } from "lucide-rea
 import { Diagnostics, describeError } from "../services/Diagnostics";
 import { clearApiSession } from "../services/api";
 import { getAppVersion } from "../services/appInfo";
+import { copyText } from "../services/clipboard";
 
 /**
  * What the interface shows when a screen crashes. It says what went wrong in
@@ -17,7 +18,7 @@ export default function CrashScreen({ error }: { error: unknown }) {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(details);
+      if (!(await copyText(details))) throw new Error("Copy failed.");
       setCopied(true);
     } catch {
       setCopied(false);

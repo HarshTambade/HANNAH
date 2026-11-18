@@ -97,14 +97,30 @@ async function appendContentReport(document, { logPath = defaultContentReportLog
   return resolved;
 }
 
-function createContentReportHandler({ logPath } = {}) {
+/** HANNAH's own database, when the server has one: serverless hosts can't keep a local file. */
+async function saveContentReport(document) {
+  const { getDatabase } = require("./db");
+  const db = await getDatabase();
+  await db.query(
+    "INSERT INTO hannah_content_reports (id, message_id, reason, app_version, platform, inference_mode, mode_detail, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+    [document.id, document.messageId, document.reason, document.appVersion, document.platform, document.inferenceMode, document.modeDetail || null, Date.parse(document.receivedAt) || Date.now()],
+  );
+}
+
+function createContentReportHandler({ logPath, useDatabase = () => require("./db").databaseConfigured() } = {}) {
   return async function contentReportHandler(req, res) {
     const validated = validateContentReportPayload(req.body);
     if (!validated.ok) return res.status(400).json({ error: validated.error });
 
     const document = buildContentReportDocument(validated.value);
     try {
-      await appendContentReport(document, { logPath });
+      // A log file the operator chose wins; otherwise the database; otherwise the default file.
+      const chosenFile = Boolean(logPath || process.env.CONTENT_REPORT_LOG?.trim());
+      if (!chosenFile && useDatabase()) await saveContentReport(document);
+      else if (!chosenFile && process.env.VERCEL) {
+        // A serverless host has no lasting disk: say so instead of losing the report.
+        return res.status(503).json({ error: "Reporting needs this server's database. The operator can connect one in Settings → Account." });
+      } else await appendContentReport(document, { logPath });
       return res.status(202).json({ ok: true, id: document.id });
     } catch {
       // Never log the report body or a user identifier. The operator alert is

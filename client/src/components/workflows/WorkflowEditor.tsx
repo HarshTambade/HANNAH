@@ -16,6 +16,7 @@ import { AccountError } from "../../services/Account";
 import ParamField from "./ParamField";
 import ExecutionDetail, { FINAL, StatusPill } from "./ExecutionDetail";
 import { CATEGORY_STYLE, History, autoLayout, fieldPaths, iconFor, newNodeId, reaches, uniqueName } from "./support";
+import { copyText } from "../../services/clipboard";
 
 type RunState = Record<string, { status: string; count: number; error: string | null }>;
 type CardData = { node: WorkflowNode; definition?: NodeDefinition; errors: string[]; run?: RunState[string] };
@@ -156,7 +157,7 @@ function ConfigPanel({ node, definition, catalog, credentials, problems, fields,
             {webhook && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
                 <p className="font-semibold">Webhook URL {webhook.enabled ? "(live)" : "(active once the workflow is activated)"}</p>
-                <p className="mt-1 flex items-center gap-1.5 font-mono text-[11px]"><span className="min-w-0 flex-1 truncate rounded bg-white px-1.5 py-1">{webhook.url}</span><button type="button" className="btn-ghost !p-1" aria-label="Copy webhook URL" onClick={() => void navigator.clipboard?.writeText(webhook.url)}><Copy size={12} /></button></p>
+                <p className="mt-1 flex items-center gap-1.5 font-mono text-[11px]"><span className="min-w-0 flex-1 truncate rounded bg-white px-1.5 py-1">{webhook.url}</span><button type="button" className="btn-ghost !p-1" aria-label="Copy webhook URL" onClick={() => void copyText(webhook.url)}><Copy size={12} /></button></p>
                 <p className="mt-1">{webhook.auth === "hmac" ? "Sign each request: X-Hannah-Timestamp and X-Hannah-Signature: sha256=HMAC(secret, timestamp.body)." : "Send the secret in the X-Hannah-Token header."} The secret was shown when you published; rotate it in the toolbar's webhook menu if you lost it.</p>
               </div>
             )}
@@ -242,8 +243,8 @@ function SecretsDialog({ secrets, webhooks, onClose }: { secrets: WebhookSecret[
           const hook = webhooks.find((item) => item.nodeId === secret.nodeId);
           return (
             <li key={secret.triggerId} className="space-y-1.5 rounded-2xl border border-slate-200 p-3 text-xs">
-              {hook && <p className="flex items-center gap-1.5 font-mono"><span className="min-w-0 flex-1 truncate">{hook.url}</span><button type="button" className="btn-ghost !p-1" aria-label="Copy URL" onClick={() => void navigator.clipboard?.writeText(hook.url)}><Copy size={12} /></button></p>}
-              <p className="flex items-center gap-1.5 font-mono"><span className="min-w-0 flex-1 break-all rounded bg-slate-100 p-1.5" aria-label="Webhook secret">{secret.secret}</span><button type="button" className="btn-ghost !p-1" aria-label="Copy secret" onClick={() => void navigator.clipboard?.writeText(secret.secret)}><Copy size={12} /></button></p>
+              {hook && <p className="flex items-center gap-1.5 font-mono"><span className="min-w-0 flex-1 truncate">{hook.url}</span><button type="button" className="btn-ghost !p-1" aria-label="Copy URL" onClick={() => void copyText(hook.url)}><Copy size={12} /></button></p>}
+              <p className="flex items-center gap-1.5 font-mono"><span className="min-w-0 flex-1 break-all rounded bg-slate-100 p-1.5" aria-label="Webhook secret">{secret.secret}</span><button type="button" className="btn-ghost !p-1" aria-label="Copy secret" onClick={() => void copyText(secret.secret)}><Copy size={12} /></button></p>
               <pre className="overflow-x-auto rounded-lg bg-slate-950 p-2 text-[10px] text-slate-100">{`curl -X POST ${hook?.url ?? "<url>"} \\\n  -H "Content-Type: application/json" \\\n  -H "X-Hannah-Token: ${secret.secret}" \\\n  -d '{"text": "hello"}'`}</pre>
             </li>
           );

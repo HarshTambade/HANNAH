@@ -31,7 +31,7 @@ import {
   type OfflineModelStatus,
 } from "../services/AIService";
 import { apiFetch, apiHeaders, apiUrl, isAccountSession, isLocalDevelopmentHost, isGuestSession } from "../services/api";
-import { agentRules, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
+import { agentRules, parseReply, runAgentTurn, type AgentActivity } from "../services/AgentRuntime";
 import type { AvatarActivity } from "../services/avatar/expressions";
 import { costLabel, needsCostConfirmation, readRoutingPreferences, type RouteChoice, type RoutePreview } from "../services/ModelRouting";
 import RoutePreviewChip from "./RoutePreviewChip";
@@ -89,20 +89,13 @@ function normalizeEmotion(value: unknown): Emotion {
 }
 
 function parseAIResponse(value: unknown): { reply: string; emotion: Emotion } {
-  let parsed = value;
+  // Text: its {"reply": …} if it has one, otherwise the text as written. Prose
+  // that merely contains a JSON example ({"port": 3000}) is shown, not refused.
   if (typeof value === "string") {
-    const candidate = value.match(/\{[\s\S]*\}/)?.[0];
-    if (candidate) {
-      try {
-        parsed = JSON.parse(candidate);
-      } catch {
-        return { reply: screenOutgoingText(value.trim()), emotion: "neutral" };
-      }
-    } else {
-      return { reply: screenOutgoingText(value.trim()), emotion: "neutral" };
-    }
+    const { reply, emotion } = parseReply(value);
+    return { reply, emotion: normalizeEmotion(emotion) };
   }
-
+  const parsed = value;
   if (parsed && typeof parsed === "object" && "reply" in parsed) {
     const result = parsed as { reply?: unknown; emotion?: unknown };
     if (typeof result.reply === "string" && result.reply.trim()) {
@@ -182,6 +175,10 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const [cloudModel, setCloudModel] = useState("");
   const [cloudProvider, setCloudProvider] = useState("Groq");
   const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
+  // The provider poll reads the current status, and asks the model check to run again after recovering.
+  const apiStatusRef = useRef(apiStatus);
+  useEffect(() => { apiStatusRef.current = apiStatus; }, [apiStatus]);
+  const [modelCheck, setModelCheck] = useState(0);
   const [apiError, setApiError] = useState("");
   const [speechLanguage, setSpeechLanguage] = useState<SpeechLanguage>(() => {
     try {
@@ -336,7 +333,12 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
             : providers[0]?.id || "groq";
         setCloudProviderId(selected);
         setCloudProvider(providers.find((provider) => provider.id === selected)?.label || "Groq");
-        setApiStatus(providers.length ? "checking" : "misconfigured");
+        // A poll that finds the same providers leaves a working connection alone; after being offline it checks the models again.
+        if (!providers.length) setApiStatus("misconfigured");
+        else if (apiStatusRef.current === "offline" || apiStatusRef.current === "misconfigured") {
+          setApiStatus("checking");
+          setModelCheck((count) => count + 1);
+        }
       } catch {
         if (active) setApiStatus("offline");
       }
@@ -398,7 +400,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     };
     void loadModels();
     return () => { active = false; };
-  }, [cloudProviderId, groqApiKey]);
+  }, [cloudProviderId, groqApiKey, modelCheck]);
 
   useEffect(() => {
     if (!cloudProviderId) return;

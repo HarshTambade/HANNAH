@@ -1,4 +1,4 @@
-import { apiFetch, apiUrl } from "./api";
+import { apiFetch, apiUrl, hasApiSession } from "./api";
 
 const ALLOWED_EVENTS = new Set([
   "first_message_sent",
@@ -13,6 +13,8 @@ const ALLOWED_EVENTS = new Set([
 
 export function trackEvent(name: string, properties: Record<string, unknown> = {}) {
   if (!ALLOWED_EVENTS.has(name)) return;
+  // Before connecting there's nothing to send them with; the server would refuse.
+  if (!hasApiSession()) return;
   const payload = {
     event: name,
     ...Object.fromEntries(Object.entries(properties).slice(0, 12)),

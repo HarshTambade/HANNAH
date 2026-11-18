@@ -24,7 +24,7 @@ Without part 1, the website still works for chat with a visitor's own AI key. Ev
 **How it runs:**
 - The workflow worker runs inside the server, so part 2 (the scheduler) isn't needed.
 - The database is reached only on the compose network, without TLS (`DATABASE_SSL=off`).
-- For a public address, put a TLS proxy (Caddy, nginx, Traefik) in front. Chat apps and calendar sign-in need https.
+- For a public address, put a TLS proxy (Caddy, nginx, Traefik) in front. Chat apps and calendar sign-in need https. A proxy on the same machine or a private network is recognised automatically, so per-visitor limits use the real visitor address; a proxy elsewhere needs `HANNAH_TRUST_PROXY=true`.
 
 ## 1. Database and Vercel settings
 

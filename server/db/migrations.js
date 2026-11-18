@@ -439,6 +439,37 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_phone_commands_execution ON hannah_phone_commands (execution_id, node_id)",
     ],
   },
+  {
+    version: 14,
+    name: "feedback and AI content reports in the database",
+    // Serverless hosts have no writable disk, so reports kept only in a local
+    // file were lost there. No account id, IP or chat text is stored.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_feedback (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        message TEXT NOT NULL,
+        app_version TEXT,
+        platform TEXT,
+        inference_mode TEXT,
+        mode_detail TEXT,
+        diagnostics TEXT,
+        created_at BIGINT NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_feedback_created ON hannah_feedback (created_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_content_reports (
+        id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        app_version TEXT,
+        platform TEXT,
+        inference_mode TEXT,
+        mode_detail TEXT,
+        created_at BIGINT NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_content_reports_created ON hannah_content_reports (created_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

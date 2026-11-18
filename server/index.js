@@ -12,6 +12,7 @@ const cors = require("cors");
 const express = require("express");
 const {
   assertProductionApiToken,
+  createAddressRateLimiter,
   createRateLimiter,
   rateLimitSettings,
   requireApiToken,
@@ -323,9 +324,9 @@ app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/transcribe", createRateLimiter(rateLimits.chat));
 app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
 app.post("/api/vision/describe", createRateLimiter(rateLimits.desktop));
-app.post("/api/feedback", createRateLimiter(rateLimits.feedback));
-app.post("/api/report-content", createRateLimiter(rateLimits.contentReport));
-app.post("/api/events", createRateLimiter(rateLimits.events));
+app.post("/api/feedback", createAddressRateLimiter(rateLimits.feedbackPerAddress), createRateLimiter(rateLimits.feedback));
+app.post("/api/report-content", createAddressRateLimiter(rateLimits.contentReportPerAddress), createRateLimiter(rateLimits.contentReport));
+app.post("/api/events", createAddressRateLimiter(rateLimits.eventsPerAddress), createRateLimiter(rateLimits.events));
 app.post("/api/account/mail/send", createRateLimiter(rateLimits.chat));
 app.post("/api/account/mail/drafts", createRateLimiter(rateLimits.chat));
 app.post("/api/account/calendar/events", createRateLimiter(rateLimits.chat));
@@ -456,8 +457,10 @@ app.get("/api/presence", (_req, res) => {
 app.post("/api/events", (req, res) => {
   const event = typeof req.body?.event === "string" ? req.body.event.trim().slice(0, 80) : "";
   if (!event) return res.status(400).json({ error: "An event name is required." });
-  // Metadata only: no message text, prompts, or credentials.
-  console.info(JSON.stringify({ type: "client_event", event, timestamp: new Date().toISOString(), platform: req.body?.platform, appVersion: req.body?.appVersion }));
+  // Metadata only: no message text, prompts, or credentials. Anyone using the app can send these, so every field is bounded.
+  if (!/^[a-z0-9_.-]{1,80}$/.test(event)) return res.status(400).json({ error: "An event name is 1–80 lowercase letters, digits, dots, dashes or underscores." });
+  const short = (value) => (typeof value === "string" ? value.replace(/[^\w .+:/-]/g, "").slice(0, 40) : undefined);
+  console.info(JSON.stringify({ type: "client_event", event, timestamp: new Date().toISOString(), platform: short(req.body?.platform), appVersion: short(req.body?.appVersion) }));
   res.status(202).json({ ok: true });
 });
 

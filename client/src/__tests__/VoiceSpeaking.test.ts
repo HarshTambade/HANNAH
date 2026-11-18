@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Speaking a whole reply, stopping cleanly, and never hearing herself as the person.
 vi.mock("@capacitor/core", () => ({ Capacitor: { getPlatform: () => "web", isNativePlatform: () => false, isPluginAvailable: () => false }, registerPlugin: () => ({}) }));
 vi.mock("@capgo/capacitor-speech-synthesis", () => ({ SpeechSynthesis: {} }));
-vi.mock("../services/api", () => ({ apiFetch: vi.fn(async () => new Response("", { status: 503 })), apiUrl: (path: string) => path }));
-vi.mock("../services/AIService", () => ({ getNetworkStatus: async () => ({ connected: false }) }));
+const session = vi.hoisted(() => ({ token: "" }));
+vi.mock("../services/api", () => ({ apiFetch: vi.fn(async () => new Response("", { status: 503 })), apiUrl: (path: string) => path, getAccountHint: () => null, getApiAccessToken: () => session.token, getSessionGroqKey: () => "" }));
+const net = vi.hoisted(() => ({ connected: false }));
+vi.mock("../services/AIService", () => ({ getNetworkStatus: async () => ({ connected: net.connected }) }));
 
 const { chunkForSpeech, speakableText } = await import("../services/SpeakableText");
 const { SpeechService, speakInBrowser } = await import("../services/SpeechService");
@@ -130,3 +132,28 @@ describe("barge-in hears the person, not HANNAH", () => {
 });
 
 beforeEach(() => { vi.restoreAllMocks(); });
+
+describe("the server voice is used only where it's offered", () => {
+  it("asks once per session, shares the request, doesn't hold up speech, and asks again after signing in differently", async () => {
+    const { apiFetch } = await import("../services/api");
+    const { resetVoiceAvailability } = await import("../services/SpeechService");
+    resetVoiceAvailability();
+    const calls: string[] = [];
+    vi.mocked(apiFetch).mockImplementation(async (input) => {
+      calls.push(String(input));
+      if (String(input).includes("/api/voice/providers")) return new Response(JSON.stringify({ mithi: false }), { status: 200 });
+      return new Response("", { status: 403 });
+    });
+    net.connected = true;
+    const synthesis = fakeSynthesis();
+    await Promise.all([SpeechService.speak("First reply.", "en-US"), SpeechService.speak("Second reply.", "en-US")]);
+    await SpeechService.speak("Third reply.", "en-US");
+    expect(calls.filter((url) => url.includes("/api/voice/providers"))).toHaveLength(1);
+    expect(calls.some((url) => url.includes("/api/tts"))).toBe(false);
+    expect(synthesis.spoken.length).toBeGreaterThan(0);
+    session.token = "operator-token-that-changed-0123456789";
+    await SpeechService.speak("After signing in.", "en-US");
+    expect(calls.filter((url) => url.includes("/api/voice/providers"))).toHaveLength(2);
+    net.connected = false;
+  });
+});

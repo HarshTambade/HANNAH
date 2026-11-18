@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Check, Copy, ExternalLink, RefreshCw, Trash2, UserCheck, UserX } from "lucide-react";
 import { apiFetch, apiUrl, getAccountHint } from "../services/api";
 import LocalChatApps from "./LocalChatApps";
+import { copyText } from "../services/clipboard";
 
 type Person = { id: string; name: string | null; at?: number; preview?: string; approvedAt?: number };
 type Setup = { webhookUrl?: string; verifyToken?: string; installUrl?: string; steps?: string[] };
@@ -35,7 +36,7 @@ function CopyLine({ label, value }: { label: string; value: string }) {
       <p className="text-[11px] font-semibold text-slate-600">{label}</p>
       <div className="mt-0.5 flex items-center gap-1.5">
         <code className="min-w-0 flex-1 truncate rounded-lg bg-white px-2 py-1 font-mono text-[11px] text-ink" title={value}>{value}</code>
-        <button type="button" aria-label={`Copy ${label}`} onClick={() => { void navigator.clipboard?.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); }} className="btn-ghost !px-2 !py-1 text-[11px]">{copied ? <Check size={12} /> : <Copy size={12} />}</button>
+        <button type="button" aria-label={`Copy ${label}`} onClick={() => { void copyText(value).then((ok) => { if (!ok) return; setCopied(true); setTimeout(() => setCopied(false), 1500); }); }} className="btn-ghost !px-2 !py-1 text-[11px]">{copied ? <Check size={12} /> : <Copy size={12} />}</button>
       </div>
     </div>
   );

@@ -80,28 +80,6 @@ export function selectToolsForRequest(tools: HANNAHTool[], request: string, { pr
   return chosen.slice(0, limit);
 }
 
-export class FreelanceAgent {
-  profile: AgentProfile;
-  constructor(profile: AgentProfile) { this.profile = profile; }
-  async run(prompt: string) {
-    // Fast, low-cost model, no tools.
-    return { reply: `FreelanceAgent (${this.profile.modelTier}): ${prompt.slice(0, 120)}`, emotion: "neutral" as const, tools: [] as string[] };
-  }
-}
-
-export class ResearchAgent {
-  profile: AgentProfile;
-  constructor(profile: AgentProfile) { this.profile = profile; }
-  async spawnWorkers(prompts: string[]): Promise<string[]> {
-    // Spawn parallel search/scrape workers (scaffold).
-    return Promise.all(prompts.map(async (prompt) => `research-result:${prompt.slice(0, 60)}`));
-  }
-  async run(prompt: string) {
-    const workers = await this.spawnWorkers([prompt]);
-    return { reply: `ResearchAgent (${this.profile.modelTier}): ${workers.join(" | ")}`, emotion: "thinking" as const };
-  }
-}
-
 export class RouterAgent {
   profiles: Record<string, AgentProfile>;
   constructor(profiles: Record<string, AgentProfile> = defaultAgentProfiles) { this.profiles = profiles; }
@@ -122,12 +100,6 @@ export class RouterAgent {
       maintenance: "maintenance",
     };
     return this.profiles[map[taskType]] || this.profiles.default;
-  }
-  delegate(taskType: TaskType, _prompt?: string) {
-    const profile = this.selectProfile(taskType);
-    if (taskType === "research") return new ResearchAgent(profile);
-    if (taskType === "quick_chat") return new FreelanceAgent(profile);
-    return null;
   }
 }
 

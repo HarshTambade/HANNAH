@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, Loader2, Pause, Play, RotateCcw, Square, X } from "lucide-react";
 import { WorkflowApi, type ExecutionDetail as Detail, type NodeRun } from "../../services/WorkflowApi";
 import { STATUS_STYLE, duration, emptyStops, liveProgress, when } from "./support";
+import { copyText } from "../../services/clipboard";
 
 const LIVE = new Set(["queued", "running"]);
 export const FINAL = new Set(["completed", "failed", "cancelled", "timed-out"]);
@@ -191,7 +192,7 @@ export default function ExecutionDetail({ executionId, onOpenExecution, onClose,
           ) : (
             <>
               Waiting for a request at this run's resume URL (expires {when(execution.waiting.until)}):
-              {detail.resumeUrl && <span className="mt-2 flex items-center gap-2 font-mono text-[11px]"><span className="min-w-0 flex-1 truncate rounded-lg bg-white px-2 py-1">{detail.resumeUrl}</span><button type="button" className="btn-ghost !p-1.5" aria-label="Copy resume URL" onClick={() => void navigator.clipboard?.writeText(detail.resumeUrl!)}><Copy size={12} /></button></span>}
+              {detail.resumeUrl && <span className="mt-2 flex items-center gap-2 font-mono text-[11px]"><span className="min-w-0 flex-1 truncate rounded-lg bg-white px-2 py-1">{detail.resumeUrl}</span><button type="button" className="btn-ghost !p-1.5" aria-label="Copy resume URL" onClick={() => void copyText(detail.resumeUrl!)}><Copy size={12} /></button></span>}
             </>
           )}
         </div>

@@ -5,6 +5,7 @@ import {
   PROFILES_REVIEWED, TIER_DESCRIPTIONS, applyToChat, defaultHardware, detectHardware, loadHardware, recommend, saveHardware, suggestedReserveGB,
   type AdvisorNeeds, type Budget, type GpuKind, type HardwareProfile, type ModelCatalog, type OperatingSystem, type Priority, type Recommendation, type Task,
 } from "../services/ModelAdvisor";
+import { copyText } from "../services/clipboard";
 
 const tasks: Array<[Task, string]> = [
   ["chat", "Everyday chat"], ["coding", "Coding"], ["reasoning", "Reasoning"], ["research", "Research"],
@@ -207,7 +208,7 @@ export default function ModelsPage({ onOpenChat }: { onOpenChat?: () => void } =
   };
   const copy = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      if (!(await copyText(text))) throw new Error("Copy failed.");
       setCopied(text);
       window.setTimeout(() => setCopied((current) => (current === text ? "" : current)), 1800);
     } catch {

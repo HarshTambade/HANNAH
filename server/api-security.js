@@ -18,9 +18,13 @@ const configuredTokenDigest = configuredTokenIsValid
 // Bring-your-own-key access: a visitor with only a Groq key may use these routes.
 // Their key is forwarded to Groq's official API and nowhere else (see
 // getRequestProviderApiKey in index.js); server-held provider keys, desktop
-// control, TTS, calls, feedback and sync still require the operator token.
+// control, TTS, calls and sync still require the operator token.
 // Paths are relative to the /api or /v1 mount.
-const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/vision/describe", "/a2a", "/route/preview", "/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc", "/web/search", "/web/read", "/setup/hosting/discover", "/setup/hosting/database", "/setup/hosting/status", "/setup/hosting/finish"]);
+// Feedback, AI content reports and usage events are open to anyone using the
+// app (validated, stored without account ids, and limited per network address
+// as well as per credential, since a visitor's key isn't checked on these
+// routes): app stores require in-app reporting of AI replies for everyone.
+const BYOK_PATHS = new Set(["/feedback", "/report-content", "/events", "/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/vision/describe", "/a2a", "/route/preview", "/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc", "/web/search", "/web/read", "/setup/hosting/discover", "/setup/hosting/database", "/setup/hosting/status", "/setup/hosting/finish"]);
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
 // The calendar/email sign-in callbacks are opened by Google or Microsoft; the single-use state identifies the user.
 const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/workflows/catalog", "/workflows/tick", "/session/key", "/connectors/catalog"]);
@@ -145,6 +149,83 @@ function createRateLimiter({ limit, windowMs }) {
   };
 }
 
+const net = require("node:net");
+
+/** Loopback, private and link-local addresses: where a reverse proxy in front of HANNAH connects from. */
+function isPrivateAddress(address) {
+  const value = String(address || "").replace(/^::ffff:/, "");
+  if (net.isIPv4(value)) {
+    const [a, b] = value.split(".").map(Number);
+    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+  }
+  return value === "::1" || /^f[cd][0-9a-f]{2}:/i.test(value) || /^fe80:/i.test(value);
+}
+
+/** One key per client: IPv4 as is, IPv6 by its /64 network (one household or device gets a whole /64). */
+function addressKey(address) {
+  const value = String(address || "unknown").replace(/^::ffff:/, "");
+  if (!net.isIPv6(value)) return value;
+  const [head] = value.split("::");
+  const groups = head.split(":").filter(Boolean);
+  // A "::" in the first four groups means the rest of the /64 is zeros.
+  const full = value.includes("::") && groups.length < 4 ? [...groups, ...Array(4 - groups.length).fill("0")] : value.split(":");
+  return `${full.slice(0, 4).map((group) => group.toLowerCase().replace(/^0+(?=.)/, "")).join(":")}::/64`;
+}
+
+/**
+ * The caller's network address for rate limiting:
+ * - on Vercel, x-real-ip, which Vercel's edge sets (a client can't forge it);
+ * - behind a reverse proxy on this machine or a private network (Docker with
+ *   Caddy or nginx), the first X-Forwarded-For entry; also anywhere when
+ *   HANNAH_TRUST_PROXY=true says a trusted proxy always sets it;
+ * - otherwise the connection's own address. A forged X-Forwarded-For from
+ *   the internet changes nothing.
+ */
+function clientAddress(req) {
+  if (process.env.VERCEL && req.get("x-real-ip")) return String(req.get("x-real-ip")).trim();
+  const peer = req.socket?.remoteAddress || "unknown";
+  const trustForwarded = String(process.env.HANNAH_TRUST_PROXY || "").toLowerCase() === "true" || isPrivateAddress(peer);
+  if (trustForwarded) {
+    const forwarded = String(req.get("x-forwarded-for") || "").split(",")[0].trim();
+    if (forwarded && net.isIP(forwarded.replace(/^::ffff:/, ""))) return forwarded;
+  }
+  return peer;
+}
+
+/**
+ * A limit per network address, for public write routes where credentials can
+ * be made up. Kept in this process's memory: on serverless hosts each instance
+ * counts on its own, so the limit there is per instance (the per-credential
+ * limit and the routes' own validation still apply).
+ */
+function createAddressRateLimiter({ limit, windowMs, maxBuckets = 10_000 }) {
+  const buckets = new Map();
+  return function rateLimitByAddress(req, res, next) {
+    const now = Date.now();
+    const key = addressKey(clientAddress(req));
+    let bucket = buckets.get(key);
+    if (!bucket || now >= bucket.resetAt) {
+      bucket = { count: 0, resetAt: now + windowMs };
+      buckets.delete(key);
+      buckets.set(key, bucket);
+    }
+    if (buckets.size > maxBuckets) {
+      // Drop expired ones; if that isn't enough, the oldest (a Map keeps insertion order), so the next request doesn't scan again.
+      for (const [address, item] of buckets) if (now >= item.resetAt) buckets.delete(address);
+      for (const address of buckets.keys()) {
+        if (buckets.size <= maxBuckets * 0.9) break;
+        if (address !== key) buckets.delete(address);
+      }
+    }
+    if (bucket.count >= limit) {
+      res.setHeader("Retry-After", String(Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))));
+      return res.status(429).json({ error: "Too many requests from this network. Try again later." });
+    }
+    bucket.count += 1;
+    return next();
+  };
+}
+
 function rateLimitSettings() {
   const windowMs = positiveInteger(process.env.HANNAH_RATE_LIMIT_WINDOW_MS, 60_000, 3_600_000);
   return {
@@ -154,6 +235,10 @@ function rateLimitSettings() {
     feedback: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_FEEDBACK_MAX, 10, 100_000), windowMs },
     contentReport: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_CONTENT_REPORT_MAX, 10, 100_000), windowMs },
     events: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_EVENTS_MAX, 60, 100_000), windowMs },
+    // Per network address, per 15 minutes (see createAddressRateLimiter).
+    feedbackPerAddress: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_FEEDBACK_PER_ADDRESS, 20, 100_000), windowMs: 15 * 60_000 },
+    contentReportPerAddress: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_CONTENT_REPORT_PER_ADDRESS, 30, 100_000), windowMs: 15 * 60_000 },
+    eventsPerAddress: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_EVENTS_PER_ADDRESS, 300, 100_000), windowMs: 15 * 60_000 },
   };
 }
 
@@ -161,6 +246,9 @@ module.exports = {
   accountMayUse,
   assertProductionApiToken,
   BYOK_PATHS,
+  addressKey,
+  clientAddress,
+  createAddressRateLimiter,
   createRateLimiter,
   isGroqKey,
   rateLimitSettings,

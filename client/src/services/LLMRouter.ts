@@ -93,20 +93,37 @@ export function rateLimitWaitMs(retryAfter: string | null, attempt: number) {
   return (Number.isFinite(seconds) && seconds > 0 ? Math.min(60, seconds) : 10 * (attempt + 1)) * 1000;
 }
 
-async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 90_000, groqApiKey?: string, useApiToken = false): Promise<AgentStep> {
+/** A timeout that also ends when `signal` (Stop) fires. */
+function withStop(timeoutMs: number, signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  if (!signal) return timeout;
+  if (typeof AbortSignal.any === "function") return AbortSignal.any([timeout, signal]);
+  const controller = new AbortController();
+  const abort = (source: AbortSignal) => controller.abort(source.reason);
+  if (signal.aborted) abort(signal);
+  signal.addEventListener("abort", () => abort(signal), { once: true });
+  timeout.addEventListener("abort", () => abort(timeout), { once: true });
+  return controller.signal;
+}
+
+async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 90_000, groqApiKey?: string, useApiToken = false, stop?: AbortSignal): Promise<AgentStep> {
   // A busy provider (429) is waited out a few times, so a long task (such as
   // notes from a lecture) isn't lost to a per-minute limit.
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await requestAgentStepOnce(url, body, timeoutMs, groqApiKey, useApiToken);
+      return await requestAgentStepOnce(url, body, timeoutMs, groqApiKey, useApiToken, stop);
     } catch (error) {
-      if (!(error instanceof AgentApiError) || error.status !== 429 || attempt >= 3 || !error.retryAfterMs) throw error;
-      await new Promise((resolve) => setTimeout(resolve, error.retryAfterMs));
+      if (stop?.aborted || !(error instanceof AgentApiError) || error.status !== 429 || attempt >= 3 || !error.retryAfterMs) throw error;
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, error.retryAfterMs);
+        stop?.addEventListener("abort", () => { clearTimeout(timer); resolve(undefined); }, { once: true });
+      });
+      if (stop?.aborted) throw error;
     }
   }
 }
 
-async function requestAgentStepOnce(url: string, body: Record<string, unknown>, timeoutMs: number, groqApiKey?: string, useApiToken = false): Promise<AgentStep> {
+async function requestAgentStepOnce(url: string, body: Record<string, unknown>, timeoutMs: number, groqApiKey?: string, useApiToken = false, stop?: AbortSignal): Promise<AgentStep> {
   let response: Response;
   try {
     const request = useApiToken ? apiFetch : fetch;
@@ -117,9 +134,10 @@ async function requestAgentStepOnce(url: string, body: Record<string, unknown>, 
         ...(groqApiKey ? { "X-Groq-API-Key": groqApiKey } : {}),
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: withStop(timeoutMs, stop),
     });
   } catch (error) {
+    if (stop?.aborted) throw error;
     const timedOut = error instanceof DOMException && error.name === "TimeoutError";
     let endpointLabel = "the configured server";
     try {
@@ -215,7 +233,7 @@ export class LLMRouter {
     return resolveInferenceMode(preferred, browserConnected && network.connected);
   }
 
-  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = [], extra: { routeHint?: "simple" | "standard" | "complex" } = {}): Promise<AgentStep> {
+  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = [], extra: { routeHint?: "simple" | "standard" | "complex"; signal?: AbortSignal } = {}): Promise<AgentStep> {
     if (mode === "cloud" && ChaosEngine.consume("network-drop")) {
       ChaosEngine.setDegraded("Offline: cloud request dropped; switching to local AI.");
       throw new Error("Chaos injection: simulated cloud network drop.");
@@ -239,12 +257,12 @@ export class LLMRouter {
     };
     try {
       // A visitor's Groq key goes along for Auto too; the server only ever uses it with Groq.
-      const result = await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && (selectedProvider === "groq" || model === "auto") ? groqApiKey : undefined, true);
+      const result = await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && (selectedProvider === "groq" || model === "auto") ? groqApiKey : undefined, true, extra.signal);
       if (mode === "cloud") ChaosEngine.clearDegraded();
       return result;
     } catch (primaryError) {
       const fallbackBase = configuredPythonFallback();
-      if (!fallbackBase || mode !== "cloud" || selectedProvider !== "groq" || groqApiKey || !shouldUsePythonFallback(primaryError)) throw primaryError;
+      if (extra.signal?.aborted || !fallbackBase || mode !== "cloud" || selectedProvider !== "groq" || groqApiKey || !shouldUsePythonFallback(primaryError)) throw primaryError;
       // If the connection dropped during the cloud request, let AgentRuntime
       // switch straight to WebLLM/llama.cpp instead of waiting on an unreachable
       // Python endpoint. A reachable local Python service still gets its cold-load budget.

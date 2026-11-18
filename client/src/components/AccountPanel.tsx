@@ -6,6 +6,7 @@ import { ACCOUNT_EVENT, isGroqKey } from "../services/api";
 import { VERCEL_SUPABASE_URL } from "../config/project";
 import DatabaseIntegration from "./DatabaseIntegration";
 import HostingSetup from "./HostingSetup";
+import { copyText } from "../services/clipboard";
 
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-slate-400 focus:border-sky-400 sm:text-sm";
 
@@ -201,7 +202,7 @@ function DeveloperKeys() {
           <p className="font-semibold">Copy this key now. It won't be shown again.</p>
           <div className="mt-2 flex items-center gap-2">
             <code className="min-w-0 flex-1 break-all rounded-lg bg-white px-2 py-1.5 font-mono">{created}</code>
-            <button type="button" className="btn-outline" onClick={() => { void navigator.clipboard?.writeText(created).then(() => setCopied(true)); }}>{copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}</button>
+            <button type="button" className="btn-outline" onClick={() => { void copyText(created).then((copied) => copied && setCopied(true)); }}>{copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy"}</button>
           </div>
         </div>
       )}

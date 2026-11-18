@@ -119,9 +119,13 @@ async function getModelPath() {
   return decodeURIComponent(uri.replace(/^file:\/\//, ""));
 }
 
+/** Bumped by releaseOfflineModel(): a load that finishes after a release is released too, not kept. */
+let llamaGeneration = 0;
+
 async function getLlamaContext() {
   if (llamaContext) return llamaContext;
   if (!llamaInitialization) {
+    const generation = llamaGeneration;
     llamaInitialization = (async () => {
       if (!(await modelExists())) throw new Error("The on-device model is not ready. Prepare offline AI while online first.");
       const model = await getModelPath();
@@ -134,13 +138,39 @@ async function getLlamaContext() {
         n_threads: Math.max(2, Math.min(6, navigator.hardwareConcurrency || 4)),
         n_gpu_layers: 99,
       });
+      if (generation !== llamaGeneration) {
+        // Released while loading: don't keep (or leak) the model that just loaded.
+        const { releaseAllLlama } = await import("llama-cpp-capacitor");
+        await releaseAllLlama().catch(() => undefined);
+        throw new Error("The on-device model was unloaded while it was starting. Try again.");
+      }
       llamaContext = context;
       return context;
     })().finally(() => {
-      llamaInitialization = undefined;
+      if (generation === llamaGeneration) llamaInitialization = undefined;
     });
   }
   return llamaInitialization;
+}
+
+/**
+ * Fit the conversation into the model's 2,048-token window (about 5,500
+ * characters besides the system prompt), keeping what matters: the newest
+ * messages first, and in a long message its start (for an agent prompt, the
+ * rules and tools) and its end (the latest turns, with the current question).
+ * Exported for tests.
+ */
+export function fitForOfflineModel(messages: Array<{ role: string; content: string }>, budget = 5_500) {
+  const fit = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, Math.floor(max * 0.4))}\n…\n${text.slice(-Math.floor(max * 0.6))}`);
+  const kept: Array<{ role: string; content: string }> = [];
+  let left = budget;
+  for (const message of [...messages].reverse()) {
+    if (left < 200) break;
+    const content = fit(message.content, kept.length ? Math.min(left, 1_500) : left);
+    kept.unshift({ role: message.role, content });
+    left -= content.length;
+  }
+  return kept;
 }
 
 export async function generateOfflineReply(messages: ChatMessage[]) {
@@ -149,7 +179,7 @@ export async function generateOfflineReply(messages: ChatMessage[]) {
   const result = await context.completion({
     messages: [
       { role: "system", content: offlineSystemPrompt },
-      ...messages.slice(-8).filter(({ role }) => role !== "system").map(({ role, content }) => ({ role, content: content.slice(0, 7000) })),
+      ...fitForOfflineModel(messages.slice(-8).filter(({ role }) => role !== "system").map(({ role, content }) => ({ role, content }))),
     ],
     n_predict: 512,
     temperature: 0.3,
@@ -161,6 +191,7 @@ export async function generateOfflineReply(messages: ChatMessage[]) {
 
 export async function releaseOfflineModel() {
   const wasLoaded = Boolean(llamaContext || llamaInitialization);
+  llamaGeneration += 1;
   llamaContext = undefined;
   llamaInitialization = undefined;
   if (!supportsNativeLlama() || !wasLoaded) return;

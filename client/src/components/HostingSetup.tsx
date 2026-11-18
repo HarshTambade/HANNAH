@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Check, CircleAlert, Clipboard, ExternalLink, Loader2, Rocket } from "lucide-react";
 import { apiFetch, apiUrl } from "../services/api";
+import { copyText } from "../services/clipboard";
 
 type VercelProject = { id: string; name: string; teamId: string | null; team: string; domains: string[]; serves: boolean; git: boolean };
 type Discovery = { host: string; vercel: { projects: VercelProject[] }; supabase: { organizations: Array<{ slug: string; name: string }>; projects: Array<{ ref: string; name: string; region: string; status: string }> } };
@@ -119,7 +120,7 @@ export default function HostingSetup() {
     }
   };
 
-  const copy = (label: string, value: string) => { void navigator.clipboard?.writeText(value).then(() => setCopied(label)); };
+  const copy = (label: string, value: string) => { void copyText(value).then((copied) => copied && setCopied(label)); };
   const field = "min-w-0 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-ink outline-none focus:border-sky-400";
   const project = found?.vercel.projects.find((item) => item.id === projectId);
 

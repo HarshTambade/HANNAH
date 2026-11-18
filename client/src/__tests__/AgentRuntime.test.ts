@@ -24,7 +24,7 @@ vi.mock("../services/LLMRouter", () => ({
   shouldUseLocalFallback: () => true,
 }));
 
-import { compactToolResults, runAgentTurn } from "../services/AgentRuntime";
+import { compactToolResults, parseReply, runAgentTurn, STOPPED_REPLY, trimConversation } from "../services/AgentRuntime";
 
 describe("AgentRuntime tool loop", () => {
   beforeEach(() => {
@@ -144,3 +144,57 @@ describe("keeping agent requests small", () => {
     expect(messages[0].content).toBe("find a lecture");
   });
 });
+
+describe("audit fixes: long runs, Stop, and replies with JSON in them", () => {
+  const long = (label: string) => `${label}:${"x".repeat(5_000)}`;
+  const step = (ids: string[]) => ({ role: "assistant" as const, content: "", tool_calls: ids.map((id) => ({ id, type: "function" as const, function: { name: "web_read", arguments: "{}" } })) });
+
+  it("keeps every result of the latest step whole, even when it called three tools", () => {
+    const messages = [
+      { role: "user" as const, content: "compare three pages" },
+      step(["a"]), { role: "tool" as const, tool_call_id: "a", content: long("old") },
+      step(["b", "c", "d"]),
+      { role: "tool" as const, tool_call_id: "b", content: long("one") },
+      { role: "tool" as const, tool_call_id: "c", content: long("two") },
+      { role: "tool" as const, tool_call_id: "d", content: long("three") },
+    ];
+    compactToolResults(messages);
+    expect(messages[2].content).toMatch(/shortened/);
+    expect([messages[4].content, messages[5].content, messages[6].content]).toEqual([long("one"), long("two"), long("three")]);
+  });
+
+  it("never starts the trimmed window on a tool result cut off from the step that asked for it", () => {
+    const messages = [
+      { role: "user" as const, content: "start" },
+      ...Array.from({ length: 10 }, (_, index) => [{ role: "user" as const, content: `q${index}` }, { role: "assistant" as const, content: `a${index}` }]).flat(),
+      step(["x", "y", "z"]),
+      { role: "tool" as const, tool_call_id: "x", content: "1" },
+      { role: "tool" as const, tool_call_id: "y", content: "2" },
+      { role: "tool" as const, tool_call_id: "z", content: "3" },
+      ...Array.from({ length: 22 }, (_, index) => ({ role: "user" as const, content: `late${index}` })),
+    ];
+    // The plain cut would land on the second tool result.
+    expect(messages[messages.length - 24].role).toBe("tool");
+    trimConversation(messages);
+    expect(messages[0].role).toBe("assistant");
+    expect(messages[0].tool_calls?.map((call) => call.id)).toEqual(["x", "y", "z"]);
+  });
+
+  it("a reply that arrives after Stop is not shown or spoken", async () => {
+    const controller = new AbortController();
+    requestStep.mockReset().mockImplementation(async (_mode, _messages, _tools, _model, _key, _provider, _items, _personal, _memories, extra) => {
+      expect(extra.signal).toBe(controller.signal);
+      controller.abort();
+      return { content: JSON.stringify({ reply: "Here is the finished answer.", emotion: "happy" }), toolCalls: [] };
+    });
+    const reply = await runAgentTurn({ mode: "cloud", messages: [{ role: "user", content: "write me an essay" }], signal: controller.signal, generateLocal: vi.fn(async () => "") });
+    expect(reply.reply).toBe(STOPPED_REPLY);
+    expect(reply.outcome).toBe("stopped");
+  });
+
+  it("prose that contains a JSON example is the reply, not an error", () => {
+    expect(parseReply('Use this config: {"port": 3000} and restart.').reply).toBe('Use this config: {"port": 3000} and restart.');
+    expect(parseReply('{"reply": "Hi {there}", "emotion": "happy"}')).toEqual({ reply: "Hi {there}", emotion: "happy" });
+  });
+});
+

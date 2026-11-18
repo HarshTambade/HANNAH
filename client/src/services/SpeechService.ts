@@ -1,9 +1,48 @@
 import { Capacitor } from "@capacitor/core";
 import { SpeechSynthesis } from "@capgo/capacitor-speech-synthesis";
 import type { SpeechLanguage } from "../types";
-import { apiFetch, apiUrl } from "./api";
+import { apiFetch, apiUrl, getAccountHint, getApiAccessToken, getSessionGroqKey } from "./api";
 import { getNetworkStatus } from "./AIService";
 import { chunkForSpeech } from "./SpeakableText";
+
+/**
+ * Whether this server offers the Mithi voice to this caller (GET
+ * /api/voice/providers; only the operator's token gets it). Without the check,
+ * every reply started with a request that could only fail (401/403/503)
+ * before the device voice spoke.
+ * - The answer belongs to the session that asked: signing in or out, or a
+ *   different token, key or server, asks again.
+ * - Calls share one request in flight, and speech waits for it at most
+ *   1.2 seconds; a slower answer is used from the next reply on.
+ */
+type MithiCheck = { session: string; available: boolean | null; checkedAt: number; pending: Promise<boolean> | null };
+let mithi: MithiCheck | null = null;
+const sessionFingerprint = () => `${apiUrl("/")}|${getApiAccessToken().slice(-8)}|${getAccountHint()?.email ?? ""}|${getSessionGroqKey().slice(-6)}`;
+async function mithiAvailable({ waitMs = 1_200 } = {}) {
+  const session = sessionFingerprint();
+  if (!mithi || mithi.session !== session || (mithi.available === false && Date.now() - mithi.checkedAt > 10 * 60_000)) {
+    mithi = { session, available: null, checkedAt: 0, pending: null };
+  }
+  if (mithi.available !== null) return mithi.available;
+  const check = mithi;
+  check.pending ??= (async () => {
+    try {
+      const response = await apiFetch(apiUrl("/api/voice/providers"), { signal: AbortSignal.timeout(5_000) });
+      const body = response.ok ? await response.json() as { mithi?: boolean } : {};
+      check.available = body.mithi === true;
+    } catch {
+      check.available = false;
+    }
+    check.checkedAt = Date.now();
+    check.pending = null;
+    return check.available;
+  })();
+  return Promise.race([check.pending, new Promise<boolean>((resolve) => setTimeout(() => resolve(false), waitMs))]);
+}
+/** For tests. */
+export function resetVoiceAvailability() {
+  mithi = null;
+}
 
 /** Bumped by cancel(): a reply being spoken piece by piece stops before its next piece. */
 let generation = 0;
@@ -179,7 +218,7 @@ export class SpeechService {
     const network = await getNetworkStatus().catch(() => ({ connected: typeof navigator === "undefined" || navigator.onLine }));
     // The server voice, piece by piece (it cuts text past 5,000 characters). If a piece fails, the device voice says the rest.
     let remaining = text;
-    if (!options.systemOnly && network.connected) {
+    if (!options.systemOnly && network.connected && await mithiAvailable()) {
       const pieces = chunkForSpeech(text, 1500);
       let spoken = 0;
       try {

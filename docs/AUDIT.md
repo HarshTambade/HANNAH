@@ -1,5 +1,61 @@
 # HANNAH Codebase Audit
 
+## Production audit — 2026-11-18
+
+**Revision:** `main` at d473a33 plus the uncommitted 1.5.0 work. **Method:** every automated check the repository has, plus four new kinds of evidence:
+
+1. **A route probe.** All 158 declared server routes were called signed out and signed in, with no body, an empty body, wrong types and junk ids: 862 requests, on a real server and database, with outbound network blocked.
+2. **A screen sweep** (`e2e/screens.spec.ts`). Every screen was loaded signed in with a database, and as a guest without one, which is how the live site runs.
+3. **An interaction crawler** (`e2e/interactions.spec.ts`). Every button, tab and switch on every screen was pressed, in both of those setups. It fails on any uncaught error, console error, 5xx response, or 401/403 the app causes itself.
+4. **Two code reviews.** One covered all uncommitted changes; the other covered the core chat path (`server/index.js`, `ChatUI.tsx`, `AIService.ts`, `AgentRuntime.ts`).
+
+### Found and fixed
+
+| # | Where | Defect | Fix |
+| --- | --- | --- | --- |
+| 1 | Live site | No database: accounts, sync, Phone Bridge, workflows, calendar and email, chat apps and cross-device approvals are all off (`/api/account/status` reports `enabled: false`) | **Owner action:** connect Supabase (Settings → Account → set up hosting) |
+| 2 | Feedback, AI-reply reports, usage events | Open only to the operator token, so the Feedback form and the Report button (an app-store requirement for AI content) failed for every guest and account | Open to everyone using the app; validated; limited per credential and per network address |
+| 3 | AI-reply reports | Written to a local file, which fails on Vercel (read-only disk) | Stored in the database (migration 14) when there is one. A file the operator chose takes priority; on serverless with no database the app gets a clear 503 |
+| 4 | Feedback | Delivered only through Discord or MongoDB | Also stored in the server's database |
+| 5 | Spoken replies | Each reply first asked the operator-only server voice, waited for the refusal, then spoke | Asks `/api/voice/providers` once per session, shared and non-blocking, and asks again when the session changes |
+| 6 | Copy buttons (9 places) | An uncaught error and no copy when the browser denies clipboard access (Android web views, http, some browsers) | One `copyText` helper with a fallback; "Copied" shows only when it really copied |
+| 7 | Chat header | After 30 seconds the provider poll reset a working connection to "checking" for good | Leaves a working status alone; checks the models again after recovering from offline |
+| 8 | Stop | Never reached the model request; a reply arriving after Stop was shown and spoken | The signal goes to the request and its rate-limit waits; replies after Stop are dropped |
+| 9 | Long agent runs | Trimming could start on a tool result whose step was cut off, so Groq rejected the request (400) | The window moves back to that step |
+| 10 | Multi-tool steps | Unread results past the latest two were cut and labelled "already used" | The latest step's results all stay whole |
+| 11 | Offline models | The on-device model kept the first 7,000 characters (losing the question); the local prompt kept the last 11,000 (losing the safety rules) | Rules and tools kept whole; the newest turns kept; fits the 2,048-token window |
+| 12 | On-device model | Releasing it during a load leaked the loaded model | A generation check releases a load that finishes after a release |
+| 13 | Replies | Prose containing a JSON example became "invalid response" | Uses the runtime's string-aware parser |
+| 14 | Voice (earlier in this release) | Barge-in triggered on HANNAH's own voice; long replies were cut; her last words looped back as input | See the 1.5.0 changelog |
+| 15 | New limiter (found in review) | Bypassable with made-up keys; one shared bucket behind a proxy; IPv6 rotation; full rescans under a flood | Per-address limit; a private or loopback proxy is trusted (`HANNAH_TRUST_PROXY` for others); IPv6 per /64; bounded table |
+| 16 | Usage events | Logged unbounded, unvalidated fields | Event name pattern; fields cleaned and capped |
+| 17 | Dead code | `ResearchAgent` and `FreelanceAgent` echoed the prompt as fake "research" (not called) | Removed |
+| 18 | Memory export | base64 labelled as encryption | The claim is removed |
+
+### Results after the fixes
+
+| Check | Result |
+| --- | --- |
+| Server tests | 287 pass, 1 skipped (SQLite and Postgres) |
+| Client tests | 336 pass |
+| Desktop plugin tests | 43 pass |
+| End-to-end | 82 pass, including both new specs in both setups |
+| Typechecks | Client and desktop clean |
+| Route probe | 0 server errors, 0 leaked internals, 0 crashes |
+| Secret scan, permission audit, versions, brand assets | Pass |
+| Shipped dependencies | No moderate or higher advisories |
+
+### Still open
+
+- **The live database (#1)**, and everything that needs a physical device or a real account: KI-24, KI-26 to KI-31 in [KNOWN_ISSUES.md](architecture/KNOWN_ISSUES.md).
+- **85 of the 238 client source files aren't loaded by the app.** They're the experimental modules listed in the README: CRDT sync, hardware bridge, `AgentOrchestrator`'s simulated execution, `SyncService`'s base64 "encryption" and similar. None reaches users, but they're misleading to read. Removing them, or moving them to `experimental/`, is the owner's call.
+- **Per-address limits are kept in each process's memory.** On serverless hosts they count per instance; a shared limit needs a store such as the database or a KV service.
+- **No linter is configured.** The strict TypeScript build is the only static check.
+
+---
+
+## Earlier audit — 2026-11-15
+
 **Audit date:** 2026-11-15
 **Reviewed revision:** b81a527
 **Scope:** 189 tracked paths inventoried; repository source and configuration reviewed. Binary artwork, GLB models, generated platform resources, and dependency internals are identified below but are not individually behaviorally audited. This is a source audit, not a fresh build, test, security scan, or physical-device verification. No implementation files were changed for this deliverable.

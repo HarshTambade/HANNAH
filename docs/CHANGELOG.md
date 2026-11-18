@@ -116,6 +116,14 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Feedback and Report didn't work for anyone but the server operator.** The Feedback form and the button for reporting an AI reply answered "Add your Groq API key or a HANNAH access token" for every guest and signed-in user. They now work for everyone using the app. They're validated and limited per credential and per network address. Reports and feedback are kept in the server's database (on Vercel, a local file was lost).
+- **Stop really stops.** Pressing Stop now cancels the AI request in flight, and an answer that arrives afterwards is no longer shown or spoken.
+- **Long agent tasks no longer fail partway.** Trimming a long run could separate tool results from the step that asked for them, which Groq rejects. When one step reads several pages, all of them now reach the model whole.
+- **On-device AI keeps your question.** With a phone's offline model, a long prompt kept its start and lost your latest message (or the reverse lost the safety rules). Both are now kept, within the model's 2,048-token window.
+- **Copy buttons work everywhere.** Where the browser denies clipboard access (Android web views, plain-http pages), the copy buttons threw an error and copied nothing. They now fall back, and show "Copied" only when it worked.
+- **The chat header no longer sticks on "checking".** It used to, after the first 30 seconds of a working connection.
+- **Replies that contain JSON are shown.** An answer such as `Use this config: {"port": 3000}` used to be replaced with "invalid response".
+- **Faster spoken replies.** Each reply no longer waits for the operator-only server voice to refuse before the device voice starts.
 - **HANNAH stopped partway through speaking, and answered her own words in a loop.**
   - **Cutting off:** interrupting by talking (barge-in) calibrated on a moment of room noise and then treated anything louder as you, including her own voice from the speakers, which echo cancellation doesn't remove. It now learns her level at the microphone once she starts and stops only for sound well above it.
   - **Long replies:** Chrome stops long speech partway and never says so, Android refuses more than 4,000 characters, and the server voices cut long text. Every voice now reads the reply sentence by sentence to the end, without Markdown, code or links, and a stalled piece can't leave her stuck "speaking".

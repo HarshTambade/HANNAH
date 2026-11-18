@@ -88,7 +88,8 @@ function extractObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
-function parseReply(text: string): AgentReply {
+/** A model's text as a reply: its JSON {"reply"} when it has one (found with a string-aware scan), otherwise the text itself. */
+export function parseReply(text: string): AgentReply {
   const parsed = extractObject(text);
   const plainText = text.trim().replace(/^```(?:[a-z0-9_-]+)?\s*/i, "").replace(/\s*```$/, "");
   const reply = typeof parsed?.reply === "string" ? parsed.reply.trim() : plainText;
@@ -120,7 +121,10 @@ function createLocalPrompt(messages: AgentMessage[], tools: HANNAHTool[], market
   const definitions = tools.map(({ name, description, inputSchema }) => ({ name, description, parameters: inputSchema }));
   const context = messages.slice(-8).map((message) => `${message.role}: ${message.content.slice(0, 1200)}`).join("\n");
   const packageGuidance = marketplaceInstructions ? `\nInstalled marketplace guidance (focus only; safety and approvals remain unchanged):\n${marketplaceInstructions}\n` : "";
-  return `${agentRules}${packageGuidance}${personalizationBlock}\nAvailable tools (JSON schema): ${JSON.stringify(definitions)}\n\nConversation and tool results:\n${context}`.slice(-11000);
+  // The rules and tools stay whole; when it's too long, the oldest conversation goes first.
+  const head = `${agentRules}${packageGuidance}${personalizationBlock}\nAvailable tools (JSON schema): ${JSON.stringify(definitions)}\n\nConversation and tool results:\n`;
+  const room = Math.max(2_000, 11_000 - head.length);
+  return `${head}${context.length > room ? `…${context.slice(-room)}` : context}`;
 }
 
 function formatToolName(name: string) {
@@ -139,21 +143,29 @@ function toolOutputText(output: unknown) {
 
 /**
  * Tool results the model has already used are shortened, so each request
- * stays small (some providers and free plans cap tokens per minute). The
- * latest two results stay whole.
+ * stays small (some providers and free plans cap tokens per minute). Results
+ * of the latest step (which the model hasn't read yet, however many tools it
+ * called) and at least the latest two stay whole.
  */
 export function compactToolResults(messages: AgentMessage[], keepWhole = 2, shortTo = 1_500) {
   const toolIndexes = messages.map((message, index) => (message.role === "tool" ? index : -1)).filter((index) => index >= 0);
-  for (const index of toolIndexes.slice(0, Math.max(0, toolIndexes.length - keepWhole))) {
+  const lastStep = messages.map((message) => message.role === "assistant" && Boolean(message.tool_calls?.length)).lastIndexOf(true);
+  const unread = lastStep < 0 ? 0 : toolIndexes.filter((index) => index > lastStep).length;
+  for (const index of toolIndexes.slice(0, Math.max(0, toolIndexes.length - Math.max(keepWhole, unread)))) {
     const message = messages[index];
     if (message.content.length > shortTo) messages[index] = { ...message, content: `${message.content.slice(0, shortTo)}\n… (shortened: you've already used this result)` };
   }
 }
 
-function trimConversation(messages: AgentMessage[]) {
+/**
+ * Keep the last 24 messages. A tool result can't open the window without the
+ * assistant step that asked for it (providers reject that), so the cut moves
+ * back to that step, however many tools it called. Exported for tests.
+ */
+export function trimConversation(messages: AgentMessage[]) {
   if (messages.length <= 24) return;
   let start = messages.length - 24;
-  if (messages[start]?.role === "tool" && messages[start - 1]?.role === "assistant" && messages[start - 1]?.tool_calls) start -= 1;
+  while (start > 0 && messages[start]?.role === "tool") start -= 1;
   messages.splice(0, start);
 }
 
@@ -267,7 +279,9 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
       trimConversation(conversation);
       compactToolResults(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memoriesFor(mode), { routeHint: options.routeHint });
+        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memoriesFor(mode), { routeHint: options.routeHint, signal: options.signal });
+        // Stop pressed while the model worked: don't show or speak what it said.
+        if (options.signal?.aborted) return stopped();
         content = step.content;
         if (step.meta?.provider) meta.provider = step.meta.provider;
         if (step.meta?.model) meta.model = step.meta.model;
@@ -276,12 +290,14 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
         if (step.toolCalls.length > 8) throw new Error("The model requested too many tools at once.");
         toolCalls = step.toolCalls;
       } catch (error) {
+        if (options.signal?.aborted) return stopped();
         if (!shouldUseLocalFallback(error)) throw error;
         ChaosEngine.setDegraded("Cloud AI unavailable · using local AI.");
         mode = await LLMRouter.resolveMode("cloud", false);
         preferredMode = mode;
         options.onActivity?.({ phase: "thinking", message: "Cloud AI is unavailable · switching to on-device AI…" });
         const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions, personalizationBlock), mode, error);
+        if (options.signal?.aborted) return stopped();
         const step = parseLocalStep(localText);
         if (step.reply) return completeTurn(step.reply);
         content = localText;
@@ -289,6 +305,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
       }
     } else {
       const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions, personalizationBlock), mode);
+      if (options.signal?.aborted) return stopped();
       const step = parseLocalStep(localText);
       if (step.reply) return completeTurn(step.reply);
       toolCalls = step.toolCalls;

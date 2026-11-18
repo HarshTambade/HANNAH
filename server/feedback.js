@@ -219,6 +219,29 @@ function getMongoClient(uri) {
   return cached;
 }
 
+/** HANNAH's own database, when the server has one (works on serverless hosts, unlike a local file). */
+/** Diagnostics as JSON of at most `max` characters: whole entries are dropped (oldest first), never cut mid-value. */
+function diagnosticsJson(diagnostics, max = 200_000) {
+  if (!diagnostics) return null;
+  let value = { ...diagnostics };
+  let text = JSON.stringify(value);
+  while (text.length > max && Array.isArray(value.entries) && value.entries.length) {
+    value = { ...value, entries: value.entries.slice(Math.ceil(value.entries.length / 4)), truncated: true };
+    text = JSON.stringify(value);
+  }
+  return text.length > max ? JSON.stringify({ truncated: true, note: "The attached report was too large to keep." }) : text;
+}
+
+async function deliverToDatabase(document) {
+  const { getDatabase } = require("./db");
+  const db = await getDatabase();
+  await db.query(
+    "INSERT INTO hannah_feedback (id, category, message, app_version, platform, inference_mode, mode_detail, diagnostics, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    [document.id, document.category, document.message, document.appVersion, document.platform, document.inferenceMode, document.modeDetail || null, diagnosticsJson(document.diagnostics), Date.parse(document.receivedAt)],
+  );
+  return { channel: "database" };
+}
+
 async function deliverToMongo(document, { env = process.env } = {}) {
   const config = mongoConfiguration(env);
   if (!config) return null;
@@ -228,7 +251,7 @@ async function deliverToMongo(document, { env = process.env } = {}) {
   return { channel: "mongodb" };
 }
 
-function createFeedbackHandler({ now = () => new Date(), idFactory = randomUUID, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+function createFeedbackHandler({ now = () => new Date(), idFactory = randomUUID, env = process.env, fetchImpl = globalThis.fetch, useDatabase = () => (env === process.env ? require("./db").databaseConfigured() : Boolean(String(env.DATABASE_URL || env.POSTGRES_URL || "").trim())) } = {}) {
   return async function feedbackHandler(req, res) {
     const validation = validateFeedbackPayload(req.body);
     if (!validation.ok) return res.status(400).json({ error: validation.error });
@@ -236,6 +259,7 @@ function createFeedbackHandler({ now = () => new Date(), idFactory = randomUUID,
     const channels = [];
     if (env.FEEDBACK_DISCORD_WEBHOOK_URL?.trim()) channels.push("discord");
     if (env.MONGODB_URI?.trim()) channels.push("mongodb");
+    if (useDatabase()) channels.push("database");
     if (channels.length === 0) {
       return res.status(503).json({ error: "Feedback delivery is not configured on this server." });
     }
@@ -244,6 +268,7 @@ function createFeedbackHandler({ now = () => new Date(), idFactory = randomUUID,
     const deliveries = [];
     if (channels.includes("discord")) deliveries.push(deliverToDiscord(document, { env, fetchImpl }));
     if (channels.includes("mongodb")) deliveries.push(deliverToMongo(document, { env }));
+    if (channels.includes("database")) deliveries.push(deliverToDatabase(document));
     const results = await Promise.allSettled(deliveries);
     const delivered = results.filter((result) => result.status === "fulfilled" && result.value).length;
 
@@ -273,5 +298,6 @@ module.exports = {
   buildFeedbackDocument,
   closeFeedbackStores,
   createFeedbackHandler,
+  diagnosticsJson,
   validateFeedbackPayload,
 };

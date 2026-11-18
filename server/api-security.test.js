@@ -169,9 +169,6 @@ test("a visitor Groq key cannot reach operator-only routes", async () => {
     ["GET", "/api/pinecall/token"],
     ["POST", "/api/tts"],
     ["POST", "/api/desktop/computer"],
-    ["POST", "/api/feedback"],
-    ["POST", "/api/report-content"],
-    ["POST", "/api/events"],
     ["GET", "/api/sync/memory"],
     ["GET", "/api/health/agent"],
   ];
@@ -183,6 +180,16 @@ test("a visitor Groq key cannot reach operator-only routes", async () => {
     });
     assert.equal(response.status, 401, method + " " + path);
   }
+});
+
+test("anyone using the app can send feedback, report an AI reply and send usage events (validated, not operator-only)", async () => {
+  for (const path of ["/api/feedback", "/api/report-content", "/api/events"]) {
+    const response = await fetch(baseUrl + path, { method: "POST", headers: { "X-Groq-API-Key": visitorKey, "Content-Type": "application/json" }, body: "{}" });
+    // An empty body is refused by the route's own validation, not by the operator check.
+    assert.equal(response.status, 400, path);
+  }
+  const anonymous = await fetch(baseUrl + "/api/report-content", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(anonymous.status, 401, "still not open to requests with no credentials at all");
 });
 
 test("a visitor Groq key cannot borrow another provider's server key", async () => {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@capacitor/core", () => ({ Capacitor: { getPlatform: () => "android" } }));
 vi.mock("@capgo/capacitor-speech-synthesis", () => ({ SpeechSynthesis: {} }));
-vi.mock("../services/api", () => ({ apiFetch: vi.fn(), apiUrl: (path: string) => path }));
+vi.mock("../services/api", () => ({ apiFetch: vi.fn(), apiUrl: (path: string) => path, getAccountHint: () => null, getApiAccessToken: () => "", getSessionGroqKey: () => "" }));
 vi.mock("../services/AIService", () => ({ getNetworkStatus: async () => ({ connected: false }) }));
 
 const { isEchoOf, isRecentEcho } = await import("../services/EchoGuard");

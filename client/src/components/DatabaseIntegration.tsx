@@ -4,6 +4,7 @@ import { apiFetch, apiUrl, getApiAccessToken } from "../services/api";
 import { databaseLabel } from "../services/Account";
 import { VERCEL_SUPABASE_URL } from "../config/project";
 import HostingSetup from "./HostingSetup";
+import { copyText } from "../services/clipboard";
 
 type DbStatus = { database: { configured: boolean; ready: boolean; kind: string | null; provider: string | null; source?: "DATABASE_URL" | "POSTGRES_URL" | null; schemaVersion?: number; error?: string }; vault: boolean; vaultSource?: string | null };
 
@@ -137,7 +138,7 @@ export default function DatabaseIntegration({ showSetup = true }: { showSetup?: 
             <p className="mt-2 text-xs leading-5">Add these in Vercel (Settings → Environment Variables) if you want them. HANNAH_VAULT_KEY pins the key that encrypts saved keys instead of deriving it from Supabase's secret; keep a copy. CRON_SECRET lets a scheduler run schedules and long workflows (see the workflows guide). Made in this browser; not sent anywhere.</p>
             <div className="mt-2"><div className="relative rounded-2xl bg-slate-950 p-4 pr-12 font-mono text-xs leading-6 text-slate-100">
             <pre className="whitespace-pre-wrap break-all">{envBlock}</pre>
-            <button type="button" aria-label="Copy environment variables" onClick={() => { void navigator.clipboard?.writeText(envBlock).then(() => setCopied(true)); }} className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">{copied ? <Check size={14} /> : <Clipboard size={14} />}</button>
+            <button type="button" aria-label="Copy environment variables" onClick={() => { void copyText(envBlock).then((copied) => copied && setCopied(true)); }} className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">{copied ? <Check size={14} /> : <Clipboard size={14} />}</button>
             <button type="button" aria-label="Make new secrets" onClick={() => { setSecrets({ vault: randomHex(), cron: randomHex(24) }); setCopied(false); }} className="absolute right-3 top-10 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"><RefreshCw size={14} /></button>
             </div></div>
           </details>
@@ -162,7 +163,7 @@ export default function DatabaseIntegration({ showSetup = true }: { showSetup?: 
           <div>
             <div className="relative rounded-2xl bg-slate-950 p-4 pr-12 font-mono text-xs leading-6 text-slate-100">
             <pre className="whitespace-pre-wrap break-all">{envBlock}</pre>
-            <button type="button" aria-label="Copy environment variables" onClick={() => { void navigator.clipboard?.writeText(envBlock).then(() => setCopied(true)); }} className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">{copied ? <Check size={14} /> : <Clipboard size={14} />}</button>
+            <button type="button" aria-label="Copy environment variables" onClick={() => { void copyText(envBlock).then((copied) => copied && setCopied(true)); }} className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">{copied ? <Check size={14} /> : <Clipboard size={14} />}</button>
             <button type="button" aria-label="Make new secrets" onClick={() => { setSecrets({ vault: randomHex(), cron: randomHex(24) }); setCopied(false); }} className="absolute right-3 top-10 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"><RefreshCw size={14} /></button>
           </div>
             <p className="mt-2 text-xs leading-5 text-slate-500">These secrets were made in this browser and aren't sent anywhere. HANNAH_VAULT_KEY encrypts saved keys: keep a copy, because losing it makes them unreadable. CRON_SECRET lets a scheduler run workflows on serverless hosting (see the workflows guide). Self-hosted: run <code className="font-mono">npm run db:check</code> in <code className="font-mono">server/</code> to confirm.</p>

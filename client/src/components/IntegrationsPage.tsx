@@ -8,6 +8,7 @@ import { SITE_URL } from "../config/site";
 import { pathForScreen } from "../routes";
 import DatabaseIntegration from "./DatabaseIntegration";
 import McpServersCard from "./McpServersCard";
+import { copyText } from "../services/clipboard";
 
 type IntegrationsPageProps = { onBack: () => void };
 
@@ -418,7 +419,7 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
 
   const copy = async (value: string, key: string) => {
     try {
-      await navigator.clipboard.writeText(value);
+      if (!(await copyText(value))) throw new Error("Copy failed.");
       setCopied(key);
       window.setTimeout(() => setCopied((current) => current === key ? "" : current), 1800);
     } catch {
