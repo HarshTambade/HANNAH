@@ -88,16 +88,26 @@ async function checkSignature(raw: Record<string, unknown>): Promise<SignatureCh
   const publicKey = base64Bytes(signature.publicKey, 32);
   const value = base64Bytes(signature.value, 64);
   if (!publicKey || !value) return { error: "The signature's public key or value isn't valid base64 of the right length." };
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", publicKey));
-  const fingerprint = [...digest.slice(0, 8)].map((byte) => byte.toString(16).padStart(2, "0")).join("").replace(/(.{4})(?=.)/g, "$1 ");
+  let fingerprint: string | undefined;
+  if (crypto?.subtle?.digest) {
+    try {
+      const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", publicKey));
+      fingerprint = [...digest.slice(0, 8)].map((byte) => byte.toString(16).padStart(2, "0")).join("").replace(/(.{4})(?=.)/g, "$1 ");
+    } catch {
+      fingerprint = undefined;
+    }
+  }
   const { signature: _omit, ...signed } = raw;
+  if (!crypto?.subtle?.importKey) {
+    return { status: "unverifiable", ...(fingerprint ? { fingerprint } : {}) };
+  }
   let valid: boolean;
   try {
     const key = await crypto.subtle.importKey("raw", publicKey, { name: "Ed25519" }, false, ["verify"]);
     valid = await crypto.subtle.verify({ name: "Ed25519" }, key, value, new TextEncoder().encode(canonicalJson(signed)));
   } catch {
     // Older browsers lack Ed25519 in WebCrypto: say so instead of guessing.
-    return { status: "unverifiable", fingerprint };
+    return { status: "unverifiable", ...(fingerprint ? { fingerprint } : {}) };
   }
   if (!valid) return { error: "The signature doesn't match this manifest, so it may have been altered after signing." };
   const trusted = trustedPublishers.find((item) => item.publicKey === signature.publicKey);
@@ -118,6 +128,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 async function sha256Hex(text: string) {
+  if (!crypto?.subtle?.digest) throw new Error("This browser can't compute SHA-256.");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -191,8 +202,14 @@ export async function validateManifest(input: unknown): Promise<ValidationResult
   if (value.integrity !== undefined) {
     const declared = isPlainObject(value.integrity) && typeof value.integrity.sha256 === "string" ? value.integrity.sha256.toLowerCase() : "";
     if (!/^[a-f0-9]{64}$/.test(declared)) errors.push(`"integrity.sha256" must be a 64-character hex digest.`);
-    else if (instructions && declared !== await sha256Hex(instructions)) errors.push("The integrity hash doesn't match the instructions, so they may have been altered.");
-    else integrity = "verified";
+    else {
+      try {
+        if (instructions && declared !== await sha256Hex(instructions)) errors.push("The integrity hash doesn't match the instructions, so they may have been altered.");
+        else integrity = "verified";
+      } catch {
+        warnings.push("This browser can't check the integrity hash, so it wasn't verified.");
+      }
+    }
   } else {
     warnings.push("No integrity hash: HANNAH can't confirm the instructions match what the publisher released.");
   }

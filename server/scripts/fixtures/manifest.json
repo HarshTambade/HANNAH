@@ -1,0 +1,14 @@
+{
+  "manifestVersion": 1,
+  "id": "dev.example.meeting-notes",
+  "type": "instruction-skill",
+  "name": "Meeting notes",
+  "description": "Turns rough notes into decisions, owners and next steps.",
+  "version": "1.0.0",
+  "publisher": { "name": "Example Labs", "url": "https://example.dev" },
+  "category": "Productivity",
+  "license": "MIT",
+  "permissions": [],
+  "privacy": { "dataLeavesDevice": false, "notes": "Adds guidance text only." },
+  "instructions": "When the user shares meeting notes, reply with three short sections: Decisions, Owners and Next steps. Keep each item to one line and ask before inventing missing owners."
+}

@@ -50,4 +50,16 @@ describe("skill signatures", () => {
     const result = await validateManifest({ ...signed, signature: { alg: "RSA", publicKey: "x", value: "y" } });
     expect(result.ok).toBe(false);
   });
+
+  it("validates the committed signed fixture", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const fixture = JSON.parse(readFileSync(resolve(__dirname, "../../../server/scripts/fixtures/signed.json"), "utf8"));
+    const result = await validateManifest(fixture);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.integrity).toBe("verified");
+      expect(result.signature.status).toBe("signed");
+    }
+  });
 });

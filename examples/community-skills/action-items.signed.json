@@ -1,0 +1,28 @@
+{
+  "manifestVersion": 1,
+  "id": "examples.action-items",
+  "type": "instruction-skill",
+  "name": "Action items",
+  "description": "Turns a discussion into clear decisions, owners and next steps.",
+  "version": "1.0.0",
+  "publisher": {
+    "name": "HANNAH Examples",
+    "url": "https://github.com/HarshTambade/HANNAH"
+  },
+  "category": "Productivity",
+  "license": "MIT",
+  "permissions": [],
+  "privacy": {
+    "dataLeavesDevice": false,
+    "notes": "Adds guidance text only."
+  },
+  "instructions": "When the user shares notes or a discussion, reply with three short sections: Decisions, Owners and Next steps. Keep each item to one line and ask before inventing missing owners.",
+  "integrity": {
+    "sha256": "a7c08f7ddfcd9d1b1b3b7a5ed6e025d69ef6c276a532dd24e531f785a2f3cbf4"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "publicKey": "o+3aG0q8Jrb5kqeK4wfIQH1wEa0/9AyazQVrInlppKo=",
+    "value": "PlpHbAAtlB2yQQpYfX4Y0zwnajcgG5l4nD6lq3S/Va9EvdmUJs9zPAmye+kpcHs+zEe6i6T6RyiSpFPNDOCfBw=="
+  }
+}

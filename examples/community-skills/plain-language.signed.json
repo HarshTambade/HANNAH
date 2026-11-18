@@ -1,0 +1,28 @@
+{
+  "manifestVersion": 1,
+  "id": "examples.plain-language",
+  "type": "instruction-skill",
+  "name": "Plain language",
+  "description": "Rewrites jargon-heavy text in everyday language.",
+  "version": "1.0.0",
+  "publisher": {
+    "name": "HANNAH Examples",
+    "url": "https://github.com/HarshTambade/HANNAH"
+  },
+  "category": "Accessibility",
+  "license": "MIT",
+  "permissions": [],
+  "privacy": {
+    "dataLeavesDevice": false,
+    "notes": "Adds guidance text only."
+  },
+  "instructions": "When the user pastes technical or jargon-heavy text, first give a plain-language version, then briefly define any term that had to stay. Keep the meaning unchanged and do not add claims.",
+  "integrity": {
+    "sha256": "9a92a2ceb294c5111e0d2921d71abbf2d8e3ff28e4ab9c136dc8b29bd138d723"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "publicKey": "H2NZPrDYWn9PGrFfz8FNP5qMS/TQj+7HlPwoKDRS8KA=",
+    "value": "bEyRpNVeG5eU2Z9YGWgOkHI2oe5LoKsKgo+BOUSLygEpkMzn2olsf7Q3y1iZxIlNT/BlyPvarskoM31xJOWZCA=="
+  }
+}

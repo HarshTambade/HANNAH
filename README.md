@@ -910,7 +910,7 @@ Entries add **prompt guidance only**. They don't add tools, request permissions,
 - the optional Ed25519 **publisher signature** over the whole manifest;
 - the instructions for prompt-injection text.
 
-Publishers sign with `node server/scripts/sign-skill.js keygen <dir>`, then `node server/scripts/sign-skill.js sign manifest.json <key.pem>`. Keys listed in [`shared/trusted-publishers.json`](./shared/trusted-publishers.json) show as a **trusted publisher**. The list starts empty, and you add a key only after confirming it with the publisher. Any other valid signature shows as signed by an unknown key, with its fingerprint. A manifest changed after signing is rejected.
+Publishers sign with `node server/scripts/sign-skill.js keygen <dir>`, then `node server/scripts/sign-skill.js sign manifest.json <key.pem>`. Check a signed manifest with `node server/scripts/sign-skill.js verify manifest.json`. Keys listed in [`shared/trusted-publishers.json`](./shared/trusted-publishers.json) show as a **trusted publisher**. The list starts empty, and you add a key only after confirming it with the publisher. Any other valid signature shows as signed by an unknown key, with its fingerprint. A manifest changed after signing is rejected. `keygen --force` overwrites an existing key pair.
 
 The server checks the instructions again and labels them as untrusted guidance. At most three can be on at once. Executable plugins and MCP-server packages are refused until package signing and sandboxed execution exist. A public registry, reviews and sandboxed executable plugins aren't built yet.
 

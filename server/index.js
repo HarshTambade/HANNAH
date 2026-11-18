@@ -263,7 +263,14 @@ function normalizeMemories(value) {
 
 // User-installed community instruction skills. Re-checked here because the
 // client is untrusted; rejected skills are dropped, not partially applied.
-const COMMUNITY_INJECTION = /ignore (all |any )?(previous|prior|above|earlier) (instructions|rules|messages)|(reveal|print|show|repeat).{0,30}(system prompt|hidden instructions|developer message)|(bypass|skip|disable|turn off).{0,30}(approval|confirmation|guardian|safety|guardrail)|jailbreak|developer mode/i;
+const COMMUNITY_INJECTION_PATTERNS = [
+  /ignore (all |any )?(previous|prior|above|earlier) (instructions|rules|messages)/i,
+  /(reveal|print|show|repeat).{0,30}(system prompt|hidden instructions|developer message)/i,
+  /(bypass|skip|disable|turn off).{0,30}(approval|confirmation|guardian|safety|guardrail)/i,
+  /(api[ _-]?key|password|token|secret).{0,40}(send|post|upload|share|include)/i,
+  /(send|post|upload|exfiltrate).{0,40}(https?:\/\/|webhook)/i,
+  /you (are|have) no (rules|restrictions|limits)|jailbreak|developer mode/i,
+];
 
 function normalizeCommunitySkills(value) {
   if (value === undefined) return [];
@@ -274,7 +281,7 @@ function normalizeCommunitySkills(value) {
     const name = item.name.trim().replace(/[\r\n]+/g, " ").slice(0, 60);
     const instructions = item.instructions.trim();
     if (!name || !instructions || instructions.length > 1200) return null;
-    if (COMMUNITY_INJECTION.test(instructions)) return null;
+    if (COMMUNITY_INJECTION_PATTERNS.some((pattern) => pattern.test(instructions))) return null;
     skills.push({ name, instructions });
   }
   return skills;
