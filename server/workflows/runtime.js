@@ -35,8 +35,10 @@ const engine = require("./engine");
 const { REGISTRY, looksSecret } = require("./nodes");
 const { tokens: memoryTokens } = require("./text");
 
-const LEASE_MS = 60_000;
-const HEARTBEAT_MS = 15_000;
+// A running execution's lease; a worker that disappears loses it after this long and the run is recovered.
+// WORKFLOW_LEASE_MS can shorten it (at least 5 seconds), for example in restart tests.
+const LEASE_MS = Math.max(5_000, Number(process.env.WORKFLOW_LEASE_MS) || 60_000);
+const HEARTBEAT_MS = Math.round(LEASE_MS / 4);
 const MAX_RECOVERIES = 3;
 const USER_CONCURRENCY = Math.max(1, Number(process.env.WORKFLOW_USER_CONCURRENCY) || 3);
 const WORKER_CONCURRENCY = Math.max(1, Number(process.env.WORKFLOW_WORKER_CONCURRENCY) || 4);
@@ -343,6 +345,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         signal: controller.signal,
         resume: resume || undefined,
         inlineWaitMs: INLINE_WAIT_MS,
+        shouldPause: async () => Number((await db.query("SELECT pause_requested FROM hannah_workflow_executions WHERE id = $1", [id])).rows[0]?.pause_requested) === 1,
         onCheckpoint: async (state, event) => {
           const at = now();
           await db.query("UPDATE hannah_workflow_executions SET state = $1, updated_at = $2, resume = NULL WHERE id = $3", [JSON.stringify(state), at, id]);
@@ -383,6 +386,8 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
          lease_owner = NULL, lease_expires_at = NULL, finished_at = $7, updated_at = $8 WHERE id = $9`,
       [status, JSON.stringify(result.state || {}), result.error || null, result.errorNode || null, waiting ? JSON.stringify(waiting) : null, waiting?.until ?? null, FINAL.has(status) ? at : null, at, row.id],
     );
+    // A pause request is used up when the run pauses (or ends before it could).
+    if (FINAL.has(status) || waiting?.kind === "paused") await db.query("UPDATE hannah_workflow_executions SET pause_requested = 0 WHERE id = $1", [row.id]);
     if (FINAL.has(status) && row.mode !== "test") {
       const event = status === "completed" ? "workflow.completed" : status === "cancelled" ? null : "workflow.failed";
       // $depth stops workflows that trigger each other from looping (see emitEvent).
@@ -399,14 +404,15 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     const report = { recovered: 0, deadLettered: 0, woke: 0, expired: 0, scheduled: 0, mail: 0, ran: [] };
 
     // 1. Executions whose worker disappeared.
-    const { rows: stale } = await db.query("SELECT id, attempts FROM hannah_workflow_executions WHERE status = 'running' AND lease_expires_at < $1 LIMIT 50", [now()]);
+    // Only recoveries count towards dead-lettering: attempts also counts normal resumes after waits and approvals.
+    const { rows: stale } = await db.query("SELECT id, recoveries FROM hannah_workflow_executions WHERE status = 'running' AND lease_expires_at < $1 LIMIT 50", [now()]);
     for (const row of stale) {
       if (running.has(row.id)) continue;
-      if (Number(row.attempts) >= MAX_RECOVERIES) {
-        const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'failed', error = $1, lease_owner = NULL, lease_expires_at = NULL, finished_at = $2, updated_at = $2 WHERE id = $3 AND status = 'running'", [`Dead-lettered: the worker stopped ${row.attempts} times while running this. It won't be retried automatically; retry it from the execution page after checking the failed step.`, now(), row.id]);
+      if (Number(row.recoveries) >= MAX_RECOVERIES) {
+        const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'failed', error = $1, lease_owner = NULL, lease_expires_at = NULL, finished_at = $2, updated_at = $2 WHERE id = $3 AND status = 'running'", [`Dead-lettered: the worker stopped ${Number(row.recoveries) + 1} times while running this. It won't be retried automatically; retry it from the execution page after checking the failed step.`, now(), row.id]);
         report.deadLettered += rowCount;
       } else {
-        const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'queued', lease_owner = NULL, lease_expires_at = NULL, updated_at = $1 WHERE id = $2 AND status = 'running' AND lease_expires_at < $1", [now(), row.id]);
+        const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'queued', recoveries = recoveries + 1, lease_owner = NULL, lease_expires_at = NULL, updated_at = $1 WHERE id = $2 AND status = 'running' AND lease_expires_at < $1", [now(), row.id]);
         report.recovered += rowCount;
       }
     }
@@ -619,6 +625,26 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     return { status: "cancelled" };
   }
 
+  /**
+   * Pause a run. A queued run pauses at once; a running one stops before its next step
+   * (the step in progress finishes first). Resume continues from there; finished steps never run again.
+   */
+  async function pause(userId, executionId) {
+    const db = await database();
+    const { rows: [row] } = await db.query("SELECT status FROM hannah_workflow_executions WHERE id = $1 AND user_id = $2", [executionId, userId]);
+    if (!row) throw fail(404, "That run doesn't exist.", "not-found");
+    if (row.status === "queued") {
+      const waiting = { kind: "paused", message: "Paused by you before it started. Resume to run it." };
+      const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'waiting', waiting = $1, wait_until = NULL, updated_at = $2 WHERE id = $3 AND status = 'queued'", [JSON.stringify(waiting), now(), executionId]);
+      if (rowCount) return { status: "paused" };
+    }
+    if (row.status === "running" || row.status === "queued") {
+      await db.query("UPDATE hannah_workflow_executions SET pause_requested = 1, updated_at = $1 WHERE id = $2 AND status IN ('queued', 'running')", [now(), executionId]);
+      return { status: "pausing" };
+    }
+    throw fail(409, FINAL.has(row.status) ? "This run has already finished." : "This run is already waiting.", "not-running");
+  }
+
   /** Answer an approval or deliver a webhook resume: the execution goes back to the queue. */
   async function resume(userId, executionId, { approved, data, nodeId }) {
     const db = await database();
@@ -627,8 +653,9 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     const waiting = parse(row.waiting, null);
     if (!waiting || !["waiting", "waiting-approval"].includes(row.status)) throw fail(409, "This run isn't waiting for anything.", "not-waiting");
     if (nodeId && nodeId !== waiting.nodeId) throw fail(409, "This run is waiting at a different step.", "not-waiting");
-    const payload = waiting.kind === "approval" ? { nodeId: waiting.nodeId, approved: Boolean(approved) } : { nodeId: waiting.nodeId, data: data ?? null };
-    const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'queued', resume = $1, waiting = NULL, wait_until = NULL, updated_at = $2 WHERE id = $3 AND status = $4", [JSON.stringify(payload), now(), executionId, row.status]);
+    // A run paused before it started has no step to resume at: it simply starts.
+    const payload = waiting.kind === "paused" && !waiting.nodeId ? null : waiting.kind === "approval" ? { nodeId: waiting.nodeId, approved: Boolean(approved) } : { nodeId: waiting.nodeId, data: data ?? null };
+    const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'queued', resume = $1, waiting = NULL, wait_until = NULL, updated_at = $2 WHERE id = $3 AND status = $4", [payload ? JSON.stringify(payload) : null, now(), executionId, row.status]);
     if (rowCount !== 1) throw fail(409, "Someone answered first.", "conflict");
     return { status: "queued" };
   }
@@ -656,7 +683,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     loop = null;
   }
 
-  return { cancel, claim, emitEvent, enqueue, publishedDefinition, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
+  return { cancel, claim, pause, emitEvent, enqueue, publishedDefinition, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
 }
 
 module.exports = { FINAL, createRuntime, explainProviderError, sha256 };

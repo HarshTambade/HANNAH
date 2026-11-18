@@ -33,7 +33,7 @@ const NodeCard = memo(function NodeCard({ data, selected }: NodeProps<CardNode>)
   const outputs = outputsFor(definition, node.params);
   const status = run?.status;
   return (
-    <div className={`relative w-[220px] rounded-2xl border bg-white shadow-sm transition ${selected ? "ring-2 ring-violet-400" : ""} ${errors.length ? "border-rose-300" : status === "failed" ? "border-rose-400" : status === "done" ? "border-emerald-300" : style.ring} ${node.disabled ? "opacity-50" : ""}`}>
+    <div className={`relative w-[220px] rounded-2xl border bg-white shadow-sm transition ${selected ? "ring-2 ring-violet-400" : ""} ${errors.length ? "border-rose-300" : status === "failed" ? "border-rose-400" : status === "done" ? "border-emerald-300" : status === "running" || status === "retrying" ? "border-sky-400 ring-2 ring-sky-200" : style.ring} ${node.disabled ? "opacity-50" : ""}`}>
       {definition.inputs.map((input, index) => (
         <Handle key={input} id={input} type="target" position={Position.Left} style={{ top: definition.inputs.length > 1 ? `${30 + index * 34}%` : "50%" }} className="!h-3 !w-3 !border-2 !border-white !bg-slate-400" title={input === "main" ? "Input" : input} />
       ))}

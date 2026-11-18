@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Copy, RotateCcw, Square, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Loader2, Pause, Play, RotateCcw, Square, X } from "lucide-react";
 import { WorkflowApi, type ExecutionDetail as Detail, type NodeRun } from "../../services/WorkflowApi";
-import { STATUS_STYLE, duration, emptyStops, when } from "./support";
+import { STATUS_STYLE, duration, emptyStops, liveProgress, when } from "./support";
 
 const LIVE = new Set(["queued", "running"]);
 export const FINAL = new Set(["completed", "failed", "cancelled", "timed-out"]);
@@ -23,7 +23,7 @@ function NodeRow({ run, open, onToggle }: { run: NodeRun; open: boolean; onToggl
         {open ? <ChevronDown size={14} className="shrink-0 text-slate-400" /> : <ChevronRight size={14} className="shrink-0 text-slate-400" />}
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{run.name}</span>
         {run.attempts > 1 && <span className="text-[11px] text-amber-800">{run.attempts} attempts</span>}
-        <span className="text-[11px] tabular-nums text-slate-500">{duration(run.durationMs)}</span>
+        <span className="text-[11px] tabular-nums text-slate-500">{duration(run.durationMs ?? (["running", "retrying"].includes(run.status) && run.startedAt ? Date.now() - run.startedAt : null))}</span>
         <StatusPill status={run.status} />
       </button>
       {open && (
@@ -83,8 +83,10 @@ export default function ExecutionDetail({ executionId, onOpenExecution, onClose,
     const poll = async () => {
       const next = await load();
       if (stop) return;
-      // Keep watching while it's queued or running; waits and finished runs don't change on their own here.
+      // Keep watching while it's queued or running, and more slowly while it waits (the worker can continue it,
+      // for example after a timed wait or a rate limit). Finished runs don't change.
       if (next && LIVE.has(next.execution.status)) timer = window.setTimeout(poll, 1200);
+      else if (next && next.execution.status.startsWith("waiting")) timer = window.setTimeout(poll, 5000);
     };
     void poll();
     return () => { stop = true; window.clearTimeout(timer); };
@@ -113,25 +115,41 @@ export default function ExecutionDetail({ executionId, onOpenExecution, onClose,
   const { execution, nodes } = detail;
   const failedName = execution.errorNode ? nodes.find((node) => node.nodeId === execution.errorNode)?.name ?? detail.definition.nodes.find((node) => node.id === execution.errorNode)?.name : null;
   const total = execution.finishedAt && execution.startedAt ? execution.finishedAt - execution.startedAt : null;
+  const progress = liveProgress(detail);
 
   return (
     <section aria-label="Run details" className="space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink"><StatusPill status={execution.status} /> {execution.workflowName ?? "Run"} <span className="font-mono text-[11px] font-normal text-slate-500">{execution.id}</span></p>
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink"><StatusPill status={execution.status === "waiting" && execution.waiting?.kind === "paused" ? "paused" : execution.status} /> {execution.workflowName ?? "Run"} <span className="font-mono text-[11px] font-normal text-slate-500">{execution.id}</span></p>
           <p className="mt-1 text-xs text-slate-500">
             {({ manual: "Run by you", test: "Test run of the draft", schedule: "Scheduled", webhook: "Webhook", event: "HANNAH event", retry: "Retry" } as Record<string, string>)[execution.mode] ?? execution.mode}
-            {" · "}started {when(execution.startedAt ?? execution.createdAt)} · {total !== null ? duration(total) : LIVE.has(execution.status) ? "running…" : "—"}
+            {" · "}started {when(execution.startedAt ?? execution.createdAt)} · {total !== null ? duration(total) : LIVE.has(execution.status) && execution.startedAt ? `${duration(Date.now() - execution.startedAt)} so far` : LIVE.has(execution.status) ? "running…" : "—"}
             {execution.retryOf && <> · retry of <button type="button" className="font-mono underline" onClick={() => onOpenExecution?.(execution.retryOf!)}>{execution.retryOf.slice(0, 14)}…</button></>}
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
+          {LIVE.has(execution.status) && !execution.pauseRequested && <button type="button" disabled={Boolean(busy)} className="btn-outline !py-1.5 text-xs" onClick={() => void act("pause", () => WorkflowApi.pause(execution.id))}><Pause size={13} /> Pause</button>}
+          {execution.status === "waiting" && execution.waiting?.kind === "paused" && <button type="button" disabled={Boolean(busy)} className="btn-primary !py-1.5 text-xs" onClick={() => void act("resume", () => WorkflowApi.resume(execution.id))}><Play size={13} /> Resume</button>}
           {(LIVE.has(execution.status) || execution.status.startsWith("waiting")) && <button type="button" disabled={Boolean(busy)} className="btn-outline !py-1.5 text-xs text-rose-700" onClick={() => void act("cancel", () => WorkflowApi.cancel(execution.id))}><Square size={13} /> Cancel</button>}
           {["failed", "timed-out", "cancelled"].includes(execution.status) && execution.errorNode && <button type="button" disabled={Boolean(busy)} className="btn-outline !py-1.5 text-xs" onClick={() => void act("retry", () => WorkflowApi.retry(execution.id, "failed"))}><RotateCcw size={13} /> Retry from failed step</button>}
           {FINAL.has(execution.status) && <button type="button" disabled={Boolean(busy)} className="btn-ghost !py-1.5 text-xs" onClick={() => void act("rerun", () => WorkflowApi.retry(execution.id, "start"))}><RotateCcw size={13} /> Run again</button>}
           {onClose && <button type="button" className="btn-ghost !p-2" aria-label="Close run details" onClick={onClose}><X size={14} /></button>}
         </div>
       </header>
+
+      {progress && (
+        <div role="status" aria-live="polite" className={`rounded-2xl border px-4 py-3 text-sm ${progress.retrying ? "border-amber-200 bg-amber-50 text-amber-900" : "border-sky-200 bg-sky-50 text-sky-900"}`}>
+          <p className="flex items-center gap-2 font-semibold"><Loader2 size={14} className="animate-spin" />
+            {progress.step ? <>{progress.retrying ? "Retrying" : "Running"} “{progress.step}”{progress.retrying && progress.attempt ? `, attempt ${progress.attempt}` : ""}{progress.sinceMs !== null ? ` · ${duration(progress.sinceMs)}` : ""}</> : execution.status === "queued" ? "Queued: waiting for a worker…" : "Starting…"}
+          </p>
+          {progress.lastError && <p className="mt-0.5 text-xs">Last error: {progress.lastError}</p>}
+          {execution.pauseRequested && <p className="mt-0.5 text-xs">Pausing: it stops after the step in progress.</p>}
+        </div>
+      )}
+      {Boolean(execution.recoveries) && (
+        <p role="note" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-700">The server stopped during this run {execution.recoveries === 1 ? "once" : `${execution.recoveries} times`}; it continued from its last checkpoint. A step that was in progress then ran again.</p>
+      )}
 
       {execution.error && (
         <div role="alert" className={`rounded-2xl border px-4 py-3 text-sm ${execution.status === "completed" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
@@ -160,7 +178,7 @@ export default function ExecutionDetail({ executionId, onOpenExecution, onClose,
       )}
       {execution.status === "waiting" && execution.waiting && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          {execution.waiting.kind === "time" ? <>{execution.waiting.message && <span className="block font-semibold">{execution.waiting.message}</span>}Waiting until {when(execution.waiting.until)}, then it continues on its own.</> : execution.waiting.kind === "device" ? (
+          {execution.waiting.kind === "paused" ? <span className="block font-semibold">{execution.waiting.message ?? "Paused by you."}</span> : execution.waiting.kind === "time" ? <>{execution.waiting.message && <span className="block font-semibold">{execution.waiting.message}</span>}Waiting until {when(execution.waiting.until)}, then it continues on its own.</> : execution.waiting.kind === "device" ? (
             <>
               <span className="block font-semibold">{execution.waiting.message ?? "Waiting for your desktop app."}</span>
               <span className="mt-1 block text-xs">It runs when the HANNAH desktop app is open and signed in to this account, with “Run workflow tasks” on in Settings → Desktop access; it asks you there first. If no desktop picks it up by {when(execution.waiting.until)}, the run stops.</span>

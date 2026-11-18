@@ -157,6 +157,10 @@ async function httpCall(ctx, { method, url, headers, query, bodyType, body, time
   for (const [key, value] of Object.entries(query || {})) target.searchParams.set(key, value);
   const finalHeaders = { "User-Agent": "HANNAH-Workflows/1", Accept: responseFormat === "text" ? "*/*" : "application/json, text/plain, */*", ...headers, ...credentialHeaders(credential) };
   if (idempotencyKey) finalHeaders["Idempotency-Key"] = idempotencyKey;
+  // Loop guard: a workflow that calls a HANNAH webhook (its own or another's) passes on how many
+  // webhook hops led here; the webhook refuses past MAX_WEBHOOK_HOPS. Set last, so it can't be overridden.
+  for (const key of Object.keys(finalHeaders)) if (key.toLowerCase() === "x-hannah-hops") delete finalHeaders[key];
+  finalHeaders["X-Hannah-Hops"] = String(Math.max(0, Number(ctx.hops) || 0) + 1);
   let payload;
   if (!["GET", "HEAD"].includes(method) && body !== undefined && body !== "" && body !== null) {
     if (bodyType === "form") {

@@ -40,6 +40,7 @@ const run = (definition, options = {}) => execute({
   sleep: options.sleep ?? (async () => {}),
   onCheckpoint: options.onCheckpoint,
   inlineWaitMs: options.inlineWaitMs,
+  shouldPause: options.shouldPause,
 });
 
 describe("expressions", () => {
@@ -361,5 +362,25 @@ describe("Aggregate when nothing arrives", () => {
     ], [connect("t", "if"), connect("if", "ag", "true")]);
     const result = await run(definition);
     assert.equal(result.state.nodes.ag.status, "skipped");
+  });
+});
+
+describe("pause", () => {
+  it("stops before the next step when asked, and resuming runs the rest without repeating finished steps", async () => {
+    const { services, calls } = fakeServices();
+    const definition = base([
+      { id: "t", name: "Start", type: "trigger.manual" },
+      { id: "n1", name: "First", type: "action.notify", params: { title: "one", body: "1" } },
+      { id: "n2", name: "Second", type: "action.notify", params: { title: "two", body: "2" } },
+    ], [connect("t", "n1"), connect("n1", "n2")]);
+    // The person presses Pause while "First" is running: the check before "Second" says pause.
+    const paused = await run(definition, { services, shouldPause: async () => calls.notify.length === 1 });
+    assert.equal(paused.status, "waiting");
+    assert.equal(paused.waiting.kind, "paused");
+    assert.equal(paused.waiting.nodeId, "n2");
+    assert.equal(calls.notify.length, 1);
+    const resumed = await run(definition, { services, state: paused.state, resume: { nodeId: "n2" }, shouldPause: async () => false });
+    assert.equal(resumed.status, "completed");
+    assert.deepEqual(calls.notify.map((note) => note.title), ["one", "two"]);
   });
 });

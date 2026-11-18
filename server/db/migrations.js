@@ -374,6 +374,18 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_phone_commands_user ON hannah_phone_commands (user_id, created_at)",
     ],
   },
+  {
+    version: 10,
+    name: "workflow pause and recovery count",
+    // pause_requested: the person asked to pause a running execution; the worker
+    // stops before the next step. recoveries: how many times a stalled run was put
+    // back in the queue after its worker disappeared (attempts also counts normal
+    // resumes after waits, so it can't be used for dead-lettering).
+    statements: [
+      "ALTER TABLE hannah_workflow_executions ADD COLUMN pause_requested INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE hannah_workflow_executions ADD COLUMN recoveries INTEGER NOT NULL DEFAULT 0",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

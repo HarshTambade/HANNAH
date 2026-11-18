@@ -347,13 +347,24 @@ test("a run interrupted by a worker crash continues from its checkpoint; repeate
   assert.equal(done.execution.status, "completed");
   assert.equal(targetHits.filter((hit) => hit.url === "/first-call").length, before, "the finished step wasn't repeated");
 
+  assert.equal(done.execution.recoveries, 1);
+
+  // Claimed many times by normal resumes (waits, approvals), then the worker dies once: it's recovered, not dead-lettered.
+  const resumedOften = (await api.post(`/workflows/${id}/run`, {})).body.executionId;
+  await db.query("UPDATE hannah_workflow_executions SET status = 'running', attempts = 9, recoveries = 0, lease_owner = 'w-dead', lease_expires_at = 1, state = $1 WHERE id = $2", [JSON.stringify(state), resumedOften]);
+  const recovered = await runtime.tick({ budgetMs: 10_000 });
+  assert.equal(recovered.recovered, 1);
+  assert.equal(recovered.deadLettered, 0);
+  assert.equal((await runToEnd(api, resumedOften)).execution.status, "completed");
+
+  // Its worker died three times already: the fourth time it's dead-lettered.
   const second = (await api.post(`/workflows/${id}/run`, {})).body.executionId;
-  await db.query("UPDATE hannah_workflow_executions SET status = 'running', attempts = 3, lease_owner = 'w-dead', lease_expires_at = 1 WHERE id = $1", [second]);
+  await db.query("UPDATE hannah_workflow_executions SET status = 'running', recoveries = 3, lease_owner = 'w-dead', lease_expires_at = 1 WHERE id = $1", [second]);
   const dead = await runtime.tick({ budgetMs: 10_000 });
   assert.equal(dead.deadLettered, 1);
   const row = (await api.get(`/workflows/executions/${second}`)).body.execution;
   assert.equal(row.status, "failed");
-  assert.match(row.error, /Dead-lettered/);
+  assert.match(row.error, /Dead-lettered: the worker stopped 4 times/);
 });
 
 test("schedules fire once per slot in the workflow's time zone, and pausing stops them", async () => {
@@ -744,4 +755,104 @@ test("drafting from a description reports a rate limit clearly, with Retry-After
   assert.equal(drafted.status, 429);
   assert.equal(drafted.body.reason, "rate-limited");
   assert.match(drafted.body.error, /Groq is rate-limiting your key.*Try again in 90 seconds/);
+});
+
+test("pause: a running run stops before its next step and resume continues without repeating finished steps; queued runs pause at once", async () => {
+  const api = client(await signUp("pause@example.com"));
+  const id = await createWorkflow(api, "Pausable", definition([
+    { id: "t", name: "Start", type: "trigger.manual", params: { sample: { order: "P-1" } } },
+    { id: "slow", name: "Slow call", type: "action.http", params: { method: "POST", url: `${targetUrl}/slow-pause`, body: { order: "{{ $json.order }}" } } },
+    { id: "s", name: "Mark", type: "data.set", params: { fields: [{ name: "marked", value: "yes" }] } },
+    { id: "n", name: "Tell me", type: "action.notify", params: { title: "Paused run", body: "{{ $json.marked }}" } },
+  ], [["t", "slow"], ["slow", "s"], ["s", "n"]]));
+  const executionId = (await api.post(`/workflows/${id}/run`, {})).body.executionId;
+  // While "Slow call" is in flight (the target answers after 4 s), ask for a pause.
+  const ticking = runtime.tick({ budgetMs: 10_000 });
+  for (let i = 0; i < 40; i += 1) {
+    const { body } = await api.get(`/workflows/executions/${executionId}`);
+    if (body.nodes.some((node) => node.nodeId === "slow" && node.status === "running")) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  const pausing = await api.post(`/workflows/executions/${executionId}/pause`);
+  assert.deepEqual(pausing.body, { status: "pausing" });
+  await ticking;
+  const paused = (await api.get(`/workflows/executions/${executionId}`)).body;
+  assert.equal(paused.execution.status, "waiting");
+  assert.equal(paused.execution.waiting.kind, "paused");
+  assert.equal(paused.execution.waiting.nodeId, "s", "it stopped before the step after the one in progress");
+  assert.match(paused.execution.waiting.message, /Paused by you before “Mark”/);
+  assert.equal(paused.nodes.find((node) => node.nodeId === "slow").status, "done", "the step in progress finished");
+  assert.equal(paused.execution.pauseRequested, false);
+  // A tick doesn't continue it on its own.
+  await runtime.tick({ budgetMs: 2000 });
+  assert.equal((await api.get(`/workflows/executions/${executionId}`)).body.execution.status, "waiting");
+
+  const hitsBefore = targetHits.filter((hit) => hit.url === "/slow-pause").length;
+  assert.equal((await api.post(`/workflows/executions/${executionId}/resume`, {})).status, 200);
+  const done = await runToEnd(api, executionId);
+  assert.equal(done.execution.status, "completed");
+  assert.equal(done.nodes.find((node) => node.nodeId === "n").status, "done");
+  assert.equal(targetHits.filter((hit) => hit.url === "/slow-pause").length, hitsBefore, "the finished call wasn't repeated");
+
+  // A queued run pauses at once, and can be cancelled while paused.
+  const queued = (await api.post(`/workflows/${id}/run`, {})).body.executionId;
+  assert.deepEqual((await api.post(`/workflows/executions/${queued}/pause`)).body, { status: "paused" });
+  await runtime.tick({ budgetMs: 2000 });
+  assert.equal((await api.get(`/workflows/executions/${queued}`)).body.execution.status, "waiting");
+  assert.equal((await api.post(`/workflows/executions/${queued}/cancel`)).body.status, "cancelled");
+  assert.equal((await api.post(`/workflows/executions/${queued}/pause`)).status, 409, "a finished run can't be paused");
+  // Another account can't pause it.
+  const stranger = client(await signUp("pause-stranger@example.com"));
+  assert.equal((await stranger.post(`/workflows/executions/${executionId}/pause`)).status, 404);
+});
+
+test("loop guards: a workflow calling its own webhook stops after 5 hops; workflows triggered by each other's completion stop at depth 3", async () => {
+  const api = client(await signUp("loops@example.com"));
+  const loopDefinition = (url, secret) => definition([
+    { id: "hook", name: "Incoming", type: "trigger.webhook", params: { method: "POST", auth: "token" } },
+    { id: "call", name: "Call myself", type: "action.http", params: { method: "POST", url, headers: [{ name: "X-Hannah-Token", value: secret }], body: { again: true } } },
+  ], [["hook", "call"]]);
+  const created = await api.post("/workflows", { name: "Self caller", definition: loopDefinition(`${targetUrl}/placeholder`, "x") });
+  const id = created.body.workflow.id;
+  const first = await api.post(`/workflows/${id}/publish`);
+  const { secret, triggerId } = first.body.webhookSecrets[0];
+  const hookUrl = `${baseUrl}/api/hooks/${triggerId}`;
+  const draft = (await api.get(`/workflows/${id}`)).body;
+  assert.equal((await api.put(`/workflows/${id}`, { name: "Self caller", definition: loopDefinition(hookUrl, secret), baseVersion: draft.workflow.draftVersion })).status, 200);
+  const published = await api.post(`/workflows/${id}/publish`);
+  assert.equal((await api.post(`/workflows/${id}/activate`, { approvedPermissions: published.body.permissions })).status, 200);
+  // A spoofed hop count from outside is refused the same way.
+  const spoofed = await realFetch(hookUrl, { method: "POST", headers: { "Content-Type": "application/json", "X-Hannah-Token": secret, "X-Hannah-Hops": "99" }, body: "{}" });
+  assert.equal(spoofed.status, 508);
+
+  const startRun = await realFetch(hookUrl, { method: "POST", headers: { "Content-Type": "application/json", "X-Hannah-Token": secret }, body: "{}" });
+  assert.equal(startRun.status, 202);
+  for (let round = 0; round < 15; round += 1) await runtime.tick({ budgetMs: 5000 });
+  const runs = (await api.get(`/workflows/executions?workflowId=${id}`)).body.executions;
+  assert.equal(runs.length, 6, "the first call plus 5 hops");
+  const failed = runs.filter((run) => run.status === "failed");
+  assert.equal(failed.length, 1);
+  assert.match(failed[0].error, /508/);
+  const last = (await api.get(`/workflows/executions/${failed[0].id}`)).body;
+  assert.match(JSON.stringify(last.nodes.find((node) => node.nodeId === "call").error), /stops such chains after 5/);
+
+  // Two workflows that each start when another workflow completes, set off by a third.
+  const onCompleted = (name) => definition([
+    { id: "e", name: "Another finished", type: "trigger.event", params: { event: "workflow.completed" } },
+    { id: "n", name: "Note", type: "action.notify", params: { title: name, body: "{{ $json.data.workflowId }}" } },
+  ], [["e", "n"]]);
+  for (const name of ["Ping", "Pong"]) {
+    const wf = await createWorkflow(api, name, onCompleted(name));
+    const pub = await api.post(`/workflows/${wf}/publish`);
+    assert.equal((await api.post(`/workflows/${wf}/activate`, { approvedPermissions: pub.body.permissions })).status, 200);
+  }
+  const starter = await createWorkflow(api, "Starter", definition([{ id: "t", name: "Start", type: "trigger.manual" }, { id: "s", name: "Set", type: "data.set" }], [["t", "s"]]));
+  await api.post(`/workflows/${starter}/publish`);
+  assert.equal((await api.post(`/workflows/${starter}/run`, { draft: false })).status, 202);
+  for (let round = 0; round < 15; round += 1) await runtime.tick({ budgetMs: 5000 });
+  const all = (await api.get("/workflows/executions?limit=200")).body.executions.filter((run) => ["Ping", "Pong"].includes(run.workflowName));
+  assert.ok(all.length > 0 && all.length <= 6, `bounded chain, got ${all.length} runs`);
+  const settled = all.length;
+  for (let round = 0; round < 5; round += 1) await runtime.tick({ budgetMs: 5000 });
+  assert.equal((await api.get("/workflows/executions?limit=200")).body.executions.filter((run) => ["Ping", "Pong"].includes(run.workflowName)).length, settled, "no more runs start");
 });

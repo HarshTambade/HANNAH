@@ -119,6 +119,7 @@ export const STATUS_STYLE: Record<string, { label: string; tone: string }> = {
   queued: { label: "Queued", tone: "bg-slate-100 text-slate-700 border-slate-200" },
   running: { label: "Running", tone: "bg-sky-50 text-sky-800 border-sky-200" },
   waiting: { label: "Waiting", tone: "bg-amber-50 text-amber-900 border-amber-200" },
+  paused: { label: "Paused", tone: "bg-slate-100 text-slate-700 border-slate-300" },
   "waiting-approval": { label: "Needs approval", tone: "bg-amber-50 text-amber-900 border-amber-200" },
   completed: { label: "Completed", tone: "bg-emerald-50 text-emerald-800 border-emerald-200" },
   failed: { label: "Failed", tone: "bg-rose-50 text-rose-800 border-rose-200" },
@@ -155,4 +156,16 @@ export function emptyStops(definition: WorkflowDefinition, nodes: NodeRun[]) {
     if (Object.values(node.output).some((port) => port.count > 0)) return false;
     return definition.connections.some((connection) => connection.source === node.nodeId && byId.get(connection.target)?.status === "skipped");
   }).map((node) => ({ nodeId: node.nodeId, name: node.name, skipped: nodes.filter((other) => other.status === "skipped" && reaches(definition.connections, node.nodeId, other.nodeId)).length }));
+}
+
+/**
+ * What a live run is doing now, for the run page: the step running (or
+ * retrying, with its attempt and last error) and for how long. Null when
+ * nothing is running.
+ */
+export function liveProgress(detail: { execution: { status: string }; nodes: NodeRun[] }, now = Date.now()) {
+  if (!["queued", "running"].includes(detail.execution.status)) return null;
+  const active = detail.nodes.find((node) => node.status === "retrying") ?? detail.nodes.find((node) => node.status === "running");
+  if (!active) return { step: null as string | null, retrying: false, attempt: 0, sinceMs: null as number | null, lastError: null as string | null };
+  return { step: active.name, retrying: active.status === "retrying", attempt: active.attempts, sinceMs: active.startedAt ? Math.max(0, now - active.startedAt) : null, lastError: active.status === "retrying" ? active.error : null };
 }

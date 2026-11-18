@@ -329,7 +329,8 @@ function permanent(error) {
  *
  * input: { definition, execution: { id, mode, triggerNodeId, triggerData, state, startedAt }, workflow: { id, name, timezone },
  *          services, now, signal (AbortSignal for cancel), onCheckpoint(state, event), resume?: { nodeId, approved?, data? },
- *          inlineWaitMs? (longest rate-limit wait done in place; longer ones park the run) }
+ *          inlineWaitMs? (longest rate-limit wait done in place; longer ones park the run),
+ *          shouldPause? (async; true stops the run before the next step as a "paused" wait) }
  * returns { status: completed | failed | waiting | waiting-approval | cancelled | timed-out, state, error?, errorNode?, waiting?, warnings }
  *
  * Rate limits. An AI provider that is rate-limiting (an error with
@@ -339,7 +340,7 @@ function permanent(error) {
  * longer ones park the run as a timed wait, which survives restarts and, on
  * serverless hosting, is woken by the next tick.
  */
-async function execute({ definition, execution, workflow, services, now = () => Date.now(), signal, onCheckpoint = async () => {}, resume, sleep = delay, inlineWaitMs = RATE_LIMIT.inlineMs }) {
+async function execute({ definition, execution, workflow, services, now = () => Date.now(), signal, onCheckpoint = async () => {}, resume, sleep = delay, inlineWaitMs = RATE_LIMIT.inlineMs, shouldPause = async () => false }) {
   const nodes = (definition.nodes || []).filter((node) => REGISTRY.has(node.type));
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byName = new Map(nodes.map((node) => [node.name, node]));
@@ -383,6 +384,13 @@ async function execute({ definition, execution, workflow, services, now = () => 
     if (previous && ["done", "skipped", "failed-continued", "denied"].includes(previous.status)) continue;
     throwIfCancelled();
     if (now() > deadline) return { status: "timed-out", state, error: `The workflow ran past its ${Math.round(timeoutMs / 60_000)}-minute limit.`, errorNode: id, warnings };
+    // Paused by the person: stop before this step. Resuming runs it from the start (finished steps never run again).
+    if (previous?.status !== "waiting" && await shouldPause()) {
+      const waiting = { kind: "paused", retry: true, message: `Paused by you before “${node.name}”. Resume to continue from here.` };
+      state.nodes[id] = { status: "waiting", waiting, at: now() };
+      await onCheckpoint(state, { nodeId: id, status: "waiting" });
+      return { status: "waiting", state, waiting: { nodeId: id, ...waiting }, warnings };
+    }
 
     // Gather this node's input items.
     const isStart = id === execution.triggerNodeId;
@@ -489,6 +497,8 @@ async function execute({ definition, execution, workflow, services, now = () => 
         const ctx = {
           node: { ...node, params }, params, items, inputs, credential, services, signal: controller.signal, timeoutMs: limit,
           execution: { id: execution.id, mode: execution.mode }, workflow, triggerData: isStart ? execution.triggerData : undefined,
+          // How many webhook hops led to this run (see the HTTP step's X-Hannah-Hops header).
+          hops: Math.max(0, Number(execution.triggerData?.$hops) || 0),
           resumed: resumed && !previous?.gate && !retryingAfterPark ? resumed : null, now, resolve, resolveOnce, scopeFor, throwIfCancelled: () => { if (controller.signal.aborted) throw controller.signal.reason instanceof Error ? controller.signal.reason : new CancelledError(); },
         };
         result = await Promise.race([

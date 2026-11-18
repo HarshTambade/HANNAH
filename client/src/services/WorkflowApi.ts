@@ -71,8 +71,8 @@ export type WebhookSecret = { nodeId: string; triggerId: string; secret: string 
 export type ExecutionStatus = "queued" | "running" | "waiting" | "waiting-approval" | "completed" | "failed" | "cancelled" | "timed-out";
 export type Execution = {
   id: string; workflowId: string; workflowVersion: number | null; mode: "manual" | "test" | "schedule" | "webhook" | "event" | "retry"; status: ExecutionStatus;
-  error: string | null; errorNode: string | null; attempts: number; waiting: { nodeId: string; kind: "time" | "approval" | "webhook" | "device"; until?: number; message?: string; details?: unknown } | null;
-  retryOf: string | null; cancelRequested: boolean; createdAt: number; startedAt: number | null; finishedAt: number | null; updatedAt: number;
+  error: string | null; errorNode: string | null; attempts: number; waiting: { nodeId?: string; kind: "time" | "approval" | "webhook" | "device" | "paused"; until?: number; message?: string; details?: unknown; retry?: boolean } | null;
+  retryOf: string | null; cancelRequested: boolean; pauseRequested?: boolean; recoveries?: number; createdAt: number; startedAt: number | null; finishedAt: number | null; updatedAt: number;
   workflowName?: string; nodes?: { done: number; failed: number; skipped: number; total: number };
 };
 export type PortData = Record<string, { count: number; items: unknown[] }>;
@@ -132,6 +132,9 @@ export const WorkflowApi = {
   execution: (id: string) => accountRequest<ExecutionDetail>(`/api/workflows/executions/${encodeURIComponent(id)}`, { signal: AbortSignal.timeout(30_000) }),
   cancel: (id: string) => post<{ status: string }>(`/api/workflows/executions/${encodeURIComponent(id)}/cancel`),
   retry: (id: string, from: "failed" | "start" = "failed") => post<{ executionId: string }>(`/api/workflows/executions/${encodeURIComponent(id)}/retry`, { from }),
+  pause: (id: string) => post<{ status: "paused" | "pausing" }>(`/api/workflows/executions/${encodeURIComponent(id)}/pause`),
+  /** Continue a paused run from the step it stopped at. */
+  resume: (id: string) => post<{ status: string }>(`/api/workflows/executions/${encodeURIComponent(id)}/resume`, {}),
   answer: (id: string, approved: boolean) => post<{ status: string }>(`/api/workflows/executions/${encodeURIComponent(id)}/resume`, { approved }),
   approvals: () => accountRequest<{ approvals: Execution[] }>("/api/workflows/approvals"),
   credentials: () => accountRequest<{ vault: boolean; credentials: Credential[] }>("/api/workflows/credentials"),

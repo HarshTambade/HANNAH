@@ -54,7 +54,7 @@ The editor never runs a workflow. It saves a draft, asks the server to validate,
 
 1. **Validate** (`engine.validateWorkflow`): format, unique ids and names, known and available node types, required parameters (respecting `showIf`), select values, number ranges, patterns, expression syntax, schedule validity (5-minute minimum, valid time zone), credentials (present, owned, right type), port names, no trigger with inputs, no cycles; warnings for steps no trigger reaches and half-connected merges.
 2. **Queue**: an execution row is the job (`status = queued`), with the definition snapshotted so later edits don't change a running workflow.
-3. **Claim**: a worker moves `queued → running` with a conditional update and a 60-second lease, so two workers never run the same execution. A heartbeat renews the lease every 15 seconds and checks for a cancel request.
+3. **Claim**: a worker moves `queued → running` with a conditional update and a 60-second lease (`WORKFLOW_LEASE_MS`, at least 5 seconds), so two workers never run the same execution. A heartbeat renews the lease every quarter of it and checks for a cancel request; before every step the engine also checks for a pause request.
 4. **Run** (`engine.execute`): topological order from the starting trigger. Per node: retries with exponential backoff and jitter (5xx, 429 and network errors; not 4xx or validation errors), a time limit, cancellation between items. A checkpoint (state + the step's sanitized input and output) is written after every node.
 5. **Finish**: `completed`, `failed` (with the failing node and message), `cancelled`, `timed-out`, `waiting` (a timed wait or a resume URL) or `waiting-approval`.
 
@@ -63,7 +63,8 @@ Statuses: workflows are **draft**, **published** and **active** or **paused**; v
 ### Reliability guarantees
 
 - **At-least-once per node, at-most-once for finished nodes.** A run that stops (worker crash, serverless freeze, wait, approval) continues from its last checkpoint; finished nodes never run again. The node that was mid-call when a worker died runs again, so HTTP steps can send an `Idempotency-Key` (`<execution>:<node>:<item>`). Exactly-once external effects are not claimed.
-- **Recovery and dead-letter.** An expired lease puts the run back in the queue. After 3 recoveries it is marked failed as "dead-lettered" and never retried silently.
+- **Recovery and dead-letter.** An expired lease puts the run back in the queue and counts a recovery (`recoveries`, shown on the run page). The run continues from its last checkpoint. Only recoveries count: waits, approvals and rate-limit pauses don't. The fourth time a run's worker disappears, it is marked failed as "dead-lettered" and never retried silently.
+- **Pause and resume.** Pause stops a queued run at once and a running one before its next step; the step in progress finishes first. A paused run waits (it survives restarts) until you resume it, then continues from that step. Finished steps never run again. A paused run can be cancelled.
 - **No silent success.** A failed node fails the run, unless that node is set to "continue on error"; then its error becomes its output and the run reads "completed with errors".
 - **AI rate limits are waited out, not failed.** When the AI provider says "too many requests" (HTTP 429), the step doesn't fail. This doesn't use up the step's own retries.
   - **Auto model:** it first tries the account's other providers.
@@ -123,6 +124,9 @@ The full chain on a desktop with a person clicking the dialogs hasn't been run e
 - **Approval per run.** Sending email asks every time unless the user allowed "send without asking" at activation (shown as its own permission). The Approval node pauses for anyone's yes or no.
 - **Credentials.** Encrypted with the vault key (AES-GCM envelope, `HANNAH_VAULT_KEY`), bound to the user and credential id. They're never returned by the API, never in workflow JSON, exports, runs or logs; the list shows a hint only. Imports drop credential references the importer doesn't own.
 - **Outbound requests (SSRF).** Only http and https; the address is checked when the socket connects (no DNS rebinding); loopback, private, link-local and metadata (169.254.169.254), carrier-grade NAT, multicast and reserved ranges are refused for IPv4, IPv6 and mapped addresses; redirects are re-checked and drop credentials when the host changes; responses are capped. The PostgreSQL node resolves its host the same way. Self-hosters can allow their own network with `WORKFLOW_ALLOW_PRIVATE_NETWORK=true`.
+- **Loops.** The graph itself can't loop (cycles are refused). Workflows that trigger each other are bounded:
+  - **Events:** a run started by another workflow's completion or failure carries a depth, and chains stop at depth 3.
+  - **Webhooks:** every HTTP step sends `X-Hannah-Hops`, set last so the step's own headers can't change it. Webhooks refuse with 508 past 5 hops, so a workflow calling its own webhook stops.
 - **Webhooks.** Unguessable ids; a secret token (stored as a hash) or HMAC-SHA256 over `timestamp.body` with a 5-minute window and replay protection; rate limits; only safe headers are passed to the workflow. Secrets are shown once and can be rotated.
 - **Untrusted data.** Expressions can't execute code. External responses, email and AI outputs are data; AI prompts label them as such.
 - **The Code step's sandbox.** User JavaScript never runs on the server's JavaScript engine:
@@ -158,6 +162,11 @@ Workflows need the account database.
 Vercel's Hobby plan allows only daily cron jobs (a more frequent schedule fails the deployment), so on Hobby use an external scheduler (for example cron-job.org or a GitHub Actions schedule) to call the tick URL every few minutes with the bearer header. Runs longer than the function's time limit continue across ticks from their checkpoints.
 
 ## 7. Testing
+
+- **Real services:**
+  - `node server/scripts/workflow-proof.mjs` starts the real server and runs Manual → HTTP (GitHub's API) → Process JSON → IF → Notify → Create document.
+  - It covers success, a real 404, retries on a real 503, cancellation, and a SIGKILL restart during a slow real request, then checks the run history afterwards. It needs network access.
+- **Restarts:** `server/workflows.restart.test.js` kills the real server process during an HTTP step and during a Wait, restarts it on the same database, and checks the runs finish from their checkpoints.
 
 - `server/workflows/engine.test.js`: expressions (including sandbox escapes), SSRF checks, validation, schedules across time zones, data passing, branching, retries with backoff, continue-on-error, cancellation, approvals, email approval and denial, resume without re-running, split, filter and aggregate, single-node tests, redaction.
 - `server/workflows.test.js` (SQLite) and `server/workflows.pglite.test.js` (Postgres): the API end to end with the real worker: draft versioning, validation errors pointing at nodes, token and HMAC webhooks with replay protection, AI extraction, notifications, retries and retry-from-failure, cancel while waiting and while running, approvals, crash recovery and dead-lettering, schedules firing once per slot with two workers ticking at once, event chaining, account isolation, credential secrecy, import and export, the cron secret.

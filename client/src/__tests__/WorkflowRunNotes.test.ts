@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyStops } from "../components/workflows/support";
+import { emptyStops, liveProgress } from "../components/workflows/support";
 import type { NodeRun, WorkflowDefinition } from "../services/WorkflowApi";
 
 const run = (nodeId: string, status: string, output: NodeRun["output"]): NodeRun => ({ nodeId, name: nodeId, status, attempts: 1, startedAt: 1, finishedAt: 2, durationMs: 1, input: null, output, error: null });
@@ -29,5 +29,22 @@ describe("why a completed run did less than expected", () => {
       run("Alert", "skipped", null),
     ];
     expect(emptyStops(definition([["Start", "Big?"], ["Big?", "Alert", "true"]]), nodes)).toEqual([]);
+  });
+});
+
+describe("what a live run is doing now", () => {
+  it("names the running step and how long it has run", () => {
+    const nodes = [run("Start", "done", { main: { count: 1, items: [{}] } }), { ...run("Get stats", "running", null), startedAt: 10_000, finishedAt: null, durationMs: null }];
+    expect(liveProgress({ execution: { status: "running" }, nodes }, 14_500)).toEqual({ step: "Get stats", retrying: false, attempt: 1, sinceMs: 4_500, lastError: null });
+  });
+
+  it("shows a retry with its attempt and the error that caused it", () => {
+    const nodes = [{ ...run("Get stats", "retrying", null), attempts: 2, startedAt: 1, finishedAt: null, error: "GET api.example.com/stats returned HTTP 503" }];
+    expect(liveProgress({ execution: { status: "running" }, nodes }, 2)).toMatchObject({ step: "Get stats", retrying: true, attempt: 2, lastError: "GET api.example.com/stats returned HTTP 503" });
+  });
+
+  it("is empty once the run has finished, so a finished run never looks live", () => {
+    expect(liveProgress({ execution: { status: "failed" }, nodes: [run("Get stats", "failed", null)] })).toBeNull();
+    expect(liveProgress({ execution: { status: "completed" }, nodes: [run("Get stats", "done", null)] })).toBeNull();
   });
 });

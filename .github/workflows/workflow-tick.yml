@@ -1,0 +1,31 @@
+name: HANNAH workflow tick
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    name: Tick workflow engine
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/workflows/tick
+        env:
+          HANNAH_PRODUCTION_URL: ${{ secrets.HANNAH_PRODUCTION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HANNAH_PRODUCTION_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Secrets not configured; skipping tick."
+            exit 0
+          fi
+          url="${HANNAH_PRODUCTION_URL%/}/api/workflows/tick"
+          code=$(curl -sS -o /tmp/tick.out -w "%{http_code}" -H "Authorization: Bearer ${CRON_SECRET}" "$url")
+          echo "HTTP $code"
+          cat /tmp/tick.out
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::Workflow tick failed with HTTP $code"
+            exit 1
+          fi

@@ -178,6 +178,32 @@ test("a failing step is shown with its error and retried from the failure", asyn
   await expect(page.getByRole("region", { name: "Run details" }).getByText(/retry of/)).toBeVisible({ timeout: 15_000 });
 });
 
+test("a live run shows the step in progress, pauses before the next step and resumes to the end", async ({ page }) => {
+  await signedIn(page, "pause-ui@example.com");
+  await page.goto("/automations");
+  // Three steps that each take about 1.5 s (inside the Code step's 2-second limit), so the run is live long enough to watch and pause.
+  const slow = "const end = Date.now() + 1500; while (Date.now() < end) {} return items;";
+  await page.evaluate(async (code) => {
+    const step = (id: string, name: string, x: number) => ({ id, name, type: "data.code", params: { mode: "all", code }, position: { x, y: 160 } });
+    await fetch("/api/workflows", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Slow steps", definition: { format: "hannah-workflow", version: 2, settings: { timezone: "UTC" },
+      nodes: [{ id: "t", name: "Start", type: "trigger.manual", params: {}, position: { x: 80, y: 160 } }, step("a", "Slow one", 340), step("b", "Slow two", 600), step("c", "Slow three", 860)],
+      connections: [["t", "a"], ["a", "b"], ["b", "c"]].map(([source, target], index) => ({ id: `c${index}`, source, target, sourceOutput: "main", targetInput: "main" })) } }) });
+  }, slow);
+  await page.reload();
+  await page.getByRole("list", { name: "Workflows" }).getByRole("button", { name: /^Slow steps Draft/ }).click();
+  await page.getByRole("button", { name: "Test run", exact: true }).click();
+  const run = page.getByRole("region", { name: "Run details" });
+  // The live status names the step that's running.
+  await expect(run.getByRole("status").filter({ hasText: /Running “Slow (one|two)”/ })).toBeVisible({ timeout: 20_000 });
+  await run.getByRole("button", { name: "Pause" }).click();
+  await expect(run.getByText(/Paused by you before “Slow (two|three)”/)).toBeVisible({ timeout: 15_000 });
+  await expect(run.getByText("Paused", { exact: true })).toBeVisible();
+  await expect(run.getByText("Completed", { exact: true })).toHaveCount(0);
+  await run.getByRole("button", { name: "Resume" }).click();
+  await expect(run.getByText("Completed", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+  await expect(run.getByRole("list", { name: "Steps" }).getByText("Done")).toHaveCount(4);
+});
+
 test("a file workflow: test-run with a CSV from the editor, see the code step's console, then upload to the active workflow", async ({ page }) => {
   await signedIn(page, "files@example.com");
   await page.goto("/automations");

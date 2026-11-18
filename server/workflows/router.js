@@ -28,6 +28,7 @@
  *   GET    /workflows/executions                  ?workflowId&status&limit
  *   GET    /workflows/executions/:id              execution with every node's input and output
  *   POST   /workflows/executions/:id/cancel
+ *   POST   /workflows/executions/:id/pause        stop before the next step; /resume continues
  *   POST   /workflows/executions/:id/retry        { from: "failed" | "start" }
  *   POST   /workflows/executions/:id/resume       { approved } for approvals
  *   GET    /workflows/approvals                   runs waiting for you
@@ -51,6 +52,8 @@ const { CREDENTIAL_TYPES, REGISTRY, catalog } = require("./nodes");
 const { FINAL, sha256 } = require("./runtime");
 
 const ID = /^[A-Za-z0-9_-]{6,80}$/;
+/** Webhook calls that come from other workflow runs (X-Hannah-Hops) are refused past this many hops. */
+const MAX_WEBHOOK_HOPS = 5;
 const MAX_DEFINITION_BYTES = 512 * 1024;
 const MAX_UPLOAD_BYTES = 1024 * 1024;
 const TEXT_TYPES = /^(text\/|application\/(json|xml|csv|x-ndjson|yaml|x-yaml|javascript))|\+(json|xml)$/i;
@@ -123,7 +126,7 @@ function publicExecution(row) {
     id: row.id, workflowId: row.workflow_id, workflowVersion: row.workflow_version === null ? null : Number(row.workflow_version), mode: row.mode, status: row.status,
     error: row.error || null, errorNode: row.error_node || null, attempts: Number(row.attempts),
     waiting: (() => { const waiting = parse(row.waiting, null); if (!waiting) return null; const { tokenHash: _hash, ...rest } = waiting; return rest; })(),
-    retryOf: row.retry_of || null, cancelRequested: Boolean(Number(row.cancel_requested)),
+    retryOf: row.retry_of || null, cancelRequested: Boolean(Number(row.cancel_requested)), pauseRequested: Boolean(Number(row.pause_requested)), recoveries: Number(row.recoveries) || 0,
     createdAt: Number(row.created_at), startedAt: row.started_at === null ? null : Number(row.started_at), finishedAt: row.finished_at === null ? null : Number(row.finished_at), updatedAt: Number(row.updated_at),
   };
 }
@@ -295,6 +298,7 @@ function createWorkflowRouter({ runtime, publicBaseUrl = () => "" }) {
   }));
 
   router.post("/workflows/executions/:id/cancel", withAccount(async (req, res, _db, account) => res.json(await runtime.cancel(account.id, String(req.params.id)))));
+  router.post("/workflows/executions/:id/pause", withAccount(async (req, res, _db, account) => res.json(await runtime.pause(account.id, String(req.params.id)))));
 
   router.post("/workflows/executions/:id/resume", json, withAccount(async (req, res, _db, account) => {
     const result = await runtime.resume(account.id, String(req.params.id), { approved: req.body?.approved === true, nodeId: req.body?.nodeId });
@@ -717,6 +721,9 @@ function createHookRouter({ runtime }) {
         const hash = sha256(given);
         if (!given || !trigger.secret_hash || !crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(trigger.secret_hash))) return res.status(401).json({ error: "Send the webhook's secret in the X-Hannah-Token header." });
       }
+      // Loop guard: workflows calling webhooks (their own or each other's) stop after MAX_WEBHOOK_HOPS.
+      const hops = Math.max(0, Math.floor(Number(req.get("x-hannah-hops")) || 0));
+      if (hops > MAX_WEBHOOK_HOPS) return res.status(508).json({ error: `This webhook was called by a chain of ${hops} workflow runs, each started by the one before. HANNAH stops such chains after ${MAX_WEBHOOK_HOPS} so workflows can't trigger each other forever.`, reason: "loop" });
       if (deliveryId) {
         try {
           await db.query("INSERT INTO hannah_workflow_deliveries (trigger_id, delivery_id, received_at) VALUES ($1, $2, $3)", [trigger.id, deliveryId, Date.now()]);
@@ -731,7 +738,7 @@ function createHookRouter({ runtime }) {
       const headers = Object.fromEntries(Object.entries(req.headers).filter(([key]) => SAFE_HEADERS.test(key)).map(([key, value]) => [key, String(value).slice(0, 300)]));
       const queued = await runtime.enqueue({
         userId: trigger.user_id, workflowId: trigger.workflow_id, definition: workflow.definition, version: workflow.version, mode: "webhook", triggerNodeId: trigger.node_id,
-        triggerData: { body, query, headers, method: req.method, receivedAt: new Date().toISOString() },
+        triggerData: { body, query, headers, method: req.method, receivedAt: new Date().toISOString(), ...(hops ? { $hops: hops } : {}) },
         idempotencyKey: deliveryId ? `hook:${trigger.id}:${deliveryId}` : null,
       });
       if (SERVERLESS && !queued.duplicate) await runtime.tick({ budgetMs: 15_000, only: queued.id }).catch(() => {});

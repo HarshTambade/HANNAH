@@ -18,7 +18,7 @@
  */
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { relative, resolve, sep } from "node:path";
+import { relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const args = process.argv.slice(2);
@@ -29,8 +29,9 @@ const omitDev = args.includes("--omit-dev");
 const ORDER = ["info", "low", "moderate", "high", "critical"];
 const threshold = ORDER.indexOf(level);
 if (threshold < 0) throw new Error(`Unknown level ${level}`);
-// Exceptions name scopes with forward slashes; on Windows, path.relative uses backslashes.
-const scope = relative(root, dir).split(sep).join("/") || ".";
+// Exceptions name scopes with forward slashes. Normalize both separators so a Windows run
+// (where path.relative returns backslashes) matches the recorded scopes.
+const scope = relative(root, dir).replace(/[\\/]/g, "/") || ".";
 const today = new Date().toISOString().slice(0, 10);
 
 const exceptions = existsSync(resolve(root, ".audit-exceptions.json")) ? JSON.parse(readFileSync(resolve(root, ".audit-exceptions.json"), "utf8")) : [];

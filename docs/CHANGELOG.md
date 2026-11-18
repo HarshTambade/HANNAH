@@ -6,6 +6,13 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Workflows: pause, resume, and recovery you can trust.**
+  - **Pause:** runs can be paused (before their next step) and resumed from that step. Finished steps never run again.
+  - **Recovery:** a run was dead-lettered the first time its server stopped if it had already waited or been approved a few times, with a wrong "the worker stopped N times" message. Only real restarts count now. The run page says when a run continued after a restart.
+  - **Loops:** a workflow whose HTTP step calls its own webhook (or two calling each other's) now stops after 5 hops instead of running until the daily limit.
+  - **Run page:** it names the step running or retrying (attempt, time, last error), keeps updating while a run waits, and the canvas highlights the running step.
+  - **Proof:** checked against real services (GitHub's API, real 404s and 503s) and by killing the server mid-run (`server/scripts/workflow-proof.mjs`).
+
 - **Workflows no longer fail when the AI provider is busy.**
   - **Before:** with a free Groq key, 4 of 6 workflows started together failed at their first AI step with "Provider returned HTTP 429."
   - **Waiting:** a rate-limited AI step now waits for the provider and keeps trying for up to 30 minutes. Long waits pause the run, and the run page says why; nothing is lost if the server restarts.
