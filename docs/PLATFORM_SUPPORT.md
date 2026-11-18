@@ -7,7 +7,7 @@ Status for **HANNAH 1.4.0**, reviewed 2026-11-17. Every claim below says how it 
 | Platform | Package | Built by | Signing today |
 | --- | --- | --- | --- |
 | Web / PWA | Static site (`client/dist`) | CI "Web and PWA" job | Not applicable |
-| macOS 12+ | DMG and ZIP, Apple silicon and Intel | CI "Electron (macos-latest)" | Not signed or notarized: no Apple Developer ID in the repository secrets |
+| macOS 12+ | DMG and ZIP, Apple silicon and Intel | CI "Electron (macos-15)" | Not signed or notarized: no Apple Developer ID in the repository secrets |
 | Windows 10/11 | NSIS installer (x64) | CI "Electron (windows-latest)" | Not code-signed: no certificate in the repository secrets |
 | Linux (x86-64) | AppImage and `.deb` | CI "Electron (ubuntu-latest)" | SHA-256 checksums; GPG signatures once `GPG_PRIVATE_KEY` is set |
 | Android 7+ (API 24) | APK; AAB when a Play key exists | CI "Android" | Debug-signed: no release keystore in the repository secrets |

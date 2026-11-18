@@ -179,7 +179,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # macos-15, not macos-latest: on 2026-11-18 GitHub left macos-latest jobs unassigned ("not acquired by Runner", capacity) while macos-15 ran.
+        os: [macos-15, windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
