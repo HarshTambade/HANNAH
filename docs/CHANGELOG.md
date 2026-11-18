@@ -6,6 +6,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Supabase connections no longer fail TLS verification.** Supabase's certificates come from its own certificate authority, so verified connections failed with "self-signed certificate in certificate chain", and the advice was to turn verification off. HANNAH now has Supabase's root built in and verifies against it, whatever `sslmode` the URL asks for.
 - **Long workflow runs on Vercel finish instead of being cut off.**
   - **Before:** on serverless hosting a run executed inside one request until it ended. A run longer than the function's time limit was stopped mid-step and treated as a crash, and after four stops it was given up. Meanwhile the Run button waited for the whole run.
   - **Now:** a run hands itself back between steps when the request's time budget is used up, and the next tick, or the open run page, continues it from there. Finished steps never run again, and handing back isn't counted as a crash. The workflow's time limit counts the time it actually ran.
@@ -32,6 +33,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### New
 
+- **Connect Supabase in one step on Vercel.** Create or link a Supabase database from the Vercel project's Storage tab, and HANNAH finds it: it reads `POSTGRES_URL`, which the integration adds, when `DATABASE_URL` isn't set. Integrations → Database leads through it and generates the vault key and cron secret in your browser.
 - **HANNAH's browser, YouTube study notes and PDF notes (desktop app).**
   - **HANNAH's browser:** "find a GATE lecture on YouTube" or "look this up" opens HANNAH's own browser window, visible and signed out of everything.
     - She can search, open pages, read, scroll, follow links, click and look.

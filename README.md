@@ -789,11 +789,13 @@ On the **Agents** screen you can turn specialists off, pick a model for each, an
 
 ## Accounts and your own database
 
-Accounts are optional, and they use **a database you choose**. Set `DATABASE_URL` on the server:
+Accounts are optional, and they use **a database you choose**. Set `DATABASE_URL` on the server.
+
+**On Vercel, Supabase connects in one step:** open the project's Storage tab (or [Supabase on the Vercel Marketplace](https://vercel.com/marketplace/supabase)), then create or link a Supabase project for this deployment. The integration adds `POSTGRES_URL`, and HANNAH uses it when `DATABASE_URL` is empty. Add `HANNAH_VAULT_KEY` and `CRON_SECRET` (Integrations → Database makes both in your browser), then redeploy.
 
 | Database | `DATABASE_URL` | Notes |
 | --- | --- | --- |
-| **Supabase** | `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres` | Project Settings → Database → connection string. Use the pooler on serverless hosts. If TLS verification fails, set `DATABASE_CA_CERT` or `DATABASE_SSL=no-verify`. |
+| **Supabase** | `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres` | Project Settings → Database → connection string. Use the pooler on serverless hosts (the direct host is IPv6-only). TLS is verified against Supabase's CA, which is built in. |
 | **Neon** | `postgresql://<user>:<password>@ep-<name>-pooler.<region>.aws.neon.tech/neondb?sslmode=require` | Use the pooled connection string. |
 | **Any Postgres 13+** | `postgresql://<user>:<password>@<host>:5432/<db>?sslmode=require` | RDS, Cloud SQL, Azure, Railway, Render, Aiven or your own server. |
 | **SQLite** | `sqlite:./data/hannah.db` | One self-hosted server or the desktop app (Node 22.5+). Not for Vercel or other serverless hosts, whose disks are temporary. |

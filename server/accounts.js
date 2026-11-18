@@ -16,7 +16,7 @@
 const express = require("express");
 const { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } = require("node:crypto");
 const { promisify } = require("node:util");
-const { databaseConfigured, describeDatabaseError, getDatabase, parseDatabaseUrl, testDatabaseUrl } = require("./db");
+const { databaseConfigured, databaseSource, databaseUrl, describeDatabaseError, getDatabase, parseDatabaseUrl, testDatabaseUrl } = require("./db");
 const { decryptSecret, encryptSecret, secretHint, vaultConfigured } = require("./vault");
 const { getProvider } = require("./providers/catalog");
 
@@ -203,17 +203,19 @@ function storableProvider(providerId) {
 
 async function databaseStatus() {
   if (!databaseConfigured()) return { configured: false, ready: false, kind: null, provider: null };
+  // The variable's name only (DATABASE_URL, or POSTGRES_URL from Vercel's Supabase integration), never its value.
+  const source = databaseSource();
   let config;
   try {
-    config = parseDatabaseUrl(process.env.DATABASE_URL);
+    config = parseDatabaseUrl(databaseUrl());
   } catch (error) {
-    return { configured: true, ready: false, kind: null, provider: null, error: describeDatabaseError(error) };
+    return { configured: true, ready: false, kind: null, provider: null, source, error: describeDatabaseError(error) };
   }
   try {
     const db = await getDatabase();
-    return { configured: true, ready: true, kind: db.kind, provider: db.provider, schemaVersion: db.schemaVersion };
+    return { configured: true, ready: true, kind: db.kind, provider: db.provider, source, schemaVersion: db.schemaVersion };
   } catch (error) {
-    return { configured: true, ready: false, kind: config.kind, provider: config.provider, error: describeDatabaseError(error) };
+    return { configured: true, ready: false, kind: config.kind, provider: config.provider, source, error: describeDatabaseError(error) };
   }
 }
 

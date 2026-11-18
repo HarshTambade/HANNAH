@@ -1,21 +1,37 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Check, Clipboard, Database, PlugZap } from "lucide-react";
+import { Check, Clipboard, Database, ExternalLink, PlugZap, RefreshCw } from "lucide-react";
 import { apiFetch, apiUrl, getApiAccessToken } from "../services/api";
 import { databaseLabel } from "../services/Account";
 
-type DbStatus = { database: { configured: boolean; ready: boolean; kind: string | null; provider: string | null; schemaVersion?: number; error?: string }; vault: boolean };
+type DbStatus = { database: { configured: boolean; ready: boolean; kind: string | null; provider: string | null; source?: "DATABASE_URL" | "POSTGRES_URL" | null; schemaVersion?: number; error?: string }; vault: boolean };
+
+/** Vercel's Supabase integration: it creates (or links) a Supabase project and adds POSTGRES_URL to the Vercel project, which HANNAH reads. */
+const VERCEL_SUPABASE = "https://vercel.com/marketplace/supabase";
+
+/** A random secret made in this browser (never sent anywhere): 32 bytes as hex. */
+function randomHex(bytes = 32) {
+  const values = new Uint8Array(bytes);
+  crypto.getRandomValues(values);
+  return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("");
+}
 
 const PRESETS = [
   {
     id: "supabase",
     label: "Supabase",
+    oneClick: {
+      steps: [
+        "Press Connect Supabase on Vercel, pick this HANNAH project, and create a Supabase project (the free plan works) or link one you have. Vercel adds its connection to the project; nothing to copy.",
+        "Add the two secrets below to the same Vercel project (Settings → Environment Variables), then redeploy. HANNAH finds the database by itself and creates its tables.",
+      ],
+    },
     steps: [
       "Create a project at supabase.com (the free plan works).",
-      "Open Project Settings → Database → Connection string, and copy the URI. On Vercel or other serverless hosts use the pooler (port 6543).",
+      "Open Connect (or Project Settings → Database) and copy the connection string. On serverless hosts use the pooler (port 6543): the direct host is IPv6-only.",
       "Replace [YOUR-PASSWORD] with your database password.",
     ],
     url: "postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres",
-    note: "If the connection fails with a certificate error, add DATABASE_SSL=no-verify or set DATABASE_CA_CERT to Supabase's CA certificate.",
+    note: "Connections are verified against Supabase's own certificate authority, which HANNAH has built in.",
   },
   {
     id: "neon",
@@ -62,8 +78,12 @@ export default function DatabaseIntegration() {
     apiFetch(apiUrl("/api/db/status"), { signal: AbortSignal.timeout(8_000) }).then((response) => (response.ok ? response.json() : null)).then(setStatus).catch(() => setStatus(null));
   }, []);
 
+  const [secrets, setSecrets] = useState(() => ({ vault: randomHex(), cron: randomHex(24) }));
   const active = PRESETS.find((item) => item.id === preset)!;
-  const envBlock = `DATABASE_URL=${active.url}\nHANNAH_VAULT_KEY=<run: openssl rand -hex 32>`;
+  const oneClick = "oneClick" in active ? active.oneClick : null;
+  // Never offer a new vault key once one is set: replacing it makes saved keys unreadable.
+  const secretLines = `${status?.vault ? "# HANNAH_VAULT_KEY is already set: keep it\n" : `HANNAH_VAULT_KEY=${secrets.vault}\n`}CRON_SECRET=${secrets.cron}`;
+  const envBlock = oneClick ? secretLines : `DATABASE_URL=${active.url}\n${secretLines}`;
   const operator = Boolean(getApiAccessToken());
 
   const test = async (event: FormEvent) => {
@@ -96,7 +116,7 @@ export default function DatabaseIntegration() {
         </div>
         <span className={`pill-badge ${db?.ready ? "" : "opacity-80"}`} role="status">
           <span className={`h-2 w-2 rounded-full ${db?.ready ? "bg-emerald-500" : db?.configured ? "bg-amber-500" : "bg-slate-300"}`} aria-hidden="true" />
-          {!status ? "Checking…" : db?.ready ? `Connected · ${databaseLabel(db.provider)} · schema v${db.schemaVersion}` : db?.configured ? "Configured but unreachable" : "Not connected"}
+          {!status ? "Checking…" : db?.ready ? `Connected · ${databaseLabel(db.provider)}${db.source === "POSTGRES_URL" ? " (Vercel integration)" : ""} · schema v${db.schemaVersion}` : db?.configured ? "Configured but unreachable" : "Not connected"}
         </span>
       </div>
       {db?.configured && !db.ready && db.error && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{db.error}</p>}
@@ -110,18 +130,37 @@ export default function DatabaseIntegration() {
 
       <div className="mt-4 grid gap-5 lg:grid-cols-2">
         <div>
-          <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-6 text-slate-600">
-            {active.steps.map((step) => <li key={step}>{step}</li>)}
-            <li>Add these to the server environment (<code className="font-mono text-xs">server/.env</code>, or your host's environment variables) and redeploy. Tables are created automatically.</li>
-          </ol>
+          {oneClick ? (
+            <>
+              <p className="text-sm font-semibold text-ink">Hosted on Vercel: connect in one step</p>
+              <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm leading-6 text-slate-600">
+                {oneClick.steps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+              <a href={VERCEL_SUPABASE} target="_blank" rel="noreferrer" className="btn-primary mt-3 inline-flex items-center gap-1.5">Connect Supabase on Vercel <ExternalLink size={13} /></a>
+              <details className="mt-4 text-sm text-slate-600">
+                <summary className="cursor-pointer text-xs font-semibold text-slate-700">Self-hosted, or another host</summary>
+                <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-6">
+                  {active.steps.map((step) => <li key={step}>{step}</li>)}
+                  <li>Set <code className="font-mono text-xs">DATABASE_URL</code> to it, with the two secrets, in <code className="font-mono text-xs">server/.env</code> or your host's environment, and restart.</li>
+                </ol>
+                <pre className="mt-2 whitespace-pre-wrap break-all rounded-xl bg-slate-100 p-2 font-mono text-[11px] text-slate-700">DATABASE_URL={active.url}</pre>
+              </details>
+            </>
+          ) : (
+            <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-6 text-slate-600">
+              {active.steps.map((step) => <li key={step}>{step}</li>)}
+              <li>Add these to the server environment (<code className="font-mono text-xs">server/.env</code>, or your host's environment variables) and redeploy. Tables are created automatically.</li>
+            </ol>
+          )}
           <p className="mt-3 text-xs leading-5 text-slate-500">{active.note}</p>
         </div>
         <div>
           <div className="relative rounded-2xl bg-slate-950 p-4 pr-12 font-mono text-xs leading-6 text-slate-100">
             <pre className="whitespace-pre-wrap break-all">{envBlock}</pre>
             <button type="button" aria-label="Copy environment variables" onClick={() => { void navigator.clipboard?.writeText(envBlock).then(() => setCopied(true)); }} className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">{copied ? <Check size={14} /> : <Clipboard size={14} />}</button>
+            <button type="button" aria-label="Make new secrets" onClick={() => { setSecrets({ vault: randomHex(), cron: randomHex(24) }); setCopied(false); }} className="absolute right-3 top-10 rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"><RefreshCw size={14} /></button>
           </div>
-          <p className="mt-2 text-xs text-slate-500">Keep HANNAH_VAULT_KEY secret and backed up: losing it makes saved provider keys unreadable. Then run <code className="font-mono">npm run db:check</code> in <code className="font-mono">server/</code> to confirm.</p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">These secrets were made in this browser and aren't sent anywhere. HANNAH_VAULT_KEY encrypts saved keys: keep a copy, because losing it makes them unreadable. CRON_SECRET lets a scheduler run workflows on serverless hosting (see the workflows guide). Self-hosted: run <code className="font-mono">npm run db:check</code> in <code className="font-mono">server/</code> to confirm.</p>
         </div>
       </div>
 

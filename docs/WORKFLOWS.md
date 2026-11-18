@@ -143,7 +143,7 @@ Workflows need the account database.
 
 | Setting | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Postgres (Supabase, Neon, any host) or SQLite. Migration 6 creates the workflow tables on start. |
+| `DATABASE_URL` | Postgres (Supabase, Neon, any host) or SQLite. Migration 6 creates the workflow tables on start. Without it, `POSTGRES_URL` is used: Vercel's Supabase integration adds it. |
 | `HANNAH_VAULT_KEY` | 64 hex characters. Encrypts credentials and HMAC webhook secrets. |
 | `CRON_SECRET` | 16+ characters. Authenticates `/api/workflows/tick` on serverless hosting. |
 | `WORKFLOW_WORKER=off` | Don't run the in-process worker (for example when a separate process drives the tick). |

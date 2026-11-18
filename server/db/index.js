@@ -11,8 +11,14 @@
  *   sqlite:./data/hannah.db            A file on a self-hosted server or desktop
  *                                       (needs Node 22.5+; not for serverless)
  *
- * With no DATABASE_URL, HANNAH keeps working on-device only and account
- * features report themselves as unavailable.
+ * With no DATABASE_URL, HANNAH uses POSTGRES_URL if it's set: that's what
+ * Vercel's Supabase integration (Vercel → Storage → Supabase) adds to the
+ * project, so connecting Supabase there needs nothing copied by hand. With
+ * neither, HANNAH keeps working on-device only and account features report
+ * themselves as unavailable.
+ *
+ * Supabase connections are verified against Supabase's own root CA (bundled,
+ * see supabase-ca.js) as well as the public roots.
  *
  * Queries use a portable SQL subset written with $1, $2… placeholders; the
  * SQLite adapter rewrites them to ?1, ?2….
@@ -20,7 +26,18 @@
 
 const path = require("node:path");
 const fs = require("node:fs");
+const tls = require("node:tls");
 const { MIGRATIONS } = require("./migrations");
+
+/** Where the database URL comes from: DATABASE_URL, else POSTGRES_URL (Vercel's Supabase integration). */
+const URL_VARIABLES = ["DATABASE_URL", "POSTGRES_URL"];
+function databaseSource() {
+  return URL_VARIABLES.find((name) => String(process.env[name] || "").trim()) || null;
+}
+function databaseUrl() {
+  const source = databaseSource();
+  return source ? String(process.env[source]).trim() : "";
+}
 
 function redact(url) {
   return String(url).replace(/\/\/([^:@/]+)(:[^@/]*)?@/, "//$1:***@");
@@ -66,18 +83,44 @@ function postgresSsl(url) {
   if (mode === "off" || mode === "disable") return false;
   if (mode === "no-verify") return { rejectUnauthorized: false };
   if (ca) return { rejectUnauthorized: true, ca };
-  if (/[?&]sslmode=/i.test(url)) return undefined; // the driver reads sslmode from the URL
   const provider = detectProvider(url);
+  // Supabase: verified TLS against Supabase's root (and the public ones), whatever sslmode the URL asks for short of off.
+  if (provider === "supabase" && sslModeOf(url) !== "disable") return { rejectUnauthorized: true, ca: [require("./supabase-ca"), ...tls.rootCertificates] };
+  if (sslModeOf(url)) return undefined; // the driver reads sslmode from the URL
   return provider === "local-postgres" ? false : { rejectUnauthorized: true };
+}
+
+function sslModeOf(url) {
+  try {
+    return new URL(url).searchParams.get("sslmode")?.toLowerCase() || null;
+  } catch {
+    return /[?&]sslmode=([^&]*)/i.exec(url)?.[1]?.toLowerCase() || null;
+  }
+}
+
+/**
+ * The driver's settings for a Postgres URL. sslmode in a connection string
+ * overrides the ssl option, so it's dropped when HANNAH sets TLS itself.
+ */
+function postgresConnection(url) {
+  const ssl = postgresSsl(url);
+  if (ssl === undefined) return { connectionString: url };
+  let connectionString = url;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("sslmode");
+    connectionString = parsed.toString();
+  } catch {
+    // Not parseable as a URL: leave it for the driver.
+  }
+  return { connectionString, ssl };
 }
 
 function createPostgres(config) {
   // Loaded lazily so deployments without a database never need the driver.
   const { Pool } = require("pg");
-  const ssl = postgresSsl(config.url);
   const pool = new Pool({
-    connectionString: config.url,
-    ...(ssl === undefined ? {} : { ssl }),
+    ...postgresConnection(config.url),
     max: Math.max(1, Math.min(20, Number(process.env.DATABASE_POOL_MAX) || 3)),
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 8_000,
@@ -196,9 +239,9 @@ async function openDatabase(rawUrl) {
 let current = null;
 let currentUrl = null;
 
-/** The process-wide database from DATABASE_URL, opened once on first use. */
+/** The process-wide database from DATABASE_URL (or POSTGRES_URL), opened once on first use. */
 function getDatabase() {
-  const url = String(process.env.DATABASE_URL || "").trim();
+  const url = databaseUrl();
   if (!url) return Promise.resolve(null);
   if (!current || currentUrl !== url) {
     currentUrl = url;
@@ -212,7 +255,7 @@ function getDatabase() {
 }
 
 function databaseConfigured() {
-  return Boolean(String(process.env.DATABASE_URL || "").trim());
+  return Boolean(databaseUrl());
 }
 
 /** Connect, run SELECT 1 and close. For the operator's "Test connection" button. */
@@ -236,9 +279,10 @@ function describeDatabaseError(error) {
   if (code === "28P01" || code === "28000") return "The database rejected the user name or password.";
   if (code === "3D000") return "That database doesn't exist on the server.";
   if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "The database host name couldn't be found.";
+  if (code === "ENETUNREACH" || code === "EHOSTUNREACH") return "The database host can't be reached from this server. Supabase's direct host (db.<project>.supabase.co) is IPv6-only; on Vercel and most serverless hosts use the pooler URL (…pooler.supabase.com) instead.";
   if (code === "ECONNREFUSED") return "The database refused the connection. Check the host and port.";
   if (code === "ETIMEDOUT" || /timeout/i.test(String(error?.message))) return "The database didn't answer in time. Check the host, port and firewall or IP allow-list.";
-  if (/self[- ]signed|certificate/i.test(String(error?.message))) return "The database's TLS certificate couldn't be verified. Set DATABASE_CA_CERT, or DATABASE_SSL=no-verify if your provider requires it.";
+  if (/self[- ]signed|certificate/i.test(String(error?.message))) return "The database's TLS certificate couldn't be verified. Set DATABASE_CA_CERT to your provider's CA certificate (Supabase's is built in).";
   if (/SSL|ssl/.test(String(error?.message))) return "The database requires a different TLS setting. Add ?sslmode=require to the URL or set DATABASE_SSL.";
   return "Couldn't connect to the database.";
 }
@@ -251,7 +295,7 @@ function describeDatabaseError(error) {
 async function useDatabase(db) {
   const result = await migrate(db);
   db.schemaVersion = result.version;
-  currentUrl = String(process.env.DATABASE_URL || "").trim();
+  currentUrl = databaseUrl();
   current = Promise.resolve(db);
   return db;
 }
@@ -264,4 +308,4 @@ async function resetDatabase() {
   if (pending) await pending.then((db) => db?.close()).catch(() => {});
 }
 
-module.exports = { databaseConfigured, describeDatabaseError, detectProvider, getDatabase, migrate, openDatabase, parseDatabaseUrl, redact, resetDatabase, testDatabaseUrl, useDatabase };
+module.exports = { databaseConfigured, databaseSource, databaseUrl, describeDatabaseError, detectProvider, getDatabase, migrate, openDatabase, parseDatabaseUrl, postgresConnection, redact, resetDatabase, testDatabaseUrl, useDatabase };

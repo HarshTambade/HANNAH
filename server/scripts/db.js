@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 "use strict";
 
-// Check or migrate the database in DATABASE_URL.
+// Check or migrate the database in DATABASE_URL (or POSTGRES_URL, from Vercel's Supabase integration).
 //   npm run db:check     connect and report the provider and schema version
 //   npm run db:migrate   apply pending migrations (also done automatically on first use)
 require("dotenv").config();
-const { describeDatabaseError, openDatabase, parseDatabaseUrl, redact } = require("../db");
+const { databaseUrl, describeDatabaseError, openDatabase, parseDatabaseUrl, redact } = require("../db");
 
 async function main() {
   const command = process.argv[2] || "check";
-  const url = process.env.DATABASE_URL;
+  const url = databaseUrl();
   if (!url) {
-    console.error("DATABASE_URL is not set. Add it to server/.env, for example a Supabase or Neon connection string.");
+    console.error("Neither DATABASE_URL nor POSTGRES_URL is set. Add one to server/.env, for example a Supabase or Neon connection string.");
     process.exitCode = 1;
     return;
   }
