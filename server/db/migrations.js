@@ -428,6 +428,17 @@ const MIGRATIONS = [
       "ALTER TABLE hannah_channels ADD COLUMN seen TEXT",
     ],
   },
+  {
+    version: 13,
+    name: "phone requests from workflows",
+    // A workflow step's phone request carries its execution and step, so the
+    // phone's result resumes that run (and a retry doesn't send a second one).
+    statements: [
+      "ALTER TABLE hannah_phone_commands ADD COLUMN execution_id TEXT",
+      "ALTER TABLE hannah_phone_commands ADD COLUMN node_id TEXT",
+      "CREATE INDEX IF NOT EXISTS hannah_phone_commands_execution ON hannah_phone_commands (execution_id, node_id)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

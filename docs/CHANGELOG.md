@@ -6,6 +6,29 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### New
 
+- **Workflows can use your phone and your desktop.**
+  - **Phone steps:** Check my phones, Find a contact on my phone, Call on my phone, Text on my phone. They go through the same Phone Bridge as chat. You approve every call or text in the run, and then tap Call or Send on the phone. An offline phone fails the step at once, and nothing is kept for later.
+  - **Desktop steps:** Open apps and links (an app with a shared project folder, such as VS Code with your repository, plus links in your browser, after one dialog that lists them) and Desktop notification.
+  - **Example:** a "Morning startup" workflow: a schedule, then open VS Code with the project, then your work links.
+- **More from your mail, and Google Chat.**
+  - **Needs your reply:** HANNAH finds the conversations where the newest message is from someone else and you haven't answered. Automated senders are left out.
+  - **Replies:** she prepares reply drafts that stay in the same Gmail thread or Outlook conversation.
+  - **Organizing:** she archives and labels (Gmail) or categorizes (Outlook), after your approval. She never deletes.
+  - **Attachments:** she lists them, and can download one up to 10 MB.
+  - **Google Chat:** in Settings → Calendar and email, choose **Also connect Google Chat**. HANNAH then reads the spaces you're in, summarizes them, and posts as you only after you approve.
+  - **Dashboard:** a Communications card shows what needs your reply, with Draft reply and Archive buttons and your Chat spaces, each labelled with its account.
+  - **Workflows:** the Email step can find conversations that need a reply, read one message, or save a reply draft. A new Google Chat step reads a space or posts, with approval on every post.
+- **"Hey HANNAH" keeps listening.**
+  - **Desktop app:** it keeps listening while the window is hidden, and the menu bar says so.
+  - **Android:** a native background listener runs in a foreground service, with a notification and Stop button the whole time. Detection stays on the phone, and nothing is sent until you talk to HANNAH. Not yet built or run on a phone: KI-28.
+  - **iPhone:** iOS doesn't let apps listen for their own name, so "Hey Siri, talk to HANNAH" opens HANNAH ready to listen. It's also available in the Shortcuts app.
+- **Memory keeps up with you.**
+  - **Changed facts:** when a fact changes ("I live in Pune" after "I live in Mumbai"), the new one replaces the old, which is kept as its history. There's no second, contradicting memory.
+  - **Temporary chat** (the eye button in chat): it doesn't use or save memories, and it isn't kept in your chat history.
+  - **Export:** memories now export as Markdown as well as JSON.
+- **One risk scale for approvals.** Every action that needs your yes has a level: low (reading), medium (drafts, labels, files in a shared folder), high (messages, calls, email, posts, outside tools) or critical (payments, deleting). Chat, voice and workflows all use the same levels.
+- **Capability matrix** ([docs/CAPABILITY_MATRIX.md](CAPABILITY_MATRIX.md)): what works on each platform, and how far each feature has been verified.
+
 - **HANNAH Desktop can use your apps (macOS, beta).** Ask her to press a button, fill in a field, type, use a shortcut, scroll, switch apps, arrange windows or quit an app.
   - **How she sees:** she reads the window in front through macOS's Accessibility API (its buttons, fields, menus, text and errors) and acts on those elements; a mouse click at a point is only the fallback.
   - **Checking her work:** after each action she looks again, and calls it done only when the app shows it.
@@ -93,6 +116,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### Fixed
 
+- **Memory export no longer claims encryption.** The profile export added a base64 copy of the data labelled as encrypted. Base64 isn't encryption, so the field is gone, and the export is plainly a readable file. Sync still encrypts on its own.
 - **Reminders on Android could stop reaching the phone.**
   - **Cause:** Android 12 and later must allow "exact alarms", and Android 14 doesn't by default. Without that permission, every time HANNAH handed reminders to the phone, the notifications plugin opened the "Alarms & reminders" settings screen and waited. HANNAH queues each hand-over behind the last, so one unanswered screen held up every reminder after it.
   - **Fix:** HANNAH checks the permission first and schedules an inexact reminder when it's missing. It's still delivered, perhaps a few minutes late. Each hand-over now has a time limit.

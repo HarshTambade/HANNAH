@@ -17,6 +17,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A1B2C3D4E5F60718293A4B5C /* HannahPhonePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5D /* HannahPhonePlugin.swift */; };
+		B2C3D4E5F60718293A4B5C6D /* HannahIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D4E5F60718293A4B5C6E /* HannahIntents.swift */; };
 		A2A6B20A101A4FDCB73B29D1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2A6B20A101A4FDCB73B29D2 /* PrivacyInfo.xcprivacy */; };
 		B7C1A0012F00000000000001 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B7C1A0012F00000000000002 /* InfoPlist.strings */; };
 /* End PBXBuildFile section */
@@ -33,6 +34,7 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5D /* HannahPhonePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HannahPhonePlugin.swift; sourceTree = "<group>"; };
+		B2C3D4E5F60718293A4B5C6E /* HannahIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HannahIntents.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		A2A6B20A101A4FDCB73B29D2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B7C1A0012F00000000000003 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -74,6 +76,7 @@
 			children = (
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				A1B2C3D4E5F60718293A4B5D /* HannahPhonePlugin.swift */,
+				B2C3D4E5F60718293A4B5C6E /* HannahIntents.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -176,6 +179,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5C /* HannahPhonePlugin.swift in Sources */,
+				B2C3D4E5F60718293A4B5C6D /* HannahIntents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

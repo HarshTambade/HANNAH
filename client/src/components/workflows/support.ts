@@ -2,6 +2,7 @@
 import {
   AlarmClock, AppWindow, ArrowLeftRight, BadgeCheck, Bell, Bot, BrainCircuit, Braces, CalendarClock, CalendarPlus, Database, FileText, FileUp, Filter, GitBranch, Github, Globe, Group,
   Hourglass, ListEnd, ListTree, Mail, MailOpen, Merge, MessageSquare, MessagesSquare, MousePointerClick, NotebookPen, PenLine, Radio, Repeat, ScanText, Search, ShieldCheck, Sparkles,
+  BellRing, Contact, MessageSquareText, PhoneCall, Smartphone,
   Split, SquareTerminal, TableProperties, Tags, Unplug, Webhook, Workflow, type LucideIcon,
 } from "lucide-react";
 import type { NodeCategory, NodeRun, WorkflowConnection, WorkflowDefinition, WorkflowNode } from "../../services/WorkflowApi";
@@ -10,6 +11,7 @@ const ICONS: Record<string, LucideIcon> = {
   AlarmClock, AppWindow, ArrowLeftRight, BadgeCheck, Bell, Bot, BrainCircuit, Braces, CalendarClock, CalendarPlus, Database, FileText, FileUp, Filter, GitBranch, Github, Globe, Group,
   Hourglass, ListEnd, ListTree, Mail, MailOpen, Merge, MessageSquare, MessagesSquare, MousePointerClick, NotebookPen, PenLine, Radio, Repeat, ScanText, Search, ShieldCheck, Sparkles,
   Split, TableProperties, Tags, TerminalSquare: SquareTerminal, Unplug, Webhook,
+  BellRing, Contact, MessageSquareText, PhoneCall, Smartphone,
 };
 
 export const iconFor = (name: string): LucideIcon => ICONS[name] ?? Workflow;

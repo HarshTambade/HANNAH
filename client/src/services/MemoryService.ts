@@ -1,4 +1,4 @@
-import { categoryOf, DUPLICATE_THRESHOLD, MEMORY_CATEGORIES, rankMemories, secretIn, sensitivityOf, similarity, type MemoryCategory, type MemorySource, type Ranked, type Sensitivity } from "./MemoryModel";
+import { categoryOf, contradicts, DUPLICATE_THRESHOLD, MEMORY_CATEGORIES, rankMemories, secretIn, sensitivityOf, similarity, type MemoryCategory, type MemorySource, type Ranked, type Sensitivity } from "./MemoryModel";
 
 export type MemoryLayer = "session" | "long_term" | "persona";
 export type MemoryTier = "episodic" | "semantic" | "procedural";
@@ -18,10 +18,19 @@ export type MemoryRecord = {
   category: MemoryCategory;
   source: MemorySource;
   sensitivity: Sensitivity;
+  /** Earlier values of this fact, newest first, when a newer statement replaced them (“I moved to Pune”). */
+  previous?: Array<{ content: string; until: string }>;
 };
 
 export type MemorySettings = { enabled: boolean; categories: Record<MemoryCategory, boolean> };
-export type RememberResult = { ok: true; record: MemoryRecord; merged: boolean } | { ok: false; reason: string };
+export type RememberResult = { ok: true; record: MemoryRecord; merged: boolean; replaced?: string } | { ok: false; reason: string };
+
+/**
+ * Temporary chat: for this session HANNAH neither uses nor saves memories.
+ * Kept in memory only, so a reload or a new window starts normally.
+ */
+let temporaryChat = false;
+export const TEMPORARY_CHAT_EVENT = "hannah:temporary-chat";
 
 const KEY = "hannah.memory.v1";
 const SETTINGS_KEY = "hannah.memory.settings.v1";
@@ -52,6 +61,7 @@ function normalize(raw: Partial<MemoryRecord> & { content?: unknown }): MemoryRe
       ? { kind: raw.source.kind, ...(typeof raw.source.detail === "string" ? { detail: raw.source.detail.slice(0, 120) } : {}) }
       : { kind: layer === "persona" ? "you" : "legacy" },
     sensitivity: raw.sensitivity === "sensitive" || raw.sensitivity === "normal" ? raw.sensitivity : sensitivityOf(content),
+    ...(Array.isArray(raw.previous) ? { previous: raw.previous.filter((entry) => entry && typeof entry.content === "string" && typeof entry.until === "string").slice(0, 5).map((entry) => ({ content: entry.content.slice(0, 300), until: entry.until })) } : {}),
   };
 }
 
@@ -90,6 +100,17 @@ function readSettings(): MemorySettings {
 const clean = (content: string) => content.replace(/\s+/g, " ").trim().slice(0, MAX_CHARS);
 
 export const MemoryService = {
+  temporaryChat: () => temporaryChat,
+  /** Temporary chat on or off for this session. */
+  setTemporaryChat(on: boolean) {
+    temporaryChat = on;
+    try {
+      window.dispatchEvent(new Event(TEMPORARY_CHAT_EVENT));
+    } catch {
+      // No window (tests).
+    }
+  },
+
   list(layer?: MemoryLayer, tier?: MemoryTier) {
     const records = read();
     let filtered = records;
@@ -118,6 +139,7 @@ export const MemoryService = {
    */
   remember(content: string, options: { source: MemorySource; layer?: MemoryLayer; category?: MemoryCategory; sensitivity?: Sensitivity; weight?: number }): RememberResult {
     if (!readSettings().enabled) return { ok: false, reason: "Memory is turned off, so HANNAH didn't save this. Turn it on under What HANNAH remembers." };
+    if (temporaryChat) return { ok: false, reason: "This is a temporary chat, so HANNAH doesn't remember anything from it. Turn off Temporary chat to save memories." };
     const text = clean(content);
     if (!text) return { ok: false, reason: "There's nothing to save." };
     const secret = secretIn(text);
@@ -141,6 +163,24 @@ export const MemoryService = {
         records.splice(index, 1);
         write([merged, ...records]);
         return { ok: true, record: merged, merged: true };
+      }
+      // A newer value for the same fact replaces the old one; the old value is kept as its history.
+      const conflict = records.findIndex((record) => record.layer !== "session" && contradicts(record.content, text));
+      if (conflict >= 0) {
+        const existing = records[conflict];
+        const updated: MemoryRecord = {
+          ...existing,
+          content: text,
+          decay: 0,
+          updatedAt: now,
+          source: options.source,
+          category: options.category ?? existing.category,
+          sensitivity: options.sensitivity ?? (existing.sensitivity === "sensitive" ? "sensitive" : sensitivityOf(text)),
+          previous: [{ content: existing.content, until: now }, ...(existing.previous ?? [])].slice(0, 5),
+        };
+        records.splice(conflict, 1);
+        write([updated, ...records]);
+        return { ok: true, record: updated, merged: false, replaced: existing.content };
       }
     }
     const tier: MemoryTier = layer === "session" ? "episodic" : layer === "long_term" ? "semantic" : "procedural";
@@ -207,14 +247,14 @@ export const MemoryService = {
    */
   forMessage(query: string, options: { allowSensitive?: boolean; limit?: number } = {}): { picked: Ranked<MemoryRecord>[]; hiddenSensitive: number } {
     const settings = readSettings();
-    if (!settings.enabled) return { picked: [], hiddenSensitive: 0 };
+    if (!settings.enabled || temporaryChat) return { picked: [], hiddenSensitive: 0 };
     return rankMemories(read(), query, { limit: options.limit ?? 8, allowSensitive: options.allowSensitive, categories: settings.categories });
   },
 
   /** For the search_memories tool: ranked matches, or the newest when there's no query. Never sensitive ones. */
   search(query: string, limit = 20) {
     const settings = readSettings();
-    if (!settings.enabled) return { memories: [] as MemoryRecord[], hiddenSensitive: 0, off: true };
+    if (!settings.enabled || temporaryChat) return { memories: [] as MemoryRecord[], hiddenSensitive: 0, off: true };
     const usable = read().filter((record) => record.layer !== "session" && settings.categories[record.category] !== false);
     const hiddenSensitive = usable.filter((record) => record.sensitivity === "sensitive").length;
     const open = usable.filter((record) => record.sensitivity !== "sensitive");

@@ -749,6 +749,96 @@ export function createDesktopTools(deps) {
       return { approved: true, page };
     },
 
+    /**
+     * A workflow's "Open apps and links" step: one system dialog lists the app
+     * (with a shared project folder) and the links, then each is opened and
+     * checked. Links must be http(s); the app is checked to be running and,
+     * with a project, to show a window named after the folder.
+     */
+    async runWorkflowOpen({ workflowName, app: appName, folder: folderName, urls, notify } = {}) {
+      const state = await load();
+      if (!state.workflowTasks) fail("WORKFLOW_TASKS_OFF", "Workflow tasks are off on this computer. Turn on “Run workflow tasks” in Settings → Desktop access.");
+      const app = appName ? await resolveApp(String(appName)) : null;
+      let folder = null;
+      if (folderName) {
+        const wanted = String(folderName).trim().toLowerCase();
+        folder = state.folders.find((item) => item.id === folderName || item.name.toLowerCase() === wanted) || null;
+        if (!folder) fail("NOT_FOUND", `No folder called “${String(folderName).slice(0, 80)}” is shared in this desktop app. Share it in Settings → Desktop access.`);
+        if (!app) fail("BAD_REQUEST", "Name the app that should open the project.");
+      }
+      const links = [];
+      for (const url of (Array.isArray(urls) ? urls : []).slice(0, 10)) {
+        let parsed;
+        try { parsed = new URL(String(url)); } catch { fail("BAD_REQUEST", `“${String(url).slice(0, 80)}” isn't a web address.`); }
+        if (!/^https?:$/.test(parsed.protocol)) fail("BAD_REQUEST", "Only http and https links can be opened.");
+        links.push(parsed.toString());
+      }
+      if (!app && !links.length) fail("BAD_REQUEST", "The step has nothing to open.");
+      if (links.length && !deps.openUrl) fail("UNAVAILABLE", "This build can't open links.");
+      const lines = [...(app ? [`Open ${app.name}${folder ? ` with ${folder.name}` : ""}`] : []), ...links.map((link) => `Open ${link} in your browser`)];
+      const choice = await deps.confirm({
+        title: "Workflow task",
+        message: `“${String(workflowName || "A workflow").slice(0, 120)}” wants to open things on this computer.`,
+        detail: lines.map((line, index) => `${index + 1}. ${line}`).join("\n"),
+        buttons: ["Open them", "Don't open"],
+      });
+      if (choice !== 0) {
+        await record({ kind: "workflow-open-declined", detail: String(workflowName || "").slice(0, 120) });
+        return { approved: false };
+      }
+      const steps = [];
+      if (app) {
+        try {
+          const folderPath = folder ? await folderPathFor(folder.id) : "";
+          const result = await deps.apps.launch(app, { folder: folderPath });
+          const project = folder && result.verified !== false ? await control.waitForWindow({ appName: app.name, text: folder.name }).catch((error) => ({ checked: false, reason: error.message })) : null;
+          steps.push({
+            step: `Open ${app.name}${folder ? ` with ${folder.name}` : ""}`, ok: result.verified !== false && (!project?.checked || project.found === true),
+            verified: result.verified, alreadyRunning: result.alreadyRunning, detail: describeLaunch(app, result),
+            ...(project ? { project: project.checked ? { loaded: Boolean(project.found), windowTitle: project.windowTitle || null } : { loaded: null, reason: project.reason } } : {}),
+          });
+        } catch (error) {
+          steps.push({ step: `Open ${app.name}`, ok: false, detail: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      for (const link of links) {
+        try {
+          await deps.openUrl(link);
+          // The default browser takes the link; HANNAH can't see its tabs, so this is "handed over", not "loaded".
+          steps.push({ step: `Open ${link}`, ok: true, verified: null, detail: "Handed to your default browser." });
+        } catch (error) {
+          steps.push({ step: `Open ${link}`, ok: false, detail: error instanceof Error ? error.message : String(error) });
+        }
+      }
+      if (notify) deps.notify?.({ title: String(workflowName || "Workflow").slice(0, 80), body: steps.map((step) => `${step.ok ? "✓" : "✗"} ${step.step}`).join("\n") });
+      await record({ kind: "workflow-open", detail: `${steps.filter((step) => step.ok).length}/${steps.length} opened` });
+      return { approved: true, ok: steps.every((step) => step.ok), steps };
+    },
+
+    /**
+     * "Hey HANNAH" in the desktop app: while it's on, the window keeps running
+     * when it's hidden or minimized (no background throttling), so the
+     * on-device detector keeps listening, and the menu bar says so. Detection
+     * itself stays on this computer (WakeWord.ts, Vosk); no audio is sent.
+     */
+    async setWakeListening({ on } = {}) {
+      const listening = on === true;
+      deps.setBackgroundListening?.(listening);
+      deps.onWakeListening?.({ listening });
+      await record({ kind: listening ? "wake-listening-on" : "wake-listening-off" });
+      return { listening, background: Boolean(deps.setBackgroundListening) };
+    },
+
+    /** A workflow's desktop notification. Shown only with workflow tasks on; it can't do anything else. */
+    async workflowNotify({ workflowName, title, body } = {}) {
+      const state = await load();
+      if (!state.workflowTasks) fail("WORKFLOW_TASKS_OFF", "Workflow tasks are off on this computer. Turn on “Run workflow tasks” in Settings → Desktop access.");
+      if (!deps.notify) fail("UNAVAILABLE", "This build can't show notifications.");
+      deps.notify({ title: String(title || workflowName || "HANNAH").slice(0, 120), body: String(body || "").slice(0, 1000) });
+      await record({ kind: "workflow-notification", detail: String(workflowName || "").slice(0, 120) });
+      return { shown: true };
+    },
+
     // ----- screen -----
 
     async screenStatus() {
@@ -1209,7 +1299,7 @@ export function createDesktopTools(deps) {
 export const BRIDGED_METHODS = Object.freeze([
   "listFolders", "addFolder", "removeFolder", "setAccess", "revealFolder",
   "listDirectory", "readFile", "writeFile", "runCommand", "forgetCommand", "recentActivity", "setFolderSandbox",
-  "workflowTaskSettings", "setWorkflowTasks", "approveWorkflowTask", "readWebPage",
+  "workflowTaskSettings", "setWorkflowTasks", "approveWorkflowTask", "readWebPage", "runWorkflowOpen", "workflowNotify", "setWakeListening",
   "screenStatus", "captureScreen", "pauseScreenSession", "stopScreenSession", "openScreenSettings",
   "listApps", "openApp", "forgetApp",
   "startupSettings", "saveStartupRoutine", "setStartupEnabled", "runStartupRoutine",

@@ -37,6 +37,9 @@ export interface HannahDesktopPlugin {
   setWorkflowTasks(options: { enabled: boolean }): Promise<{ enabled: boolean }>;
   approveWorkflowTask(options: { workflowName: string; summary: string; folderId: string }): Promise<{ approved: boolean }>;
   readWebPage(options: { url: string; waitFor?: string; screenshot?: boolean; workflowName: string }): Promise<{ approved: boolean; page?: WebPageRead }>;
+  runWorkflowOpen(options: { workflowName: string; app?: string; folder?: string; urls?: string[]; notify?: boolean }): Promise<{ approved: boolean; ok?: boolean; steps?: WorkflowOpenStep[] }>;
+  workflowNotify(options: { workflowName: string; title: string; body: string }): Promise<{ shown: boolean }>;
+  setWakeListening(options: { on: boolean }): Promise<{ listening: boolean; background: boolean }>;
   /** Screen: one screenshot per request, after a system dialog; a session is shown in the tray and can be paused or stopped. */
   screenStatus(): Promise<ScreenStatus>;
   captureScreen(options: { reason: string }): Promise<ScreenCapture>;
@@ -106,6 +109,7 @@ export type ScreenStatus = ScreenSessionState & { permission: string; platform: 
 export type ScreenCapture = { image: string; mediaType: "image/jpeg" | "image/png"; width: number; height: number; windows: string[]; capturedAt: number; session: ScreenSessionState };
 export type InstalledApp = { id: string; name: string };
 export type AllowedApp = { id: string; name: string; addedAt: number };
+export type WorkflowOpenStep = { step: string; ok: boolean; verified?: boolean | null; alreadyRunning?: boolean; detail: string; project?: { loaded: boolean | null; windowTitle?: string | null; reason?: string } };
 export type AppLaunch = { app: InstalledApp; folder: string | null; verified: boolean | null; alreadyRunning: boolean; outcome: string; project?: { loaded: boolean | null; windowTitle?: string; windowTitles?: string[]; reason?: string } };
 export type StartupStep = { kind: "app"; app: InstalledApp; folderId?: string } | { kind: "url"; url: string } | { kind: "wait"; seconds: number };
 export type StartupRun = { at: number; trigger: "login" | "manual"; ok: boolean; steps: Array<{ label: string; ok: boolean; detail?: string }> };

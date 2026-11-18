@@ -329,6 +329,9 @@ app.post("/api/events", createRateLimiter(rateLimits.events));
 app.post("/api/account/mail/send", createRateLimiter(rateLimits.chat));
 app.post("/api/account/mail/drafts", createRateLimiter(rateLimits.chat));
 app.post("/api/account/calendar/events", createRateLimiter(rateLimits.chat));
+app.post("/api/account/mail/messages/:provider/:id/reply-draft", createRateLimiter(rateLimits.chat));
+app.post("/api/account/mail/messages/:provider/:id/organize", createRateLimiter(rateLimits.chat));
+app.post("/api/account/chat/messages", createRateLimiter(rateLimits.chat));
 // Workflows: one runtime per process. Events anywhere in HANNAH can start workflows with an event trigger.
 const workflowRuntime = createRuntime({ emit: emitUserEvent });
 onUserEvent((userId, event, data) => (databaseConfigured() ? workflowRuntime.emitEvent(userId, event, data, { sourceWorkflowId: data?.workflowId || null, depth: Number(data?.$depth) || 0 }) : 0));
@@ -338,7 +341,25 @@ app.use("/api", createHookRouter({ runtime: workflowRuntime }));
 app.use("/api", createChannelHookRouter({ runtime: workflowRuntime, publicBaseUrl }));
 app.use("/api", createRememberedKeyRouter());
 // Phone Bridge: a paired phone signs its requests over the exact body, so it parses its own.
-app.use("/api", createPhoneBridgeRouter());
+// A workflow's phone step waits for its request: picking it up gives the phone time to report, and the report resumes the run.
+const phoneWorkflowHooks = {
+  delivered: ({ userId, executionId, command, resultWindowMs }) => workflowRuntime.extendWait(userId, executionId, (command.deliveredAt || Date.now()) + resultWindowMs + 15_000),
+  settled: async ({ userId, executionId, nodeId, command }) => {
+    const data = { ok: true, command: { id: command.id, status: command.status, result: command.result, payload: command.payload } };
+    // The phone can answer before the run is saved as waiting; the worker's sweep picks those up too.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        await workflowRuntime.resume(userId, executionId, { nodeId, data });
+        if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) await workflowRuntime.tick({ budgetMs: 8000, only: executionId, preempt: true }).catch(() => {});
+        return;
+      } catch (error) {
+        if (error?.reason !== "not-waiting") return;
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
+    }
+  },
+};
+app.use("/api", createPhoneBridgeRouter({ hooks: phoneWorkflowHooks }));
 app.use(express.json({ limit: "12mb" }));
 if (databaseConfigured()) setSpendStore(createSpendStore());
 const isOperator = (res) => Boolean(res.locals.hannahApiTokenId) && !res.locals.hannahAccount && !res.locals.hannahByok;

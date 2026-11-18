@@ -52,11 +52,13 @@ export default function ConnectionsPanel() {
     };
   }, [refresh]);
 
-  const connect = async (provider: ConnectionProvider) => {
+  const connect = async (provider: ConnectionProvider, features: Array<"chat"> = []) => {
     setBusy(provider.id);
     setError("");
     try {
-      const result = await Connections.connect(provider.id);
+      // Keep Google Chat when connecting again for another reason.
+      const keep = provider.features?.chat ? ["chat" as const] : [];
+      const result = await Connections.connect(provider.id, [...new Set([...keep, ...features])]);
       if (result === "external") setNotice(`Finish signing in to ${provider.label} in your browser, then come back here.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -100,7 +102,11 @@ export default function ConnectionsPanel() {
               </div>
             </div>
             {provider.connected ? (
-              <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-emerald-800"><Check size={13} /> Connected{provider.email ? ` as ${provider.email}` : ""}</p>
+              <>
+                <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-emerald-800"><Check size={13} /> Connected{provider.email ? ` as ${provider.email}` : ""}</p>
+                {provider.features && !provider.features.organize && <p className="mt-1 text-xs leading-5 text-amber-800">Connected before HANNAH could archive and label mail. <button type="button" className="underline" onClick={() => void connect(provider)}>Connect again</button> to allow it.</p>}
+                {provider.id === "google" && provider.features?.chat && <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-800"><Check size={13} /> Google Chat: reads spaces you're in; posts only after you approve.</p>}
+              </>
             ) : !provider.configured ? (
               <p className="mt-3 text-xs leading-5 text-slate-600">Not set up on this server yet. The operator registers a {provider.label} sign-in app and sets its client ID and secret (see docs/CALENDAR_AND_EMAIL.md).</p>
             ) : (
@@ -108,7 +114,10 @@ export default function ConnectionsPanel() {
             )}
             <div className="mt-auto pt-3">
               {provider.connected ? (
-                <button type="button" className="btn-outline !py-1.5 text-rose-700" disabled={busy === provider.id} onClick={() => void disconnect(provider)}>Disconnect</button>
+                <div className="flex flex-wrap gap-2">
+                  {provider.id === "google" && !provider.features?.chat && <button type="button" className="btn-outline !py-1.5" disabled={busy === provider.id} onClick={() => void connect(provider, ["chat"])}>Also connect Google Chat</button>}
+                  <button type="button" className="btn-outline !py-1.5 text-rose-700" disabled={busy === provider.id} onClick={() => void disconnect(provider)}>Disconnect</button>
+                </div>
               ) : (
                 <button type="button" className="btn-primary !py-1.5" disabled={!provider.configured || !vault || busy === provider.id} onClick={() => void connect(provider)}>Connect {provider.label}</button>
               )}

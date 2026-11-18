@@ -12,6 +12,7 @@ import { apiUrl } from "../services/api";
 import { ChaosEngine, type DegradedState } from "../services/ChaosEngine";
 import { RemindersCard } from "./Reminders";
 import { DeviceTasksCard } from "./DeviceTasksPanel";
+import { CommunicationsCard } from "./CommunicationsCard";
 
 type DashboardProps = {
   onOpenChat: () => void;
@@ -417,6 +418,8 @@ export default function Dashboard({ onOpenChat, onOpenMemory, onOpenAutomations,
       <div className="mt-4"><DeviceTasksCard onSignIn={onOpenSettings} /></div>
 
       <div className="mt-4"><RemindersCard /></div>
+
+      <div className="mt-4"><CommunicationsCard onOpenSettings={onOpenSettings} /></div>
 
       <section className="mt-4 grid gap-3 sm:grid-cols-3" aria-label="More">
         {[

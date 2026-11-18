@@ -34,6 +34,13 @@ function deps(overrides: Partial<{ approvePage: boolean; approveTask: boolean; f
       },
       approveWorkflowTask: async (options) => { seen.approveWorkflowTask.push(options); return { approved: overrides.approveTask !== false }; },
       listFolders: async () => ({ folders: overrides.folders ?? [folder("hannah"), folder("notes", "read")], allowedCommands: [], platform: "darwin" }),
+      runWorkflowOpen: async (options) => {
+        seen.open = [...(seen.open ?? []), options];
+        if (overrides.approvePage === false) return { approved: false };
+        const steps = [{ step: `Open ${options.app}`, ok: overrides.fail !== "app", verified: overrides.fail !== "app", detail: overrides.fail === "app" ? "It didn't start." : "Its process is running." }];
+        return { approved: true, ok: steps.every((step) => step.ok), steps };
+      },
+      workflowNotify: async (options) => { seen.notify = [...(seen.notify ?? []), options]; return { shown: true }; },
     },
     runCodingAgent: async (options) => {
       seen.agent.push(options);
@@ -92,5 +99,21 @@ describe("workflow tasks on the desktop", () => {
     ]);
     expect(state.calls[2].body).toEqual({ deviceId: "dev-test0123456789", deviceName: "Test Mac" });
     expect(state.calls[3].body).toMatchObject({ deviceId: "dev-test0123456789", ok: true, output: { title: "Status" } });
+  });
+});
+
+describe("open and notify jobs", () => {
+  it("opens through the desktop's own dialog and reports what was verified; a decline or a failed app fails the job", async () => {
+    const ok = deps();
+    const opened = await runJob(job("open", { app: "Visual Studio Code", folder: "hannah", urls: ["https://github.com/"], notify: true }), ok.value);
+    expect(opened).toMatchObject({ ok: true, output: { steps: [{ ok: true, verified: true }] } });
+    expect(ok.seen.open?.[0]).toEqual({ workflowName: "Nightly check", app: "Visual Studio Code", folder: "hannah", urls: ["https://github.com/"], notify: true });
+    expect(await runJob(job("open", { app: "Visual Studio Code" }), deps({ approvePage: false }).value)).toEqual({ ok: false, error: "You chose not to open these on your desktop." });
+    const failed = await runJob(job("open", { app: "Visual Studio Code" }), deps({ fail: "app" }).value);
+    expect(failed).toMatchObject({ ok: false });
+    expect((failed as { error: string }).error).toMatch(/didn't start/);
+    const note = deps();
+    expect(await runJob(job("notify", { title: "Done", body: "All set" }), note.value)).toEqual({ ok: true, output: { shown: true } });
+    expect(note.seen.notify?.[0]).toEqual({ workflowName: "Nightly check", title: "Done", body: "All set" });
   });
 });

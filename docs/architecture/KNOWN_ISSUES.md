@@ -33,6 +33,11 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 | KI-25 | Computer control (Windows, Linux) | No adapter yet (UI Automation, AT-SPI); the tools say so | P2 | Open |
 | KI-26 | Reminders on Android and iOS | Fixed on main (inexact alarms when Android denies exact ones; a time limit per hand-over; the card shows the phone's state), unit-tested against the plugin's real API; not yet run on a phone or the emulator (the CI APK download stalled) | P1 | Needs a run on a device: set a reminder 2 minutes ahead, close the app, wait |
 | KI-27 | New chat apps and desktop channels | Slack, Discord, Google Chat, Teams and WhatsApp are tested with real signatures against stand-in APIs, and every real endpoint answered as expected with dummy credentials. iMessage was refused for lack of Full Disk Access, and Signal for lack of signal-cli, on this Mac. None has been run with a real bot yet | P1 | Needs the owner's bots and accounts |
+| KI-28 | "Hey HANNAH" on Android (native) | The foreground service and plugin are written and wired, but this Mac has no JDK 17, so they haven't been compiled here; CI builds the APK. Not yet run on a phone | P1 | Needs a CI build, then a run on a phone: turn it on, lock the screen, say "Hey HANNAH" |
+| KI-29 | "Talk to HANNAH" with Siri (iOS) | The App Intent typechecks against the iOS 26 SDK and is in the Xcode project; the app itself doesn't build here (KI-23); not run on an iPhone | P2 | Needs KI-23 fixed, then a run on an iPhone |
+| KI-30 | Gmail and Outlook extras, Google Chat as you | Needs-reply, reply drafts, archive and labels, attachments and Google Chat are tested against recorded Google and Microsoft APIs; not run with a real account. Organizing Gmail needs a new permission, so older connections must connect again. Google Chat needs the Chat API configured for the operator's Google Cloud project | P1 | Needs the owner's accounts, and the Chat API set up |
+| KI-31 | Phone Bridge on a physical phone; phone workflow steps | The bridge and its workflow steps are tested end to end against the real server with a test phone that signs exactly like the app. The dialer and messaging hand-off hasn't been run on a physical phone in this release. The phone only picks up requests while HANNAH is open on it (no push), so a scheduled phone step fails if the phone isn't open | P1 | Needs a physical phone run; push needs FCM and APNs credentials |
+| KI-32 | Semantic memory search | Not implemented. Memories are ranked by matching words (rarer words count more), with categories and recency; there are no embeddings or pgvector | P2 | Open |
 
 ## Details
 
@@ -293,3 +298,31 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 
 - **State:** `createUnsupportedAdapter` answers every call with what's missing: Windows UI Automation and SendInput; Linux AT-SPI with X11 input, or on Wayland the desktop's remote-desktop portal. HANNAH says so instead of trying.
 - **Next:** one adapter per system behind the same interface (`control.mjs`), each tested on a real machine (KI-12).
+
+### KI-28: "Hey HANNAH" on Android not yet built or run on a phone (P1)
+
+- **What's there:** `HannahWakeService.java` is a foreground service of type microphone, with its notification and Stop button shown the whole time. It uses Vosk's Android library with the same two-entry grammar as the other apps, downloads the same model over HTTPS once, and unpacks it with a path-checked tar reader. `HannahWakePlugin.java` asks for the microphone and notifications first. `WakeWord.ts` uses it on Android.
+- **Not verified:** this Mac has only a Java 8 runtime, with no compiler, so the Java hasn't been compiled locally, and the new Gradle dependencies (`vosk-android`, `jna`) haven't been resolved. The next CI build compiles it.
+- **Android's rules it follows:** the service starts only from the open app (Android 14 refuses a microphone service started from the background). In the background, a detection posts a "Tap to talk" notification, because Android doesn't let apps bring themselves to the front.
+
+### KI-29: Siri "Talk to HANNAH" not run on an iPhone (P2)
+
+- iOS doesn't allow a third-party app to listen for its own wake word. `HannahIntents.swift` adds an App Intent and App Shortcut ("Talk to HANNAH", "Hey HANNAH" through Siri) that opens HANNAH ready to listen, through the same voice turn as the microphone button.
+- It typechecks against the iOS SDK at the app's iOS 15 target, and Xcode parses the project with it. A full build waits on KI-23.
+
+### KI-30: mail extras and Google Chat need real accounts (P1)
+
+- **Tested:** each operation's exact API calls, against recorded responses (`server/communications.test.js`, `server/workflows.comms.test.js`).
+- **Permissions:** archiving and labelling in Gmail need `gmail.modify`, which new connections request; older connections are asked to connect again, and HANNAH refuses with that message rather than failing halfway. Google Chat asks separately ("Also connect Google Chat") for `chat.spaces.readonly`, `chat.messages.readonly` and `chat.messages.create`.
+- **Operator setup for Google Chat:** the Google Cloud project behind `GOOGLE_CLIENT_ID` needs the Google Chat API enabled, with a Chat app configured. Restricted scopes need Google's verification before people outside the project can use them.
+
+### KI-31: Phone Bridge not run on a physical phone in 1.5.0; no push (P1)
+
+- **Tested:** `server/workflows.phone.test.js` runs on SQLite and Postgres. It covers lookup, approval, dialer opened, SMS sent and cancelled on iOS, denial, offline, expiry, a phone answering before the run is saved as waiting, and another account's workflow, all through the real signed routes.
+- **Not yet:** the Android dialer and composer, and the iOS `tel:` and Messages sheet, on real phones for this release.
+- **By design:** a request lives one minute, and the phone checks for requests every 3 seconds while HANNAH is open on it. Without push (FCM and APNs need the owner's credentials), a closed app gets nothing, and the step fails without anything happening later.
+
+### KI-32: no semantic memory search (P2)
+
+- Retrieval scores word overlap, weighting rare words (IDF), and filters by category, sensitivity and temporary chat. Embedding-based search (on-device, or pgvector on the server) isn't implemented.
+

@@ -135,6 +135,9 @@ class HannahDesktopImpl {
       ownPid: process.pid,
       stopShortcut: STOP_SHORTCUT,
       onControlSession: (state) => globalThis.__hannahMain?.setControlIndicator?.(state),
+      // "Hey HANNAH": keep the app's windows running while hidden, and show it in the menu bar.
+      setBackgroundListening: (on) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.setBackgroundThrottling(!on); },
+      onWakeListening: (state) => globalThis.__hannahMain?.setWakeIndicator?.(state),
       openScreenSettings: async () => {
         if (process.platform === "darwin") await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
       },

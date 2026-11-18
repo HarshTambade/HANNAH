@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Check, Download, EyeOff, Pencil, Plus, Search, ShieldAlert, Trash2, X } from "lucide-react";
 import { MEMORY_SETTINGS_EVENT, MemoryService, type MemoryRecord } from "../services/MemoryService";
 import { CATEGORY_LABELS, MEMORY_CATEGORIES, SOURCE_LABELS, tokens, type MemoryCategory } from "../services/MemoryModel";
+import { memoriesAsMarkdown } from "../services/MemoryExportService";
 import { MEMORY_EVENT, notifyMemoryChanged } from "../services/MemoryStore";
 
 function when(iso: string) {
@@ -73,12 +74,12 @@ export default function MemoryPanel() {
     return !problem;
   };
 
-  const exportMemories = () => {
+  const exportMemories = (format: "json" | "markdown" = "json") => {
     const payload = { exportedAt: new Date().toISOString(), app: "HANNAH", settings, memories: MemoryService.list() };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+    const url = URL.createObjectURL(format === "markdown" ? new Blob([memoriesAsMarkdown()], { type: "text/markdown" }) : new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `hannah-memories-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `hannah-memories-${new Date().toISOString().slice(0, 10)}.${format === "markdown" ? "md" : "json"}`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -134,7 +135,8 @@ export default function MemoryPanel() {
             <Search size={14} className="text-slate-400" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search memories" aria-label="Search memories" className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none" />
           </label>
-          <button type="button" onClick={exportMemories} className="btn-outline !py-1.5 text-xs"><Download size={12} /> Export</button>
+          <button type="button" onClick={() => exportMemories("json")} className="btn-outline !py-1.5 text-xs"><Download size={12} /> Export JSON</button>
+          <button type="button" onClick={() => exportMemories("markdown")} className="btn-outline !py-1.5 text-xs"><Download size={12} /> Export Markdown</button>
           <div className="flex w-full flex-wrap gap-1.5" role="group" aria-label="Filter by category">
             <button type="button" aria-pressed={filter === "all"} onClick={() => setFilter("all")} className={`rounded-full px-2.5 py-0.5 text-xs ${filter === "all" ? "bg-ink text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>All {records.length}</button>
             {MEMORY_CATEGORIES.filter((category) => counts[category]).map((category) => (
@@ -172,6 +174,7 @@ export default function MemoryPanel() {
                   ) : (
                     <p className="mt-0.5 break-words text-sm text-slate-700">{record.content}</p>
                   )}
+                  {record.previous?.length ? <p className="mt-0.5 text-xs text-slate-500">Earlier: {record.previous.map((entry) => `“${entry.content}” (until ${when(entry.until)})`).join("; ")}</p> : null}
                   <p className="mt-1 text-xs text-slate-500">
                     {SOURCE_LABELS[record.source.kind]}{record.source.detail ? ` (${record.source.detail})` : ""} · saved {when(record.createdAt)}
                     {record.updatedAt !== record.createdAt ? ` · updated ${when(record.updatedAt)}` : ""}

@@ -28,7 +28,7 @@ export default function WakeWordSetting() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-xl">
           <p className="flex items-center gap-2 text-sm font-semibold text-ink"><Ear size={15} /> “Hey HANNAH”</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">Start talking hands-free. Detection runs on this device and only listens for its name; no audio is sent anywhere until you speak to HANNAH after it. Works while HANNAH is open in the desktop app, on Android while it's on screen, or in this browser tab.</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">Start talking hands-free. Detection runs on this device and only listens for its name; no audio is sent anywhere until you speak to HANNAH after it. In the desktop app it keeps listening while the window is hidden (the menu bar says so). On Android it keeps listening in the background, with a notification and a Stop button the whole time. In a browser, only while this tab is open.</p>
         </div>
         <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
           <input
@@ -47,7 +47,7 @@ export default function WakeWordSetting() {
           <span>{state === "error" ? error : stateText[state]}</span>
         </p>
       )}
-      {!supported && <p className="mt-3 text-xs text-slate-600">Not available on this device yet. It works in the desktop app, on Android, and in desktop browsers.</p>}
+      {!supported && <p className="mt-3 text-xs text-slate-600">iPhone doesn't let apps listen for their own name. Say “Hey Siri, talk to HANNAH” instead, or add it as a shortcut in the Shortcuts app; HANNAH opens ready to listen.</p>}
     </div>
   );
 }

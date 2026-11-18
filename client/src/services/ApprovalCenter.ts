@@ -51,6 +51,8 @@ function titleFor(action: string) {
     create_event: "Add a calendar event",
     save_email_draft: "Save an email draft",
     send_email: "Send an email",
+    organize_email: "Organize an email",
+    send_chat_message: "Post in Google Chat",
   };
   return labels[action] ?? action.replaceAll("_", " ");
 }

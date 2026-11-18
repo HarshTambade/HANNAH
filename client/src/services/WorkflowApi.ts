@@ -71,7 +71,7 @@ export type WebhookSecret = { nodeId: string; triggerId: string; secret: string 
 export type ExecutionStatus = "queued" | "running" | "waiting" | "waiting-approval" | "completed" | "failed" | "cancelled" | "timed-out";
 export type Execution = {
   id: string; workflowId: string; workflowVersion: number | null; mode: "manual" | "test" | "schedule" | "webhook" | "event" | "retry"; status: ExecutionStatus;
-  error: string | null; errorNode: string | null; attempts: number; waiting: { nodeId?: string; kind: "time" | "approval" | "webhook" | "device" | "paused"; until?: number; message?: string; details?: unknown; retry?: boolean } | null;
+  error: string | null; errorNode: string | null; attempts: number; waiting: { nodeId?: string; kind: "time" | "approval" | "webhook" | "device" | "phone" | "paused"; until?: number; message?: string; details?: unknown; retry?: boolean } | null;
   retryOf: string | null; cancelRequested: boolean; pauseRequested?: boolean; recoveries?: number; createdAt: number; startedAt: number | null; finishedAt: number | null; updatedAt: number;
   workflowName?: string; nodes?: { done: number; failed: number; skipped: number; total: number };
 };
@@ -188,7 +188,13 @@ export const PERMISSION_LABELS: Record<string, string> = {
   reminders: "Create reminders",
   ai: "Use your AI provider keys (counts toward their usage)",
   "computer-use": "Control your computer",
-  desktop: "Send tasks to your desktop app (reading web pages, coding in shared folders); each one asks you there",
+  desktop: "Send tasks to your desktop app (opening apps and links, reading web pages, coding in shared folders, notifications); each one asks you there",
+  "phone-read": "See your paired phones and whether they're online",
+  "phone-contacts": "Look up names in your paired phone's contacts",
+  "phone-call": "Open your phone's dialer with a number (you approve each run, then tap Call)",
+  "phone-sms": "Open your phone's messaging app with a text (you approve each run, then tap Send)",
   "read-email": "Read your email",
+  "chat-read": "Read Google Chat spaces you're in",
+  "chat-send": "Post in Google Chat as you (you approve each run)",
   "run-code": "Run your JavaScript in an isolated sandbox (no network or files)",
 };

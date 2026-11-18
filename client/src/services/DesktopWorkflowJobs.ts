@@ -1,8 +1,8 @@
 /**
  * Workflow tasks on this desktop.
  *
- * A server workflow's "Read a web page on your desktop" and "Coding task on
- * your desktop" steps queue a job for the account. While the desktop app is
+ * A server workflow's desktop steps (read a web page, coding task, open apps
+ * and links, desktop notification) queue a job for the account. While the desktop app is
  * open and signed in, and the person turned on "Run workflow tasks" in
  * Settings → Desktop access, this runner checks for jobs, claims one (only one
  * device gets it), asks the person in a system dialog, runs it here and
@@ -19,7 +19,7 @@ import { thisDevice } from "./DeviceTasks";
 
 export type DeviceJob = {
   id: string;
-  kind: "browser" | "coding";
+  kind: "browser" | "coding" | "open" | "notify";
   workflowName: string;
   executionId: string;
   input: Record<string, unknown>;
@@ -30,7 +30,7 @@ export type DeviceJob = {
 type Outcome = { ok: true; output: Record<string, unknown> } | { ok: false; error: string };
 
 export type JobDeps = {
-  plugin: Pick<ReturnType<typeof hannahDesktop>, "readWebPage" | "approveWorkflowTask" | "listFolders">;
+  plugin: Pick<ReturnType<typeof hannahDesktop>, "readWebPage" | "approveWorkflowTask" | "listFolders" | "runWorkflowOpen" | "workflowNotify">;
   runCodingAgent: (options: { task: string; folder: SharedFolder; allowCommands: boolean; onActivity: (line: string) => void }) => Promise<string>;
 };
 
@@ -62,6 +62,18 @@ export async function runJob(job: DeviceJob, deps: JobDeps): Promise<Outcome> {
       const activity: string[] = [];
       const reply = await deps.runCodingAgent({ task, folder, allowCommands, onActivity: (line) => { if (activity.length < 40) activity.push(line.slice(0, 300)); } });
       return { ok: true, output: { reply, activity, folder: folder.name } };
+    }
+    if (job.kind === "open") {
+      const urls = Array.isArray(job.input.urls) ? job.input.urls.map(String) : [];
+      const result = await deps.plugin.runWorkflowOpen({ workflowName: job.workflowName, app: String(job.input.app || "") || undefined, folder: String(job.input.folder || "") || undefined, urls, notify: job.input.notify === true });
+      if (!result.approved) return { ok: false, error: "You chose not to open these on your desktop." };
+      const steps = result.steps ?? [];
+      if (!result.ok) return { ok: false, error: steps.filter((step) => !step.ok).map((step) => `${step.step}: ${step.detail}`).join(" ").slice(0, 900) || "Something didn't open." };
+      return { ok: true, output: { steps } };
+    }
+    if (job.kind === "notify") {
+      const result = await deps.plugin.workflowNotify({ workflowName: job.workflowName, title: String(job.input.title || ""), body: String(job.input.body || "") });
+      return { ok: true, output: { shown: result.shown } };
     }
     return { ok: false, error: `This desktop app can't run “${String(job.kind)}” tasks. Update it.` };
   } catch (error) {

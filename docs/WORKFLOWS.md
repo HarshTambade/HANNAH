@@ -84,9 +84,11 @@ Statuses: workflows are **draft**, **published** and **active** or **paused**; v
 | Category | Nodes | Status |
 | --- | --- | --- |
 | Triggers | Manual, Schedule (interval, daily, weekly, cron; time zone), Webhook (token or HMAC), HANNAH event (reminder fired, team finished, budget exceeded, approval requested, workflow completed or failed, custom events), New email (Gmail or Outlook, optional search filter, checked every 5+ minutes), File uploaded (up to 1 MB; CSV and JSON can become one item per row) | Available |
-| Actions | HTTP request, Send notification, Email (read newest, draft, send), Calendar (list, add), Slack, Discord, GitHub (issue, comment, list issues, list workflow runs), Notion page, Save to memory, Create or list reminders, Create document (Markdown or CSV) | Available |
+| Actions | HTTP request, Send notification, Email (read newest, find conversations that need a reply, read one, reply draft in the thread, draft, send), Calendar (list, add), Check my phones (Phone Bridge), Slack, Discord, GitHub (issue, comment, list issues, list workflow runs), Notion page, Save to memory, Create or list reminders, Create document (Markdown or CSV) | Available |
 | | PostgreSQL (parameterized SQL, read-only by default) | Beta |
-| | Read a web page on your desktop, Coding task on your desktop (run by the signed-in desktop app; see "Desktop steps") | Beta |
+| | Read a web page on your desktop, Coding task on your desktop, Open apps and links on your desktop, Desktop notification (run by the signed-in desktop app; see "Desktop steps") | Beta |
+| | Find a contact on my phone, Call on my phone, Text on my phone (the paired phone through the Phone Bridge; see "Phone steps") | Beta |
+| | Google Chat (read a space, list spaces, post as you, with approval on every post) | Beta |
 | Logic | If, Switch, Filter, Merge, Split into items, Aggregate, Limit, Wait, Approval, Wait for webhook | Available |
 | Data | Set fields, Map fields, Extract with pattern, Parse (JSON, CSV, key: value), Convert, Validate | Available |
 | | Code (JavaScript in a sandbox; once for all items or once per item; console output kept with the run) | Beta |
@@ -116,6 +118,19 @@ Verified by:
 - **The app's job runner:** unit tests.
 
 The full chain on a desktop with a person clicking the dialogs hasn't been run end to end. The dialogs can't be automated without a bypass, and adding one would be a security hole.
+
+### Phone steps
+
+"Find a contact on my phone", "Call on my phone" and "Text on my phone" use the HANNAH Phone Bridge (`server/phone-bridge.js`), the same one chat uses. A workflow can't skip any of its checks.
+
+1. **Approval first.** Call and Text ask for approval on every run (`approvalFor`), and that can't be switched off. Nothing reaches the phone before you approve.
+2. **One request, through the bridge's own checks.** `createPhoneCommand` is shared with the chat API. It checks that the phone is paired to this account, allows calls, SMS or contact lookups, and has been seen in the last 45 seconds, and it applies the number rules (no emergency numbers, no `*` or `#` codes). An offline phone fails the step at once, and nothing is queued. The request carries the execution and step, so a retry returns the same open request instead of sending a second one.
+3. **The run waits** (`waiting.kind = "phone"`). The phone picks the request up within its one-minute life, which gives it 10 minutes to report; then it reports with a signed request. The report resumes the run (`hooks.settled` in `server/index.js`). If the phone answers before the run is saved as waiting, the worker's sweep finds the result and resumes the run anyway.
+4. **Only what the phone said.** "Dialer opened" (you tap Call), "composer opened" (you tap Send; an iPhone also reports sent or cancelled), or the phone's refusal. "Call connected" isn't reported: phones don't tell apps that. An unanswered request expires, the run times out, and nothing happens on the phone later.
+
+Verified by `server/workflows.phone.test.js` on SQLite and Postgres, with a test phone that signs exactly like the app; see KI-31 for what's left to verify on physical phones.
+
+**Open apps and links** sends one job with the app (and optionally a shared project folder) and up to 10 http(s) links. The desktop shows them all in one dialog, opens them, checks that the app is running and that its window shows the project folder, and hands the links to the default browser. It reports the browser hand-off as "handed over", not "loaded", because HANNAH can't see the browser's tabs.
 
 ## 5. Security
 

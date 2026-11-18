@@ -28,6 +28,12 @@
 
         </activity>
 
+        <!-- "Hey HANNAH" in the background (HannahWakeService): a microphone foreground service, always shown with a Stop button. -->
+        <service
+            android:name=".HannahWakeService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -42,6 +48,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "Hey HANNAH" in the background, only after the person turns it on: a visible microphone foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Phone Bridge: look up a name on this phone when the person allows it. No CALL_PHONE or SEND_SMS: the dialer and messaging app do that after the person taps. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- Android 11+ package visibility: check that a dialer and a messaging app exist. -->

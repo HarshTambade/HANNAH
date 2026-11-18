@@ -10,10 +10,12 @@
  *
  * Off by default. The first time it's turned on, the app downloads the speech
  * model (about 41 MB) from the HANNAH website and keeps it in this device's
- * storage. It listens only while HANNAH is open (on Android, while the app is
- * on screen), and it pauses while HANNAH is listening to you or speaking.
+ * storage. In the desktop app it keeps listening while the window is hidden;
+ * on Android a native foreground service (HannahWakeService.java, always shown
+ * with Stop) listens in the background. It pauses while HANNAH is listening to
+ * you or speaking. iOS doesn't allow it: "Hey Siri, talk to HANNAH" instead.
  */
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { apiUrl } from "./api";
 
 export const WAKE_EVENT = "hannah:wake";
@@ -51,9 +53,19 @@ function storage() {
   }
 }
 
+/** In the desktop app, keep listening while the window is hidden and show it in the menu bar. */
+let desktopListening: boolean | null = null;
+function tellDesktop(listening: boolean) {
+  if (desktopListening === listening) return;
+  desktopListening = listening;
+  void import("./DesktopFiles").then(({ desktopFilesAvailable, hannahDesktop }) => (desktopFilesAvailable() ? hannahDesktop().setWakeListening({ on: listening }) : undefined)).catch(() => undefined);
+}
+
 function setState(next: WakeState, error = "") {
   state = next;
   lastError = error;
+  // Paused (HANNAH has the microphone for a voice turn) still counts as on.
+  tellDesktop(next === "listening" || next === "paused" || next === "loading");
   try {
     window.dispatchEvent(new Event(WAKE_STATE_EVENT));
   } catch {
@@ -81,9 +93,10 @@ export function heardWakePhrase(text: string) {
   return /(?:^|\s)hey hannah(?:\s|$)/.test(String(text).toLowerCase().replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim());
 }
 
-/** Desktop app, Android and desktop browsers; iOS isn't supported yet. */
+/** Desktop app, Android and desktop browsers. iOS doesn't allow it: use Siri, “Talk to HANNAH” (startSiriVoiceLaunch). */
 export function wakeWordSupported() {
   if (typeof window === "undefined" || Capacitor.getPlatform() === "ios") return false;
+  if (usesNativeWake()) return true;
   const hasAudio = typeof window.AudioContext === "function" || typeof (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext === "function";
   return typeof navigator.mediaDevices?.getUserMedia === "function" && typeof WebAssembly === "object" && typeof Worker === "function" && hasAudio;
 }
@@ -157,7 +170,71 @@ function heard(text: string) {
   }, 10_000);
 }
 
+// ---------- Android: the native background listener (HannahWakeService.java) ----------
+
+type NativeWakeState = "off" | "loading" | "listening" | "paused" | "error";
+interface HannahWakePlugin {
+  start(options: { modelUrl: string }): Promise<{ state: NativeWakeState }>;
+  stop(): Promise<{ state: NativeWakeState }>;
+  pause(options: { paused: boolean }): Promise<{ paused: boolean }>;
+  status(): Promise<{ state: NativeWakeState; detail: string; microphone: string }>;
+  pendingWake(): Promise<{ pending: boolean }>;
+  addListener(event: "wake", listener: (data: { source: string }) => void): Promise<PluginListenerHandle>;
+  addListener(event: "state", listener: (data: { state: NativeWakeState; detail: string }) => void): Promise<PluginListenerHandle>;
+}
+let nativePlugin: HannahWakePlugin | null = null;
+let nativeListening = false;
+/** On Android the app listens natively, in a foreground service that keeps going in the background. */
+export function usesNativeWake() {
+  return typeof window !== "undefined" && Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android" && Capacitor.isPluginAvailable("HannahWake");
+}
+function nativeWake() {
+  if (!nativePlugin) {
+    nativePlugin = registerPlugin<HannahWakePlugin>("HannahWake");
+    void nativePlugin.addListener("state", ({ state: next, detail }) => {
+      nativeListening = next !== "off" && next !== "error";
+      // Stop in the notification means off: the next launch doesn't start listening again.
+      if (next === "off") storage()?.setItem(ENABLED_KEY, "off");
+      setState(next, detail);
+    });
+    void nativePlugin.addListener("wake", () => openVoiceTurnFromNative());
+    // Opened by tapping "You said Hey HANNAH" while HANNAH was in the background.
+    void nativePlugin.pendingWake().then(({ pending }) => { if (pending) openVoiceTurnFromNative(); }).catch(() => undefined);
+  }
+  return nativePlugin;
+}
+function openVoiceTurnFromNative() {
+  if (Date.now() - lastWake < COOLDOWN_MS) return;
+  lastWake = Date.now();
+  pendingWake = true;
+  setState("paused");
+  window.dispatchEvent(new Event(WAKE_EVENT));
+  // If no voice turn takes the microphone, the service listens again.
+  clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(() => {
+    if (pendingWake && !busy) {
+      pendingWake = false;
+      void nativeWake().pause({ paused: false }).catch(() => undefined);
+    }
+  }, 10_000);
+}
+async function startNative() {
+  setState("loading");
+  try {
+    const url = new URL(wakeModelUrl(), window.location.href).toString();
+    await nativeWake().start({ modelUrl: url });
+    nativeListening = true;
+  } catch (error) {
+    nativeListening = false;
+    setState("error", error instanceof Error ? error.message : String(error));
+  }
+}
+
 async function start() {
+  if (usesNativeWake()) {
+    if (!WakeWord.enabled() || nativeListening) return;
+    return startNative();
+  }
   if (!WakeWord.enabled() || busy || starting || recognizer) return;
   if (!wakeWordSupported()) {
     setState("unsupported", "This device can't run the wake word.");
@@ -220,6 +297,12 @@ function stop() {
   stopAudio();
 }
 
+/** Turning the wake word off on Android stops the background service; leaving the screen doesn't. */
+function stopNative() {
+  nativeListening = false;
+  void nativeWake().stop().catch(() => undefined);
+}
+
 export const WakeWord = {
   enabled() {
     return storage()?.getItem(ENABLED_KEY) === "on";
@@ -230,6 +313,7 @@ export const WakeWord = {
       await start();
     } else {
       stop();
+      if (usesNativeWake()) stopNative();
       model?.terminate();
       model = null;
       modelLoading = null;
@@ -242,6 +326,13 @@ export const WakeWord = {
   setBusy(value: boolean) {
     if (busy === value) return;
     busy = value;
+    if (usesNativeWake()) {
+      // The voice turn takes the microphone from the service, then gives it back.
+      clearTimeout(resumeTimer);
+      if (value) pendingWake = false;
+      if (WakeWord.enabled() && nativeListening) void nativeWake().pause({ paused: value }).catch(() => undefined);
+      return;
+    }
     if (value) {
       pendingWake = false;
       clearTimeout(resumeTimer);
@@ -260,9 +351,54 @@ export const WakeWord = {
   },
 };
 
+/**
+ * Open a voice turn from outside the detector: Siri / Shortcuts on iPhone
+ * ("Talk to HANNAH", HannahIntents.swift). Same event and same chat path as
+ * "Hey HANNAH", so voice and text use one task system.
+ */
+export function requestVoiceTurn() {
+  if (typeof window === "undefined") return;
+  pendingWake = true;
+  window.dispatchEvent(new Event(WAKE_EVENT));
+}
+
+const SIRI_LAUNCH_KEY = "hannah.voiceLaunch";
+const SIRI_LAUNCH_FRESH_MS = 2 * 60_000;
+
+/** On iPhone, a "Talk to HANNAH" from Siri leaves a timestamp; a fresh one opens a voice turn, once. Exported for tests. */
+export async function checkSiriLaunch({ now = Date.now(), preferences }: { now?: number; preferences?: { get(o: { key: string }): Promise<{ value: string | null }>; remove(o: { key: string }): Promise<void> } } = {}) {
+  const prefs = preferences ?? (await import("@capacitor/preferences")).Preferences;
+  const { value } = await prefs.get({ key: SIRI_LAUNCH_KEY });
+  if (!value) return false;
+  await prefs.remove({ key: SIRI_LAUNCH_KEY });
+  const at = Number(value);
+  if (!Number.isFinite(at) || now - at > SIRI_LAUNCH_FRESH_MS || at - now > 60_000) return false;
+  requestVoiceTurn();
+  return true;
+}
+
+/** Listen for Siri launches while the iPhone app runs. Returns a stop function. */
+export function startSiriVoiceLaunch() {
+  if (typeof window === "undefined" || !Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "ios") return () => undefined;
+  const check = () => void checkSiriLaunch().catch(() => undefined);
+  check();
+  const onVisible = () => { if (document.visibilityState === "visible") check(); };
+  document.addEventListener("visibilitychange", onVisible);
+  return () => document.removeEventListener("visibilitychange", onVisible);
+}
+
 /** Start listening if the wake word was left on. */
 export function startWakeWord() {
   if (typeof window === "undefined") return () => undefined;
+  if (usesNativeWake()) {
+    // Attach to a service that may already be running, and report its real state.
+    void nativeWake().status().then(({ state: current, detail }) => {
+      nativeListening = current !== "off" && current !== "error";
+      if (nativeListening || current === "error") setState(current, detail);
+      else if (WakeWord.enabled()) void start();
+    }).catch(() => { if (WakeWord.enabled()) void start(); });
+    return () => undefined;
+  }
   if (WakeWord.enabled()) void start();
   return () => stop();
 }

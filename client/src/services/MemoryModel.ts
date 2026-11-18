@@ -141,6 +141,36 @@ export function similarity(a: string, b: string) {
 
 export const DUPLICATE_THRESHOLD = 0.8;
 
+/**
+ * What a statement is about and what it says, for facts with one current value:
+ * "my favourite food is biryani", "I live in Pune", "I work at Acme",
+ * "my brother's number is …", "I prefer VS Code". Null for anything else.
+ * Exported for tests.
+ */
+export function factOf(text: string): { subject: string; value: string } | null {
+  const clean = String(text).toLowerCase().replace(/[“”"]/g, "").replace(/[.!]+$/, "").replace(/\s+/g, " ").trim();
+  const patterns: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+    [/^(?:the user's |user's |my )(.{2,60}?) (?:is|are|was) (?:now )?(.{1,120})$/, (m) => m[1]],
+    [/^(?:the user |i )(?:now )?(live|lives|stay|stays|work|works|study|studies) (?:in|at|for) (.{1,120})$/, (m) => m[1].replace(/s$/, "").replace(/ie$/, "y")],
+    [/^(?:the user |i )(?:now )?(?:prefer|prefers|use|uses) (.{1,80}?) (?:for|as) (.{1,80})$/, (m) => `prefer for ${m[2]}`],
+  ];
+  for (const [pattern, subject] of patterns) {
+    const match = clean.match(pattern);
+    if (!match) continue;
+    const key = subject(match).replace(/\bfavorite\b/g, "favourite").replace(/^(?:current |main )/, "").trim();
+    const value = pattern === patterns[2][0] ? match[1] : match[2];
+    if (key && value) return { subject: key, value: value.trim() };
+  }
+  return null;
+}
+
+/** True when two statements give different values for the same fact. Exported for tests. */
+export function contradicts(older: string, newer: string) {
+  const a = factOf(older);
+  const b = factOf(newer);
+  return Boolean(a && b && a.subject === b.subject && a.value !== b.value && similarity(a.value, b.value) < DUPLICATE_THRESHOLD);
+}
+
 export type RankableMemory = {
   id: string;
   content: string;

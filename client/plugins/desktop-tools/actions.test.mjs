@@ -231,3 +231,39 @@ test("startup routine: saved after showing the steps, on only when turned on, ru
   assert.equal(loginItem(), false, "turning it off removes the login item");
   assert.equal((await instance.runStartupRoutine({ trigger: "login" })).ran, false);
 });
+
+test("workflow open step: off unless workflow tasks are on; one dialog lists everything; declined opens nothing; only http(s) links", async () => {
+  const project = path.join(sandbox, "home", "work", "startup");
+  await mkdir(project, { recursive: true });
+  const apps = [{ id: "/A/Visual Studio Code.app", name: "Visual Studio Code" }];
+  const { instance, asked, launches, opened, notes } = harness({ apps, folder: project, answers: [0, 0, 1, 0] });
+  const { folder } = await instance.addFolder({ access: "read" });
+  const request = { workflowName: "Morning startup", app: "Visual Studio Code", folder: folder.name, urls: ["https://github.com/", "https://mail.google.com/"], notify: true };
+  await assert.rejects(instance.runWorkflowOpen(request), /Workflow tasks are off/);
+  await instance.setWorkflowTasks({ enabled: true }); // answers[0]
+  const result = await instance.runWorkflowOpen(request); // answers[1]
+  assert.equal(result.approved, true);
+  assert.equal(result.ok, true);
+  assert.match(asked.at(-1).detail, /1\. Open Visual Studio Code with startup\n2\. Open https:\/\/github.com\/ in your browser\n3\. Open https:\/\/mail.google.com\/ in your browser/);
+  assert.equal(launches.length, 1);
+  assert.deepEqual(opened, ["https://github.com/", "https://mail.google.com/"]);
+  assert.equal(result.steps[1].verified, null, "a link handed to the browser isn't claimed as loaded");
+  assert.match(notes.at(-1).body, /✓ Open Visual Studio Code with startup/);
+
+  assert.deepEqual(await instance.runWorkflowOpen(request), { approved: false }); // answers[2]: declined
+  assert.equal(launches.length, 1, "declined: nothing opened");
+  assert.equal(opened.length, 2);
+  await assert.rejects(instance.runWorkflowOpen({ ...request, urls: ["file:///etc/passwd"] }), /Only http and https/);
+  await assert.rejects(instance.runWorkflowOpen({ ...request, folder: "not-shared" }), /No folder called/);
+  await assert.rejects(instance.runWorkflowOpen({ workflowName: "Empty" }), /nothing to open/);
+  assert.deepEqual(await instance.workflowNotify({ workflowName: "W", title: "Done", body: "All set" }), { shown: true });
+  assert.deepEqual(notes.at(-1), { title: "Done", body: "All set" });
+});
+
+test("Hey HANNAH on the desktop: background listening is switched with the wake word and shown in the menu bar", async () => {
+  const calls = [];
+  const instance = createDesktopTools({ storePath: path.join(sandbox, `wake-${Math.random()}.json`), confirm: async () => 0, home: path.join(sandbox, "home"), setBackgroundListening: (on) => calls.push(["throttle-off", on]), onWakeListening: (state) => calls.push(["indicator", state.listening]) });
+  assert.deepEqual(await instance.setWakeListening({ on: true }), { listening: true, background: true });
+  assert.deepEqual(await instance.setWakeListening({ on: false }), { listening: false, background: true });
+  assert.deepEqual(calls, [["throttle-off", true], ["indicator", true], ["throttle-off", false], ["indicator", false]]);
+});

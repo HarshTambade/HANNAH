@@ -6,7 +6,24 @@ import { SideEffectLedger } from "./SideEffectLedger";
 import { GuardianAgent } from "./GuardianAgent";
 import { ApprovalCenter } from "./ApprovalCenter";
 
-export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file" | "external_tool" | "create_event" | "save_email_draft" | "send_email";
+export type SensitiveAction = "send_message" | "make_call" | "make_payment" | "toggle_setting" | "store_memory" | "delete_memory" | "delete_credential" | "read_file" | "desktop_action" | "write_file" | "delete_file" | "external_tool" | "create_event" | "save_email_draft" | "send_email" | "organize_email" | "send_chat_message";
+
+/**
+ * One risk scale for every action that needs the person's yes (chat, voice and
+ * workflows alike): low reads approved information; medium changes something
+ * of theirs that can be undone (a draft, a label, a file in a shared folder);
+ * high reaches other people or the outside world (messages, calls, email,
+ * outside tools); critical is money or can't be undone. A higher level never
+ * gets fewer confirmations, whatever autonomy settings say.
+ */
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+export const ACTION_RISK: Record<SensitiveAction, RiskLevel> = {
+  read_file: "low",
+  store_memory: "medium", save_email_draft: "medium", organize_email: "medium", create_event: "medium", write_file: "medium", toggle_setting: "medium",
+  send_message: "high", make_call: "high", send_email: "high", send_chat_message: "high", external_tool: "high", desktop_action: "high",
+  make_payment: "critical", delete_file: "critical", delete_memory: "critical", delete_credential: "critical",
+};
+export const riskOf = (action: SensitiveAction): RiskLevel => ACTION_RISK[action] ?? "high";
 
 export class HITLDeniedError extends Error {
   constructor(message = "Action cancelled. HANNAH did not make any changes.") { super(message); this.name = "HITLDeniedError"; }
@@ -30,6 +47,15 @@ function describeAction(action: SensitiveAction, args: Record<string, unknown>) 
     const body = String(args.body ?? "");
     const from = args.provider ? ` from your ${args.provider === "microsoft" ? "Outlook" : "Gmail"} account` : "";
     return `${action === "send_email" ? `Send this email${from}? It can't be unsent.` : `Save this email as a draft${from}? It won't be sent.`}\n\n${lines.join("\n")}\n\n${body.slice(0, 1200)}${body.length > 1200 ? "…" : ""}`;
+  }
+  if (action === "organize_email") {
+    const labels = Array.isArray(args.labels) ? args.labels.map(String).filter(Boolean) : [];
+    const what = [args.archive === true ? "archive it (it leaves the inbox; nothing is deleted)" : "", labels.length ? `add ${labels.length === 1 ? "the label" : "the labels"} ${labels.join(", ")}` : ""].filter(Boolean).join(" and ");
+    return `In your ${args.provider === "microsoft" ? "Outlook" : "Gmail"} account, ${what || "organize this email"}?\n\n${String(args.subject ?? args.id ?? "")}`;
+  }
+  if (action === "send_chat_message") {
+    const text = String(args.text ?? "");
+    return `Post this in Google Chat${args.spaceName ? ` (${String(args.spaceName)})` : ""}, as you? Everyone in that space can see it.\n\n${text.slice(0, 1200)}${text.length > 1200 ? "…" : ""}`;
   }
   if (action === "create_event") {
     const when = (value: unknown) => {

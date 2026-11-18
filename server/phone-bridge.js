@@ -121,7 +121,78 @@ const RESULTS = {
 };
 const FINAL = new Set(["declined", "failed", "sent", "cancelled", "resolved", "dialer-opened", "expired", "no-report"]);
 
-function createPhoneBridgeRouter({ now = () => Date.now() } = {}) {
+/**
+ * Queue one request for a paired phone, with every check: the action, the
+ * phone (the given one, or the default), the capability the person allowed on
+ * it, that it's online right now, and the number's rules. Used by the
+ * computer's API and by workflow steps, so both follow the same rules.
+ * A workflow step's request carries its execution and step, and the same
+ * step's request that is still open is returned instead of a second one.
+ */
+async function createPhoneCommand(db, userId, input, { now = () => Date.now(), executionId = null, nodeId = null } = {}) {
+  const action = String(input?.action || "");
+  if (!ACTIONS[action]) throw fail(400, "The action must be call, sms or lookup.", "bad-request");
+  if (executionId) {
+    const { rows: [open] } = await db.query("SELECT * FROM hannah_phone_commands WHERE user_id = $1 AND execution_id = $2 AND node_id = $3 AND status IN ('pending', 'delivered', 'composer-opened') ORDER BY created_at DESC LIMIT 1", [userId, executionId, nodeId]);
+    if (open && !(open.status === "pending" && Number(open.expires_at) <= now())) {
+      const { rows: [phone] } = await db.query("SELECT * FROM hannah_paired_phones WHERE id = $1", [open.phone_id]);
+      return { command: publicCommand(open, now()), phone: publicPhone(phone, now()), reused: true };
+    }
+  }
+  const { rows: phones } = await db.query("SELECT * FROM hannah_paired_phones WHERE user_id = $1 AND revoked_at IS NULL ORDER BY is_default DESC, last_seen_at DESC", [userId]);
+  if (!phones.length) throw fail(409, "No phone is paired. Pair one in Settings → Phone.", "no-phone");
+  const wanted = input?.phoneId ? phones.find((phone) => phone.id === String(input.phoneId) || phone.name.toLowerCase() === String(input.phoneId).toLowerCase()) : phones[0];
+  if (!wanted) throw fail(404, "That phone isn't paired.", "not-found");
+  const capabilities = parse(wanted.capabilities, []);
+  if (!capabilities.includes(ACTIONS[action])) throw fail(403, `${wanted.name} doesn't allow ${action === "lookup" ? "contact lookups" : action === "sms" ? "preparing SMS" : "calls"}. Turn it on in HANNAH on the phone (Settings → Phone).`, "not-allowed");
+  const at = now();
+  if (wanted.last_seen_at === null || at - Number(wanted.last_seen_at) >= ONLINE_MS) {
+    throw fail(409, `${wanted.name} is offline: open HANNAH on it with “Use this phone from my computer” on, then try again. Nothing was sent.`, "phone-offline");
+  }
+  let payload;
+  if (action === "lookup") {
+    const query = clean(input?.query, 80);
+    if (query.length < 2) throw fail(400, "Give at least two letters of the name.", "bad-request");
+    payload = { query };
+  } else {
+    payload = { number: normalizeNumber(input?.number), name: clean(input?.name, 80) || null };
+    if (action === "sms") {
+      const body = clean(input?.body, 1000);
+      if (!body) throw fail(400, "Write the message.", "bad-request");
+      payload.body = body;
+    }
+  }
+  const id = newId("pc");
+  const nonce = crypto.randomBytes(16).toString("base64url");
+  await db.query(
+    "INSERT INTO hannah_phone_commands (id, user_id, phone_id, action, payload, nonce, status, requested_by, created_at, expires_at, execution_id, node_id) VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9, $10, $11)",
+    [id, userId, wanted.id, action, JSON.stringify(payload), nonce, clean(input?.deviceName, 80) || "A computer", at, at + COMMAND_TTL_MS, executionId, nodeId],
+  );
+  await db.query("DELETE FROM hannah_phone_commands WHERE user_id = $1 AND created_at < $2", [userId, at - 30 * 86_400_000]);
+  const { rows: [row] } = await db.query("SELECT * FROM hannah_phone_commands WHERE id = $1", [id]);
+  return { command: publicCommand(row, now()), phone: publicPhone(wanted, now()) };
+}
+
+/** The account's paired phones, as the dashboard shows them. */
+async function listPhones(db, userId, now = Date.now()) {
+  const { rows } = await db.query("SELECT * FROM hannah_paired_phones WHERE user_id = $1 AND revoked_at IS NULL ORDER BY is_default DESC, created_at", [userId]);
+  return rows.map((row) => publicPhone(row, now));
+}
+
+/** When a request is over as far as HANNAH can tell (Android doesn't report a send after the composer opens). */
+const settled = (command, platform) => FINAL.has(command.status) || (command.status === "composer-opened" && platform === "android");
+
+function createPhoneBridgeRouter({ now = () => Date.now(), hooks = {} } = {}) {
+  // A workflow step waiting on a request hears when the phone picks it up and when it's settled.
+  const tell = async (event, row, phone) => {
+    if (!row.execution_id || !hooks[event]) return;
+    try {
+      const { rows: [fresh] } = await (await getDatabase()).query("SELECT * FROM hannah_phone_commands WHERE id = $1", [row.id]);
+      await hooks[event]({ userId: row.user_id, executionId: row.execution_id, nodeId: row.node_id, command: publicCommand(fresh || row, now()), platform: phone.platform, resultWindowMs: RESULT_WINDOW_MS });
+    } catch (error) {
+      console.error(`Phone bridge workflow hook failed (${error?.code || error?.name || "error"}).`);
+    }
+  };
   const router = express.Router();
   // The raw body is kept: a phone's signature covers its exact bytes.
   const json = express.json({ limit: "64kb", verify: (req, _res, buffer) => { req.rawBody = buffer.toString("utf8"); } });
@@ -202,40 +273,8 @@ function createPhoneBridgeRouter({ now = () => Date.now() } = {}) {
   }));
 
   router.post("/phone/commands", json, withAccount(async (req, res, db, account) => {
-    const action = String(req.body?.action || "");
-    if (!ACTIONS[action]) throw fail(400, "The action must be call, sms or lookup.", "bad-request");
-    const { rows: phones } = await db.query("SELECT * FROM hannah_paired_phones WHERE user_id = $1 AND revoked_at IS NULL ORDER BY is_default DESC, last_seen_at DESC", [account.id]);
-    if (!phones.length) throw fail(409, "No phone is paired. Pair one in Settings → Phone.", "no-phone");
-    const wanted = req.body?.phoneId ? phones.find((phone) => phone.id === String(req.body.phoneId)) : phones[0];
-    if (!wanted) throw fail(404, "That phone isn't paired.", "not-found");
-    const capabilities = parse(wanted.capabilities, []);
-    if (!capabilities.includes(ACTIONS[action])) throw fail(403, `${wanted.name} doesn't allow ${action === "lookup" ? "contact lookups" : action === "sms" ? "preparing SMS" : "calls"}. Turn it on in HANNAH on the phone (Settings → Phone).`, "not-allowed");
-    const at = now();
-    if (wanted.last_seen_at === null || at - Number(wanted.last_seen_at) >= ONLINE_MS) {
-      throw fail(409, `${wanted.name} is offline: open HANNAH on it with “Use this phone from my computer” on, then try again. Nothing was sent.`, "phone-offline");
-    }
-    let payload;
-    if (action === "lookup") {
-      const query = clean(req.body?.query, 80);
-      if (query.length < 2) throw fail(400, "Give at least two letters of the name.", "bad-request");
-      payload = { query };
-    } else {
-      payload = { number: normalizeNumber(req.body?.number), name: clean(req.body?.name, 80) || null };
-      if (action === "sms") {
-        const body = clean(req.body?.body, 1000);
-        if (!body) throw fail(400, "Write the message.", "bad-request");
-        payload.body = body;
-      }
-    }
-    const id = newId("pc");
-    const nonce = crypto.randomBytes(16).toString("base64url");
-    await db.query(
-      "INSERT INTO hannah_phone_commands (id, user_id, phone_id, action, payload, nonce, status, requested_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, $8, $9)",
-      [id, account.id, wanted.id, action, JSON.stringify(payload), nonce, clean(req.body?.deviceName, 80) || "A computer", at, at + COMMAND_TTL_MS],
-    );
-    await db.query("DELETE FROM hannah_phone_commands WHERE user_id = $1 AND created_at < $2", [account.id, at - 30 * 86_400_000]);
-    const { rows: [row] } = await db.query("SELECT * FROM hannah_phone_commands WHERE id = $1", [id]);
-    res.status(201).json({ command: publicCommand(row, now()), phone: publicPhone(wanted, now()) });
+    const { command, phone } = await createPhoneCommand(db, account.id, req.body || {}, { now });
+    res.status(201).json({ command, phone });
   }));
 
   router.get("/phone/commands", withAccount(async (req, res, db, account) => {
@@ -296,7 +335,10 @@ function createPhoneBridgeRouter({ now = () => Date.now() } = {}) {
     const delivered = [];
     for (const row of rows) {
       const { rowCount } = await db.query("UPDATE hannah_phone_commands SET status = 'delivered', delivered_at = $1 WHERE id = $2 AND status = 'pending'", [at, row.id]);
-      if (rowCount === 1) delivered.push({ id: row.id, action: row.action, payload: parse(row.payload, {}), nonce: row.nonce, expiresAt: Number(row.expires_at), requestedBy: row.requested_by });
+      if (rowCount === 1) {
+        delivered.push({ id: row.id, action: row.action, payload: parse(row.payload, {}), nonce: row.nonce, expiresAt: Number(row.expires_at), requestedBy: row.requested_by });
+        await tell("delivered", row, phone);
+      }
     }
     res.json({ commands: delivered, serverTime: at });
   }));
@@ -323,6 +365,7 @@ function createPhoneBridgeRouter({ now = () => Date.now() } = {}) {
       [status, JSON.stringify(result), FINAL.has(status) ? at : null, row.id, ...from],
     );
     if (rowCount !== 1) throw fail(409, `This request already ended (${row.status}).`, "final");
+    if (settled({ status }, phone.platform)) await tell("settled", row, phone);
     res.json({ status });
   }));
 
@@ -334,4 +377,4 @@ function createPhoneBridgeRouter({ now = () => Date.now() } = {}) {
   return router;
 }
 
-module.exports = { CAPABILITIES, EMERGENCY, createPhoneBridgeRouter, fingerprintOf, normalizeNumber, signedMessage, verifySignature };
+module.exports = { CAPABILITIES, COMMAND_TTL_MS, EMERGENCY, RESULT_WINDOW_MS, createPhoneBridgeRouter, createPhoneCommand, listPhones, settled, fingerprintOf, normalizeNumber, signedMessage, verifySignature };

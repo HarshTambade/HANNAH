@@ -4,13 +4,14 @@ import { useWebLLM } from "../services/WebLLM";
 import {
   ArrowUp, Bookmark, BookmarkCheck, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
   RotateCcw, Settings2, ShieldAlert, Smartphone, Speaker, Square, Users, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
+  EyeOff as TemporaryIcon,
 } from "lucide-react";
 import { runTeamTask } from "../services/Orchestrator";
 import { readVoiceSettings, startBargeInMonitor, VoiceIn, VoiceOut } from "../services/VoiceEngines";
 import { isRecentEcho, type SpokenReply } from "../services/EchoGuard";
 import { ChatHistory } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
-import { MemoryService } from "../services/MemoryService";
+import { MemoryService, TEMPORARY_CHAT_EVENT } from "../services/MemoryService";
 import { notifyMemoryChanged } from "../services/MemoryStore";
 import { AgentApiError } from "../services/LLMRouter";
 import { ApprovalCenter, type ApprovalRequest } from "../services/ApprovalCenter";
@@ -237,12 +238,20 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   // While chat is open, HITL confirmations appear as in-chat approval cards.
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   useEffect(() => ApprovalCenter.attachHost(setApprovals), []);
+  // Temporary chat: no memories used or saved, and this conversation isn't kept.
+  const [temporary, setTemporary] = useState(() => MemoryService.temporaryChat());
   useEffect(() => {
+    const update = () => setTemporary(MemoryService.temporaryChat());
+    window.addEventListener(TEMPORARY_CHAT_EVENT, update);
+    return () => window.removeEventListener(TEMPORARY_CHAT_EVENT, update);
+  }, []);
+  useEffect(() => {
+    if (temporary) return;
     // Keep only the real conversation; transient tool/status lines are not history.
     const durable = messages.filter((message) => message.role !== "system");
     if (durable.length <= 1 && durable[0]?.id === welcomeMessage.id) ChatHistory.clear();
     else ChatHistory.save(durable);
-  }, [messages]);
+  }, [messages, temporary]);
   const [nativeStatus, setNativeStatus] = useState<OfflineModelStatus>("checking");
   const [isPreparingNative, setIsPreparingNative] = useState(false);
   const [nativeAgentStatus, setNativeAgentStatus] = useState({ available: false, initialized: false, hasApiKey: false });
@@ -992,6 +1001,17 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
           >
             {isSettingsOpen ? <X size={15} /> : <Settings2 size={15} />}
             {panel && <span className="hidden text-xs font-medium sm:inline">{isSettingsOpen ? "Close" : "Settings"}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => MemoryService.setTemporaryChat(!temporary)}
+            aria-pressed={temporary}
+            aria-label={temporary ? "Temporary chat is on: memories aren't used or saved, and this chat isn't kept. Turn off" : "Start a temporary chat: no memories used or saved, and the chat isn't kept"}
+            title={temporary ? "Temporary chat is on" : "Temporary chat"}
+            className={`flex items-center gap-1.5 rounded-xl border p-2.5 transition ${temporary ? "border-violet-300 bg-violet-50 text-violet-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+          >
+            <TemporaryIcon size={15} />
+            {temporary && <span className="hidden text-xs font-medium sm:inline">Temporary</span>}
           </button>
           <button
             type="button"

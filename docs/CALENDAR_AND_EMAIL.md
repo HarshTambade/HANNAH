@@ -13,6 +13,11 @@ Until a provider is set up, its card in Settings says "Not set up on this server
 | Search and read mail | Gmail | Outlook mail |
 | Save a draft (after the user approves it) | ✓ | ✓ |
 | Send mail (after the user approves it) | ✓ | ✓ |
+| Find conversations that still need a reply | Gmail threads (newest message isn't yours) | Inbox checked against Sent Items per conversation |
+| Reply draft in the same conversation (after approval) | Thread id, In-Reply-To and References | `createReply` / `createReplyAll` |
+| Archive, labels (after approval; never delete) | Needs `gmail.modify` | Move to Archive, categories |
+| Attachments (list; download up to 10 MB) | ✓ | ✓ (file attachments) |
+| Google Chat as the user: spaces, messages, post (post after approval) | Only with "Also connect Google Chat" | — |
 
 Events are created without attendees, so HANNAH never sends invitations. Mail is plain text. Mail content that HANNAH reads is marked to the AI model as information from other people, not instructions, and every send shows the full recipients and text for approval first.
 
@@ -40,6 +45,8 @@ Settings → Calendar and email also shows each redirect URI to the operator thr
    - `https://www.googleapis.com/auth/calendar.events`
    - `https://www.googleapis.com/auth/gmail.readonly`
    - `https://www.googleapis.com/auth/gmail.compose`
+   - `https://www.googleapis.com/auth/gmail.modify` (archive and labels; connections made before 1.5.0 are asked to connect again)
+   - For Google Chat, only if you offer it: `https://www.googleapis.com/auth/chat.spaces.readonly`, `https://www.googleapis.com/auth/chat.messages.readonly`, `https://www.googleapis.com/auth/chat.messages.create`. Enable the **Google Chat API** in the Library, and configure a Chat app under its **Configuration** tab. Google requires that even for user-authenticated access. HANNAH asks for these scopes only when a user chooses **Also connect Google Chat**.
 4. **Clients → Create client → Web application**. Add the Google redirect URI above under **Authorized redirect URIs**.
 5. Copy the client ID and secret into `server/.env`:
 

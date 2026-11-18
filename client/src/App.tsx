@@ -17,7 +17,7 @@ import { Diagnostics } from "./services/Diagnostics";
 import { startDeviceTaskSync } from "./services/DeviceTasks";
 import { startDesktopWorkflowJobs } from "./services/DesktopWorkflowJobs";
 import { startPhoneBridge } from "./services/PhoneBridge";
-import { startWakeWord, WAKE_EVENT } from "./services/WakeWord";
+import { startSiriVoiceLaunch, startWakeWord, WAKE_EVENT } from "./services/WakeWord";
 import { startNativeReminders } from "./services/NativeReminders";
 import { clearApiSession, getAccountHint, getRememberedKeyHint, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey, syncRememberedKey } from "./services/api";
 import { Account } from "./services/Account";
@@ -130,6 +130,7 @@ export default function App() {
   }, [screen]);
   // iMessage and Signal replies (desktop app, only while a channel is on).
   useEffect(() => startLocalChannelLoop(), []);
+  useEffect(() => startSiriVoiceLaunch(), []);
 
   useEffect(() => {
     const onPop = () => {

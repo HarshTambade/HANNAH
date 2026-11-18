@@ -51,6 +51,7 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /workflow|automat/i, tools: /^(create_workflow_draft|list_workflows)$/ },
   { match: /battery|device|setting|wi-?fi|bluetooth|volume|brightness/i, tools: /^(get_device_status|get_battery_status|toggle_setting)$/ },
   { match: /mail|e-?mail|inbox|gmail|outlook|calendar|meeting|event|schedule/i, tools: /^(email_|calendar_)/ },
+  { match: /google chat|\bchat\b|\bspaces?\b|team chat|channel/i, tools: /^gchat_/ },
 ];
 // web_search is always kept, so "can you check…" never finds HANNAH without a way to look.
 const CORE_TOOLS = ["search_memories", "save_memory", "create_reminder", "web_search"];

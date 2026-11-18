@@ -25,7 +25,11 @@ Three rules shape the product:
 > - HANNAH using your Mac's apps;
 > - setting up Vercel and Supabase from the app;
 > - a command sandbox, a `hannah` command-line tool, Docker self-hosting and a plugin kit;
-> - reliable phone reminders.
+> - reliable phone reminders;
+> - workflows that use your phone (find a contact, call, text, each approved) and your desktop (open apps, projects and links);
+> - mail that still needs your reply, reply drafts in the thread, archiving and labels, and Google Chat as you;
+> - "Hey HANNAH" that keeps listening (desktop window hidden, Android in the background; "Hey Siri, talk to HANNAH" on iPhone);
+> - memories that update when a fact changes, temporary chat, and Markdown export.
 >
 > See [Project status](#project-status) for what is finished, what is experimental, and what still needs a real-device run.
 
@@ -916,7 +920,7 @@ The server checks the instructions again and labels them as untrusted guidance. 
 
 HANNAH has two kinds of automation:
 
-- **Workflows** (signed in, on a server with its database): a visual editor on a canvas, run by the engine on HANNAH's server. Triggers: manual, schedules in your time zone, new email in Gmail or Outlook (checked every few minutes), file uploads (CSV, JSON or text up to 1 MB), webhooks (secret token or HMAC with replay protection) and HANNAH events. Steps: HTTP, email (read, draft, send with approval), calendar, Slack, Discord, GitHub, Notion, PostgreSQL (beta), memory, reminders, documents; If, Switch, Filter, Merge, Split, Aggregate, Wait, Approval; data mapping, parsing and validation with safe `{{ expressions }}`; a Code step (beta) that runs your JavaScript in an isolated WebAssembly sandbox with no network or file access; desktop steps (beta) that ask your signed-in desktop app to read a web page or run a coding task in a shared folder, after asking you there; AI prompts, structured extraction, classification and specialist agents. Every run records each step's input, output, timing and errors; you can retry from the failed step, cancel, or approve from any device. Credentials are encrypted and never shown again, internal network addresses are blocked, and a workflow lists what it may do before you activate it. Type a description and HANNAH drafts the workflow for you. Templates: invoice intake (webhook), invoice emails, morning email summary, GitHub issue triage, evening summary to memory, build failure monitor. Deployment, the security model and the API: [`docs/WORKFLOWS.md`](./docs/WORKFLOWS.md).
+- **Workflows** (signed in, on a server with its database): a visual editor on a canvas, run by the engine on HANNAH's server. Triggers: manual, schedules in your time zone, new email in Gmail or Outlook (checked every few minutes), file uploads (CSV, JSON or text up to 1 MB), webhooks (secret token or HMAC with replay protection) and HANNAH events. Steps: HTTP, email (read, draft, send with approval), calendar, Slack, Discord, GitHub, Notion, PostgreSQL (beta), memory, reminders, documents; If, Switch, Filter, Merge, Split, Aggregate, Wait, Approval; data mapping, parsing and validation with safe `{{ expressions }}`; a Code step (beta) that runs your JavaScript in an isolated WebAssembly sandbox with no network or file access; desktop steps (beta) that ask your signed-in desktop app to open apps, a shared project and links, show a notification, read a web page or run a coding task in a shared folder, after asking you there; phone steps (beta) that check your paired phones, find a contact on your phone, and open its dialer or Messages after you approve each run; Google Chat (beta: read a space, or post with approval); email steps that find conversations needing your reply and save reply drafts in the thread; AI prompts, structured extraction, classification and specialist agents. Every run records each step's input, output, timing and errors; you can retry from the failed step, cancel, or approve from any device. Credentials are encrypted and never shown again, internal network addresses are blocked, and a workflow lists what it may do before you activate it. Type a description and HANNAH drafts the workflow for you. Templates: invoice intake (webhook), invoice emails, morning email summary, GitHub issue triage, evening summary to memory, build failure monitor. Deployment, the security model and the API: [`docs/WORKFLOWS.md`](./docs/WORKFLOWS.md).
 - **Routines on this device** (no account needed), below.
 
 **Routines** are a trigger (chosen days at a time, every few hours, or only when you run it), then steps in order: **Ask HANNAH** (an agent task), **Daily briefing** (today's calendar, reminders, mail, weather and news, narrated; see [Daily briefing](#daily-briefing)), **Action** (save to memory or create a reminder, after your approval) and **Output** (notification, speech or run history only). Build one with **New automation** or start from a template (Morning briefing, Morning plan, Evening reflection, Stretch break, Friday review), add steps, move them up or down, and save. Each step gets the previous step's result. The editor ([`AutomationDraft.ts`](./client/src/services/AutomationDraft.ts)) stores it as a workflow chain ([`WorkflowSchema.ts`](./client/src/services/WorkflowSchema.ts)) on the device; automations made with the old canvas open with their steps in run order.
@@ -938,6 +942,10 @@ HANNAH remembers what you add on the **Memory & trust** screen, what you mark wi
 - **No secrets.** Passwords, PINs, API keys, tokens, card numbers and ID numbers are refused, wherever a save comes from.
 - **You're in control.** Every memory shows its category, where it came from and when it was last used. You can edit, re-categorise or delete it, switch a whole category off, export your memories, or turn memory off entirely: then nothing is used or saved.
 - **No duplicates.** Saving something that says nearly the same as an existing memory updates it instead.
+- **Facts that change.** When a new statement changes a fact HANNAH remembers ("I live in Pune" after "I live in Mumbai", "my favourite food is biryani" after "pizza"), it replaces the old memory instead of contradicting it, and the old value is kept as that memory's history (shown under it, and in exports).
+- **Temporary chat.** The eye button in chat starts a temporary chat: HANNAH doesn't use or save memories in it, and it isn't kept in your chat history. It ends when you turn it off or reload.
+- **Export** as JSON or as readable Markdown, grouped by category with each memory's source.
+- **Search is by words, not meaning.** There's no embedding (vector) search yet ([KI-32](./docs/architecture/KNOWN_ISSUES.md)).
 
 Code: [`MemoryModel.ts`](./client/src/services/MemoryModel.ts), [`MemoryService.ts`](./client/src/services/MemoryService.ts), [`MemoryPanel.tsx`](./client/src/components/MemoryPanel.tsx).
 
@@ -978,6 +986,7 @@ Use your own phone from your computer.
 - **Asking:** say "call Aman using my phone" or "text my brother I'll be late", or use the panel. HANNAH finds the person in the phone's contacts (only matches come back) and asks you to confirm the name and number. The phone's own dialer or Messages then opens with it filled in, and you tap Call or Send.
 - **What HANNAH reports:** only what the phone verified, never "connected" or "delivered".
 - **Limits:** requests last a minute, and a phone that isn't open with HANNAH gets nothing, rather than a call happening later. Emergency numbers and `*`/`#` codes are refused. No restricted call or SMS permissions are used.
+- **In workflows:** the steps Check my phones, Find a contact on my phone, Call on my phone and Text on my phone use this same bridge, with approval on every call or text (see [`docs/WORKFLOWS.md`](./docs/WORKFLOWS.md#phone-steps)).
 - **More:** design, security and verification are in [`docs/DEVICE_INTELLIGENCE.md`](./docs/DEVICE_INTELLIGENCE.md), along with the audit and backlog for computer use, startup routines and communication services.
 
 ## Calendar and email
@@ -985,6 +994,9 @@ Use your own phone from your computer.
 Connect Google (Calendar and Gmail) or Microsoft (Outlook calendar and mail) in **Settings → Calendar and email**. You sign in on the provider's own page; HANNAH stores the sign-in encrypted in your account, so it works on all your devices.
 
 - **What HANNAH can do:** list your events, add an event, search and read mail, save a draft and send mail. Adding an event, saving a draft and sending mail each show you exactly what will happen and wait for your approval. Events are created without attendees, so nobody is invited.
+- **Mail that needs you:** "what emails need a reply?" finds conversations where the newest message is from someone else and you haven't answered (automated senders are left out). HANNAH can then prepare a reply draft in the same thread, archive a message or add labels, after your approval. She never deletes mail. She lists attachments and can read one up to 10 MB. The **Communications** card on the Dashboard shows the same list, labelled by account.
+- **Google Chat:** choose **Also connect Google Chat** on your Google card. HANNAH can then list the spaces you're in, read and summarize recent messages, and post as you after you approve the exact text. The operator also needs the Chat API set up ([`docs/CALENDAR_AND_EMAIL.md`](./docs/CALENDAR_AND_EMAIL.md)).
+- **WhatsApp:** only a WhatsApp Business number, through Meta's official Cloud API ([Chat apps](#chat-apps)). Personal WhatsApp has no official API, so HANNAH doesn't read it.
 - **Mail is untrusted.** Mail HANNAH reads is marked to the model as other people's content, never instructions.
 - **Server setup:** the operator registers a Google and/or Microsoft sign-in app and sets `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`. Step-by-step: [`docs/CALENDAR_AND_EMAIL.md`](./docs/CALENDAR_AND_EMAIL.md). Gmail access for the public needs Google's app verification.
 
@@ -1137,7 +1149,7 @@ node cli/hannah.mjs logout
 - **Languages:** English (`en-US`), Hindi (`hi-IN`) and Marathi (`mr-IN`), subject to platform support.
 - **Input:** the microphone stays off until you press **Speak**. Choose the engine in **Settings → Voice**: the browser's or device's recognition, or **Groq Whisper**, which records on the device and transcribes each utterance with Groq. Whisper works in any browser that can record, including with a visitor's own Groq key.
 - **Output:** spoken replies are on by default and can be turned off (stored on the device). Choose **Automatic** (Mithi when `MITHI_TTS_URL` is set, otherwise the device voice), **Device voice** (offline, with a voice picker), or **OpenAI voices** (`gpt-4o-mini-tts`, ten voices; needs an OpenAI key saved to your account or on the server). If a hosted voice fails, HANNAH falls back to the device voice. The voice layer is in [`VoiceEngines.ts`](./client/src/services/VoiceEngines.ts) and [`server/voice.js`](./server/voice.js).
-- **“Hey HANNAH” wake word:** turn it on in Settings → Voice to start a voice turn hands-free in the desktop app, on Android (while HANNAH is on screen) or in a desktop browser tab. Detection runs on the device with [Vosk](https://alphacephei.com/vosk/) (Kaldi compiled to WebAssembly) listening for only two things, "hey hannah" or anything else, so it can't transcribe speech and no audio leaves the device. The first time, the app downloads the ~41 MB English model from the HANNAH website and keeps it. It pauses while HANNAH is listening or speaking. It can't tell "Hey Anna" from "Hey Hannah", and it isn't available on iOS yet. Code: [`WakeWord.ts`](./client/src/services/WakeWord.ts); the website build adds the model with [`scripts/wakeModel.ts`](./client/scripts/wakeModel.ts) (pinned SHA-256).
+- **“Hey HANNAH” wake word:** turn it on in Settings → Voice to start a voice turn hands-free. In the desktop app it keeps listening while the window is hidden, and the menu bar says so. On Android, a native foreground service keeps listening in the background, with a notification and Stop button the whole time (built in 1.5.0, not yet run on a phone: [KI-28](./docs/architecture/KNOWN_ISSUES.md)). In a desktop browser, it listens only while the tab is open. On iPhone, which doesn't allow it, say **"Hey Siri, talk to HANNAH"** (or use the Shortcuts app): HANNAH opens ready to listen. Detection runs on the device with [Vosk](https://alphacephei.com/vosk/) (Kaldi compiled to WebAssembly) listening for only two things, "hey hannah" or anything else, so it can't transcribe speech and no audio leaves the device. The first time, the app downloads the ~41 MB English model from the HANNAH website and keeps it. It pauses while HANNAH is listening or speaking. It can't tell "Hey Anna" from "Hey Hannah". Code: [`WakeWord.ts`](./client/src/services/WakeWord.ts); the website build adds the model with [`scripts/wakeModel.ts`](./client/scripts/wakeModel.ts) (pinned SHA-256).
 - **Interrupt by talking (barge-in):** while HANNAH speaks, the microphone listens with echo cancellation and she stops as soon as you start talking. This audio isn't recorded or sent anywhere. Turn it off in Settings → Voice.
 - **Calls (Pinecall):** need `VITE_PINECALL_AGENT_ID`, a server-side `PINECALL_TOKEN_URL` that returns `{ token, server, expires_in }`, network access and microphone permission. The Pinecall API key never goes to the client.
 
@@ -1453,7 +1465,8 @@ Treat these as design work in progress, not features. Account sync (see [Account
 - **Stop** takes effect before the next step; a model request already in flight finishes first.
 - Without a database, spending budgets live in server memory and reset on restart.
 - Accounts use email and password only. There's no OAuth sign-in to HANNAH itself or password-reset email yet (connecting Google or Microsoft for calendar and email is separate).
-- Tasks across devices and the wake word work while HANNAH is open; there's no push notification to a closed app (use the `approval.requested` webhook).
+- Tasks across devices and the Phone Bridge work while HANNAH is open; there's no push notification to a closed app (use the `approval.requested` webhook). A scheduled phone step fails, without anything happening later, if HANNAH isn't open on the phone.
+- **"Hey HANNAH" on Android** (native, background) is built but hasn't been compiled on a dev machine or run on a phone yet. **Siri "Talk to HANNAH"** typechecks, but the iOS app doesn't build with Xcode 27 yet ([KI-23](./docs/architecture/KNOWN_ISSUES.md)).
 - Calendar and email need the operator's Google and Microsoft sign-in apps; Gmail for the public needs Google's verification.
 - The Marketplace has no public registry. Plugins are remote MCP servers that you add yourself; code from the Marketplace never runs inside HANNAH.
 - **Computer control:** macOS only, and not yet run with Accessibility switched on. Windows and Linux adapters aren't built.
@@ -1463,9 +1476,13 @@ Treat these as design work in progress, not features. Account sync (see [Account
   - connectors' vendor sign-in;
   - Groq browser search;
   - the Vercel and Supabase setup;
-  - the Docker image and the command sandbox (no Docker on the test machine).
+  - the Docker image and the command sandbox (no Docker on the test machine);
+  - mail needs-reply, reply drafts, archive and labels, and Google Chat as you;
+  - the phone workflow steps on a physical phone.
 
   Each is tested against the platform's protocol, and its real endpoints were checked. [`KNOWN_ISSUES.md`](./docs/architecture/KNOWN_ISSUES.md) tracks each one.
+- Memory search matches words, not meaning (no vector search yet).
+- What's verified on each platform: [`docs/CAPABILITY_MATRIX.md`](./docs/CAPABILITY_MATRIX.md).
 - Webhooks are delivered once, with no retries.
 - No price in `shared/model-prices.json` has a verification date yet, so the app shows no dollar estimates until an operator verifies them.
 - The router's measured latency and provider health are per server process, and Fastest mode needs three real replies before it uses measurements.

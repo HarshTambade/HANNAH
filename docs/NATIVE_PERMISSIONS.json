@@ -4,7 +4,10 @@
     "android.permission.RECORD_AUDIO": "Voice turns, calls and the on-device 'Hey HANNAH' wake word. Asked when you first use voice.",
     "android.permission.MODIFY_AUDIO_SETTINGS": "Route call audio to the speaker or earpiece and apply echo cancellation during a voice session.",
     "android.permission.INTERNET": "Reach the HANNAH server, your chosen AI provider, and Ollama or a local model host on your network.",
-    "android.permission.READ_CONTACTS": "Phone Bridge: when you ask your computer to call or text someone by name, look the name up on this phone and send back only the matching names and numbers. Asked the first time; calls and SMS themselves need no permission because the dialer and messaging app do them after you tap."
+    "android.permission.READ_CONTACTS": "Phone Bridge: when you ask your computer to call or text someone by name, look the name up on this phone and send back only the matching names and numbers. Asked the first time; calls and SMS themselves need no permission because the dialer and messaging app do them after you tap.",
+    "android.permission.FOREGROUND_SERVICE": "'Hey HANNAH' in the background, only after you turn it on in Settings → Voice: the listener runs as a foreground service with an always-visible notification and a Stop button.",
+    "android.permission.FOREGROUND_SERVICE_MICROPHONE": "Android 14+ requires this type for a foreground service that uses the microphone ('Hey HANNAH' in the background). Detection stays on the phone; no audio is sent.",
+    "android.permission.POST_NOTIFICATIONS": "Android 13+: show the 'Listening for Hey HANNAH' notification with Stop, the 'Tap to talk' notification after the phrase is heard, and reminders. Asked when you turn those on."
   },
   "ios": {
     "NSMicrophoneUsageDescription": "Voice turns and calls.",

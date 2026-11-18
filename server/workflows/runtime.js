@@ -153,11 +153,18 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         return { id };
       },
 
-      async mail({ mode, provider, to, subject, body, query, max }) {
+      async mail({ mode, provider, to, subject, body, query, max, ...extra }) {
         const db = await database();
         const providerId = provider === "google" || provider === "microsoft" ? provider : await connectedProvider(db, userId);
         const token = await connections.accessTokenFor(db, userId, providerId, { fetchImpl, now });
         if (mode === "search") return { messages: await connections.searchMail(fetchImpl, providerId, token, { query: query || "", max: max || 10 }) };
+        if (mode === "needs-reply" || mode === "reply-draft") {
+          const { rows } = await db.query("SELECT account_email FROM hannah_connections WHERE user_id = $1 AND provider = $2", [userId, providerId]);
+          const me = rows[0]?.account_email || "";
+          const comms = require("../communications");
+          if (mode === "needs-reply") return { messages: await comms.needsReply(fetchImpl, providerId, token, { days: extra.days, max: max || 15, me }) };
+          return comms.replyDraft(fetchImpl, providerId, token, { id: String(extra.id || ""), body, replyAll: extra.replyAll === true, me });
+        }
         const message = { to: connections.recipients(to), cc: [], subject: String(subject).slice(0, 300), body: String(body).slice(0, 100_000) };
         return mode === "send" ? connections.sendMail(fetchImpl, providerId, token, message) : connections.saveDraft(fetchImpl, providerId, token, message);
       },
@@ -176,6 +183,37 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
           await db.query("INSERT INTO hannah_workflow_device_jobs (id, user_id, workflow_id, execution_id, node_id, kind, input, status, created_at, updated_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $8, $9)", [id, userId, workflowId, executionId, nodeId, kind, JSON.stringify(input), at, expiresAt]);
         }
         return { id, expiresAt };
+      },
+
+      /** The account's paired phones and whether each is online now (the Phone Bridge's own view). */
+      async phones() {
+        const db = await database();
+        return require("../phone-bridge").listPhones(db, userId, now());
+      },
+
+      /** A request for the user's paired phone, through the Phone Bridge's own checks; one per execution and step. */
+      async phoneCommand({ nodeId, ...input }) {
+        if (!executionId) throw fail(400, "Phone steps need a whole workflow run.", "bad-request", { retryable: false });
+        const db = await database();
+        try {
+          return await require("../phone-bridge").createPhoneCommand(db, userId, { ...input, deviceName: "A workflow" }, { now, executionId, nodeId });
+        } catch (error) {
+          // Offline phones and missing permissions are the person's to fix; retries follow the step's own retry setting.
+          throw Object.assign(error, { retryable: error.reason === "phone-offline" });
+        }
+      },
+
+      /** Google Chat as the user: read a space, or post (the step asks for approval on every run). */
+      async chat({ operation, space, max, text, thread }) {
+        const db = await database();
+        const { rows } = await db.query("SELECT scopes FROM hannah_connections WHERE user_id = $1 AND provider = 'google'", [userId]);
+        const comms = require("../communications");
+        if (!rows[0]) throw fail(404, "Google isn't connected. Connect it in Settings → Calendar and email.", "not-connected", { retryable: false });
+        if (!comms.hasChatScopes(rows[0].scopes)) throw fail(403, "Google Chat isn't connected. In Settings → Calendar and email, choose “Also connect Google Chat”.", "scope-missing", { retryable: false });
+        const token = await connections.accessTokenFor(db, userId, "google", { fetchImpl, now });
+        if (operation === "spaces") return { spaces: await comms.chatSpaces(fetchImpl, token) };
+        if (operation === "send") return comms.chatSend(fetchImpl, token, space, { text, thread });
+        return { messages: await comms.chatMessages(fetchImpl, token, space, { max }) };
       },
 
       async readMail({ provider, id }) {
@@ -434,12 +472,25 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     const { rows: due } = await db.query("SELECT id, status, waiting FROM hannah_workflow_executions WHERE status IN ('waiting', 'waiting-approval') AND wait_until <= $1 LIMIT 50", [now()]);
     for (const row of due) {
       const waiting = parse(row.waiting, {});
+      if (row.status === "waiting" && waiting.kind === "phone" && waiting.commandId) {
+        // The phone may have answered before this run was saved as waiting: use its answer instead of timing out.
+        const { rows: [command] } = await db.query("SELECT * FROM hannah_phone_commands WHERE id = $1", [waiting.commandId]);
+        const bridge = require("../phone-bridge");
+        const status = command?.status;
+        if (command && bridge.settled({ status }, waiting.platform)) {
+          const data = { ok: true, command: { id: command.id, status, result: parse(command.result, null), payload: parse(command.payload, {}) } };
+          const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'queued', resume = $1, waiting = NULL, wait_until = NULL, updated_at = $2 WHERE id = $3 AND status = 'waiting'", [JSON.stringify({ nodeId: waiting.nodeId, data }), now(), row.id]);
+          report.woke += rowCount;
+          continue;
+        }
+      }
       if (row.status === "waiting" && waiting.kind === "time") {
         const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'queued', resume = $1, waiting = NULL, wait_until = NULL, updated_at = $2 WHERE id = $3 AND status = 'waiting'", [JSON.stringify({ nodeId: waiting.nodeId }), now(), row.id]);
         report.woke += rowCount;
       } else {
-        const reason = waiting.kind === "approval" ? "Nobody answered the approval in time." : waiting.kind === "device" ? "No desktop app finished the task in time. Open the desktop app signed in to this account, with “Run workflow tasks” on in Settings → Desktop access." : "The resume URL wasn't called in time.";
+        const reason = waiting.kind === "approval" ? "Nobody answered the approval in time." : waiting.kind === "phone" ? "Your phone didn't pick up or report on the request in time, so it was dropped. Nothing will happen on the phone later. Keep HANNAH open on the phone with “Use this phone from my computer” on." : waiting.kind === "device" ? "No desktop app finished the task in time. Open the desktop app signed in to this account, with “Run workflow tasks” on in Settings → Desktop access." : "The resume URL wasn't called in time.";
         const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET status = 'timed-out', error = $1, finished_at = $2, updated_at = $2 WHERE id = $3 AND status = $4", [reason, now(), row.id, row.status]);
+        if (rowCount && waiting.kind === "phone") await db.query("UPDATE hannah_phone_commands SET status = 'expired', finished_at = $1 WHERE execution_id = $2 AND status = 'pending'", [now(), row.id]);
         if (rowCount && waiting.kind === "device") await db.query("UPDATE hannah_workflow_device_jobs SET status = 'expired', updated_at = $1 WHERE execution_id = $2 AND status IN ('pending', 'claimed')", [now(), row.id]);
         report.expired += rowCount;
       }
@@ -673,6 +724,13 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     return { status: "queued" };
   }
 
+  /** A waiting step's deadline moves (a phone picked up its request and has a while to report). Never shortens it. */
+  async function extendWait(userId, executionId, until) {
+    const db = await database();
+    const { rowCount } = await db.query("UPDATE hannah_workflow_executions SET wait_until = $1, updated_at = $2 WHERE id = $3 AND user_id = $4 AND status = 'waiting' AND (wait_until IS NULL OR wait_until < $1)", [until, now(), executionId, userId]);
+    return rowCount === 1;
+  }
+
   let loop = null;
   function startWorker({ intervalMs = 5000 } = {}) {
     if (loop) return loop;
@@ -696,7 +754,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     loop = null;
   }
 
-  return { cancel, claim, pause, emitEvent, enqueue, publishedDefinition, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
+  return { cancel, claim, pause, emitEvent, enqueue, extendWait, publishedDefinition, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
 }
 
 module.exports = { FINAL, createRuntime, explainProviderError, sha256 };

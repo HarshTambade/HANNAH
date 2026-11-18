@@ -178,7 +178,12 @@ export default function ExecutionDetail({ executionId, onOpenExecution, onClose,
       )}
       {execution.status === "waiting" && execution.waiting && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          {execution.waiting.kind === "paused" ? <span className="block font-semibold">{execution.waiting.message ?? "Paused by you."}</span> : execution.waiting.kind === "time" ? <>{execution.waiting.message && <span className="block font-semibold">{execution.waiting.message}</span>}Waiting until {when(execution.waiting.until)}, then it continues on its own.</> : execution.waiting.kind === "device" ? (
+          {execution.waiting.kind === "paused" ? <span className="block font-semibold">{execution.waiting.message ?? "Paused by you."}</span> : execution.waiting.kind === "time" ? <>{execution.waiting.message && <span className="block font-semibold">{execution.waiting.message}</span>}Waiting until {when(execution.waiting.until)}, then it continues on its own.</> : execution.waiting.kind === "phone" ? (
+            <>
+              <span className="block font-semibold">{execution.waiting.message ?? "Waiting for your phone."}</span>
+              <span className="mt-1 block text-xs">Your phone gets it while HANNAH is open on it with “Use this phone from my computer” on; then you tap Call or Send there. If the phone doesn't pick it up within a minute, the request is dropped and nothing happens later.</span>
+            </>
+          ) : execution.waiting.kind === "device" ? (
             <>
               <span className="block font-semibold">{execution.waiting.message ?? "Waiting for your desktop app."}</span>
               <span className="mt-1 block text-xs">It runs when the HANNAH desktop app is open and signed in to this account, with “Run workflow tasks” on in Settings → Desktop access; it asks you there first. If no desktop picks it up by {when(execution.waiting.until)}, the run stops.</span>

@@ -243,6 +243,8 @@ type ScreenControls = {
 type ControlState = { state: "inactive" | "controlling" | "paused"; expiresAt: number | null };
 let screenIndicator: ScreenState = { state: "inactive", expiresAt: null };
 let controlIndicator: ControlState = { state: "inactive", expiresAt: null };
+// "Hey HANNAH" listening on this computer (plugins/desktop-tools setWakeListening).
+let wakeListening = false;
 const screenControls = () => (globalThis as Record<string, unknown>).__hannahDesktopTools as ScreenControls | undefined;
 // Stops computer control at once, from anywhere (plugins/desktop-tools/electron/dist/plugin.mjs shows it in the consent dialog).
 const STOP_CONTROL_SHORTCUT = isMac ? "Control+Option+Shift+Escape" : "Ctrl+Alt+Shift+Escape";
@@ -254,12 +256,16 @@ function refreshIndicator() {
   const controlling = controlIndicator.state === "controlling";
   tray.setToolTip(controlling ? `HANNAH is controlling your computer until ${until(controlIndicator.expiresAt)}. ${STOP_CONTROL_SHORTCUT} stops her.`
     : controlIndicator.state === "paused" ? "HANNAH: computer control paused"
-      : screenIndicator.state === "observing" ? `HANNAH can see your screen until ${until(screenIndicator.expiresAt)}` : screenIndicator.state === "paused" ? "HANNAH: screen viewing paused" : "HANNAH");
+      : screenIndicator.state === "observing" ? `HANNAH can see your screen until ${until(screenIndicator.expiresAt)}` : screenIndicator.state === "paused" ? "HANNAH: screen viewing paused" : wakeListening ? "HANNAH is listening for “Hey HANNAH” (on this computer)" : "HANNAH");
   if (isMac) tray.setTitle(controlling ? " Controlling" : controlIndicator.state === "paused" ? " Control paused" : screenIndicator.state === "observing" ? " Seeing screen" : screenIndicator.state === "paused" ? " Paused" : "");
   tray.setContextMenu(trayMenu());
 }
 function setScreenIndicator(state: ScreenState) {
   screenIndicator = state;
+  refreshIndicator();
+}
+function setWakeIndicator(state: { listening: boolean }) {
+  wakeListening = state.listening === true;
   refreshIndicator();
 }
 function setControlIndicator(state: ControlState) {
@@ -283,6 +289,7 @@ function trayMenu() {
       { label: "Stop Screen Viewing", click: () => void screenControls()?.stopScreenSession() },
       { type: "separator" },
     ] as MenuItemConstructorOptions[] : []),
+    ...(wakeListening ? [{ label: "Listening for “Hey HANNAH”", enabled: false }, { label: "Turn it off in Settings → Voice", click: () => openScreen("/settings") }, { type: "separator" }] as MenuItemConstructorOptions[] : []),
     { label: "Open HANNAH", click: () => showWindow() },
     { label: "Talk to HANNAH", accelerator: TALK_SHORTCUT, click: () => openScreen("/chat") },
     { type: "separator" },
@@ -406,6 +413,7 @@ function desktopInfo() {
   openDeepLink,
   setScreenIndicator,
   setControlIndicator,
+  setWakeIndicator,
 };
 
 app.whenReady().then(() => {
