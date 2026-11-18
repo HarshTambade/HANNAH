@@ -13,7 +13,7 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 | KI-5 | Workflow drafting | "Describe it" failed with a raw "HTTP 429" | P1 | Fixed |
 | KI-6 | Gateway, production | Guests share the operator's free AI key | P1 | Owner decision |
 | KI-7 | Website routing | `#features` / `#download` left in the address bar | P3 | Fixed |
-| KI-8 | Releases | Tags without releases; an old release still titled "Shanaya" | P3 | Owner decision |
+| KI-8 | Releases | Tags without releases (the old "Shanaya v1.0.2" title is now "HANNAH v1.0.2") | P3 | Owner decision (tags) |
 | KI-9 | Branding in installers | v1.4.0's macOS app has Electron's icon and its Android app Capacitor's | P1 | Fixed on main, not yet released |
 | KI-10 | Repository structure | A second, unshipped app path in the root workspace | P2 | Owner decision |
 | KI-11 | Workflow AI steps | Free-plan throughput: each AI step requests up to 1,200 output tokens | P1 | Open |
@@ -24,9 +24,9 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 | KI-16 | Workflow control | No way to pause a running execution | P1 | Fixed (Milestone 1) |
 | KI-17 | Workflow loops | An HTTP step calling a webhook could re-trigger workflows without end | P1 | Fixed (Milestone 1) |
 | KI-18 | Run page | Stopped updating while a run waited; no "now running" step or retry status | P2 | Fixed (Milestone 1) |
-| KI-19 | Workflows on Vercel | Runs executed inside one request with no time budget: cut off mid-step at the function's limit, counted as crashes | P0 | Fixed (not yet deployed) |
-| KI-20 | Branding, updater | Site, app, updater feed and downloads used the old repository name (worked only through GitHub's rename redirect) | P2 | Fixed (not yet deployed) |
-| KI-21 | Web and phone apps | No web search or page reading outside the desktop app; HANNAH said she couldn't browse | P1 | Fixed (not yet deployed) |
+| KI-19 | Workflows on Vercel | Runs executed inside one request with no time budget: cut off mid-step at the function's limit, counted as crashes | P0 | Fixed (deployed 2026-11-18) |
+| KI-20 | Branding, updater | Site, app, updater feed and downloads used the old repository name (worked only through GitHub's rename redirect) | P2 | Fixed (deployed; live site checked 2026-11-18) |
+| KI-21 | Web and phone apps | No web search or page reading outside the desktop app; HANNAH said she couldn't browse | P1 | Fixed (deployed 2026-11-18) |
 | KI-22 | New integrations | Connectors' OAuth with real vendors, Groq browser search, the Vercel + Supabase setup and the Telegram bot are tested against protocol fakes and read-only real endpoints, not yet end to end with real accounts | P1 | Needs a live run with the owner's accounts |
 
 ## Details
@@ -123,7 +123,7 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 ### KI-8: releases and tags disagree (P3, owner decision)
 
 - **Evidence:**
-  - `gh release list` shows v1.4.0, v1.3.0 and v1.0.2 ("Shanaya v1.0.2").
+  - `gh release list` shows v1.4.0, v1.3.0 and v1.0.2 (renamed from "Shanaya v1.0.2" to "HANNAH v1.0.2" on 2026-11-18).
   - `git tag` also has v1.0.3, v1.1.0 and v1.2.0, with no releases.
   - Version fields all say 1.4.0, matching the latest release.
 - **Options:** publish notes for those tags, or delete the tags. Deleting tags is outward-facing and can't be undone for people who fetched them, so it's the owner's call. Rename the v1.0.2 release title if the old name matters.

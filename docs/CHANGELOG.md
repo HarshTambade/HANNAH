@@ -2,34 +2,7 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
-## Unreleased
-
-### Fixed
-
-- **Supabase connections no longer fail TLS verification.** Supabase's certificates come from its own certificate authority, so verified connections failed with "self-signed certificate in certificate chain", and the advice was to turn verification off. HANNAH now has Supabase's root built in and verifies against it, whatever `sslmode` the URL asks for.
-- **Long workflow runs on Vercel finish instead of being cut off.**
-  - **Before:** on serverless hosting a run executed inside one request until it ended. A run longer than the function's time limit was stopped mid-step and treated as a crash, and after four stops it was given up. Meanwhile the Run button waited for the whole run.
-  - **Now:** a run hands itself back between steps when the request's time budget is used up, and the next tick, or the open run page, continues it from there. Finished steps never run again, and handing back isn't counted as a crash. The workflow's time limit counts the time it actually ran.
-  - **Settings:** `WORKFLOW_REQUEST_BUDGET_MS` and `WORKFLOW_TICK_BUDGET_MS` set the budgets.
-  - **Scheduler:** the repository's scheduled tick (`workflow-tick.yml`) now has a timeout and never overlaps itself.
-- **Links use the repository's current name, HANNAH.** The website, the app, downloads and the desktop updater's feed no longer depend on GitHub redirecting the old name.
-- **Workflows: pause, resume, and recovery you can trust.**
-  - **Pause:** runs can be paused (before their next step) and resumed from that step. Finished steps never run again.
-  - **Recovery:** a run was dead-lettered the first time its server stopped if it had already waited or been approved a few times, with a wrong "the worker stopped N times" message. Only real restarts count now. The run page says when a run continued after a restart.
-  - **Loops:** a workflow whose HTTP step calls its own webhook (or two calling each other's) now stops after 5 hops instead of running until the daily limit.
-  - **Run page:** it names the step running or retrying (attempt, time, last error), keeps updating while a run waits, and the canvas highlights the running step.
-  - **Proof:** checked against real services (GitHub's API, real 404s and 503s) and by killing the server mid-run (`server/scripts/workflow-proof.mjs`).
-
-- **Workflows no longer fail when the AI provider is busy.**
-  - **Before:** with a free Groq key, 4 of 6 workflows started together failed at their first AI step with "Provider returned HTTP 429."
-  - **Waiting:** a rate-limited AI step now waits for the provider and keeps trying for up to 30 minutes. Long waits pause the run, and the run page says why; nothing is lost if the server restarts.
-  - **Other keys:** with the Auto model, HANNAH first tries your other saved provider keys.
-  - **Clear errors:** a rejected key or an over-size request says what to change.
-  - **Drafting:** describing a workflow while the provider is busy waits briefly, then says how long to wait.
-- **"Completed" runs that did nothing now say why.** When a step finds nothing (no reminders today, no new mail), the steps after it are skipped; the run page now names that step. The Aggregate step has a new option, **When nothing arrives: Continue with an empty list**, for workflows that should still tell you there's nothing. The morning mail template uses it.
-- **No `#features` or `#download` in the address bar.** Links from the About page to sections of the home page, and the About page's own section links, scroll without leaving a hash in the address bar.
-- **Workflow runs show how many tokens an AI step used.** Token counts were hidden as if they were secrets; real tokens and passwords still are.
-- **The Windows desktop build passes its dependency audit again.** The audit gate compared Windows paths (`client\electron`) with the recorded exceptions (`client/electron`), so every Windows build since 2026-11-17 failed.
+## 1.5.0 — 2026-11-18
 
 ### New
 
@@ -97,6 +70,31 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 - **Setup check.** Settings → Setup check runs one pass over the server, your AI model (including Ollama through the server), account, calendar and email, voice, microphone, notifications, storage, the desktop app's tray and shortcut, the briefing's place and recent errors, with a verdict and a fix for each.
 
 ### Fixed
+
+- **Supabase connections no longer fail TLS verification.** Supabase's certificates come from its own certificate authority, so verified connections failed with "self-signed certificate in certificate chain", and the advice was to turn verification off. HANNAH now has Supabase's root built in and verifies against it, whatever `sslmode` the URL asks for.
+- **Long workflow runs on Vercel finish instead of being cut off.**
+  - **Before:** on serverless hosting a run executed inside one request until it ended. A run longer than the function's time limit was stopped mid-step and treated as a crash, and after four stops it was given up. Meanwhile the Run button waited for the whole run.
+  - **Now:** a run hands itself back between steps when the request's time budget is used up, and the next tick, or the open run page, continues it from there. Finished steps never run again, and handing back isn't counted as a crash. The workflow's time limit counts the time it actually ran.
+  - **Settings:** `WORKFLOW_REQUEST_BUDGET_MS` and `WORKFLOW_TICK_BUDGET_MS` set the budgets.
+  - **Scheduler:** the repository's scheduled tick (`workflow-tick.yml`) now has a timeout and never overlaps itself.
+- **Links use the repository's current name, HANNAH.** The website, the app, downloads and the desktop updater's feed no longer depend on GitHub redirecting the old name.
+- **Workflows: pause, resume, and recovery you can trust.**
+  - **Pause:** runs can be paused (before their next step) and resumed from that step. Finished steps never run again.
+  - **Recovery:** a run was dead-lettered the first time its server stopped if it had already waited or been approved a few times, with a wrong "the worker stopped N times" message. Only real restarts count now. The run page says when a run continued after a restart.
+  - **Loops:** a workflow whose HTTP step calls its own webhook (or two calling each other's) now stops after 5 hops instead of running until the daily limit.
+  - **Run page:** it names the step running or retrying (attempt, time, last error), keeps updating while a run waits, and the canvas highlights the running step.
+  - **Proof:** checked against real services (GitHub's API, real 404s and 503s) and by killing the server mid-run (`server/scripts/workflow-proof.mjs`).
+
+- **Workflows no longer fail when the AI provider is busy.**
+  - **Before:** with a free Groq key, 4 of 6 workflows started together failed at their first AI step with "Provider returned HTTP 429."
+  - **Waiting:** a rate-limited AI step now waits for the provider and keeps trying for up to 30 minutes. Long waits pause the run, and the run page says why; nothing is lost if the server restarts.
+  - **Other keys:** with the Auto model, HANNAH first tries your other saved provider keys.
+  - **Clear errors:** a rejected key or an over-size request says what to change.
+  - **Drafting:** describing a workflow while the provider is busy waits briefly, then says how long to wait.
+- **"Completed" runs that did nothing now say why.** When a step finds nothing (no reminders today, no new mail), the steps after it are skipped; the run page now names that step. The Aggregate step has a new option, **When nothing arrives: Continue with an empty list**, for workflows that should still tell you there's nothing. The morning mail template uses it.
+- **No `#features` or `#download` in the address bar.** Links from the About page to sections of the home page, and the About page's own section links, scroll without leaving a hash in the address bar.
+- **Workflow runs show how many tokens an AI step used.** Token counts were hidden as if they were secrets; real tokens and passwords still are.
+- **The Windows desktop build passes its dependency audit again.** The audit gate compared Windows paths (`client\electron`) with the recorded exceptions (`client/electron`), so every Windows build since 2026-11-17 failed.
 
 - **In voice conversations HANNAH could answer herself in a loop.** On Android and iOS the device voice reported "done" as soon as a reply was queued, not when it had been said, so the microphone reopened while HANNAH was still talking, heard her reply and sent it back as your next message. HANNAH now waits until the phone reports the reply was spoken (or stops on its own, or you interrupt), and on every platform a sentence that is mostly her own reply from the last few seconds is ignored and the microphone keeps listening. Short answers like "yes" always get through.
 - **Automations failed at their first AI step.** The server rejected agent turns with no tools ("The agent tool schemas are invalid."), which is exactly what automation steps, the daily briefing and tool-less specialists send, so every cloud automation failed. Fixed, with a regression test.
