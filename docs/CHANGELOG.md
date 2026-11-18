@@ -103,6 +103,7 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 - **The crash screen says what happened.** "A moment of stillness" now shows the error in one line (keys and paths removed) and offers **Copy details**, **Export diagnostics** and **Disconnect and reload** beside Reload, so a crash right after connecting can be reported and escaped without clearing the app.
 - **Desktop app: the boot script was blocked.** The script that marks the apps and applies your text size before the first paint was inline, which the desktop app's content security policy refuses; it's now a file, so the desktop splash and text size work there too.
 - **Link preview matches the app.** The social card behind WhatsApp, Slack and Twitter previews is now the app's own light bento look (`client/scripts/social-card.html`, rendered by `scripts/render-social-card.mjs`), not the dark card.
+- **The Android and iOS apps are identified as `com.hannah.companion`.** They still used the old `com.shanaya.companion`, unlike the app config, the desktop app and the store forms, so a signed iOS build would have fetched a provisioning profile for an ID the app didn't have. A store ID can't change after the first upload, so this is fixed before any store release. A 1.4.0 Android build installed from GitHub stays as a separate app: uninstall it after installing 1.5.0.
 
 ## 1.4.0 — 2026-11-17
 

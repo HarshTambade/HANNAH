@@ -19,7 +19,7 @@ const [repo, out] = process.argv.slice(2);
 const require = createRequire(`${repo}/client/package.json`);
 const adb = (...args) => execFileSync(`${process.env.HOME}/Library/Android/sdk/platform-tools/adb`, args, { encoding: "utf8" });
 const api = "http://127.0.0.1:3311/api";
-const pkg = "com.shanaya.companion";
+const pkg = "com.hannah.companion";
 const step = (text) => console.log(`\n▶ ${text}`);
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const results = [];

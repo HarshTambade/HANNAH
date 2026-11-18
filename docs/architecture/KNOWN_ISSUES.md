@@ -28,6 +28,7 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 | KI-20 | Branding, updater | Site, app, updater feed and downloads used the old repository name (worked only through GitHub's rename redirect) | P2 | Fixed (deployed; live site checked 2026-11-18) |
 | KI-21 | Web and phone apps | No web search or page reading outside the desktop app; HANNAH said she couldn't browse | P1 | Fixed (deployed 2026-11-18) |
 | KI-22 | New integrations | Connectors' OAuth with real vendors, Groq browser search, the Vercel + Supabase setup and the Telegram bot are tested against protocol fakes and read-only real endpoints, not yet end to end with real accounts | P1 | Needs a live run with the owner's accounts |
+| KI-23 | iOS build, toolchain | With Xcode 27 the LanceDB plugin's Swift bindings can't find their Rust module, so the iOS app doesn't build; CI's current Xcode builds it | P2 | Open (breaks CI when GitHub's macOS runners move to Xcode 27) |
 
 ## Details
 
@@ -266,3 +267,8 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
   - a real Telegram bot.
 - **Next:** the owner runs each once after deploying. Every failure shows the service's own message.
 
+### KI-23: iOS doesn't build with Xcode 27 (P2, open)
+
+- **Evidence:** on 2026-11-18, `xcodebuild … -destination generic/platform=iOS CODE_SIGNING_ALLOWED=NO build` with Xcode 27.2 (after `npm run cap:patch:ios`, as CI does) fails in `node_modules/capacitor-lancedb/ios/Sources/LanceDBPlugin/Generated/lancedb_ffi.swift` with "cannot find type 'RustBuffer' in scope": the `#if canImport(lancedb_ffiFFI)` guard doesn't find the module inside `LanceDBFFI.xcframework`. CI's `macos-latest` image still builds and archives the app.
+- **Effect:** none today. When GitHub moves `macos-latest` to Xcode 27, the iOS job will fail.
+- **Options:** pin the iOS job to an Xcode version that works, until the plugin ships bindings that build with Xcode 27, or patch the module map in `scripts/patch-capacitor-ios.mjs`.

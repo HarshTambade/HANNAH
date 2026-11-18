@@ -1,4 +1,4 @@
-package com.shanaya.companion;
+package com.hannah.companion;
 
 import android.os.Bundle;
 
