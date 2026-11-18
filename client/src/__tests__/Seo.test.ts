@@ -57,7 +57,7 @@ describe("search metadata", () => {
   it("swaps one page's head for another's", () => {
     const html = `<head>${headTags(page("/"), { siteOrigin: site, indexable: true })}</head>`;
     const swapped = withHead(html, headTags(page("/marketplace"), { siteOrigin: site, indexable: true }));
-    expect(swapped).toContain("<title>HANNAH Marketplace: AI Agents and Skills</title>");
+    expect(swapped).toContain("<title>HANNAH Marketplace: Connectors, Agents and Skills</title>");
     expect(swapped.match(/<title>/g)).toHaveLength(1);
   });
 });

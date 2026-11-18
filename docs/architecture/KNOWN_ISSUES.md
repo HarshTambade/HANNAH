@@ -26,6 +26,8 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 | KI-18 | Run page | Stopped updating while a run waited; no "now running" step or retry status | P2 | Fixed (Milestone 1) |
 | KI-19 | Workflows on Vercel | Runs executed inside one request with no time budget: cut off mid-step at the function's limit, counted as crashes | P0 | Fixed (not yet deployed) |
 | KI-20 | Branding, updater | Site, app, updater feed and downloads used the old repository name (worked only through GitHub's rename redirect) | P2 | Fixed (not yet deployed) |
+| KI-21 | Web and phone apps | No web search or page reading outside the desktop app; HANNAH said she couldn't browse | P1 | Fixed (not yet deployed) |
+| KI-22 | New integrations | Connectors' OAuth with real vendors, Groq browser search, the Vercel + Supabase setup and the Telegram bot are tested against protocol fakes and read-only real endpoints, not yet end to end with real accounts | P1 | Needs a live run with the owner's accounts |
 
 ## Details
 
@@ -65,6 +67,7 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
   3. Set `CRON_SECRET` (16+ characters).
   4. Call `GET https://hannah.eliteforums.in/api/workflows/tick` with `Authorization: Bearer $CRON_SECRET` every few minutes. Vercel Hobby only allows daily crons. The repository's `workflow-tick.yml` does this every 5 minutes once the repository secrets `HANNAH_PRODUCTION_URL` (`https://hannah.eliteforums.in`) and `CRON_SECRET` (the same value as on Vercel) are set. GitHub's schedules are best-effort and can start late; cron-job.org is more punctual. On Pro, add `"crons": [{ "path": "/api/workflows/tick", "schedule": "*/5 * * * *" }]` to `vercel.json` instead.
   5. Check: `/api/account/status` shows `database.configured: true`; sign up; run a template.
+- **In-app fix (new):** Settings → Account → “Set up HANNAH on Vercel and Supabase” does steps 1–3 and the redeploy from a Vercel token and a Supabase token (server/hosting-setup.js). Then add `CRON_SECRET` and `HANNAH_PRODUCTION_URL` as GitHub secrets for step 4.
 - **Dependencies:** blocks every durable feature for real users.
 
 ### KI-3: Windows CI fails the audit gate (P0, fixed)
@@ -242,4 +245,24 @@ From the 2026-11-18 audit ([REPOSITORY_AUDIT.md](REPOSITORY_AUDIT.md)). Each ent
 - **Evidence:** the repository was renamed to `HarshTambade/HANNAH`, but the website (source, licence, changelog, platform support, privacy policy and issue links), the About page, the desktop app, the server's release lookup, the README and the desktop auto-updater's feed (`electron-builder.yml`) still named `Shanaya-Your-AI-companion`. They worked only because GitHub redirects renamed repositories.
 - **Fix:** all of them use `HarshTambade/HANNAH`; `HANNAH_RELEASES_REPOSITORY` still overrides the server's default. Installed v1.4.0 apps keep the old name in their update feed and rely on the redirect until they update.
 - **Tests:** `e2e/routing.spec.ts` checks every GitHub link on the landing page.
+
+### KI-21: no web search outside the desktop app (P1, fixed, not yet deployed)
+
+- **Evidence:** the browser tools only exist in the desktop app (`getBrowserTools` returns nothing elsewhere), and the research specialist was told to say it couldn't browse. On the website and phones, "search for…" had no tool to use.
+- **Fix:** `web_search` (Groq's browser search on the GPT-OSS models, with the request's own Groq key) and `web_read` (a public page through the SSRF-safe client) on every platform. `web_search` is a core tool, so trimming to 20 tools always keeps it. Search words bring the web family.
+- **Tests:** `web.test.js` (request shape against a fake Groq, sources, errors, page text, blocked addresses), `ToolSelection.test.ts` (the web set), and page reading checked live on Wikipedia and BBC News. Groq's compound models were retired in September 2026, so they aren't used.
+
+### KI-22: new integrations need a live run with real accounts (P1)
+
+- **Tested so far:**
+  - Connector sign-in, through a local server that follows the MCP authorization spec, with real discovery against Linear, Notion, Atlassian, Stripe and GitHub.
+  - Real tool lists and a real tool call on six open servers.
+  - The hosting setup against fake Vercel and Supabase APIs. A dummy token got "unauthorized" (not "not found") from every real endpoint used, so the paths are real.
+  - Telegram, against a fake Bot API.
+- **Not yet:**
+  - signing in to a real vendor (each sign-in registers HANNAH with that vendor);
+  - a real Groq browser search (no key was available here);
+  - running the hosting setup on the owner's accounts;
+  - a real Telegram bot.
+- **Next:** the owner runs each once after deploying. Every failure shows the service's own message.
 

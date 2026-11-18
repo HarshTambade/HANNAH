@@ -16,7 +16,7 @@ export const defaultAgentProfiles: Record<string, AgentProfile> = {
   chat: { name: "chat", modelTier: "low-cost cloud", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
   code: { name: "code", modelTier: "high-capability cloud", allowedTools: ["list_app_files", "read_app_file", "write_app_file"], maxIterations: 12, timeoutMs: 60000 },
   system: { name: "system", modelTier: "low-cost cloud", allowedTools: ["get_device_status", "get_battery_status", "open_app", "toggle_setting", "list_app_files", "read_app_file", "write_app_file", "delete_app_file", "create_reminder", "list_reminders", "cancel_reminder", "search_memories", "save_memory"], maxIterations: 6, timeoutMs: 30000 },
-  research: { name: "research", modelTier: "high-capability cloud", allowedTools: ["knowledge_search", "knowledge_documents", "list_app_files", "read_app_file"], maxIterations: 10, timeoutMs: 90000 },
+  research: { name: "research", modelTier: "high-capability cloud", allowedTools: ["knowledge_search", "knowledge_documents", "list_app_files", "read_app_file", "web_search", "web_read"], maxIterations: 10, timeoutMs: 90000 },
   maintenance: { name: "maintenance", modelTier: "local", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
 };
 
@@ -35,7 +35,7 @@ export const MAX_TOOLS_PER_REQUEST = 20;
  * and notes tools and "call Aman" gets the phone tools.
  */
 const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
-  { match: /youtube|video|lecture|tutorial|browse|browser|website|web ?page|\bweb\b|online|internet|google|look (it )?up|instagram|reels?|swiggy|zomato|blinkit|amazon|flipkart|food|restaurant|order|https?:\/\/|www\.|\.(com|org|in|io)\b|site\b|news|latest/i, tools: /^(browser_|youtube_read_video$|desktop_save_notes_pdf$)/ },
+  { match: /youtube|video|lecture|tutorial|browse|browser|website|web ?page|\bweb\b|online|internet|google|look (it |this |that )?up|\bsearch|instagram|reels?|swiggy|zomato|blinkit|amazon|flipkart|food|restaurant|order|https?:\/\/|www\.|\.(com|org|in|io)\b|site\b|news|latest|current|today'?s|this (week|year)|price|stock|score|who (is|won)|release/i, tools: /^(browser_|web_search$|web_read$|youtube_read_video$|desktop_save_notes_pdf$)/ },
   { match: /\bnotes?\b|\bpdf\b|summar/i, tools: /^(desktop_save_notes_pdf|youtube_read_video|browser_search|browser_read)$/ },
   { match: /screen|this error|what('s| is) (happening|this)|looking at|window|display/i, tools: /^desktop_look_at_screen$/ },
   { match: /\b(open|launch|start|close|switch to)\b|\bapps?\b|application|vs ?code|vscode|chrome|terminal|spotify|slack/i, tools: /^(desktop_open_app|desktop_list_apps|open_app|desktop_folders)$/ },
@@ -50,7 +50,8 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /battery|device|setting|wi-?fi|bluetooth|volume|brightness/i, tools: /^(get_device_status|get_battery_status|toggle_setting)$/ },
   { match: /mail|e-?mail|inbox|gmail|outlook|calendar|meeting|event|schedule/i, tools: /^(email_|calendar_)/ },
 ];
-const CORE_TOOLS = ["search_memories", "save_memory", "create_reminder"];
+// web_search is always kept, so "can you check…" never finds HANNAH without a way to look.
+const CORE_TOOLS = ["search_memories", "save_memory", "create_reminder", "web_search"];
 
 /**
  * Keep a request within the server's tool limit by choosing the tools it
@@ -62,6 +63,12 @@ export function selectToolsForRequest(tools: HANNAHTool[], request: string, { pr
   for (const family of TOOL_FAMILIES) {
     if (!family.match.test(request)) continue;
     for (const tool of tools) if (family.tools.test(tool.name)) wanted.add(tool.name);
+  }
+  // A connector named in the request ("in Linear", "my Notion") brings its tools (mcp_c_<connector>_<tool>).
+  const words = request.toLowerCase();
+  for (const tool of tools) {
+    const connector = /^mcp_c_([a-z0-9]+)_/.exec(tool.name)?.[1];
+    if (connector && connector.length > 2 && words.includes(connector)) wanted.add(tool.name);
   }
   if (!wanted.size && tools.length <= limit) return tools;
   for (const tool of preferred) wanted.add(tool.name);

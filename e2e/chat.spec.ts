@@ -252,3 +252,51 @@ test("Auto previews the route before sending and Private mode stays self-hosted"
   await expect(page.getByText("Routed hello.")).toBeVisible();
   expect(agentBodies[0]).toMatchObject({ model: "auto", routing: { mode: "balanced" } });
 });
+
+test("“Remember on this browser” keeps a visitor connected in a new tab, without the key in the page's storage", async ({ context }) => {
+  let remembered = false;
+  const sentKeys: string[] = [];
+  await context.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/session/key") {
+      if (request.method() === "POST") remembered = request.headers()["x-groq-api-key"] === groqKey;
+      if (request.method() === "DELETE") remembered = false;
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify(remembered ? { remembered: true, hint: `gsk_…${groqKey.slice(-4)}` } : { remembered: false }) });
+    }
+    if (!["/api/health", "/api/account/status", "/api/db/status"].includes(url.pathname)) sentKeys.push(request.headers()["x-groq-api-key"] ?? "");
+    if (url.pathname === "/api/providers") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ defaultProvider: "groq", providers: [{ id: "groq", label: "Groq", local: false, configured: true }] }) });
+    if (url.pathname === "/api/models") return route.fulfill({ contentType: "application/json", body: JSON.stringify({ provider: "Groq", defaultModel: "openai/gpt-oss-120b", models: ["openai/gpt-oss-120b"] }) });
+    return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "Not mocked" }) });
+  });
+  await context.addInitScript(() => window.localStorage.setItem("hannah.onboarding.v1", "complete"));
+
+  const first = await context.newPage();
+  await first.goto("/");
+  await first.getByRole("button", { name: "Talk to HANNAH" }).first().click();
+  await first.getByLabel("Your Groq API key").fill(groqKey);
+  await expect(first.getByRole("checkbox", { name: /Remember on this browser/ })).toBeChecked();
+  await first.getByRole("button", { name: "Continue to HANNAH" }).click();
+  await expect(first.getByRole("textbox", { name: "Message HANNAH" })).toBeVisible();
+  await expect.poll(() => remembered).toBe(true);
+  await first.close();
+
+  // A new tab: sessionStorage is empty, so only the remembered key can connect it.
+  const second = await context.newPage();
+  sentKeys.length = 0;
+  await second.goto("/chat");
+  await expect(second.getByRole("textbox", { name: "Message HANNAH" })).toBeVisible();
+  await expect(second.getByLabel("Your Groq API key")).toHaveCount(0);
+  const stored = await second.evaluate(() => JSON.stringify({ ...window.localStorage, ...window.sessionStorage }));
+  expect(stored).not.toContain(groqKey);
+  expect(stored).toContain(`gsk_…${groqKey.slice(-4)}`);
+  expect(sentKeys.length).toBeGreaterThan(0);
+  expect(sentKeys.every((key) => key === ""), "the key travels in the cookie, not from the page").toBe(true);
+
+  // Settings says so, and Disconnect forgets it.
+  await second.goto("/settings");
+  await expect(second.getByText(`Remembered on this browser · gsk_…${groqKey.slice(-4)}`)).toBeVisible();
+  await second.getByRole("button", { name: "Disconnect this tab" }).click();
+  await expect.poll(() => remembered).toBe(false);
+  expect(await second.evaluate(() => window.localStorage.getItem("hannah.rememberedKey.v1"))).toBeNull();
+});

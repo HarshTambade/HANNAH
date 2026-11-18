@@ -18,7 +18,8 @@ test("landing navigation sections and marketplace actions work", async ({ page }
   await expect(page).toHaveURL(/\/$/);
 
   await navigation.getByRole("link", { name: "Marketplace" }).click();
-  await expect(page.getByRole("heading", { name: "Agents and skills for the way you work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect your tools. Shape how she works." })).toBeVisible();
+  await page.getByRole("tab", { name: "Agents and skills" }).click();
 
   const studyCoach = page.getByRole("article").filter({ hasText: "Study coach" });
   await studyCoach.getByRole("button", { name: "Install" }).click();
@@ -66,7 +67,7 @@ test("mobile navigation exposes and opens every section", async ({ page }) => {
 
   await page.getByRole("button", { name: "Open navigation" }).click();
   await page.getByRole("navigation", { name: "Mobile main navigation" }).getByRole("link", { name: "Marketplace" }).click();
-  await expect(page.getByRole("heading", { name: "Agents and skills for the way you work." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect your tools. Shape how she works." })).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: "Open navigation" }).click();

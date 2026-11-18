@@ -44,6 +44,73 @@ function writeSession(key: string, value: string) {
 let apiAccessToken = readSession(TOKEN_KEY);
 let groqApiKey = readSession(GROQ_KEY);
 
+// "Remember on this browser" (website): the Groq key itself is in an HttpOnly
+// cookie the server set, which this page can't read; the server uses it for
+// every /api request (server/remembered-key.js). Only a hint ("gsk_…9f2a") is
+// kept here, so the app knows at startup that you're connected.
+const REMEMBERED_KEY = "hannah.rememberedKey.v1";
+function readRemembered(): string {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(REMEMBERED_KEY) || "null") as { hint?: string } | null;
+    return typeof parsed?.hint === "string" && /^gsk_…[A-Za-z0-9]{4}$/.test(parsed.hint) ? parsed.hint : "";
+  } catch {
+    return "";
+  }
+}
+let rememberedHint = readRemembered();
+function writeRemembered(hint: string) {
+  rememberedHint = hint;
+  try {
+    if (hint) window.localStorage.setItem(REMEMBERED_KEY, JSON.stringify({ hint }));
+    else window.localStorage.removeItem(REMEMBERED_KEY);
+  } catch {
+    // Storage blocked: the cookie still works for this page.
+  }
+}
+
+/** True on the website when the key can be remembered in a cookie for this API (same origin). */
+export function canRememberKey() {
+  return IS_WEBSITE && !usesBearerSession();
+}
+
+/** The remembered key's hint, or "" when none is remembered. */
+export function getRememberedKeyHint() {
+  return rememberedHint;
+}
+
+/** Remember (or forget) this tab's Groq key on this browser for 30 days. */
+export async function rememberGroqKey(remember: boolean): Promise<boolean> {
+  if (!canRememberKey()) return false;
+  try {
+    if (!remember) {
+      writeRemembered("");
+      await fetch(apiUrl("/api/session/key"), { method: "DELETE", credentials: "same-origin" });
+      return false;
+    }
+    if (!isGroqKey(groqApiKey)) return false;
+    const response = await fetch(apiUrl("/api/session/key"), { method: "POST", credentials: "same-origin", headers: { "X-Groq-API-Key": groqApiKey } });
+    const body = await response.json().catch(() => ({})) as { remembered?: boolean; hint?: string };
+    writeRemembered(response.ok && body.remembered && body.hint ? body.hint : "");
+    return Boolean(rememberedHint);
+  } catch {
+    return false;
+  }
+}
+
+/** Ask the server whether a key is still remembered (the cookie may have expired or been cleared). */
+export async function syncRememberedKey(): Promise<boolean> {
+  if (!canRememberKey()) return false;
+  try {
+    const response = await fetch(apiUrl("/api/session/key"), { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) return Boolean(rememberedHint);
+    const body = await response.json() as { remembered?: boolean; hint?: string };
+    writeRemembered(body.remembered && body.hint ? body.hint : "");
+  } catch {
+    // Offline: keep what we know.
+  }
+  return Boolean(rememberedHint);
+}
+
 // Account session. On the web the session is an HttpOnly cookie the app can't
 // read, so only a "signed in as" hint is kept here. Native apps and builds that
 // call a different API origin can't use the cookie and keep the session token
@@ -114,6 +181,7 @@ export function clearApiSession() {
   setApiAccessToken("");
   setSessionGroqKey("");
   setAccountHint(null);
+  if (rememberedHint) void rememberGroqKey(false);
 }
 
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
@@ -125,12 +193,12 @@ export function isGroqKey(value: string) {
 
 /** Connected with the operator's access token, a signed-in account, or the visitor's own Groq key. */
 export function hasApiSession() {
-  return apiAccessToken.length >= 32 || Boolean(accountHint) || isGroqKey(groqApiKey);
+  return apiAccessToken.length >= 32 || Boolean(accountHint) || isGroqKey(groqApiKey) || Boolean(rememberedHint);
 }
 
 /** Guest (bring-your-own-key) session: no operator token or account, only a Groq key. */
 export function isGuestSession() {
-  return !apiAccessToken && !accountHint && isGroqKey(groqApiKey);
+  return !apiAccessToken && !accountHint && (isGroqKey(groqApiKey) || Boolean(rememberedHint));
 }
 
 /** Signed in to an account on this server. */

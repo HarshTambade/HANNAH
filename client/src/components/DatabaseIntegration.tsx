@@ -3,6 +3,7 @@ import { Check, Clipboard, Database, ExternalLink, PlugZap, RefreshCw } from "lu
 import { apiFetch, apiUrl, getApiAccessToken } from "../services/api";
 import { databaseLabel } from "../services/Account";
 import { VERCEL_SUPABASE_URL } from "../config/project";
+import HostingSetup from "./HostingSetup";
 
 type DbStatus = { database: { configured: boolean; ready: boolean; kind: string | null; provider: string | null; source?: "DATABASE_URL" | "POSTGRES_URL" | null; schemaVersion?: number; error?: string }; vault: boolean; vaultSource?: string | null };
 
@@ -59,7 +60,8 @@ const PRESETS = [
   },
 ] as const;
 
-export default function DatabaseIntegration() {
+/** showSetup: include the automatic Vercel + Supabase setup (Settings → Account shows it on its own). */
+export default function DatabaseIntegration({ showSetup = true }: { showSetup?: boolean } = {}) {
   const [status, setStatus] = useState<DbStatus | null>(null);
   const [preset, setPreset] = useState<(typeof PRESETS)[number]["id"]>("supabase");
   const [copied, setCopied] = useState(false);
@@ -115,6 +117,8 @@ export default function DatabaseIntegration() {
       {db?.configured && !db.ready && db.error && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">{db.error}</p>}
       {db?.ready && !status?.vault && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">Accounts work, but saved provider keys are off until HANNAH_VAULT_KEY is set.</p>}
       {db?.ready && status?.vault && status.vaultSource && status.vaultSource !== "HANNAH_VAULT_KEY" && <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-900">Saved keys are encrypted with a key derived from your Supabase project's secret ({status.vaultSource}), which never goes in the database. To keep them readable if you ever rotate that secret, set your own HANNAH_VAULT_KEY.</p>}
+
+      {showSetup && status && !db?.ready && <div className="mt-5"><HostingSetup /></div>}
 
       <div className="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Database provider">
         {PRESETS.map((item) => (

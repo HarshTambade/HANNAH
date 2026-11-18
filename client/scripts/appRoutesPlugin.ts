@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import { APP_ROUTE_PATHS, ROUTE_TITLES, ROUTE_PATHS, type AppScreen } from "../src/routes";
+import { APP_ROUTE_PATHS, EXTRA_PAGE_PATHS, ROUTE_TITLES, ROUTE_PATHS, type AppScreen } from "../src/routes";
 
 /**
  * Write an index.html for every app route (/chat/index.html, /models/index.html,
@@ -25,6 +25,9 @@ export function appRoutesPlugin(): Plugin {
 
       for (const path of APP_ROUTE_PATHS) {
         this.emitFile({ type: "asset", fileName: `${path.slice(1)}/index.html`, source: variant(ROUTE_TITLES[screenFor[path] as AppScreen]) });
+      }
+      for (const [path, screen] of Object.entries(EXTRA_PAGE_PATHS)) {
+        this.emitFile({ type: "asset", fileName: `${path.slice(1)}/index.html`, source: variant(ROUTE_TITLES[screen]) });
       }
       this.emitFile({ type: "asset", fileName: "404.html", source: variant(ROUTE_TITLES["not-found"]) });
     },

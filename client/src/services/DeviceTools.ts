@@ -12,6 +12,7 @@ import { notifyMemoryChanged } from "./MemoryStore";
 import { getDesktopFileTools } from "./DesktopFiles";
 import { getDesktopActionTools } from "./DesktopActions";
 import { getBrowserTools } from "./BrowserTools";
+import { getWebTools } from "./WebTools";
 import { checkNumber } from "./PhoneBridge";
 import { getPhoneTools } from "./PhoneTools";
 import { getConnectionTools } from "./Connections";
@@ -338,14 +339,17 @@ function safeDocumentPath(value: unknown, allowRoot = false) {
 // Tools from outside MCP servers, registered at runtime (see McpTools.ts).
 let externalTools: HANNAHTool[] = [];
 
-export function setExternalTools(tools: HANNAHTool[]) {
-  externalTools = tools.filter((tool) => tool.requiresApproval && tool.sensitive);
+const externalBySource = new Map<string, HANNAHTool[]>();
+/** Outside tools by source ("mcp": the operator's MCP servers, "connectors": the person's own connectors). Each always needs approval. */
+export function setExternalTools(tools: HANNAHTool[], source = "mcp") {
+  externalBySource.set(source, tools.filter((tool) => tool.requiresApproval && tool.sensitive));
+  externalTools = [...externalBySource.values()].flat();
 }
 
 export function getDeviceTools() {
   const desktop = [...getDesktopFileTools(), ...getDesktopActionTools(), ...getBrowserTools()];
   const connections = getConnectionTools();
-  return [...deviceTools, ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...externalTools];
+  return [...deviceTools, ...getWebTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...externalTools];
 }
 
 /**

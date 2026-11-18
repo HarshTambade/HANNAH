@@ -146,7 +146,7 @@ test.describe("with the offline service worker", () => {
 
 test("public pages arrive as real HTML, readable without running JavaScript", async ({ request }) => {
   // Trailing slash: the preview server only serves a folder's index.html that way (Vercel serves both).
-  for (const [path, heading] of [["/", "Your Personal AI"], ["/integrations/", "Bring HANNAH into your workflow."], ["/marketplace/", "Agents and skills for the way you work."]] as const) {
+  for (const [path, heading] of [["/", "Your Personal AI"], ["/integrations/", "Bring HANNAH into your workflow."], ["/marketplace/", "Connect your tools. Shape how she works."]] as const) {
     const html = await (await request.get(path)).text();
     const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     expect(html).toContain("<h1");

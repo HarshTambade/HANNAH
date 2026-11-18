@@ -5,6 +5,7 @@ import { lastSyncStatus, resetSyncState, SYNC_EVENT, SYNC_NAMESPACES, syncNow, t
 import { ACCOUNT_EVENT, isGroqKey } from "../services/api";
 import { VERCEL_SUPABASE_URL } from "../config/project";
 import DatabaseIntegration from "./DatabaseIntegration";
+import HostingSetup from "./HostingSetup";
 
 const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-base text-ink outline-none transition placeholder:text-slate-400 focus:border-sky-400 sm:text-sm";
 
@@ -374,14 +375,13 @@ export default function AccountPanel({ onSignedOut, onTabGroqKey }: { onSignedOu
                 ? `This server's database isn't reachable: ${status.database.error || "unknown error"}.`
                 : "Accounts aren't turned on for this server yet. Until the server's operator connects a database, everything stays on this device."}
             </p>
-            {!status.database.configured && (
-              <a href={VERCEL_SUPABASE_URL} target="_blank" rel="noreferrer" className="btn-primary mt-3 inline-flex items-center gap-1.5">Connect Supabase on Vercel <ExternalLink size={13} /></a>
-            )}
           </div>
         </div>
+        {!status.database.configured && <div className="mt-3"><HostingSetup /></div>}
         <details className="mt-3 [&>section]:mt-3" open={status.database.configured}>
-          <summary className="cursor-pointer text-xs font-semibold text-slate-700">For the server's operator: database setup</summary>
-          <DatabaseIntegration />
+          <summary className="cursor-pointer text-xs font-semibold text-slate-700">Other ways to connect a database (for the server's operator)</summary>
+          {!status.database.configured && <p className="mt-2 text-xs text-slate-600">Or connect Supabase through <a href={VERCEL_SUPABASE_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 font-medium text-sky-700 underline">Vercel's Supabase integration <ExternalLink size={11} /></a>, or use any Postgres:</p>}
+          <DatabaseIntegration showSetup={false} />
         </details>
       </div>
     );

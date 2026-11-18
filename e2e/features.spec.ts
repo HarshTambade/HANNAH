@@ -69,6 +69,7 @@ test("reminders can be added and cancelled from the dashboard", async ({ page })
 test("a community instruction skill installs only after its manifest is checked", async ({ page }) => {
   await connectAsGuest(page);
   await page.goto("/marketplace");
+  await page.getByRole("tab", { name: "Agents and skills" }).click();
   const panel = page.getByRole("region", { name: "Community skills" });
   await panel.getByLabel("Manifest JSON").fill(JSON.stringify({ manifestVersion: 1, type: "executable-plugin" }));
   await panel.getByRole("button", { name: "Check manifest" }).click();
@@ -476,27 +477,47 @@ test("the Morning briefing template opens with a Daily briefing step and saves",
   await expect(page.getByRole("list", { name: "Saved automations" })).toContainText("Every day at 07:30 · 2 steps");
 });
 
-test("with no database, Settings → Account offers a one-click Supabase connection on Vercel", async ({ page }) => {
+test("with no database, Settings → Account sets HANNAH up on Vercel and Supabase from two tokens", async ({ page }) => {
   await connectAsGuest(page);
-  // What production answers today: no database, no vault.
   const noDatabase = { database: { configured: false, ready: false, kind: null, provider: null }, vault: false };
-  await page.route("**/api/account/status", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ accounts: { enabled: false, signup: false, serverKeys: false }, ...noDatabase, user: null }) }));
-  await page.route("**/api/db/status", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(noDatabase) }));
+  await page.route("**/api/account/status", (route) => route.fulfill({ json: { accounts: { enabled: false, signup: false, serverKeys: false }, ...noDatabase, user: null } }));
+  await page.route("**/api/db/status", (route) => route.fulfill({ json: noDatabase }));
+  const sent: Array<{ path: string; body: Record<string, unknown> }> = [];
+  let statusCalls = 0;
+  let finishCalls = 0;
+  await page.route("**/api/setup/hosting/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const body = route.request().postDataJSON();
+    sent.push({ path, body });
+    if (path.endsWith("/discover")) return route.fulfill({ json: { host: "hannah.example", vercel: { projects: [{ id: "prj_blog", name: "blog", teamId: null, team: "Personal account", domains: ["blog.example"], serves: false, git: true }, { id: "prj_hannah", name: "hannah", teamId: "team_1", team: "Harsh", domains: ["hannah.example"], serves: true, git: true }] }, supabase: { organizations: [{ slug: "harsh-org", name: "Harsh" }], projects: [] } } });
+    if (path.endsWith("/database")) return route.fulfill({ json: { projectRef: "abcdefghijklmnopqrst", databasePassword: "generatedpassword1234567890ab", created: true } });
+    if (path.endsWith("/status")) return route.fulfill({ json: ++statusCalls < 2 ? { status: "COMING_UP", ready: false } : { status: "ACTIVE_HEALTHY", ready: true } });
+    finishCalls += 1;
+    if (!body.replace) return route.fulfill({ status: 409, json: { error: "This Vercel project already has DATABASE_URL. Confirm to replace.", reason: "exists", existing: ["DATABASE_URL"] } });
+    return route.fulfill({ json: { saved: ["DATABASE_URL", "HANNAH_VAULT_KEY", "CRON_SECRET"], deployment: { url: "https://hannah-abc.vercel.app", inspector: "https://vercel.com/i/dpl_1" }, secrets: { HANNAH_VAULT_KEY: "a".repeat(64), CRON_SECRET: "c".repeat(48) } } });
+  });
   await page.goto("/settings");
-  const connect = page.getByRole("link", { name: "Connect Supabase on Vercel" }).first();
-  await connect.scrollIntoViewIfNeeded();
-  await expect(connect).toBeVisible();
-  await expect(connect).toHaveAttribute("href", "https://vercel.com/marketplace/supabase");
-  await expect(connect).toHaveAttribute("target", "_blank");
-  await page.getByText("For the server's operator: database setup").click();
-  const setup = page.getByRole("region", { name: "Database" });
-  await expect(setup).toContainText("Hosted on Vercel: connect in one click");
-  await expect(setup).toContainText("there's nothing to copy");
-  // Your own vault key and the cron secret are optional extras, folded away.
-  const extras = setup.getByText("Optional: your own vault key, and scheduled workflows");
-  await expect(setup.getByText(/HANNAH_VAULT_KEY=[0-9a-f]{64}/)).toBeHidden();
-  await extras.click();
-  await expect(setup).toContainText(/HANNAH_VAULT_KEY=[0-9a-f]{64}/);
-  await expect(setup).toContainText(/CRON_SECRET=[0-9a-f]{48}/);
-  if (process.env.HANNAH_SHOT_DIR) await page.screenshot({ path: `${process.env.HANNAH_SHOT_DIR}/settings-account.png`, fullPage: false });
+  const setup = page.getByRole("region", { name: "Set up HANNAH on Vercel and Supabase" });
+  await setup.scrollIntoViewIfNeeded();
+  await setup.getByLabel(/Vercel token/).fill("vercel_token_e2e");
+  await setup.getByLabel(/Supabase token/).fill("sbp_token_e2e");
+  await setup.getByRole("button", { name: "Find my projects" }).click();
+  // The project serving this site is chosen for you.
+  await expect(setup.getByLabel("Vercel project")).toHaveValue("prj_hannah");
+  await expect(setup.getByLabel("Region")).toHaveValue("ap-south-1");
+  await setup.getByRole("button", { name: "Set up HANNAH" }).click();
+  await expect(setup.getByRole("alertdialog", { name: "Replace existing settings" })).toContainText("already has DATABASE_URL", { timeout: 20_000 });
+  await setup.getByRole("button", { name: "Replace them" }).click();
+  await expect(setup.getByRole("status")).toContainText("HANNAH's database is ready", { timeout: 20_000 });
+  await expect(setup.getByRole("status")).toContainText(`HANNAH_VAULT_KEY=${"a".repeat(64)}`);
+  expect(statusCalls).toBe(2);
+  expect(finishCalls).toBe(2);
+  expect(sent.find((call) => call.path.endsWith("/finish"))?.body).toMatchObject({ projectId: "prj_hannah", teamId: "team_1", projectRef: "abcdefghijklmnopqrst" });
+  const stored = await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }));
+  expect(stored).not.toContain("vercel_token_e2e");
+  expect(stored).not.toContain("sbp_token_e2e");
+  if (process.env.HANNAH_SHOT_DIR) await setup.screenshot({ path: `${process.env.HANNAH_SHOT_DIR}/hosting-setup.png` });
+  // The other ways are still there.
+  await page.getByText("Other ways to connect a database (for the server's operator)").click();
+  await expect(page.getByRole("link", { name: /Vercel's Supabase integration/ })).toHaveAttribute("href", "https://vercel.com/marketplace/supabase");
 });

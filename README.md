@@ -787,6 +787,13 @@ On the **Agents** screen you can turn specialists off, pick a model for each, an
 
 ---
 
+## Connectors, web search and chat apps
+
+- **Connectors** (Marketplace → Connectors): 33 services, each the vendor's own MCP server. Connect with your own sign-in (OAuth with PKCE), a token (GitHub), or no sign-in (docs search). Your tokens stay in your browser; HANNAH asks before every action a connector takes. You can also add any remote MCP server by URL. The directory and its checks are in `server/connectors.js`.
+- **Web search** on every platform: HANNAH searches with Groq's browser search (your own Groq key) and reads public pages through HANNAH's server (`server/web.js`). The desktop app also has its own visible browser.
+- **Telegram** (Marketplace → Chat apps, signed-in accounts): connect a bot from @BotFather and pair your own chat with a one-time link; nobody else gets answers (`server/channels.js`).
+- **Setting up hosting from the app:** Settings → Account → “Set up HANNAH on Vercel and Supabase” creates the database, saves the settings in your Vercel project and redeploys, from a Vercel and a Supabase token (`server/hosting-setup.js`).
+
 ## Accounts and your own database
 
 Accounts are optional, and they use **a database you choose**. Set `DATABASE_URL` on the server.
@@ -1360,7 +1367,7 @@ To report a security issue, use GitHub's private vulnerability reporting or cont
 
 ## License
 
-HANNAH is released under the [HANNAH Source-Available Non-Commercial License 1.0](./LICENSE). Copyright © 2026 Harsh Tambade and HANNAH contributors.
+HANNAH is released under the [HANNAH Source-Available Non-Commercial License 2.0](./LICENSE). Copyright © 2026 Harsh Tambade and HANNAH contributors.
 
 You may use, modify and redistribute it **non-commercially**, with attribution. This is a source-available license, **not** an OSI-approved open-source license.
 

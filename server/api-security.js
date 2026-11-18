@@ -20,10 +20,10 @@ const configuredTokenDigest = configuredTokenIsValid
 // getRequestProviderApiKey in index.js); server-held provider keys, desktop
 // control, TTS, calls, feedback and sync still require the operator token.
 // Paths are relative to the /api or /v1 mount.
-const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/vision/describe", "/a2a", "/route/preview"]);
+const BYOK_PATHS = new Set(["/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/vision/describe", "/a2a", "/route/preview", "/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc", "/web/search", "/web/read", "/setup/hosting/discover", "/setup/hosting/database", "/setup/hosting/status", "/setup/hosting/finish"]);
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
 // The calendar/email sign-in callbacks are opened by Google or Microsoft; the single-use state identifies the user.
-const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/workflows/catalog", "/workflows/tick"]);
+const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/workflows/catalog", "/workflows/tick", "/session/key", "/connectors/catalog"]);
 // Workflow webhooks are called by other services. Each one authenticates
 // itself (a secret token or an HMAC signature) in server/workflows/router.js;
 // the cron tick checks CRON_SECRET. Nothing else under these paths is public.
@@ -36,7 +36,7 @@ function isPublic(path) {
 function accountMayUse(path) {
   return BYOK_PATHS.has(path) || path === "/sync/memory" || path === "/account" || path.startsWith("/account/")
     || path === "/workflows" || path.startsWith("/workflows/") || path === "/notifications" || path.startsWith("/notifications/")
-    || path.startsWith("/phone/");
+    || path.startsWith("/phone/") || path.startsWith("/connectors/") || path.startsWith("/web/") || path.startsWith("/setup/hosting/") || path === "/channels" || path.startsWith("/channels/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 

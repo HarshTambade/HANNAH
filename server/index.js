@@ -24,6 +24,7 @@ const {
 const { createContentReportHandler } = require("./content-reports");
 const { createSyncHandler, createSyncFetchHandler } = require("./cloud-sync");
 const { accountAuth, accountsUseServerKeys, createAccountRouter, createSpendStore, createSyncBlobStore } = require("./accounts");
+const { createRememberedKeyRouter, rememberedKeyMiddleware } = require("./remembered-key");
 const { databaseConfigured } = require("./db");
 const { knownPriceFor, tokenUsageMiddleware, verifiedPriceFor } = require("./cost-tracking");
 const { createV1Router } = require("./v1");
@@ -31,6 +32,10 @@ const { createOrchestrateHandler } = require("./orchestrate");
 const { createVoiceRouter } = require("./voice");
 const { createVisionRouter } = require("./vision");
 const { createMcpClientRouter } = require("./mcp-client");
+const { createConnectorsRouter } = require("./connectors");
+const { createWebRouter } = require("./web");
+const { createHostingSetupRouter } = require("./hosting-setup");
+const { createChannelsRouter } = require("./channels");
 const { createA2ARouter } = require("./a2a");
 const { createWebhookRouter, emitUserEvent, onUserEvent } = require("./webhooks");
 const { createDownloadRouter } = require("./downloads");
@@ -302,6 +307,8 @@ app.use(cors({ origin: corsOrigin, credentials: true }));
 // Public download links (/download/android and so on): redirect to the newest release that has the package.
 app.use("/download", createDownloadRouter());
 // Accounts (when DATABASE_URL is set): recognize a session or developer key first.
+// A Groq key remembered in this browser (HttpOnly cookie) counts as sent with the request.
+app.use("/api", rememberedKeyMiddleware);
 app.use("/api", accountAuth());
 app.use("/v1", accountAuth());
 app.use("/api", requireApiToken);
@@ -327,6 +334,7 @@ const workflowRuntime = createRuntime({ emit: emitUserEvent });
 onUserEvent((userId, event, data) => (databaseConfigured() ? workflowRuntime.emitEvent(userId, event, data, { sourceWorkflowId: data?.workflowId || null, depth: Number(data?.$depth) || 0 }) : 0));
 // Public workflow webhooks read the raw body (HMAC signatures cover the exact bytes), so they're mounted before the JSON parser.
 app.use("/api", createHookRouter({ runtime: workflowRuntime }));
+app.use("/api", createRememberedKeyRouter());
 // Phone Bridge: a paired phone signs its requests over the exact body, so it parses its own.
 app.use("/api", createPhoneBridgeRouter());
 app.use(express.json({ limit: "12mb" }));
@@ -355,6 +363,14 @@ app.use("/api", createVoiceRouter({ getRequestProvider, allowedProviderIds, time
 app.use("/api", createVisionRouter({ usableProviders, normalizeRouting: router.normalizeRouting, privacyBlocks: router.privacyBlocks, timeoutMs: cloudRequestTimeout }));
 // Outside MCP servers (operator-configured, operator-only routes).
 app.use("/api", createMcpClientRouter({ timeoutMs: cloudRequestTimeout }));
+// Connectors people sign in to themselves; the browser keeps their tokens.
+app.use("/api", createConnectorsRouter({ publicBaseUrl, allowedOrigins, timeoutMs: cloudRequestTimeout }));
+// Web search (Groq browser search with the request's key) and page reading, on every platform.
+app.use("/api", createWebRouter({ getRequestProvider }));
+// "Set up HANNAH": connect this deployment to Vercel and Supabase with the person's own tokens.
+app.use("/api", createHostingSetupRouter());
+// Chat apps (Telegram) that reach HANNAH for one account, paired like OpenClaw's DMs.
+app.use("/api", createChannelsRouter({ runtime: workflowRuntime, publicBaseUrl }));
 // Agent2Agent: public agent card, authenticated message/send.
 app.use(createA2ARouter({ getRequestProvider, preferredProviderId, systemPrompt, parseAssistantOutput, timeoutMs: cloudRequestTimeout, version: serverVersion }));
 // OpenAI-compatible developer API. Same credentials as /api (operator token, a

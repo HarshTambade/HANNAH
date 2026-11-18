@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, Check, Eye, EyeOff, KeyRound, ShieldCheck, X } from "lucide-react";
-import { apiBase, isGroqKey, verifyApiAccess } from "../services/api";
+import { apiBase, canRememberKey, isGroqKey, rememberGroqKey, verifyApiAccess } from "../services/api";
 import { Account, databaseLabel, type AccountStatus } from "../services/Account";
 import { IS_WEBSITE } from "../config/site";
 import { SignInForm } from "./AccountPanel";
@@ -22,6 +22,9 @@ export default function ConnectPanel({ onStart, onClose }: ConnectPanelProps) {
   const [showApiKey, setShowApiKey] = useState(false);
   const [keyError, setKeyError] = useState("");
   const [verifying, setVerifying] = useState(false);
+  // Website only: keep the key in a cookie this page can't read, for 30 days.
+  const rememberable = canRememberKey();
+  const [remember, setRemember] = useState(true);
   const [accountInfo, setAccountInfo] = useState<AccountStatus | null>(null);
   const [accountMode, setAccountMode] = useState(false);
 
@@ -77,6 +80,7 @@ export default function ConnectPanel({ onStart, onClose }: ConnectPanelProps) {
       return;
     }
     onStart({ apiToken: token, groqApiKey: key });
+    if (rememberable && key && !token) void rememberGroqKey(remember);
   };
 
 
@@ -146,7 +150,13 @@ export default function ConnectPanel({ onStart, onClose }: ConnectPanelProps) {
         </details>
 
         {keyError && <p role="alert" className="mt-4 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">{keyError}</p>}
-        <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-slate-500"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-teal-600" /> {IS_WEBSITE ? "Kept only in this browser tab and cleared when you close it." : "Kept in this app's private storage on this device until you disconnect."} Your key is sent to Groq through HANNAH's server and never stored there.</p>
+        {rememberable && (
+          <label className="mt-4 flex items-start gap-2 text-xs leading-5 text-slate-600">
+            <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+            <span><span className="font-semibold text-slate-700">Remember on this browser</span> for 30 days, in a secure cookie this page's scripts can't read. Disconnect forgets it.</span>
+          </label>
+        )}
+        <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-slate-500"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-teal-600" /> {IS_WEBSITE && rememberable && remember ? "" : IS_WEBSITE ? "Kept only in this browser tab and cleared when you close it." : "Kept in this app's private storage on this device until you disconnect."} Your key is sent to Groq through HANNAH's server and never stored there.</p>
         <button type="submit" disabled={verifying} className="btn-primary group mt-5 min-h-[3.25rem] w-full !rounded-2xl text-sm disabled:cursor-wait">
           {verifying ? "Checking your key…" : "Continue to HANNAH"} {!verifying && <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />}
         </button>

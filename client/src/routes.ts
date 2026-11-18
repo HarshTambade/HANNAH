@@ -55,7 +55,10 @@ export const ROUTE_TITLES: Record<Screen, string> = {
 export const APP_ROUTE_PATHS = Object.values(ROUTE_PATHS).filter((path) => path !== "/");
 
 /** Older names some links used; they open the current screen. */
-const ALIASES: Record<string, AppScreen> = { "/conversation": "conversation", "/home": "landing", "/workflows": "automations", "/tasks": "agents" };
+const ALIASES: Record<string, AppScreen> = { "/conversation": "conversation", "/home": "landing", "/workflows": "automations", "/tasks": "agents", "/connectors/callback": "marketplace" };
+
+/** Extra pages the build emits (an index.html each) that open another screen: a connector's sign-in returns to /connectors/callback. */
+export const EXTRA_PAGE_PATHS: Record<string, AppScreen> = { "/connectors/callback": "marketplace" };
 
 function normalizePath(pathname: string, base = "/") {
   let path = pathname;

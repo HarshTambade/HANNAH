@@ -3,7 +3,7 @@ import { Code2, Download, Eye, EyeOff, KeyRound, LogOut, Search, Server, Stethos
 import { createBackup, preview as backupPreview, readBackup, restoreBackup, BackupError, type Backup, type RestoreMode } from "../services/Backup";
 import { Diagnostics, DIAGNOSTICS_EVENT, type DiagnosticLevel } from "../services/Diagnostics";
 import { applyTextSize, readTextSize, type TextSize } from "../services/appearance";
-import { apiFetch, apiUrl, getAccountHint, getApiAccessToken, getSessionGroqKey, isGroqKey, setSessionGroqKey } from "../services/api";
+import { apiFetch, apiUrl, canRememberKey, getAccountHint, getApiAccessToken, getRememberedKeyHint, getSessionGroqKey, isGroqKey, rememberGroqKey, setSessionGroqKey } from "../services/api";
 import AccountPanel from "./AccountPanel";
 import VoiceSettingsPanel from "./VoiceSettingsPanel";
 import DesktopAccessPanel from "./DesktopAccessPanel";
@@ -56,7 +56,9 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
   const [health, setHealth] = useState<{ state: string; provider?: string }>({ state: "Checking…" });
   const [groqKey, setGroqKey] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [hasGroqKey, setHasGroqKey] = useState(() => Boolean(getSessionGroqKey()));
+  const [hasGroqKey, setHasGroqKey] = useState(() => Boolean(getSessionGroqKey() || getRememberedKeyHint()));
+  // Website: the key can be remembered on this browser in a cookie the page can't read.
+  const [rememberedHint, setRememberedHint] = useState(getRememberedKeyHint);
   // Guests connect with only their Groq key; removing it ends the session.
   const usingAccessToken = Boolean(getApiAccessToken());
   const usingAccount = !usingAccessToken && Boolean(getAccountHint());
@@ -118,7 +120,16 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
     onGroqKeyChange(key);
     setGroqKey("");
     setHasGroqKey(true);
-    setNotice("Groq key saved for this browser tab.");
+    if (rememberedHint) {
+      void rememberGroqKey(true).then((ok) => { setRememberedHint(getRememberedKeyHint()); setNotice(ok ? "Groq key saved and remembered on this browser." : "Groq key saved for this browser tab."); });
+    } else setNotice("Groq key saved for this browser tab.");
+  };
+
+  const toggleRemember = (on: boolean) => {
+    void rememberGroqKey(on).then((ok) => {
+      setRememberedHint(getRememberedKeyHint());
+      setNotice(on ? (ok ? "Remembered on this browser for 30 days." : "Paste your key above first, then turn this on.") : "Forgotten on this browser. It stays for this tab until you close it.");
+    });
   };
 
   const download = (name: string, text: string) => {
@@ -230,7 +241,7 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="flex items-center gap-2 text-slate-500"><KeyRound size={15} /> Your Groq key</dt>
-            <dd className="font-medium text-ink">{hasGroqKey ? "Saved for this tab" : "Not set (server key used)"}</dd>
+            <dd className="font-medium text-ink">{rememberedHint ? `Remembered on this browser · ${rememberedHint}` : hasGroqKey ? "Saved for this tab" : "Not set (server key used)"}</dd>
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="flex items-center gap-2 text-slate-500"><Server size={15} /> Signed in with</dt>
@@ -254,6 +265,12 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
           <button type="submit" disabled={!groqKey.trim()} className="btn-outline disabled:opacity-40">Save</button>
           {hasGroqKey && <button type="button" onClick={() => { if (!usingAccessToken && !usingAccount) { onDisconnect(); return; } setSessionGroqKey(""); onGroqKeyChange(""); setHasGroqKey(false); setNotice("Groq key removed."); }} className="btn-ghost" title={usingAccessToken ? undefined : "Removing your key disconnects this tab"}>Remove</button>}
         </form>
+        {canRememberKey() && hasGroqKey && !usingAccessToken && (
+          <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-slate-600">
+            <input type="checkbox" checked={Boolean(rememberedHint)} onChange={(event) => toggleRemember(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+            <span><span className="font-semibold text-slate-700">Remember on this browser</span> for 30 days, in a secure cookie this page's scripts can't read. The server stores nothing.</span>
+          </label>
+        )}
         <button type="button" onClick={onDisconnect} className="btn-outline mt-5 text-rose-600 hover:!border-rose-300 hover:!text-rose-700"><LogOut size={15} /> Disconnect this tab</button>
       </Section>
 

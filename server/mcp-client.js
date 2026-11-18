@@ -76,9 +76,11 @@ async function readRpcResponse(response, id) {
 }
 
 class McpHttpClient {
-  constructor(server, { timeoutMs = 30_000 } = {}) {
+  /** fetchImpl: how requests are made (connectors pass an SSRF-safe one for URLs people enter). */
+  constructor(server, { timeoutMs = 30_000, fetchImpl = (...args) => fetch(...args) } = {}) {
     this.server = server;
     this.timeoutMs = timeoutMs;
+    this.fetchImpl = fetchImpl;
     this.sessionId = null;
     this.initialized = null;
     this.nextId = 1;
@@ -94,7 +96,7 @@ class McpHttpClient {
       "MCP-Protocol-Version": PROTOCOL_VERSION,
       ...(this.sessionId ? { "Mcp-Session-Id": this.sessionId } : {}),
     };
-    const response = await fetch(this.server.url, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs), redirect: "error" });
+    const response = await this.fetchImpl(this.server.url, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs), redirect: "error" });
     const session = response.headers.get("mcp-session-id");
     if (session) this.sessionId = session;
     if (!expectResponse) {
@@ -104,6 +106,7 @@ class McpHttpClient {
     if (!response.ok) {
       const error = new Error(response.status === 401 || response.status === 403 ? `${this.server.name} rejected HANNAH's credentials.` : `${this.server.name} returned HTTP ${response.status}.`);
       error.status = response.status;
+      error.wwwAuthenticate = response.headers.get("www-authenticate") || "";
       throw error;
     }
     const message = await readRpcResponse(response, body.id);

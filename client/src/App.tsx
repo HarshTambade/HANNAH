@@ -19,10 +19,11 @@ import { startDesktopWorkflowJobs } from "./services/DesktopWorkflowJobs";
 import { startPhoneBridge } from "./services/PhoneBridge";
 import { startWakeWord, WAKE_EVENT } from "./services/WakeWord";
 import { startNativeReminders } from "./services/NativeReminders";
-import { clearApiSession, getAccountHint, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey } from "./services/api";
+import { clearApiSession, getAccountHint, getRememberedKeyHint, getSessionGroqKey, hasApiSession, setApiAccessToken, setSessionGroqKey, syncRememberedKey } from "./services/api";
 import { Account } from "./services/Account";
 import { resetSyncState, startAccountSync } from "./services/AccountSync";
 import { refreshMcpTools } from "./services/McpTools";
+import { installConnectorTools } from "./services/Connectors";
 import type { Emotion, InferenceMode } from "./types";
 import NotFoundPage from "./components/NotFoundPage";
 import { legacyHashRedirect, pathForScreen, ROUTE_TITLES, screenForLocation, type AppScreen, type Screen } from "./routes";
@@ -124,7 +125,7 @@ export default function App() {
   }, []);
   // Outside MCP tools (operator sessions only), refreshed when the screen changes.
   useEffect(() => {
-    if (screen !== "landing") void refreshMcpTools();
+    if (screen !== "landing") { void refreshMcpTools(); installConnectorTools(); }
   }, [screen]);
 
   useEffect(() => {
@@ -157,6 +158,16 @@ export default function App() {
     setConnectRequested(true);
     navigate("landing");
   }, [navigate]);
+
+  // A key remembered on this browser: confirm once that the server still has the cookie (it expires after 30 days).
+  useEffect(() => {
+    if (!getRememberedKeyHint()) return;
+    void syncRememberedKey().then((still) => {
+      if (!still && !hasApiSession() && appSections.has(screenRef.current)) reconnect();
+    });
+    // Only on the first render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openSecondary = (target: "integrations" | "marketplace") => {
     setReturnScreen(screen === "not-found" ? "landing" : screen);

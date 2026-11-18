@@ -3,6 +3,7 @@ import {
   ArrowLeft, Bot, Check, Download, Search, ShieldCheck, Sparkles, Trash2,
 } from "lucide-react";
 import CommunitySkillsPanel from "./CommunitySkillsPanel";
+import ConnectorsDirectory from "./ConnectorsDirectory";
 import { MarketplaceService, type MarketplacePackageType, type MarketplaceState } from "../services/MarketplaceService";
 
 type MarketplacePageProps = { onBack: () => void };
@@ -13,6 +14,7 @@ export default function MarketplacePage({ onBack }: MarketplacePageProps) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [status, setStatus] = useState("");
+  const [tab, setTab] = useState<"connectors" | "packages">("connectors");
   const packages = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return MarketplaceService.list().filter((item) => {
@@ -54,9 +56,17 @@ export default function MarketplacePage({ onBack }: MarketplacePageProps) {
       <div className="relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
         <section className="max-w-3xl">
           <p className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-violet-700"><Sparkles size={13} /> Make HANNAH yours</p>
-          <h1 className="display-title mt-4 text-[clamp(2.4rem,5.5vw,4rem)]">Agents and skills for the way you work.</h1>
-          <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-500">Add a focused agent or a small conversation skill. Your active choices shape HANNAH’s replies while her safety rules and confirmation requirements stay in force.</p>
+          <h1 className="display-title mt-4 text-[clamp(2.4rem,5.5vw,4rem)]">Connect your tools. Shape how she works.</h1>
+          <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-500">Connect the services you use, so HANNAH can work with them for you, or add a focused agent or conversation skill. Her safety rules apply throughout, and she asks before acting.</p>
         </section>
+
+        <div role="tablist" aria-label="Marketplace sections" className="mt-8 inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-soft">
+          {([["connectors", "Connectors"], ["packages", "Agents and skills"]] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-lg px-4 py-2 text-xs font-semibold transition ${tab === id ? "bg-ink text-white" : "text-slate-600 hover:text-ink"}`}>{label}</button>
+          ))}
+        </div>
+
+        {tab === "connectors" ? <ConnectorsDirectory /> : (<>
 
         <section className="mt-8 flex flex-col gap-4 rounded-2xl border border-cyan-100 bg-cyan-50 p-4 sm:flex-row sm:items-start sm:p-5">
           <ShieldCheck size={17} className="mt-0.5 shrink-0 text-cyan-700" />
@@ -151,6 +161,7 @@ export default function MarketplacePage({ onBack }: MarketplacePageProps) {
           <div className="mt-5 rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-xs text-slate-500">No packages match that search.</div>
         )}
         <CommunitySkillsPanel />
+        </>)}
       </div>
     </main>
   );

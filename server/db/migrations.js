@@ -386,6 +386,34 @@ const MIGRATIONS = [
       "ALTER TABLE hannah_workflow_executions ADD COLUMN recoveries INTEGER NOT NULL DEFAULT 0",
     ],
   },
+  {
+    version: 11,
+    name: "chat channels",
+    // A chat app (Telegram) that reaches HANNAH for one account. The bot token is
+    // sealed by the vault; the webhook secret and pairing code are kept as hashes.
+    // Only the paired chat gets answers; history keeps the last few turns.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_channels (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        secret_key_id TEXT NOT NULL,
+        secret_wrapped TEXT NOT NULL,
+        secret_ciphertext TEXT NOT NULL,
+        webhook_secret_hash TEXT NOT NULL,
+        pairing_code_hash TEXT,
+        pairing_expires_at BIGINT,
+        paired_chat_id TEXT,
+        paired_name TEXT,
+        history TEXT,
+        last_update_id BIGINT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_channels_user ON hannah_channels (user_id)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

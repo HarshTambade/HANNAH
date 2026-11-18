@@ -33,6 +33,22 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ### New
 
+- **Connectors (Marketplace → Connectors).** 33 services you connect with your own account, each one the vendor's own MCP server, shown with its official icon: GitHub, Linear, Notion, Atlassian (Jira and Confluence), Sentry, Stripe, PayPal, Square, Vercel, Supabase, Neon, Netlify, Cloudflare, Figma, Canva, Airtable, monday.com, Zapier, Intercom, Webflow, Wix, Fireflies, Hugging Face, Context7, DeepWiki, Microsoft Learn, AWS Knowledge and more. Search them, filter by category, or add any remote MCP server by URL.
+  - **Signing in:** sign-in is OAuth with PKCE and self-registration (the MCP authorization standard), on the service's own page.
+  - **Your tokens:** they stay in your browser; HANNAH's server stores none of them.
+  - **Safety:** every tool use asks you first, and requests go only to public https addresses.
+  - **Not yet:** Asana, Box, HubSpot and Slack aren't listed, because their servers accept only apps they've approved.
+- **HANNAH searches the web everywhere.** On the website and phones, HANNAH had no way to search, so she said she couldn't browse. She now searches with Groq's browser search, using your own key, and cites her sources. She can also read any public page. Requests like "search for…", "what's the latest…" or "look this up" always bring these tools. The desktop app keeps its own visible browser.
+- **Set up HANNAH on Vercel and Supabase from the app.** Paste a Vercel token and a Supabase token in Settings → Account (or Integrations → Database). HANNAH then:
+  - finds the Vercel project serving this site;
+  - creates a Supabase database for it;
+  - connects to the database to check it;
+  - saves `DATABASE_URL`, a vault key and a cron secret as sensitive Vercel variables;
+  - deploys again.
+
+  Nothing is stored, and existing settings are never replaced without asking.
+- **Talk to HANNAH on Telegram (Marketplace → Chat apps).** Connect a bot from @BotFather and pair your own chat with a one-time link. Only that chat gets answers, and anyone else is told it's private. Replies use your account's AI key.
+- **“Remember on this browser” for your Groq key (website).** The key is kept for 30 days in a secure cookie that the page's scripts can't read, so you aren't asked again in every new tab. Disconnect forgets it.
 - **Connect Supabase in one click on Vercel.** Press **Connect Supabase on Vercel** (Settings → Account while the server has no database, or Integrations → Database) and approve it for the HANNAH project. After Vercel's redeploy, accounts and encrypted key storage are on, with nothing to copy: HANNAH reads `POSTGRES_URL`, which the integration adds, and derives its vault key from the Supabase secret it adds (`SUPABASE_JWT_SECRET`). That secret is never stored in the database. Setting your own `HANNAH_VAULT_KEY` still works, and it takes over and re-encrypts saved keys as they're read.
 - **HANNAH's browser, YouTube study notes and PDF notes (desktop app).**
   - **HANNAH's browser:** "find a GATE lecture on YouTube" or "look this up" opens HANNAH's own browser window, visible and signed out of everything.
