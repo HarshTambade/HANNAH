@@ -2,7 +2,7 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
-## Unreleased
+## 1.5.1 — 2026-11-19
 
 ### Fixed
 
@@ -16,6 +16,8 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 - **Web search failed more often than needed.** A search that Groq answered with an error is tried once more on Groq's other search model; each try is capped so the whole search ends well within the app's wait, and a rate limit is reported at once.
 - **"Export training examples" waited up to two minutes and changed your memory.** It waited for an "idle window", said "No idle window was available" when you had fewer than three rated replies, and copied random chat notes into long-term memory on the way. It now exports at once and changes nothing. The background consolidation keeps a short note only when it came up more than once (it used to keep 30% of them at random).
 - **The self-hosted sync relay didn't match the app.** The app sent changes to one address and fetched them from another the relay didn't serve, the relay's ids were guessable and it had no size limits. The relay and the app now share one protocol (see docs/SYNC_PRIVACY.md), with limits, CORS for browsers, and tests that sync two devices through the real relay.
+- **The OpenAI-compatible API and agent-to-agent endpoint also picked retired models.** `POST /v1/chat/completions` with `auto` and `POST /api/a2a` failed with "Groq doesn't offer that model", and `GET /v1/models` listed retired, speech and classifier models. They now use the provider's live model list like chat does. An agent-to-agent reply is never empty: an empty model answer is asked once more on the default model, then reported as an error.
+- **A signed-in browser's changes are refused when they come from another site.** The session cookie was already `SameSite=Lax`; requests that change something now also need to come from HANNAH's own pages (an allowed origin or the server's own address). Developer keys and the apps are unaffected.
 - **A rate limit on a local install showed a second, confusing error** ("Python fallback: Could not reach … 127.0.0.1:8000") when no Python fallback was running.
 
 ## 1.5.0 — 2026-11-18

@@ -1,0 +1,48 @@
+# Full product audit
+
+Date: 2026-11-19. Base: v1.5.0 (`c70e584`). Result: v1.5.1.
+
+## How it was done
+
+1. **Static sweep** of client and server for the usual marks of unfinished code: `Math.random`, timers standing in for work, "simulated", "mock", "scaffold", "not implemented", TODO/FIXME, hard-coded statuses and literal data arrays in components.
+2. **Use of the running product** with Playwright against a real server, a real database (SQLite) and Groq's real API: every screen as a guest, as a signed-in account and as the operator; then each feature driven as a person would, reading what came back.
+3. **API smoke test** as an account and with a developer key: 29 checks over accounts, keys, `/v1`, A2A, sync, export, audit log, phone pairing, voice, vision, web, and the refusals that must happen.
+4. **Each failure traced** from the control to the request, the handler and the provider call, fixed at the cause, covered by a test, then re-run live.
+5. **Regression**: full unit, API and end-to-end suites, lint, typecheck, secret scan, dependency audit.
+
+Details per bug are in [BUGS_AND_ROOT_CAUSES.md](./BUGS_AND_ROOT_CAUSES.md); the status of every feature is in [REPAIR_TRACKER.md](./REPAIR_TRACKER.md).
+
+## By subsystem
+
+| Subsystem | Finding |
+|---|---|
+| **Models and providers** | The largest failure of the audit: Auto was broken everywhere because curated model lists had gone stale. Fixed by following each provider's live list. Pickers no longer show non-chat models. Only Groq was exercised with a real key. |
+| **Agents** | The single-agent loop and Team mode run real tools (memory, reminders, web search, knowledge, connectors). Two tool-selection filters hid tools; fixed. Team's silent rate-limit waits looked like hangs; now shown. |
+| **Automations (device)** | Work: schedule, run now, approvals, run history with each step's output. |
+| **Workflows (server)** | A real engine: node registry with schemas, durable executions, retries, pause/resume, versions, webhooks with HMAC, schedules, approvals. Drafting from text produced workflows that couldn't run; fixed, and a web-search step was added. |
+| **Memory and Knowledge** | Memory save (with approval), recall, categories, export and delete work. Knowledge answers failed unless the message used certain words; fixed. The background "consolidation" used random choice; fixed. |
+| **Voice** | Speak and Call start and listen in the browser. Speech recognition quality, wake word and background behavior need a person and a device. |
+| **Accounts and data** | Register, sign in, keys, sync, export, audit log and delete all verified live. Cross-site origin check added. |
+| **Integrations page and APIs** | `/v1` and A2A had the same stale-model bug; fixed. MCP, webhooks and connectors have passing suites; Hugging Face connected live. |
+| **Communications** | Code is real and tested against stand-ins. Not verified with real Google or Microsoft accounts (needs your OAuth credentials). |
+| **Phone Bridge** | Server side verified; no physical phone here. |
+| **Desktop and mobile apps** | Build in CI on all platforms. Android launched on an emulator. Desktop control and iOS not exercised by hand. |
+| **Database** | 15 migrations, applied cleanly to SQLite, PGlite and the live Neon database (schema version 15). No schema defects found in this pass. |
+| **Security** | See [SECURITY_AUDIT.md](../security/SECURITY_AUDIT.md). |
+| **UI** | Every screen loads without console errors in all three modes; the e2e crawler presses every control on every screen. Routes have real paths and titles. No invented statistics or testimonials on public pages. |
+
+## Dummy or fake code found
+
+| Where | What it did | Outcome |
+|---|---|---|
+| `OnDeviceLoRAService`, `DreamingConsolidator` | Idle-wait loop; kept notes at random | Made real |
+| `PersonaKernel.update` | Threw "not implemented in scaffold" | Removed |
+| `server/sync-relay.js` | Relay that didn't match its client | Made real |
+| Workflow draft output | Invented `example.com` endpoints | Prevented and cleaned |
+| Earlier pass (1.5.0) | Sync, CRDT merge, orchestrator, research agent, PAP sign-in, hardware adapter, interop card | Made real, see CHANGELOG 1.5.0 |
+
+Chaos mode's "simulated" faults are a deliberate, labelled testing feature, off by default.
+
+## What this audit did not cover
+
+Real Google/Microsoft/WhatsApp accounts; providers other than Groq; a physical phone; the packaged desktop app by hand; iOS at runtime; thirteen panels that no screen shows. Each is listed with what it needs in the tracker.
