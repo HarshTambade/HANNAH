@@ -79,9 +79,11 @@ function explainProviderError(error, provider) {
   return error;
 }
 
-function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Date.now(), db: injectedDb, emit = async () => {}, connections = require("../connections") } = {}) {
+function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Date.now(), db: injectedDb, emit = async () => {}, connections = require("../connections"), researchProviders = null, researchRequest = undefined } = {}) {
   const database = async () => injectedDb || getDatabase();
   const running = new Map(); // execution id → AbortController, in this process
+  // Where research steps search and fetch. Null means the real providers and the SSRF-safe client; tests supply stand-ins.
+  const researchConfig = { providers: researchProviders, request: researchRequest };
 
   // ---------- services for one user ----------
 
@@ -161,6 +163,52 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         }
         // Every provider failed. If any was only busy, say so: the engine waits for it and tries again.
         throw busy || lastError;
+      },
+
+      /**
+       * Research, by the same engine chat uses (server/research): searches,
+       * opens pages, scores sources and checks citations. Web search runs with
+       * the account's Groq key; scholarly and reference searches need no key.
+       */
+      async research({ question, mode = "deep", model = "auto" }) {
+        const { runResearch, methodology } = require("../research/engine");
+        const { createProviders } = require("../research/providers");
+        const { patient } = require("../llm");
+        const userKeys = await keys();
+        const groqProvider = getProvider("groq");
+        const groqKey = userKeys.get("groq") || (accountsUseServerKeys() ? providerKey(groqProvider) : "");
+        const ask = patient(async ({ system, prompt, maxTokens }) => {
+          try { return await this.ai({ model, system, prompt, maxTokens, temperature: 0.2 }); } catch (error) { throw Object.assign(error, { retryAfter: error.retryAfterMs ? error.retryAfterMs / 1000 : undefined }); }
+        }, { waits: 2, maxWaitS: 60 });
+        const result = await runResearch({ question, mode, services: { ask, providers: researchConfig.providers || createProviders(), context: { groq: groqKey ? { baseUrl: groqProvider.baseUrl, apiKey: groqKey } : null }, request: researchConfig.request }, now });
+        result.methodology = methodology(result);
+        if (result.sources.length) await require("../documents/store").saveResearch(await database(), userId, result).catch(() => null);
+        return result;
+      },
+
+      /**
+       * A document, by the same Document Studio chat uses (server/documents):
+       * written from the request and the material given, rendered, validated,
+       * and kept in the account's files, where it can be downloaded.
+       */
+      async document({ request, formats, context = {}, spec = null, model = "auto" }) {
+        const { composeDocument } = require("../documents/compose");
+        const { createDocument } = require("../documents");
+        const { patient } = require("../llm");
+        const store = require("../documents/store");
+        const ask = patient(async ({ system, prompt, maxTokens }) => {
+          try { return await this.ai({ model, system, prompt, maxTokens, temperature: 0.3 }); } catch (error) { throw Object.assign(error, { retryAfter: error.retryAfterMs ? error.retryAfterMs / 1000 : undefined }); }
+        }, { waits: 2, maxWaitS: 60 });
+        const made = spec
+          ? { files: await Promise.all(formats.map((format) => createDocument({ format, spec }))), spec, notes: [] }
+          : await composeDocument({ request, formats, context, ask });
+        const db = await database();
+        const files = [];
+        for (const file of made.files) {
+          const saved = await store.saveDocument(db, userId, { file, spec: file.format === "xlsx" ? file.model : made.spec, source: workflowId ? `workflow:${workflowId}`.slice(0, 40) : "workflow", request, now: now() });
+          files.push({ id: saved.id, name: saved.name, format: saved.format, bytes: saved.bytes, download: `/api/account/documents/${saved.id}/download`, expiresAt: saved.expiresAt, summary: file.summary });
+        }
+        return { files, notes: made.notes };
       },
 
       async notify({ title, body }) {
@@ -773,7 +821,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     loop = null;
   }
 
-  return { cancel, claim, pause, emitEvent, enqueue, extendWait, publishedDefinition, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
+  return { cancel, claim, pause, emitEvent, enqueue, extendWait, publishedDefinition, researchConfig, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
 }
 
 module.exports = { FINAL, createRuntime, explainProviderError, sha256 };

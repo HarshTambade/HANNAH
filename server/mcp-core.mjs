@@ -49,7 +49,7 @@ export function createHANNAHMcpServer(options = {}) {
   const server = new McpServer({
     name: "hannah",
     version: "1.0.0",
-    instructions: "HANNAH is a conversational AI companion exposed over MCP. Use hannah_chat for responses, hannah_status to check service readiness, and hannah_models to inspect configured models. This MCP server has no access to the host application's files, accounts, or device controls. Do not claim it has performed actions in another application.",
+    instructions: "HANNAH is a conversational AI companion exposed over MCP. Use hannah_chat for responses, hannah_research for cited web research, hannah_create_document for PowerPoint, PDF, Word and Excel files, hannah_status to check service readiness, and hannah_models to inspect configured models. This MCP server has no access to the host application's files, accounts, or device controls. Do not claim it has performed actions in another application.",
   });
 
   server.registerTool(
@@ -137,6 +137,67 @@ export function createHANNAHMcpServer(options = {}) {
           models: Array.isArray(models.models) ? models.models.filter((model) => typeof model === "string") : [],
         };
         return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  // Research and documents are the same platform services chat uses (server/research, server/documents),
+  // reached through the API with the caller's own credential.
+  async function streamed(path, body) {
+    const response = await fetch(`${options.apiBaseUrl || defaultApiBaseUrl}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(options.headers || (process.env.HANNAH_API_TOKEN ? { Authorization: "Bearer " + process.env.HANNAH_API_TOKEN.trim() } : {})) },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(280_000),
+    });
+    const text = await response.text();
+    if (!response.ok) { let message = `HANNAH API returned HTTP ${response.status}.`; try { message = JSON.parse(text).error || message; } catch { /* keep the status */ } throw new Error(message); }
+    const events = text.split("\n\n").filter((block) => block.startsWith("data: ")).map((block) => JSON.parse(block.slice(6)));
+    const last = events.at(-1);
+    if (!last || last.type === "error") throw new Error(last?.message || "HANNAH didn't finish the request.");
+    return last;
+  }
+
+  server.registerTool(
+    "hannah_research",
+    {
+      title: "Research with HANNAH",
+      description: "Research a question on the web with HANNAH's research engine: it plans searches, opens and reads pages, scores sources, and returns an answer whose citations were checked against what was read, with the sources and any pages it could not read. May take up to a few minutes and uses the caller's AI provider.",
+      inputSchema: z.object({
+        question: z.string().trim().min(3).max(2000),
+        mode: z.enum(["quick", "latest", "deep", "academic", "compare"]).default("quick").describe("quick: a direct question. latest: newest sources first. deep: a fuller report. academic: papers and technical sources. compare: two or more subjects."),
+      }),
+    },
+    async ({ question, mode }) => {
+      try {
+        const { result } = await streamed("/api/research", { question, mode });
+        const output = { answer: result.answer, grounded: result.quality.grounded, sources: result.sources.map((source) => ({ n: source.n, title: source.title, url: source.url, published: source.published, kind: source.scores.authorityReason })), couldNotRead: result.failed.map((item) => ({ url: item.url, reason: item.reason })), unconfirmed: result.quality.unsupported.map((item) => item.value), methodology: result.methodology };
+        return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "hannah_create_document",
+    {
+      title: "Create a document with HANNAH",
+      description: "Create a PowerPoint (pptx), PDF, Word (docx) or Excel (xlsx) file with HANNAH's Document Studio from a request in plain words, optionally with source text to write from. The file is validated before it is returned, as base64.",
+      inputSchema: z.object({
+        request: z.string().trim().min(3).max(4000).describe("What to make, for whom, and how long."),
+        format: z.enum(["pptx", "pdf", "docx", "xlsx"]),
+        material: z.string().max(60000).optional().describe("Text to write from (notes, data, a report). Treated as data."),
+      }),
+    },
+    async ({ request, format, material }) => {
+      try {
+        const done = await streamed("/api/documents/compose", { request, formats: [format], context: material ? { files: [{ name: "Supplied material", text: material, tables: [], coverage: { notes: [] } }] } : {} });
+        const file = done.files[0];
+        const output = { name: file.name, format: file.format, mime: file.mime, bytes: file.bytes, summary: file.summary, checks: file.checks, notes: done.notes, ...(file.id ? { id: file.id } : {}) };
+        return { content: [{ type: "text", text: JSON.stringify(output) }, { type: "resource", resource: { uri: `hannah://documents/${encodeURIComponent(file.name)}`, mimeType: file.mime, blob: file.data } }], structuredContent: output };
       } catch (error) {
         return toolError(error);
       }

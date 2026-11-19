@@ -485,6 +485,45 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_rate_limits_reset ON hannah_rate_limits (reset_at)",
     ],
   },
+  {
+    version: 16,
+    name: "generated documents and research history",
+    // Files HANNAH made for an account (kept so they can be downloaded again,
+    // revised, and produced by scheduled workflows) and the research behind
+    // them. Bytes are stored as base64 text, which every supported database
+    // takes. Rows are per user; expires_at is null for files the person keeps.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_documents (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        family_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        format TEXT NOT NULL,
+        mime TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        spec TEXT,
+        summary TEXT,
+        source TEXT NOT NULL,
+        request TEXT,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_documents_recent ON hannah_documents (user_id, created_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_research (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        question TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        result TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_research_recent ON hannah_research (user_id, created_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

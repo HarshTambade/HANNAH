@@ -34,6 +34,7 @@ const { createVoiceRouter } = require("./voice");
 const { createVisionRouter } = require("./vision");
 const { createMcpClientRouter } = require("./mcp-client");
 const { createConnectorsRouter } = require("./connectors");
+const { createStudioRouter } = require("./studio");
 const { createWebRouter } = require("./web");
 const { createHostingSetupRouter } = require("./hosting-setup");
 const { createChannelHookRouter, createChannelsRouter } = require("./channels");
@@ -355,6 +356,11 @@ const rateLimits = rateLimitSettings();
 app.post("/api/chat", createRateLimiter(rateLimits.chat));
 app.post("/api/agent", createRateLimiter(rateLimits.agent));
 app.post("/api/orchestrate", createRateLimiter(rateLimits.agent));
+app.post("/api/research", createRateLimiter(rateLimits.agent));
+app.post("/api/documents/compose", createRateLimiter(rateLimits.agent));
+app.post("/api/documents/create", createRateLimiter(rateLimits.chat));
+app.post("/api/documents/read", createRateLimiter(rateLimits.chat));
+app.post("/api/documents/convert", createRateLimiter(rateLimits.chat));
 app.post("/api/route/preview", createRateLimiter(rateLimits.events));
 app.post("/api/a2a", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
@@ -458,6 +464,8 @@ app.use("/api", createVisionRouter({ usableProviders, normalizeRouting: router.n
 app.use("/api", createMcpClientRouter({ timeoutMs: cloudRequestTimeout }));
 // Connectors people sign in to themselves; the browser keeps their tokens.
 app.use("/api", createConnectorsRouter({ publicBaseUrl, allowedOrigins, timeoutMs: cloudRequestTimeout }));
+// Research (search, read, cite) and Document Studio (PowerPoint, PDF, Word, Excel): server/studio.js.
+app.use("/api", createStudioRouter({ getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
 app.use("/api", createWebRouter({ getRequestProvider }));
 // "Set up HANNAH": connect this deployment to Vercel and Supabase with the person's own tokens.

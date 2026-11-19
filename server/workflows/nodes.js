@@ -951,6 +951,49 @@ const NODES = [
     }),
   },
   {
+    type: "research.run", category: "ai", label: "Research a question", icon: "Search", status: STATUS.available,
+    description: "Researches a question on the web: plans searches, opens and reads the pages, scores the sources and writes an answer whose every citation is checked. The same research engine as chat.",
+    inputs: ["main"], outputs: ["main"], permissions: ["ai"],
+    params: [
+      { name: "question", label: "Question", type: "text", required: true, default: "What are the latest developments in AI agents this week?", expression: true },
+      { name: "mode", label: "Kind of research", type: "select", default: "deep", options: [{ value: "quick", label: "Quick search" }, { value: "latest", label: "Latest information" }, { value: "deep", label: "Deep research" }, { value: "academic", label: "Academic and technical" }, { value: "compare", label: "Compare and analyze" }] },
+      { name: "model", label: "Model", type: "model", default: "auto" },
+    ],
+    execute: async (ctx) => ({
+      main: await perItem(ctx, async (params, item) => {
+        const question = toText(params.question).trim();
+        if (question.length < 3) throw fail("Say what to research.");
+        const research = await ctx.services.research({ question, mode: params.mode || "deep", model: params.model });
+        // No sources means nothing was retrieved: the step fails loudly instead of passing an empty report along.
+        if (!research.sources.length) throw fail(research.answer);
+        return json({ ...item.json, answer: research.answer, summary: research.summary, sources: research.sources.map((source) => ({ n: source.n, title: source.title, url: source.url, published: source.published })), research });
+      }),
+    }),
+  },
+  {
+    type: "document.create", category: "ai", label: "Create a document", icon: "FileText", status: STATUS.available,
+    description: "Writes a PowerPoint, PDF, Word or Excel file from your instructions and the data that reaches this step (research from “Research a question”, or any text), checks it, and keeps it in your Files. The same Document Studio as chat.",
+    inputs: ["main"], outputs: ["main"], permissions: ["ai"],
+    params: [
+      { name: "request", label: "What to make", type: "text", required: true, default: "A summary report of this week's developments, for a busy reader", expression: true },
+      { name: "format", label: "Format", type: "select", default: "pdf", options: [{ value: "pdf", label: "PDF" }, { value: "docx", label: "Word" }, { value: "pptx", label: "PowerPoint" }, { value: "xlsx", label: "Excel" }] },
+      { name: "content", label: "Other material to use (optional)", type: "text", default: "", expression: true, help: "Research from an earlier step is used automatically. Add any other text to write from." },
+      { name: "model", label: "Model", type: "model", default: "auto" },
+    ],
+    execute: async (ctx) => ({
+      main: await perItem(ctx, async (params, item) => {
+        const request = toText(params.request).trim();
+        if (!request) throw fail("Say what document to make.");
+        const extra = toText(params.content).trim();
+        const context = { ...(item.json?.research?.sources ? { research: item.json.research } : {}), ...(extra ? { files: [{ name: "Material from the workflow", text: extra.slice(0, 60_000), tables: [], coverage: { notes: [] } }] } : {}) };
+        const made = await ctx.services.document({ request, formats: [params.format || "pdf"], context, model: params.model });
+        const rest = { ...item.json };
+        delete rest.research;
+        return json({ ...rest, files: made.files, file: made.files[0], documentNotes: made.notes });
+      }),
+    }),
+  },
+  {
     type: "ai.prompt", category: "ai", label: "Ask an AI model", icon: "Sparkles", status: STATUS.available,
     description: "Sends a prompt to an AI model through HANNAH's model gateway, with your provider keys, and returns the answer.",
     inputs: ["main"], outputs: ["main"], permissions: ["ai"],

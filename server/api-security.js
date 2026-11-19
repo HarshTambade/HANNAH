@@ -24,7 +24,7 @@ const configuredTokenDigest = configuredTokenIsValid
 // app (validated, stored without account ids, and limited per network address
 // as well as per credential, since a visitor's key isn't checked on these
 // routes): app stores require in-app reporting of AI replies for everyone.
-const BYOK_PATHS = new Set(["/feedback", "/report-content", "/events", "/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/vision/describe", "/a2a", "/route/preview", "/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc", "/web/search", "/web/read", "/setup/hosting/discover", "/setup/hosting/database", "/setup/hosting/status", "/setup/hosting/finish"]);
+const BYOK_PATHS = new Set(["/feedback", "/report-content", "/events", "/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/vision/describe", "/a2a", "/route/preview", "/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc", "/web/search", "/web/read", "/research", "/documents/compose", "/documents/create", "/documents/read", "/documents/convert", "/setup/hosting/discover", "/setup/hosting/database", "/setup/hosting/status", "/setup/hosting/finish"]);
 // Open without any credential, for the directory's own connectors only:
 // connecting Notion or Linear doesn't use an AI model, so it shouldn't need an
 // AI key. server/connectors.js refuses a guest any address outside its catalog,
