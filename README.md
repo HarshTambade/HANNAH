@@ -20,7 +20,8 @@ Three rules shape the product:
 3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
 > **Status:** active development. The latest published release is [v1.4.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.4.0). `main` is version **1.5.0**, which isn't released yet. It's listed under [1.5.0 in the changelog](./docs/CHANGELOG.md):
-> - connectors to 32 services and chat apps (Telegram, Slack, Discord, Google Chat, Teams, WhatsApp, and iMessage and Signal on the desktop);
+> - web research with checked citations, and PowerPoint, PDF, Word and Excel files made from a sentence;
+> - connectors to 29 services and chat apps (Telegram, Slack, Discord, Google Chat, Teams, WhatsApp, and iMessage and Signal on the desktop);
 > - web search on every platform;
 > - HANNAH using your Mac's apps;
 > - setting up Vercel and Supabase from the app;
@@ -103,7 +104,7 @@ Every screen has its own address, so refresh, bookmarks and the back button work
 | **Models** | `/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
 | **Memory & trust** | `/memory` | The accountability page: an **Agent runs** log (every request with each tool step and how it ended, which survives reloads), Guardian strictness and its decision log (allowed and blocked, with reasons), the memory center (search, filter by category, edit, mark sensitive, export, switch kinds of memory or all memory off; each memory shows where it came from and when it was last used), **Knowledge** (your own documents, indexed on the device so HANNAH answers from them with citations; see [Knowledge](#knowledge)), personalization examples, the active persona, and installed plugins. |
 | **Automations** | `/automations` | Routines built from trigger, agent-task, daily-briefing, action and output steps that run on a schedule while HANNAH is open, with approval before every action and a run history. See [Automations](#automations). |
-| **Marketplace** | `/marketplace` | **Connectors**: 32 services (GitHub, Linear, Notion, Atlassian, Stripe, Vercel, Supabase and more) with their official icons, connected without needing an AI key, or any MCP server by URL once you're signed in. **Chat apps**: talk to HANNAH from Telegram, Slack, Discord, Google Chat, Teams or WhatsApp, and in the desktop app iMessage and Signal. **Agents and skills**: 10 agents (Study coach, Research analyst, Daily organizer and more) that set how HANNAH works for a conversation, the tools she keeps to hand and the prompts she suggests, and 12 skills that adjust every reply. One click turns one on; chat shows which agent is active and lets you switch. Plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
+| **Marketplace** | `/marketplace` | **Connectors**: 29 services (GitHub, Linear, Notion, Atlassian, Stripe, Vercel, Supabase and more) with their official icons, connected without needing an AI key, or any MCP server by URL once you're signed in. **Chat apps**: talk to HANNAH from Telegram, Slack, Discord, Google Chat, Teams or WhatsApp, and in the desktop app iMessage and Signal. **Agents and skills**: 10 agents (Study coach, Research analyst, Daily organizer and more) that set how HANNAH works for a conversation, the tools she keeps to hand and the prompts she suggests, and 12 skills that adjust every reply. One click turns one on; chat shows which agent is active and lets you switch. Plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
 | **Integrations** | `/integrations` | **Test this server now**: runs the REST API, the OpenAI-compatible API, a real reply, the MCP endpoint, A2A and webhooks with your credential and shows what came back; create a developer key there. REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
 | **Settings** | `/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Calendar and email**: connect Google or Microsoft with their own sign-in. **Voice**: speaking and listening engines, voice choice, interrupt-by-talking and the **“Hey HANNAH”** wake word. **Daily briefing**: which sections, the place for the weather, and a preview (see [Daily briefing](#daily-briefing)). **Setup check**: one pass over the server, model, account, connections, voice, microphone, notifications, storage, desktop app and recent errors, with a verdict and a fix for each. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. Also **Appearance** (text size), **Desktop app** (update channel, check for updates, update history, shortcut and `hannah://` links; desktop only), **Backup and restore** (one file with your data and choices, never your keys; optional passphrase; merge or replace on restore) and **Diagnostics** (what went wrong on this device, redacted, searchable, exportable). |
 
@@ -707,6 +708,7 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | `HANNAH_PROVIDER_FALLBACKS` | — | Comma-separated providers to try when `hannah-auto` requests without a routing mode fail with a retryable error, for example `openrouter,together`. Never used for visitor keys or a pinned provider. Routed requests fall back to the router's own alternatives. |
 | `HANNAH_SELF_HOSTED_PROVIDERS` | — | Providers to treat as self-hosted in Private mode even on a public address, for example `custom,vllm` for your own inference box. Local runtimes and loopback or private-network endpoints count already. |
 | `MCP_ENABLED`, `MCP_API_TOKEN`, `HANNAH_API_URL` | on, —, `http://127.0.0.1:3001` | Remote MCP endpoint at `/mcp`: `false` turns it off; the token is an optional extra operator credential. |
+| `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`, `SEARXNG_URL` | — | Web search for research. The first one set is used; with none, research uses the caller's Groq key. Wikipedia, OpenAlex and arXiv need no key. |
 | `ANTHROPIC_DESKTOP_MODEL` | `claude-sonnet-5-5` | Model for desktop computer use (needs `ANTHROPIC_API_KEY`). |
 | `MITHI_TTS_URL` | — | Optional Mithi text-to-speech service. |
 | `PINECALL_TOKEN_URL` | — | Trusted issuer of short-lived Pinecall credentials. |
@@ -818,7 +820,7 @@ On the **Agents** screen you can turn specialists off, pick a model for each, an
 
 ### Connectors
 
-Marketplace → Connectors lists 32 services, each the vendor's own MCP server, shown with its official icon.
+Marketplace → Connectors lists 29 services on a public site and 32 on a local install (Vercel, Intercom and Square register local addresses only), each the vendor's own MCP server, shown with its official icon.
 - **Connecting:** with your own sign-in (OAuth with PKCE), a token (GitHub), or no sign-in at all (docs search). You can also add any remote MCP server by URL.
 - **Safety:** your tokens stay in your browser, and HANNAH asks before every action a connector takes.
 - **Code:** the directory and its checks are in `server/connectors.js`.
@@ -948,6 +950,23 @@ HANNAH remembers what you add on the **Memory & trust** screen, what you mark wi
 - **Search is by words, not meaning.** There's no embedding (vector) search yet ([KI-32](./docs/architecture/KNOWN_ISSUES.md)).
 
 Code: [`MemoryModel.ts`](./client/src/services/MemoryModel.ts), [`MemoryService.ts`](./client/src/services/MemoryService.ts), [`MemoryPanel.tsx`](./client/src/components/MemoryPanel.tsx).
+
+## Research and Document Studio
+
+Two platform services, each implemented once on the server and used by chat, voice, Team specialists, marketplace agents, workflows and MCP hosts. Full description: [`docs/RESEARCH_AND_DOCUMENTS.md`](./docs/RESEARCH_AND_DOCUMENTS.md).
+
+- **Research** (chat → Search the web): Quick, Latest, Deep research, Academic and Compare modes.
+  - It plans searches, runs them on interchangeable providers, opens and reads the pages (obeying `robots.txt`), scores sources and answers with `[n]` citations that link to the source.
+  - Every citation is checked against the passages that were read. Pages that couldn't be opened are listed with the reason.
+  - When nothing can be retrieved it says so instead of answering from memory.
+- **Documents**: ask for a PowerPoint, PDF, Word or Excel file in plain words.
+  - Written from attached files, a research result or the conversation, then rendered and validated by opening the file again.
+  - Excel formulas stay formulas; a dataset is copied from your file, never retyped by a model; no figures are invented when there is no data.
+  - Revisions ("make it more professional") rewrite only what was asked and keep the earlier version.
+- **Attachments**: PDF, DOCX, PPTX, XLSX, CSV, text, JSON and images, each shown with how much of it was read.
+- **Library**: files and research history on the device; signed-in accounts keep files for 30 days unless kept longer.
+
+Code: [`server/research/`](./server/research), [`server/documents/`](./server/documents), [`server/studio.js`](./server/studio.js), [`client/src/services/Studio.ts`](./client/src/services/Studio.ts).
 
 ## Knowledge
 
@@ -1148,7 +1167,7 @@ node cli/hannah.mjs logout
 
 - **Languages:** English (`en-US`), Hindi (`hi-IN`) and Marathi (`mr-IN`), subject to platform support.
 - **Input:** the microphone stays off until you press **Speak**. Choose the engine in **Settings → Voice**: the browser's or device's recognition, or **Groq Whisper**, which records on the device and transcribes each utterance with Groq. Whisper works in any browser that can record, including with a visitor's own Groq key.
-- **Output:** spoken replies are on by default and can be turned off (stored on the device). Choose **Automatic** (Mithi when `MITHI_TTS_URL` is set, otherwise the device voice), **Device voice** (offline, with a voice picker), or **OpenAI voices** (`gpt-4o-mini-tts`, ten voices; needs an OpenAI key saved to your account or on the server). If a hosted voice fails, HANNAH falls back to the device voice. The voice layer is in [`VoiceEngines.ts`](./client/src/services/VoiceEngines.ts) and [`server/voice.js`](./server/voice.js).
+- **Output:** spoken replies are off by default; HANNAH speaks during talk mode (hands-free voice input), and the Voice replies toggle turns spoken replies on for typed messages too (stored on the device). Choose **Automatic** (Mithi when `MITHI_TTS_URL` is set, otherwise the device voice), **Device voice** (offline, with a voice picker), or **OpenAI voices** (`gpt-4o-mini-tts`, ten voices; needs an OpenAI key saved to your account or on the server). If a hosted voice fails, HANNAH falls back to the device voice. The voice layer is in [`VoiceEngines.ts`](./client/src/services/VoiceEngines.ts) and [`server/voice.js`](./server/voice.js).
 - **“Hey HANNAH” wake word:** turn it on in Settings → Voice to start a voice turn hands-free. In the desktop app it keeps listening while the window is hidden, and the menu bar says so. On Android, a native foreground service keeps listening in the background, with a notification and Stop button the whole time (built in 1.5.0, not yet run on a phone: [KI-28](./docs/architecture/KNOWN_ISSUES.md)). In a desktop browser, it listens only while the tab is open. On iPhone, which doesn't allow it, say **"Hey Siri, talk to HANNAH"** (or use the Shortcuts app): HANNAH opens ready to listen. Detection runs on the device with [Vosk](https://alphacephei.com/vosk/) (Kaldi compiled to WebAssembly) listening for only two things, "hey hannah" or anything else, so it can't transcribe speech and no audio leaves the device. The first time, the app downloads the ~41 MB English model from the HANNAH website and keeps it. It pauses while HANNAH is listening or speaking. It can't tell "Hey Anna" from "Hey Hannah". Code: [`WakeWord.ts`](./client/src/services/WakeWord.ts); the website build adds the model with [`scripts/wakeModel.ts`](./client/scripts/wakeModel.ts) (pinned SHA-256).
 - **Interrupt by talking (barge-in):** while HANNAH speaks, the microphone listens with echo cancellation and she stops as soon as you start talking. This audio isn't recorded or sent anywhere. Turn it off in Settings → Voice.
 - **Calls (Pinecall):** need `VITE_PINECALL_AGENT_ID`, a server-side `PINECALL_TOKEN_URL` that returns `{ token, server, expires_in }`, network access and microphone permission. The Pinecall API key never goes to the client.
@@ -1299,6 +1318,10 @@ There are two ways to authenticate:
 | `GET`/`POST /api/sync/memory` | Versioned store for end-to-end encrypted memory blobs. Kept in the database when `DATABASE_URL` is set; otherwise in memory only and lost on restart. |
 | `GET /api/presence` | A short status line for the UI. |
 | `POST /mcp` | MCP Streamable HTTP, with your developer key, the operator token or your Groq key. |
+| `POST /api/research` | Research a question; streams each step, then the answer with sources. |
+| `POST /api/documents/compose` | Write and build PPTX, PDF, DOCX or XLSX files from a request; streams its steps. |
+| `POST /api/documents/create`, `/read`, `/convert` | Render a ready description, read an uploaded file, convert a file. |
+| `GET /api/account/documents`, `/api/account/research` | An account's files and research history (list, download, keep, delete). |
 
 Use the [JavaScript SDK](./sdk/js), or any OpenAI SDK pointed at `/v1`:
 
@@ -1545,6 +1568,7 @@ To report a security issue, use GitHub's private vulnerability reporting or cont
 | Architecture, decisions and roadmap | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
 | Deploying: database, Vercel, scheduler, Docker, signed apps | [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md) |
 | API, MCP, the command-line tool and plugins | [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md) |
+| Research and Document Studio: pipeline, guarantees, API, limits | [`docs/RESEARCH_AND_DOCUMENTS.md`](./docs/RESEARCH_AND_DOCUMENTS.md) |
 | Desktop and phone features: screen, apps, computer control, browser, Phone Bridge | [`docs/DEVICE_INTELLIGENCE.md`](./docs/DEVICE_INTELLIGENCE.md) |
 | Workflows | [`docs/WORKFLOWS.md`](./docs/WORKFLOWS.md) |
 | Known issues and what's verified | [`docs/architecture/KNOWN_ISSUES.md`](./docs/architecture/KNOWN_ISSUES.md), [`docs/architecture/PLATFORM_COMPATIBILITY.md`](./docs/architecture/PLATFORM_COMPATIBILITY.md) |

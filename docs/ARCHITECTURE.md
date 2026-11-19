@@ -127,6 +127,17 @@ Model choice lives in [`server/router.js`](../server/router.js), separate from w
 
 The brief asks to evaluate Tauri first. The desktop app is already a Capacitor Electron build that shares the web codebase and has a working computer-use bridge. Moving to Tauri would mean rebuilding the shell, IPC and packaging before adding any capability. **Proposal:** keep Electron for the UI, and put the execution runtime (filesystem, terminal, browser automation, OS adapters) in a separate least-privilege process. That process exposes a narrow, typed IPC with workspace scoping, command allowlists, risk classes and an audit log. Rust can be used inside that process later without changing the UI. This needs confirmation before Phase 5 starts.
 
+### Research and documents are platform services (1.6.0)
+
+Decision: search-and-research and document-making are each implemented once, on the server (`server/research`, `server/documents`), behind one HTTP API (`server/studio.js`). They are not features of an agent.
+
+- **Why:** before this, the single-agent loop, the research specialist and workflows each had their own web lookup, and nothing produced files. Separate copies drift: one cites, another doesn't; one checks a formula, another ships it broken. One service means one set of guarantees (checked citations, validated files, honest failure) for every caller.
+- **How callers reach them:** chat and voice through `client/src/services/Studio.ts`; the agent loop, Team specialists and marketplace agents through four shared tools from `getStudioTools()` (`research`, `create_document`, `read_attached_files`, `convert_file`), which are in every agent's core tool set; workflows through the runtime's `research` and `document` services (steps `research.run`, `document.create`); MCP hosts through `hannah_research` and `hannah_create_document`.
+- **A model plans; code is exact.** A model returns a description (a document model, a workbook plan, an answer with citations). Rendering, formula construction, validation and citation checks are code. A model never writes file bytes, cell references or the source list.
+- **Rule for new agents:** an agent that needs the web or a file uses these tools. It does not add its own fetch, search or export code.
+
+Details: [`RESEARCH_AND_DOCUMENTS.md`](./RESEARCH_AND_DOCUMENTS.md).
+
 ## 3. Roadmap
 
 Each milestone ends with the tests from brief §18 passing, docs updated, and the README's status section changed. Nothing is presented as working before its end-to-end path runs.

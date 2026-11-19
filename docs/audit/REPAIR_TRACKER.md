@@ -37,6 +37,43 @@ Audit of 2026-11-19, on top of v1.5.0. Statuses: **PASS** (worked, verified), **
 | 27 | Integrations page | Documentation only; no way to tell whether anything worked | Never built | P7 | "Test this server now": seven live checks and developer-key creation | Live as guest, account and operator | FIXED |
 | 28 | First step for a new visitor | "Paste your Groq API key" before anything else, and sign-up called the key "optional" on a server that needs it | Connect dialog didn't use what the server reports | P9 | Dialog and home page follow `/api/account/status`: free account first when the server's models are included; honest wording otherwise | Live: home → Try this → create account → chat with agent on and message ready. e2e `navigation.spec.ts` | FIXED |
 
+## Search, research and Document Studio (1.6.0)
+
+What existed before: a single web lookup (`web_search`, Groq's browser search) and a page reader; Knowledge for text files only; no file generation of any kind; no PDF, Word, PowerPoint or Excel reading. Everything below is new unless marked.
+
+| Capability | Status | Evidence |
+|---|---|---|
+| Quick, Latest, Deep, Academic and Compare research with checked citations | NEW · PASS | `research.test.js` (9); live runs with OpenAlex, arXiv, Groq search and real pages |
+| Interchangeable search providers (Groq, Wikipedia, OpenAlex, arXiv) | NEW · PASS | Live |
+| Tavily, Brave and SearXNG providers | NEW · PARTIAL | Request and response handling tested against recorded shapes; not run against the real services (no keys here) |
+| Page retrieval: `robots.txt`, paywalls and timeouts reported, PDFs read, duplicates collapsed | NEW · PASS | `research.test.js`; live |
+| Source scoring (relevance, publisher, freshness, corroboration) | NEW · PASS | `research.test.js` |
+| Prompt-injection defence for web pages | NEW · PASS | `research.test.js` |
+| Search switch, modes, live progress, sources panel, clickable citations, follow-ups, research history, save to memory | NEW · PASS | `e2e/studio.spec.ts` (7); live in a browser |
+| PowerPoint: editable slides, native charts, tables, diagrams, notes, exact slide count | NEW · PASS | `documents.test.js`; opened in Quick Look. Native charts verified structurally, not rendered here |
+| PDF: cover, contents, page numbers, tables, charts, links, Hindi and Marathi text | NEW · PASS | `documents.test.js`; pages rendered with Apple's PDF engine and looked at |
+| Word: heading styles, contents field, tables, links | NEW · PASS | `documents.test.js`; opened with Apple's Word importer |
+| Word: charts | NEW · PARTIAL | Editable bar tables, not native Word charts |
+| Excel: formulas kept and computed, tables, filters, frozen panes, conditional formatting, validation, charts | NEW · PASS | `documents.test.js`; opened in Quick Look; a live model built a correct dashboard from a CSV |
+| Formula validation; a broken formula is refused or left out and named | NEW · PASS | `documents.test.js`, `studio.test.js` |
+| Reading PDF, DOCX, PPTX, XLSX, CSV, text, JSON with an honest coverage record | NEW · PASS | `documents.test.js`; round trips of every generated format |
+| Reading images (vision description) | NEW · NOT TESTED | Uses the existing vision route; not exercised with a real image in this pass |
+| Scanned PDFs | BLOCKED by design | No OCR; reported as unreadable |
+| Conversion between formats | NEW · PASS | Content kept; layout is HANNAH's, not the original's |
+| Natural-language requests, including "research X and make a deck" and two formats at once | NEW · PASS | `Studio.test.ts` (12); live |
+| Voice | PASS by construction | A voice transcript enters the same function as typed text; not spoken aloud in a test |
+| Revisions and versions | NEW · PASS | `studio.test.js`; live ("make the first slide more formal and change the theme") |
+| Per-account storage, 30-day retention, keep, delete, access control | NEW · PASS | `studio.test.js` (another account gets 404 on every route) |
+| One service for all agents; Data analyst agent | NEW · PASS | `Studio.test.ts`; tools registered for the agent loop, specialists and marketplace agents |
+| Workflow steps: Research a question, Create a document | NEW · PASS | `workflows.studio.test.js` (4) on the real engine: completed run, file in the account, notification; a failed research fails the run with the reason |
+| MCP tools `hannah_research`, `hannah_create_document` | NEW · PASS | Live with a real MCP client (a PDF came back) |
+| Formula injection from uploaded data | FOUND AND FIXED | A CSV cell beginning with `=` became a live formula; now written as text. `documents.test.js` |
+| Connectors on the public site | CHANGED | Vercel, Intercom and Square only accept allowlisted redirect addresses; now listed on local installs only. 28 sign-in and 5 no-sign-in connectors verified from the live site |
+| User-supplied templates (.potx, .dotx) | NOT IMPLEMENTED | Themes, an accent colour and a logo are supported; importing a template file is not |
+| Images and icons chosen by HANNAH for slides | NOT IMPLEMENTED | Only the person's own images are placed; nothing is fetched from the web into a file |
+| Sharing a file by link | NOT IMPLEMENTED | Files are downloaded; nothing is published or emailed |
+| Project workspaces | NOT PRESENT | HANNAH has no "projects"; files and research are per account and per device |
+
 ## Verified working (no change needed)
 
 | Feature | Evidence | Status |

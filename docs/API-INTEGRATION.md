@@ -228,6 +228,22 @@ Fetches short-lived call credentials from the trusted `PINECALL_TOKEN_URL`. The 
 
 Uses the server-side Anthropic computer tool for the Electron desktop bridge. It requires `ANTHROPIC_API_KEY`, accepts validated user/assistant messages, and should only be called by a trusted Electron client with confirmation UI.
 
+### Research and documents
+
+`POST /api/research`, `POST /api/documents/compose`, `POST /api/documents/create`, `POST /api/documents/read`, `POST /api/documents/convert`, and the account's `GET /api/account/documents` and `GET /api/account/research`. They accept the same credentials as `/api/chat`. The two long-running routes answer with server-sent events: one event per step, then a `result` or `error` event.
+
+```bash
+curl -N "https://your-domain/api/research" \
+  -H "X-Groq-API-Key: $GROQ_API_KEY" -H "Content-Type: application/json" \
+  -d '{"question":"What changed in the latest PostgreSQL release?","mode":"latest"}'
+
+curl -N "https://your-domain/api/documents/compose" \
+  -H "Authorization: Bearer $HANNAH_KEY" -H "Content-Type: application/json" \
+  -d '{"request":"A 6-slide presentation on how tides work, for a school class","formats":["pptx"]}'
+```
+
+Each file in the result has `name`, `mime`, `bytes`, `data` (base64), `summary` and `checks`. Request bodies, events and limits are in [`RESEARCH_AND_DOCUMENTS.md`](./RESEARCH_AND_DOCUMENTS.md).
+
 ### `POST /mcp`
 
 On unless `MCP_ENABLED=false`. Send the credential you already use for the API:
@@ -236,7 +252,7 @@ On unless `MCP_ENABLED=false`. Send the credential you already use for the API:
 Authorization: Bearer <hk_ developer key, or the operator token>
 ```
 
-or your own Groq key in `X-Groq-API-Key`. The same checks as `/api/chat` apply, and each tool call runs with that credential's rate limits and budget. `MCP_API_TOKEN`, if set, is accepted as well and acts as the operator. The endpoint exposes the `hannah_chat`, `hannah_status`, and `hannah_models` MCP tools. Use HTTPS in production.
+or your own Groq key in `X-Groq-API-Key`. The same checks as `/api/chat` apply, and each tool call runs with that credential's rate limits and budget. `MCP_API_TOKEN`, if set, is accepted as well and acts as the operator. The endpoint exposes the `hannah_chat`, `hannah_research`, `hannah_create_document`, `hannah_status`, and `hannah_models` MCP tools. Use HTTPS in production.
 
 ## Frontend integration
 

@@ -2,6 +2,41 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
+## 1.6.0 — 2026-11-20
+
+### New
+
+- **Search the web, with sources you can open.** A Search the web switch in chat, with five modes.
+  - **Quick search** answers a question from a few pages. **Latest** puts the newest sources first. **Deep research** plans the work, follows up on what's missing and writes a report. **Academic** searches papers (OpenAlex and arXiv) and says which are peer-reviewed and which are preprints. **Compare** builds a side-by-side table.
+  - **You watch it work.** Each search, each page opened and each page that couldn't be read appears as it happens.
+  - **Citations are checked.** Every `[n]` in an answer links to its source. A citation to a source that wasn't read is removed, and a figure or quotation that isn't in the cited text is flagged.
+  - **A sources panel** shows each source's publisher, publication date, what kind of source it is, how many other sites agree, and the passages HANNAH read. It also lists pages that were blocked, and how the research was done.
+  - **Honest when it can't.** If no search could run, HANNAH says so and doesn't answer from memory as though it had looked.
+  - **Follow-ups** keep the earlier sources. **Research history** is in Library.
+- **PowerPoint, PDF, Word and Excel files from a sentence.** "Create a 12-slide presentation on …", "make a PDF of what we discussed", "build an Excel dashboard from this CSV".
+  - **Real, editable files.** Slides have native charts, tables and speaker notes. Word files use heading styles and a table of contents. PDFs have a cover, contents, page numbers and live links.
+  - **Excel formulas are formulas.** Totals, growth and summaries are written as formulas with their computed values, plus tables with filters, frozen headers, conditional formatting, data validation and charts. A formula that doesn't compute is left out and named, never shipped.
+  - **Your data is copied, not retyped.** A dataset goes into the workbook straight from your file.
+  - **No invented numbers.** Without data to draw on, HANNAH makes no charts of figures and tells you.
+  - **Every file is opened again and checked** before you get it; the card shows the checks.
+  - **Change it by asking.** "Make it more professional", "change the theme", "drop the last slide": only those parts are rewritten, as a new version.
+  - **Research to file in one message**, or one press under any research answer.
+- **Attach files to a chat.** PDF, Word, PowerPoint, Excel, CSV, text, JSON and images. The chip shows how much was read (for example "9/12 pages"), and scanned PDFs are reported as unreadable instead of guessed at. Ask questions about them, or convert one to another format.
+- **Library** (next to Attach): the files HANNAH made and your research history, on this device. Signed-in accounts also keep files for 30 days, or longer if you choose.
+- **The same two services everywhere.** Team specialists and marketplace agents use the same research and document tools as chat. Workflows have **Research a question** and **Create a document** steps, so "every Monday, research X, make a PDF and tell me" runs on the server. MCP hosts get `hannah_research` and `hannah_create_document`. A new **Data analyst** agent is in the marketplace.
+- **More search providers.** Tavily, Brave Search or your own SearXNG for the open web when the server has a key; Wikipedia, OpenAlex and arXiv need none. Without a search key, web search uses your Groq key.
+
+### Changed
+
+- **Vercel, Intercom and Square connectors are listed only on a local install.** They register sign-in only for addresses on their own allowlists, so on a public site their Connect button could never work. 28 sign-in connectors and 5 no-sign-in connectors were checked from the live site on 2026-11-20.
+
+### Limits
+
+- Charts in Word documents are editable bar tables, not native Word charts.
+- A converted file keeps the content, not the original's layout.
+- Scanned PDFs have no text to read; there is no OCR.
+- Generated files were checked with Apple's viewers and independent parsers here, not with Microsoft Office.
+
 ## 1.5.1 — 2026-11-19
 
 ### New

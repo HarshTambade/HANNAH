@@ -33,6 +33,22 @@ Details per bug are in [BUGS_AND_ROOT_CAUSES.md](./BUGS_AND_ROOT_CAUSES.md); the
 | **Security** | See [SECURITY_AUDIT.md](../security/SECURITY_AUDIT.md). |
 | **UI** | Every screen loads without console errors in all three modes; the e2e crawler presses every control on every screen. Routes have real paths and titles. No invented statistics or testimonials on public pages. |
 
+## 1.6.0: search, research and documents
+
+Inspected before building (2026-11-20):
+
+| Area | What existed | Verdict |
+|---|---|---|
+| Web search | `web_search` tool and "Search the web" workflow step: one Groq browser-search call returning a short answer and links | Real, but a single lookup: no plan, no page reading by HANNAH, no check of what the answer cited |
+| Page reading | `web_read`, through the SSRF-safe client | Real; reused by the research engine |
+| Research agent | The Team "Research" specialist, with the two tools above | Real; now uses the shared research service |
+| Knowledge | Local documents with BM25 search | Real; text files only (no PDF, Word, PowerPoint or Excel) |
+| File upload in chat | None | Missing |
+| Document generation or export | None: no PPTX, PDF, DOCX or XLSX was produced anywhere | Missing |
+| Fake search progress, fabricated source cards, placeholder export buttons | None found | Nothing to remove |
+
+Built: one research engine and one Document Studio on the server, used by every caller. See [RESEARCH_AND_DOCUMENTS.md](../RESEARCH_AND_DOCUMENTS.md) and the 1.6.0 table in [REPAIR_TRACKER.md](./REPAIR_TRACKER.md).
+
 ## Dummy or fake code found
 
 | Where | What it did | Outcome |

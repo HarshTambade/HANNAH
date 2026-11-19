@@ -1,4 +1,10 @@
-# Release readiness: 1.5.1
+# Release readiness: 1.6.0
+
+Date: 2026-11-20. Version fields are 1.6.0 everywhere. 1.6.0 adds research and Document Studio (see [RESEARCH_AND_DOCUMENTS.md](../RESEARCH_AND_DOCUMENTS.md)) and a database migration (16: `hannah_documents`, `hannah_research`), which applies on the first request after deploy. **Prepared, not published.**
+
+The 1.5.1 notes below still apply.
+
+# Release readiness: 1.5.1 (deployed, not tagged)
 
 Date: 2026-11-19. Version fields are 1.5.1 everywhere (`node scripts/check-versions.mjs --tag v1.5.1` passes). The release is **prepared, not published**: pushing and tagging start a production deployment and a public release, which wait for the owner's go-ahead.
 

@@ -21,6 +21,24 @@ Two routes became reachable by more callers. Both were reviewed for what that op
 
 On serverless hosting, MCP tool calls reach the API through the site's public address taken from the platform's forwarded host header. That header is set by the platform there; on other hosts the endpoint calls `127.0.0.1` and ignores it.
 
+## Research and Document Studio (1.6.0)
+
+New code that fetches from the web, reads uploaded files and stores generated files. What was checked:
+
+| Risk | What stops it | Evidence |
+|---|---|---|
+| Prompt injection from a web page | The model sees only evidence passages inside a block labelled untrusted; sentences addressed to a model are removed first and the source is flagged; no tool is callable from the research prompt | `research.test.js`: the injected line never reaches the model |
+| Prompt injection from an uploaded file | File text is passed as labelled data; reading a file grants nothing and tools keep their approvals | Review; `studio.test.js` (prompt shown to the model) |
+| Fabricated citations | Citations are checked in code against the retrieved sources; ones that match nothing are removed; unsupported figures and quotations are reported | `research.test.js` |
+| SSRF through research | Every search and page fetch uses the existing SSRF-safe client; `robots.txt` is obeyed; redirects are re-checked | `research.test.js` (disallowed page never requested) |
+| Fetching while making a document | Rendering fetches nothing; an image must be inline PNG or JPEG data, anything else is dropped | `documents.test.js` |
+| One user reading another's files or research | Every query filters by user id; another account's id answers 404 on read, download, change and delete; no credential answers 401 | `studio.test.js` |
+| Malicious uploads | 20 MB limit; ZIP parts are read in memory with a 150 MB unpacked limit; XML is parsed with patterns, not an entity-expanding parser; nothing is written to disk or executed | `documents.test.js`; review |
+| Formula injection in workbooks | A cell from an uploaded file, a converted file or a document table that begins with `=` is written as text. Formulas come only from column-name templates resolved by code, or from a workbook description the caller wrote for their own file | `documents.test.js` (a hostile CSV produces no formulas) |
+| Download header injection | File names are sanitized for the header and sent with `filename*`; `nosniff`; `no-store` | Review of `studio.js` |
+| Storage exhaustion | 12 MB per file, 200 files and 250 MB per account, 30-day expiry, oldest unkept files evicted | `studio.test.js` (expiry) |
+| New dependencies | `pptxgenjs` 4.0.1, `docx` 9.15.2, `pdfkit` 0.20.2, `jszip` 3.10.2, `unpdf` 2.1.0, `fast-formula-parser` 1.0.19, all pinned and at least two weeks old. `exceljs` was rejected for vulnerable dependencies. `image-size` (declared by `pptxgenjs`, not loaded by it) is overridden to a patched 2.0.4 | `npm audit`: 0 vulnerabilities |
+
 ## Checked and found in order
 
 | Area | What was checked | Result |

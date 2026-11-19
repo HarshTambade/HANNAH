@@ -2,7 +2,34 @@
 
 Run on 2026-11-19 on macOS (Apple silicon), Node 25, against the 1.5.1 working tree. Only tests that were actually executed are listed.
 
-## Automated suites
+## 1.6.0: search, research and Document Studio (2026-11-20)
+
+| Suite | Result |
+|---|---|
+| `server/documents.test.js` | 13 pass: every format generated and opened again; formulas; conversion; uploads; validation refuses damaged and altered files; formula injection |
+| `server/research.test.js` | 9 pass: sources and citations, injection, deep research follow-ups, academic sources, honest failure, follow-up context, providers |
+| `server/studio.test.js` | 11 pass: the HTTP API with real accounts and database: compose, access control, revision, slide count, dataset to workbook, conversion, retention, visitors, research stream |
+| `server/workflows.studio.test.js` | 4 pass: research and document steps on the real workflow engine |
+| `client/src/__tests__/Studio.test.ts` | 12 pass: intents, streaming, history, attachments, tools shared by every agent |
+| `e2e/studio.spec.ts` | 7 pass: search switch and sources, one-press PDF with a real download, research to deck, attachment to workbook, library, revision after a reload, honest failure |
+
+Live, with the real model and real network:
+
+| Check | Result |
+|---|---|
+| Academic research (OpenAlex, arXiv) | 9 searches, 44 works found, 5 used; 15 citations, none removed; preprints labelled; 3 Groq searches reported as rate-limited |
+| Web search in chat (Groq browser search) | 11 results, 4 official python.org pages read in 7 s; sources panel and history correct. A second run was rate-limited and said so |
+| Citation format | The model wrote `【1】`; found here and normalized to `[1]` |
+| "Create a 5-slide presentation on how tides work" | Exactly 5 slides, 8 of 8 checks, downloaded (105 KB) |
+| "Make the first slide more formal and change the theme" | One slide rewritten, theme changed, new version |
+| CSV → "calculate monthly growth and profit, build an Excel dashboard" | 2 sheets, 18 formulas, 3 charts; values read back correct (total 85,900; profit 39,700; average growth 8.4%) |
+| Deck and PDF in one request | Both built in 7.6 s; PDF pages looked at |
+| MCP `hannah_create_document` | A validated PDF returned to a real MCP client |
+
+Not run: Tavily, Brave and SearXNG against the real services; image attachments; opening the files in Microsoft Office; a deep research through the browser on the free Groq plan (rate-limited during this session); the live site (not deployed yet).
+
+Full suites after these changes: server 368 tests, 367 pass, 1 skipped; client 385 pass; browser end-to-end 91 pass on the full run (an earlier full run had 1 failure: the version label, because the version was bumped while it ran against the older build), then the Studio and chat specs again after the last change, 14 pass; lint and typecheck clean; `npm audit` 0 vulnerabilities; licence check 423 dependencies, all permissive.
+
 
 | Suite | Command | Result |
 |---|---|---|
