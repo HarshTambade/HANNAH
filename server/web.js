@@ -68,6 +68,22 @@ function sourcesFrom(message) {
   return sources;
 }
 
+/** The raw results Groq's search tool looked at (title, address, the text it saw), for the research engine. */
+function resultsFrom(message) {
+  const results = [];
+  const seen = new Set();
+  for (const tool of Array.isArray(message?.executed_tools) ? message.executed_tools : []) {
+    const found = tool?.search_results?.results || tool?.search_results || tool?.results || [];
+    if (!Array.isArray(found)) continue;
+    for (const item of found) {
+      if (typeof item?.url !== "string" || !/^https?:\/\//i.test(item.url) || seen.has(item.url) || results.length >= 20) continue;
+      seen.add(item.url);
+      results.push({ title: String(item.title || "").trim().slice(0, 300), url: item.url, snippet: String(item.content || item.snippet || "").replace(/\s+/g, " ").trim().slice(0, 1200) });
+    }
+  }
+  return results;
+}
+
 /**
  * One web search through Groq's browser search, for chat (POST /api/web/search)
  * and for workflows (the "Search the web" step). Groq's browser search
@@ -116,7 +132,7 @@ async function searchWeb({ baseUrl, apiKey, query, fetchImpl = (...args) => fetc
       last = { ok: false, status: 502, error: "The search came back empty. Try different words.", reason: "empty" };
       continue;
     }
-    return { ok: true, answer: answer.slice(0, 12_000), sources: sourcesFrom(message), model: body.model || model };
+    return { ok: true, answer: answer.slice(0, 12_000), sources: sourcesFrom(message), results: resultsFrom(message), model: body.model || model };
   }
   return last;
 }
