@@ -17,7 +17,9 @@
  *
  * Every outbound request goes through the SSRF-safe client (workflows/http.js):
  * https only, no internal addresses (checked at connect time), size and time
- * limits. Token and registration endpoints are always the ones discovered from
+ * limits. A visitor with no account and no key may connect the directory's
+ * own connectors, nothing else: a custom address needs a sign-in, so these
+ * routes aren't a relay to any server on the internet. Token and registration endpoints are always the ones discovered from
  * the server's own metadata, never ones the browser names. Redirect URIs must be
  * this site's /connectors/callback.
  */
@@ -30,8 +32,9 @@ const { RequestBlockedError, checkUrl, safeRequest } = require("./workflows/http
  * checked on 2026-11-18: an unauthenticated initialize either worked ("none")
  * or answered 401 with OAuth metadata that offers dynamic client registration
  * and PKCE ("oauth"). GitHub's server has no dynamic registration but accepts a
- * personal access token ("token"). Asana, Box, HubSpot and Slack aren't listed:
- * their servers only accept apps they approve in advance.
+ * personal access token ("token"). Asana, Box, Figma, HubSpot and Slack aren't
+ * listed: their servers only accept apps they approve in advance (Figma's
+ * registration endpoint answered 403 when checked again on 2026-11-19).
  *
  * Icons are each vendor's own, downloaded from its website and converted to
  * 128 px PNG (client/public/connectors), so the directory doesn't load
@@ -67,7 +70,6 @@ const CATALOG = [
   { id: "paypal", icon: "/connectors/paypal.png", name: "PayPal", category: "Payments", url: "https://mcp.paypal.com/mcp", auth: "oauth", description: "Invoices, orders, transactions and disputes.", docs: "https://developer.paypal.com/tools/mcp-server/" },
   { id: "square", icon: "/connectors/square.png", name: "Square", category: "Payments", url: "https://mcp.squareup.com/mcp", auth: "oauth", description: "Payments, orders, catalog, customers and inventory.", docs: "https://developer.squareup.com/docs/mcp" },
   // Design and websites
-  { id: "figma", icon: "/connectors/figma.png", name: "Figma", category: "Design", url: "https://mcp.figma.com/mcp", auth: "oauth", description: "Design files, frames, components and variables.", docs: "https://help.figma.com/hc/en-us/articles/32132100833559" },
   { id: "canva", icon: "/connectors/canva.png", name: "Canva", category: "Design", url: "https://mcp.canva.com/mcp", auth: "oauth", description: "Find, create and export designs.", docs: "https://www.canva.dev/docs/mcp/" },
   { id: "webflow", icon: "/connectors/webflow.png", name: "Webflow", category: "Websites", url: "https://mcp.webflow.com/mcp", auth: "oauth", description: "Sites, pages and CMS collections.", docs: "https://developers.webflow.com/mcp/reference/overview" },
   { id: "wix", icon: "/connectors/wix.png", name: "Wix", category: "Websites", url: "https://mcp.wix.com/mcp", auth: "oauth", description: "Sites, stores, bookings and content.", docs: "https://dev.wix.com/docs/sdk/articles/use-the-wix-mcp/about-the-wix-mcp" },
@@ -80,6 +82,10 @@ const CATALOG = [
 ];
 
 const MAX_BYTES = 4 * 1024 * 1024;
+const sameServer = (value) => { const url = new URL(value); url.hash = ""; return url.toString().replace(/\/$/, ""); };
+const CATALOG_URLS = new Set(CATALOG.map((entry) => sameServer(entry.url)));
+/** A visitor without an account or key: fewer requests a minute than someone who signed in. */
+const GUEST_LIMIT = 40;
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 
 /** A fetch() that goes through the SSRF-safe client. https only, unless self-hosting allows the private network. */
@@ -178,13 +184,14 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
     discovered.set(key, { at: Date.now(), value });
     return value;
   }
-  function serverUrl(raw) {
+  function serverUrl(raw, res) {
     const value = typeof raw === "string" ? raw.trim() : "";
     if (!value || value.length > 2048) throw fail(400, "Enter the connector's URL.", "invalid-url");
     let url;
     try { url = checkUrl(value); } catch (error) { throw fail(400, error.message, "blocked"); }
     if (url.protocol !== "https:" && process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK !== "true") throw fail(400, "Connectors must use https.", "invalid-url");
     url.hash = "";
+    if (res?.locals?.hannahGuest && !CATALOG_URLS.has(sameServer(url.toString()))) throw fail(401, "Sign in, or add your key, to use a connector that isn't in the directory.", "sign-in-required");
     return url.toString();
   }
   /** The redirect URI must be this site's callback, on an origin this server serves. */
@@ -197,7 +204,7 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
   }
   const handle = (fn) => async (req, res) => {
     try {
-      if (limited(req)) throw fail(429, "Too many connector requests. Wait a minute.", "rate-limited");
+      if (limited(req, res.locals?.hannahGuest ? GUEST_LIMIT : 120)) throw fail(429, "Too many connector requests. Wait a minute.", "rate-limited");
       res.setHeader("Cache-Control", "no-store");
       await fn(req, res);
     } catch (error) {
@@ -212,12 +219,12 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
   });
 
   router.post("/connectors/discover", json, handle(async (req, res) => {
-    const found = await discoverCached(serverUrl(req.body?.url));
+    const found = await discoverCached(serverUrl(req.body?.url, res));
     res.json({ auth: found.auth, registration: Boolean(found.registrationEndpoint), scope: found.scope || "" });
   }));
 
   router.post("/connectors/register", json, handle(async (req, res) => {
-    const url = serverUrl(req.body?.url);
+    const url = serverUrl(req.body?.url, res);
     const redirectUri = checkRedirect(req, req.body?.redirectUri);
     const found = await discoverCached(url);
     if (found.auth !== "oauth") throw fail(400, "This connector doesn't need a sign-in.", "no-auth");
@@ -241,7 +248,7 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
   }));
 
   router.post("/connectors/token", json, handle(async (req, res) => {
-    const url = serverUrl(req.body?.url);
+    const url = serverUrl(req.body?.url, res);
     const found = await discoverCached(url);
     if (found.auth !== "oauth") throw fail(400, "This connector doesn't need a sign-in.", "no-auth");
     const clientId = String(req.body?.clientId || "").slice(0, 512);
@@ -274,7 +281,7 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
   }));
 
   router.post("/connectors/rpc", json, handle(async (req, res) => {
-    const url = serverUrl(req.body?.url);
+    const url = serverUrl(req.body?.url, res);
     const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
     if (token && (token.length > 8192 || /[\r\n]/.test(token))) throw fail(400, "That token isn't valid.", "invalid-token");
     const name = String(req.body?.name || new URL(url).host).slice(0, 60);

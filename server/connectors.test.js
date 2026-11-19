@@ -200,3 +200,43 @@ test("the catalog lists only checked vendor servers, each with https, an auth ty
   }
   for (const unapproved of ["asana", "box", "hubspot", "slack"]) assert.ok(!ids.has(unapproved), `${unapproved} only accepts apps it approves`);
 });
+
+test("a visitor with no account or key can connect the directory's connectors, and nothing else", async () => {
+  const { requireApiToken } = require("./api-security");
+  const asked = [];
+  const fetchImpl = async (url) => {
+    asked.push(String(url));
+    return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { protocolVersion: "2025-06-18", capabilities: {}, serverInfo: { name: "stub", version: "1" } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  const app = express();
+  app.use("/api", requireApiToken, createConnectorsRouter({ publicBaseUrl: () => SITE, fetchImpl }));
+  const server = http.createServer(app);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${server.address().port}/api`;
+  const send = async (path, body, headers = {}) => {
+    const response = await fetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
+    return { status: response.status, body: await response.json() };
+  };
+  try {
+    const listed = CATALOG.find((entry) => entry.auth === "none");
+    const found = await send("/connectors/discover", { url: listed.url });
+    assert.equal(found.status, 200);
+    assert.equal(found.body.auth, "none");
+    assert.deepEqual(asked, [listed.url]);
+
+    // An address outside the directory is refused before anything is fetched.
+    for (const path of ["/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc"]) {
+      const refused = await send(path, { url: "https://mcp.somewhere-else.example/mcp", action: "list", redirectUri: REDIRECT, clientId: "x" });
+      assert.equal(refused.status, 401, path);
+      assert.equal(refused.body.reason, "sign-in-required", path);
+    }
+    assert.equal(asked.length, 1);
+
+    // Other routes stay closed to visitors.
+    const closed = await fetch(`${base}/agent`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(closed.status, 401);
+  } finally {
+    server.close();
+  }
+});

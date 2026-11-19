@@ -156,3 +156,28 @@ test("Chat apps: Slack shows the webhook URL and steps to finish; someone asking
   await expect.poll(() => approved).toBe("U2");
   await expect(chat.getByRole("list", { name: "Connected chat apps" })).toContainText("Also approved: Asha");
 });
+
+test("a visitor who hasn't connected can still connect a directory connector, and is told to sign in for a custom address", async ({ page }) => {
+  const credentials: Array<string | undefined> = [];
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const body = request.postDataJSON?.() ?? {};
+    if (url.pathname === "/api/connectors/catalog") return route.fulfill({ json: { connectors: catalog } });
+    if (url.pathname === "/api/connectors/rpc") {
+      credentials.push(request.headers().authorization || request.headers()["x-groq-api-key"]);
+      return route.fulfill({ json: { tools: [{ name: "query-docs", description: "Query docs", inputSchema: { type: "object", properties: {} }, readOnly: true }] } });
+    }
+    // What the server answers a visitor for an address outside its directory.
+    if (url.pathname === "/api/connectors/discover") return body.url.includes("context7") ? route.fulfill({ json: { auth: "none", registration: false, scope: "" } }) : route.fulfill({ status: 401, json: { error: "Sign in, or add your key, to use a connector that isn't in the directory.", reason: "sign-in-required" } });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.goto("/marketplace");
+  await page.getByRole("button", { name: "Connect Context7" }).click();
+  await expect(page.getByRole("status")).toContainText("Context7 is connected: 1 tool");
+  expect(credentials).toEqual([undefined]);
+
+  await page.getByPlaceholder("https://mcp.example.com/mcp").fill("https://mcp.elsewhere.test/mcp");
+  await page.getByRole("form", { name: "Add a custom connector" }).getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("status")).toContainText("Sign in, or add your key");
+});

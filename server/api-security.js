@@ -25,6 +25,12 @@ const configuredTokenDigest = configuredTokenIsValid
 // as well as per credential, since a visitor's key isn't checked on these
 // routes): app stores require in-app reporting of AI replies for everyone.
 const BYOK_PATHS = new Set(["/feedback", "/report-content", "/events", "/agent", "/chat", "/models", "/providers", "/catalog", "/chat/completions", "/usage", "/orchestrate", "/voice/transcribe", "/voice/speak", "/voice/providers", "/vision/describe", "/a2a", "/route/preview", "/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc", "/web/search", "/web/read", "/setup/hosting/discover", "/setup/hosting/database", "/setup/hosting/status", "/setup/hosting/finish"]);
+// Open without any credential, for the directory's own connectors only:
+// connecting Notion or Linear doesn't use an AI model, so it shouldn't need an
+// AI key. server/connectors.js refuses a guest any address outside its catalog,
+// so these routes can't be used as a relay to arbitrary servers, and guests
+// have their own, lower, per-address limit there.
+const GUEST_PATHS = new Set(["/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc"]);
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
 // The calendar/email sign-in callbacks are opened by Google or Microsoft; the single-use state identifies the user.
 const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/workflows/catalog", "/workflows/tick", "/session/key", "/connectors/catalog"]);
@@ -76,6 +82,11 @@ function requireApiToken(req, res, next) {
     if (BYOK_PATHS.has(req.path) && isGroqKey(visitorKey)) {
       res.locals.hannahByok = true;
       res.locals.hannahApiTokenId = `byok:${createHash("sha256").update(visitorKey).digest("hex")}`;
+      return next();
+    }
+    if (GUEST_PATHS.has(req.path)) {
+      res.locals.hannahGuest = true;
+      res.locals.hannahApiTokenId = `guest:${createHash("sha256").update(addressKey(clientAddress(req))).digest("hex")}`;
       return next();
     }
   }
