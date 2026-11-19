@@ -6,9 +6,9 @@ Date: 2026-11-19. Version fields are 1.5.1 everywhere (`node scripts/check-versi
 
 | Gate | Result |
 |---|---|
-| Server tests | 327 pass, 1 skipped |
-| Client tests | 364 pass |
-| End-to-end | 82 pass |
+| Server tests | 330 pass, 1 skipped |
+| Client tests | 373 pass |
+| End-to-end | 85 pass |
 | Lint, typecheck | 0 errors |
 | Secret scan, dependency audit, audit gate, permissions, brand | Pass |
 | Web production build | Builds; served by the server and used for the live checks |
@@ -32,6 +32,18 @@ No platform is claimed as tested on real hardware.
 2. Wait for "Build HANNAH" to pass on that commit.
 3. `git tag -a v1.5.1 -m "HANNAH v1.5.1" && git push origin v1.5.1`; CI builds all installers and publishes the GitHub Release.
 4. Confirm the release and its assets on GitHub, and that `/download/<platform>` on the live site resolves to v1.5.1.
+
+## Check after deploying
+
+These changes only take effect on the live site once `main` is pushed. Then, as a visitor with no credential:
+
+- Connect on a connector works (it answered 401 before).
+- `POST /mcp` answers 401 asking for a credential (it answered 404 before).
+- The home page shows the new sections.
+
+## One setting decides whether visitors need an API key
+
+The live server reports `serverKeys: false`, so a new visitor still has to paste a Groq key, and the page says so. Setting `HANNAH_ACCOUNTS_USE_SERVER_KEYS=true` on the server lets anyone create an account and chat with no key, using the operator's Groq quota within the per-account rate limits and daily budget. That is the owner's decision; the page and the connect dialog follow whatever the server reports.
 
 ## Known limits of this release
 

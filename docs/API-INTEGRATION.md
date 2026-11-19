@@ -68,8 +68,8 @@ Important variables:
 | `PINECALL_TOKEN_URL` | No | Trusted server-side Pinecall token issuer. |
 | `ANTHROPIC_API_KEY` | No | Enables Anthropic chat, Python provider fallback, and Electron desktop computer use. |
 | `ANTHROPIC_DESKTOP_MODEL` | No | Model for the Electron computer-toolset route; falls back to `ANTHROPIC_MODEL`. |
-| `MCP_ENABLED` | No | Enables the authenticated `/mcp` endpoint when `true`. |
-| `MCP_API_TOKEN` | No | Bearer token of at least 32 characters for remote MCP. |
+| `MCP_ENABLED` | No | The authenticated `/mcp` endpoint is on by default; `false` turns it off. |
+| `MCP_API_TOKEN` | No | Optional extra Bearer token (32+ characters) for `/mcp` that acts as the operator. |
 
 The Python agent fallback also tries Groq first, then configured Anthropic and OpenAI-compatible providers, followed by local inference. It accepts provider-specific `*_API_KEY`, `*_BASE_URL`, `*_MODEL`, and `*_MODELS` variables, plus `CUSTOM_BASE_URL` and a custom model ID for a gateway.
 
@@ -230,13 +230,13 @@ Uses the server-side Anthropic computer tool for the Electron desktop bridge. It
 
 ### `POST /mcp`
 
-Available only when `MCP_ENABLED=true`. Send:
+On unless `MCP_ENABLED=false`. Send the credential you already use for the API:
 
 ```http
-Authorization: Bearer <MCP_API_TOKEN>
+Authorization: Bearer <hk_ developer key, or the operator token>
 ```
 
-The token must be at least 32 characters. The endpoint exposes the `hannah_chat`, `hannah_status`, and `hannah_models` MCP tools. Keep it private and use HTTPS in production.
+or your own Groq key in `X-Groq-API-Key`. The same checks as `/api/chat` apply, and each tool call runs with that credential's rate limits and budget. `MCP_API_TOKEN`, if set, is accepted as well and acts as the operator. The endpoint exposes the `hannah_chat`, `hannah_status`, and `hannah_models` MCP tools. Use HTTPS in production.
 
 ## Frontend integration
 

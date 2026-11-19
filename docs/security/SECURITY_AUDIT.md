@@ -10,6 +10,17 @@ Date: 2026-11-19, for 1.5.1. This records what was checked and how; it is not a 
 | Sync relay: guessable ids (`Math.random`), no body limit, any payload accepted | Medium for anyone self-hosting it | Per-device storage, 1 MB limit, envelope validation, caps | `sync-relay.test.js` |
 | Workflow drafts could contain model-invented outbound URLs | Low | Placeholder addresses cleared; drafting forbids invented addresses | `workflows.draft.test.js` |
 
+## Changed on purpose in this round
+
+Two routes became reachable by more callers. Both were reviewed for what that opens up.
+
+| Change | What a caller can now do | What limits it | Evidence |
+|---|---|---|---|
+| A visitor with no credential can use `/api/connectors/discover`, `/register`, `/token` and `/rpc` | Connect and call the 32 connectors in HANNAH's own directory, with their own vendor sign-in or token | A guest is refused any address outside the directory before anything is fetched, so the routes are not a relay to arbitrary servers; 40 requests a minute per address (120 for signed-in callers); the SSRF-safe client, https only, and redirect-URI checks apply as before; the server still stores no connector tokens | `connectors.test.js` (guest allowed in the directory, refused outside it, other routes still closed) |
+| `/mcp` is on by default and accepts a developer key, the operator token, a Groq key or a signed-in session | Call `hannah_chat`, `hannah_status` and `hannah_models`, the same things `/api/chat` and `/api/models` already allow that credential | The same credential middleware as `/api/chat`; each tool call goes to the API with the caller's own credential, so rate limits, budgets and operator-only rules are unchanged; no credential answers 401; `MCP_ENABLED=false` turns it off | `mcp-client.test.js` (none and wrong refused; own credential works; standalone mount still needs its token) |
+
+On serverless hosting, MCP tool calls reach the API through the site's public address taken from the platform's forwarded host header. That header is set by the platform there; on other hosts the endpoint calls `127.0.0.1` and ignores it.
+
 ## Checked and found in order
 
 | Area | What was checked | Result |
@@ -24,6 +35,7 @@ Date: 2026-11-19, for 1.5.1. This records what was checked and how; it is not a 
 | Stored credentials | Provider keys and OAuth tokens sealed with AES-256-GCM under the vault key; sync envelopes AES-256-GCM with PBKDF2 (310,000) | Pass (vault tests) |
 | Rate limits | Per credential and per address; shared across serverless instances through the database | Pass |
 | Webhooks | HTTPS targets only; HMAC signatures with replay protection | Pass |
+| Tool output | A tool result the output screen objects to is now withheld from the model instead of ending the turn; long results are shortened | Pass (`Marketplace.test.ts`) |
 | Uploads | Size and type checks on audio, images and workflow files | Pass (live: bad audio and image refused) |
 | XSS | Model output rendered through `MessageContent` (no raw HTML); `dangerouslySetInnerHTML` is not used anywhere in the client | Pass by review |
 

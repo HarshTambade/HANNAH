@@ -23,7 +23,9 @@ Details per bug are in [BUGS_AND_ROOT_CAUSES.md](./BUGS_AND_ROOT_CAUSES.md); the
 | **Memory and Knowledge** | Memory save (with approval), recall, categories, export and delete work. Knowledge answers failed unless the message used certain words; fixed. The background "consolidation" used random choice; fixed. |
 | **Voice** | Speak and Call start and listen in the browser. Speech recognition quality, wake word and background behavior need a person and a device. |
 | **Accounts and data** | Register, sign in, keys, sync, export, audit log and delete all verified live. Cross-site origin check added. |
-| **Integrations page and APIs** | `/v1` and A2A had the same stale-model bug; fixed. MCP, webhooks and connectors have passing suites; Hugging Face connected live. |
+| **Integrations page and APIs** | `/v1` and A2A had the same stale-model bug; fixed. The remote MCP endpoint didn't exist on serverless hosting and took one operator token; it now works there with each caller's own credential. The page was documentation only; it now tests each integration live. |
+| **Marketplace** | Connectors failed for every visitor who wasn't signed in (401 on Connect); fixed, and all 32 checked against the vendors. Agents and skills were six short text snippets with a two-step install and no trace in chat; now 22 packages with tools and prompts, one click, and a visible active agent. |
+| **Home page** | Asked every newcomer for an API key before anything else. It now starts from a message or a task, and follows what the server offers. |
 | **Communications** | Code is real and tested against stand-ins. Not verified with real Google or Microsoft accounts (needs your OAuth credentials). |
 | **Phone Bridge** | Server side verified; no physical phone here. |
 | **Desktop and mobile apps** | Build in CI on all platforms. Android launched on an emulator. Desktop control and iOS not exercised by hand. |
@@ -39,6 +41,9 @@ Details per bug are in [BUGS_AND_ROOT_CAUSES.md](./BUGS_AND_ROOT_CAUSES.md); the
 | `PersonaKernel.update` | Threw "not implemented in scaffold" | Removed |
 | `server/sync-relay.js` | Relay that didn't match its client | Made real |
 | Workflow draft output | Invented `example.com` endpoints | Prevented and cleaned |
+| Marketplace packages | Installed packages did nothing until activated, and nothing showed they were on | Made real: one click, visible in chat, tools and prompts per agent |
+| Figma connector | Listed, could never connect | Removed |
+| Integrations page | Described integrations without exercising any | Live checks added |
 | Earlier pass (1.5.0) | Sync, CRDT merge, orchestrator, research agent, PAP sign-in, hardware adapter, interop card | Made real, see CHANGELOG 1.5.0 |
 
 Chaos mode's "simulated" faults are a deliberate, labelled testing feature, off by default.

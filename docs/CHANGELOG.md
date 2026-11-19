@@ -4,7 +4,31 @@ All notable changes to HANNAH. Versions follow [Semantic Versioning](https://sem
 
 ## 1.5.1 — 2026-11-19
 
+### New
+
+- **Agents and skills that do something you can see.** The marketplace now has 10 agents and 12 skills (it had 3 and 3).
+  - **Agents** set how HANNAH works for a whole conversation: Study coach, Writing partner, Project planner, Research analyst, Code reviewer, Interview coach, Language tutor, Meeting assistant, Travel planner and Daily organizer. Each has its own method, keeps the tools it needs to hand (Research analyst always has web search and the page reader; Daily organizer always has your reminders), and suggests prompts to start with.
+  - **Skills** adjust every reply: Summary first, Step by step, Cite sources, Tables for comparisons, Devil's advocate, Honest uncertainty and more. Up to five can be on at once.
+  - **One click turns a package on.** Before, you had to install and then activate, and a package that was only installed did nothing.
+  - **Chat shows which agent is active**, lets you switch or turn it off, and offers that agent's prompts in an empty chat.
+  - **"Try it with"** on each card opens the chat with the package on and the prompt in the message box.
+- **Test your integrations from the Integrations page.** "Test this server now" runs the REST API, the OpenAI-compatible API, a real reply, the MCP endpoint, A2A and webhooks with the credential in your browser, and shows what each one answered and how long it took. Signed-in accounts can create a developer key there.
+- **A home page you can start from.**
+  - Type your first message on the home page, or pick one of six things to try; it's waiting in the chat's message box once you've connected, with the right agent on.
+  - The page asks the server what it offers: where accounts can use the server's own models, it says "no API key needed" and the connect dialog opens on "Create account". Otherwise it explains the free Groq key as before.
+  - New sections: the connectors you can use (with their icons, from the live directory), how to start in three steps, and counts taken from the product's own data.
+  - On phones, a "Talk to HANNAH" button stays within reach after the first screen.
+
 ### Fixed
+
+- **Connectors failed for every visitor who wasn't signed in.** Pressing Connect on any connector answered "Add your Groq API key or a HANNAH access token". Connecting Notion or Linear doesn't use an AI model, so the directory's connectors now connect without any key. A custom connector address still needs a sign-in, so the server can't be used as a relay to arbitrary addresses, and visitors have a lower request limit.
+- **Figma is no longer listed as a connector.** Its server refuses apps it hasn't approved, so Connect could never work. 31 of the 32 that remain were checked against the vendors' own servers on 2026-11-19 (GitHub takes a token you paste, so it wasn't).
+- **The remote MCP endpoint didn't exist on the hosted site.** `/mcp` was mounted only when the server ran as a long-lived process, and it accepted a single operator token. It now answers on serverless hosting too, and takes the credential you already have: a developer key, the operator token, or your Groq key. `MCP_ENABLED=false` turns it off.
+- **Reading a long web page ended the reply with "The agent response exceeded the configured output limit".** A tool result longer than 8,000 characters is now shortened with a note instead of failing the turn.
+- **After a failed reply, HANNAH answered the previous question instead of the new one.** The conversation then held two of your messages in a row. The request now says the earlier one went unanswered.
+- **A rate-limited web search was retried three more times in the same reply**, which used up the limit further. The tool now says not to retry, and HANNAH tells you instead.
+- **The OpenAI-compatible API reported `finish_reason: "stop"` for a reply the token limit cut off.** With a small `max_tokens`, a reasoning model can use the whole limit before writing anything; the response now says `"length"`.
+- **Creating an account without a key, on a server that needs one, said the key was "optional".** The form now says HANNAH needs it to answer, and where to get one.
 
 - **Auto mode failed on every request.** HANNAH's model profiles still listed Groq models that Groq has retired (Llama 3.1 8B, Llama 3.3 70B, Llama 4 Scout and Maverick, Qwen3 32B, Kimi K2), and Auto routed simple messages to one of them, so even "hi" failed. Auto now checks which models each provider serves today and never picks a retired one; a busy (rate-limited) model hands over to another model the provider serves; and the plain chat endpoint no longer sends the word "auto" to Groq as a model name.
 - **Model pickers offered models that can't chat.** The model lists (chat settings, Agents) showed Groq's speech-to-text (Whisper), text-to-speech (Orpheus) and safety-classifier models; picking one broke the agent. Only chat models the provider serves are listed now, and the Models page no longer recommends retired models. The workflow editor's model list was updated the same way, and a workflow saved with a retired model uses the provider's current default.

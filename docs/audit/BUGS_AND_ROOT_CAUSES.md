@@ -67,8 +67,48 @@ Found by using HANNAH with a real model on 2026-11-19. Numbers match [REPAIR_TRA
 - **Root cause:** state-changing routes trusted the cookie without checking `Origin`. Current browsers withhold a `SameSite=Lax` cookie from cross-site POSTs, so this was defense in depth, not an open hole.
 - **Fix:** `accountAuth({ originAllowed })`: allowed origins, the server's own host, and local development hosts outside production.
 
+## 19 and 20. Connectors
+
+- **Seen:** on the live site, Connect on any connector answered `Add your Groq API key or a HANNAH access token.` (HTTP 401) for a visitor who hadn't signed in.
+- **Chain break:** Connect → `POST /api/connectors/rpc` or `/register` → `requireApiToken` → 401. The routes were in the bring-your-own-key list, so they needed an AI key although they call no model.
+- **Fix:** `GUEST_PATHS` in `server/api-security.js` lets a request with no credential reach the four connector routes as a guest; `server/connectors.js` refuses a guest any address outside its catalog (`sign-in-required`) and gives guests 40 requests a minute instead of 120.
+- **Also:** Figma's registration endpoint answers 403 to unapproved apps; removed from the catalog. The other 31 were probed against the vendors' servers.
+
+## 21. Marketplace agents and skills
+
+- **Root cause:** each package was a paragraph of prompt text, sent correctly, but (a) "Install" only recorded the package and a separate "Activate" was needed, (b) nothing in chat showed that a package was on, (c) there were six in total. A person who installed one saw no change.
+- **Fix:** catalog of 22 with `starters` and, for agents, `tools`; `MarketplaceService.turnOn`; `ActiveAgentBar` in chat; agent tools kept through both tool filters; the server accepts one agent and five skills and tells the model to work as the agent describes.
+- **What an agent is, plainly:** instructions, tools kept to hand and suggested prompts. It does not run code or add permissions; tools still ask for approval.
+
+## 22. Long tool results ended the turn
+
+- **Root cause:** `screenOutgoingText`, the guard for HANNAH's own replies (8,000 characters), was also applied to tool output, where it threw.
+- **Fix:** `screenToolOutput` shortens with a note, or withholds the output if the safety screen objects.
+
+## 23. The question after a failed reply was ignored
+
+- **Root cause:** a failed turn leaves the user's message with no reply after it; the next request then carried two user messages in a row and the model answered the first.
+- **Fix:** `withUnansweredMarked` in `AgentRuntime.ts` puts a note between them.
+
+## 25. Remote MCP endpoint
+
+- **Root cause:** `/mcp` was mounted inside `startServer()`, which serverless hosting never calls, and only when `MCP_ENABLED=true` with a single `MCP_API_TOKEN`.
+- **Fix:** mounted with the app, loaded on first use, behind the same credential checks as `/api/chat`; `createHANNAHMcpServer` takes the caller's credential for its API calls.
+
+## 26. `/v1` finish reason
+
+- **Root cause:** `callProviderMeasured` discarded the provider's `finish_reason`; `/v1` always said `"stop"`.
+- **Seen through:** the new Integrations check, whose 24-token test request came back empty from a reasoning model.
+
+## 28. A new visitor's first step
+
+- **Root cause:** the connect dialog always opened on "paste your Groq API key", whatever the server offered.
+- **Fix:** `ConnectPanel` and the home page read `accounts.serverKeys` from `/api/account/status`.
+- **Limit:** the live server has `serverKeys: false`. Until the owner turns on `HANNAH_ACCOUNTS_USE_SERVER_KEYS`, visitors there still need a Groq key; the page says so.
+
 ## Test infrastructure issues met on the way
 
 - `e2e/workflows.spec.ts` matched `/Valid/`, which also matched the "Validate" step. Now exact.
 - One full e2e run failed once with `ECONNRESET` from the test's own server during the signed-in crawl; it passed alone and on the next two full runs. Treated as a flake; not reproduced.
 - Running the server test suite while a development server holds port 3001 hangs one test file. Stop the development server first.
+- One research turn failed once with a network error from the provider after a long page read (logged as `TypeError`, a failed `fetch`). Replaying the same request succeeded; not reproduced.

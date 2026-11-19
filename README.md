@@ -20,7 +20,7 @@ Three rules shape the product:
 3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
 > **Status:** active development. The latest published release is [v1.4.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.4.0). `main` is version **1.5.0**, which isn't released yet. It's listed under [1.5.0 in the changelog](./docs/CHANGELOG.md):
-> - connectors to 33 services and chat apps (Telegram, Slack, Discord, Google Chat, Teams, WhatsApp, and iMessage and Signal on the desktop);
+> - connectors to 32 services and chat apps (Telegram, Slack, Discord, Google Chat, Teams, WhatsApp, and iMessage and Signal on the desktop);
 > - web search on every platform;
 > - HANNAH using your Mac's apps;
 > - setting up Vercel and Supabase from the app;
@@ -103,8 +103,8 @@ Every screen has its own address, so refresh, bookmarks and the back button work
 | **Models** | `/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
 | **Memory & trust** | `/memory` | The accountability page: an **Agent runs** log (every request with each tool step and how it ended, which survives reloads), Guardian strictness and its decision log (allowed and blocked, with reasons), the memory center (search, filter by category, edit, mark sensitive, export, switch kinds of memory or all memory off; each memory shows where it came from and when it was last used), **Knowledge** (your own documents, indexed on the device so HANNAH answers from them with citations; see [Knowledge](#knowledge)), personalization examples, the active persona, and installed plugins. |
 | **Automations** | `/automations` | Routines built from trigger, agent-task, daily-briefing, action and output steps that run on a schedule while HANNAH is open, with approval before every action and a run history. See [Automations](#automations). |
-| **Marketplace** | `/marketplace` | **Connectors**: 33 services (GitHub, Linear, Notion, Atlassian, Stripe, Vercel, Supabase, Figma and more) with their official icons, or any MCP server by URL. **Chat apps**: talk to HANNAH from Telegram, Slack, Discord, Google Chat, Teams or WhatsApp, and in the desktop app iMessage and Signal. **Agents and skills**: first-party agents and skills that change how HANNAH replies, plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
-| **Integrations** | `/integrations` | REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
+| **Marketplace** | `/marketplace` | **Connectors**: 32 services (GitHub, Linear, Notion, Atlassian, Stripe, Vercel, Supabase and more) with their official icons, connected without needing an AI key, or any MCP server by URL once you're signed in. **Chat apps**: talk to HANNAH from Telegram, Slack, Discord, Google Chat, Teams or WhatsApp, and in the desktop app iMessage and Signal. **Agents and skills**: 10 agents (Study coach, Research analyst, Daily organizer and more) that set how HANNAH works for a conversation, the tools she keeps to hand and the prompts she suggests, and 12 skills that adjust every reply. One click turns one on; chat shows which agent is active and lets you switch. Plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
+| **Integrations** | `/integrations` | **Test this server now**: runs the REST API, the OpenAI-compatible API, a real reply, the MCP endpoint, A2A and webhooks with your credential and shows what came back; create a developer key there. REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
 | **Settings** | `/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Calendar and email**: connect Google or Microsoft with their own sign-in. **Voice**: speaking and listening engines, voice choice, interrupt-by-talking and the **“Hey HANNAH”** wake word. **Daily briefing**: which sections, the place for the weather, and a preview (see [Daily briefing](#daily-briefing)). **Setup check**: one pass over the server, model, account, connections, voice, microphone, notifications, storage, desktop app and recent errors, with a verdict and a fix for each. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. Also **Appearance** (text size), **Desktop app** (update channel, check for updates, update history, shortcut and `hannah://` links; desktop only), **Backup and restore** (one file with your data and choices, never your keys; optional passphrase; merge or replace on restore) and **Diagnostics** (what went wrong on this device, redacted, searchable, exportable). |
 
 The design follows a bento and glassmorphism style: rounded `2rem` cards, pastel tones (sky, lavender, butter, mint), large light-weight stat numbers and a floating header. Layouts are responsive down to phone width.
@@ -394,7 +394,7 @@ The root [`vercel.json`](./vercel.json) defines two services in one project:
 
 ```text
 /api/*  → server (Express)
-/mcp    → server (when MCP_ENABLED=true)
+/mcp    → server (unless MCP_ENABLED=false)
 /*      → client (Vite static build)
 ```
 
@@ -706,7 +706,7 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | `HANNAH_PUBLIC_URL` | request host | Public base URL used in the A2A agent card. |
 | `HANNAH_PROVIDER_FALLBACKS` | — | Comma-separated providers to try when `hannah-auto` requests without a routing mode fail with a retryable error, for example `openrouter,together`. Never used for visitor keys or a pinned provider. Routed requests fall back to the router's own alternatives. |
 | `HANNAH_SELF_HOSTED_PROVIDERS` | — | Providers to treat as self-hosted in Private mode even on a public address, for example `custom,vllm` for your own inference box. Local runtimes and loopback or private-network endpoints count already. |
-| `MCP_ENABLED`, `MCP_API_TOKEN`, `HANNAH_API_URL` | `false`, —, `http://127.0.0.1:3001` | Remote MCP endpoint. |
+| `MCP_ENABLED`, `MCP_API_TOKEN`, `HANNAH_API_URL` | on, —, `http://127.0.0.1:3001` | Remote MCP endpoint at `/mcp`: `false` turns it off; the token is an optional extra operator credential. |
 | `ANTHROPIC_DESKTOP_MODEL` | `claude-sonnet-5-5` | Model for desktop computer use (needs `ANTHROPIC_API_KEY`). |
 | `MITHI_TTS_URL` | — | Optional Mithi text-to-speech service. |
 | `PINECALL_TOKEN_URL` | — | Trusted issuer of short-lived Pinecall credentials. |
@@ -818,7 +818,7 @@ On the **Agents** screen you can turn specialists off, pick a model for each, an
 
 ### Connectors
 
-Marketplace → Connectors lists 33 services, each the vendor's own MCP server, shown with its official icon.
+Marketplace → Connectors lists 32 services, each the vendor's own MCP server, shown with its official icon.
 - **Connecting:** with your own sign-in (OAuth with PKCE), a token (GitHub), or no sign-in at all (docs search). You can also add any remote MCP server by URL.
 - **Safety:** your tokens stay in your browser, and HANNAH asks before every action a connector takes.
 - **Code:** the directory and its checks are in `server/connectors.js`.
@@ -1024,7 +1024,7 @@ HANNAH includes a Model Context Protocol server, so MCP hosts (IDEs, desktop ass
 }
 ```
 
-**Remote (Streamable HTTP):** set `MCP_ENABLED=true`, a unique `MCP_API_TOKEN` (`openssl rand -hex 32`) and a reachable `HANNAH_API_URL`. Then connect to `https://your-domain/mcp` with `Authorization: Bearer <token>`. Hosts that need OAuth discovery require an OAuth gateway in front.
+**Remote (Streamable HTTP):** connect to `https://your-domain/mcp` with the credential you already have: `Authorization: Bearer <hk_ developer key or operator token>`, or your Groq key in `X-Groq-API-Key`. Each tool call runs with that credential's limits and budget. It works on serverless hosting too. `MCP_ENABLED=false` turns the endpoint off; `MCP_API_TOKEN` (`openssl rand -hex 32`) is an optional extra token that acts as the operator. Hosts that need OAuth discovery require an OAuth gateway in front.
 
 The MCP server exposes no shell, file, messaging or computer-control tools. See [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md).
 
@@ -1298,7 +1298,7 @@ There are two ways to authenticate:
 | `POST /api/undo` | Logs an undo request for a recorded side effect. |
 | `GET`/`POST /api/sync/memory` | Versioned store for end-to-end encrypted memory blobs. Kept in the database when `DATABASE_URL` is set; otherwise in memory only and lost on restart. |
 | `GET /api/presence` | A short status line for the UI. |
-| `POST /mcp` | MCP Streamable HTTP (when enabled; uses `MCP_API_TOKEN`). |
+| `POST /mcp` | MCP Streamable HTTP, with your developer key, the operator token or your Groq key. |
 
 Use the [JavaScript SDK](./sdk/js), or any OpenAI SDK pointed at `/v1`:
 

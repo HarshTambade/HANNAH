@@ -26,6 +26,16 @@ Audit of 2026-11-19, on top of v1.5.0. Statuses: **PASS** (worked, verified), **
 | 16 | Rate-limit error text | Second error about a Python fallback on 127.0.0.1:8000 | Fallback attempted when nothing runs there | P9 | Original error shown | Live | FIXED |
 | 17 | Android app | Service worker failed to install inside the app | The app shell answers `/favicon.ico` with an empty response | P3 | Native and desktop apps don't register the website's worker | Android 16 emulator; `AppShell.test.ts` | FIXED (in 1.5.0) |
 | 18 | CI macOS desktop build | Cancelled twice | GitHub had no `macos-latest` runners | P3 | Runs on `macos-15` | CI green | FIXED (in 1.5.0) |
+| 19 | Connectors for visitors | Every Connect button answered "Add your Groq API key or a HANNAH access token" unless you were signed in | The connector routes sat behind the AI-key check, although they use no model | P2 | Directory connectors open to visitors; custom addresses still need a sign-in; lower visitor limit | Live browser run as guest, account and operator. Tests: `connectors.test.js` | FIXED |
+| 20 | Connector directory | Figma listed, but its server refuses registration (403) | Listed from an earlier check; Figma only accepts approved apps | P4 | Removed. The other 31 sign-in and no-sign-in connectors were probed against the vendors' servers: discovery and registration (or tool listing) all succeed | Probe output, 2026-11-19 | FIXED |
+| 21 | Marketplace agents and skills | Looked inert: 3 agents and 3 skills of one short paragraph each; "Install" did nothing until a second "Activate"; chat never showed what was on | Packages were guidance text only, with a two-step flow and no trace in chat | P4 dummy | 10 agents and 12 skills with full instructions, starter prompts and per-agent tools; one click turns a package on; chat bar shows and switches the agent; "Try it with" opens chat with the prompt | Live with the real model: Research analyst searched the web and read a page; Summary first opened the reply with "In short:". Tests: `Marketplace.test.ts`, e2e `navigation.spec.ts` | FIXED |
+| 22 | Long tool results | Reading a long page ended the reply with "exceeded the configured output limit" | The reply-length guard was applied to tool output and threw | P3 | Tool output is shortened with a note, or withheld if the safety screen objects | Tests: `Marketplace.test.ts` | FIXED |
+| 23 | Next question after a failed reply | HANNAH answered the earlier question again | Two user messages in a row reached the model | P3 | The request marks the unanswered one | Tests: `Marketplace.test.ts` | FIXED |
+| 24 | Rate-limited web search | Retried three more times within one reply | The error text said "try again in a moment" | P8 | Tool says not to retry now | Tests: `WebToolsRetry.test.ts` | FIXED |
+| 25 | Remote MCP endpoint | 404 on the hosted site; one operator token only | Mounted at process start (never on serverless) | P7 | Mounted with the app; takes a developer key, operator token, Groq key or signed-in session; tool calls carry the caller's credential | Live with a real MCP client incl. a chat call and a new `hk_` key. Tests: `mcp-client.test.js` | FIXED |
+| 26 | `/v1` finish reason | `"stop"` with empty content when `max_tokens` ran out | Provider's finish reason was dropped | P7 | `"length"` is passed through | Tests: `models-live.test.js` | FIXED |
+| 27 | Integrations page | Documentation only; no way to tell whether anything worked | Never built | P7 | "Test this server now": seven live checks and developer-key creation | Live as guest, account and operator | FIXED |
+| 28 | First step for a new visitor | "Paste your Groq API key" before anything else, and sign-up called the key "optional" on a server that needs it | Connect dialog didn't use what the server reports | P9 | Dialog and home page follow `/api/account/status`: free account first when the server's models are included; honest wording otherwise | Live: home → Try this → create account → chat with agent on and message ready. e2e `navigation.spec.ts` | FIXED |
 
 ## Verified working (no change needed)
 
@@ -39,7 +49,7 @@ Audit of 2026-11-19, on top of v1.5.0. Statuses: **PASS** (worked, verified), **
 | OpenAI-compatible API incl. streaming; usage | Live | PASS |
 | Private-network (SSRF) refusal on page reads | Live: 169.254.169.254 refused | PASS |
 | Operator-only routes refused to accounts (desktop control, MCP servers) | Live: 403 | PASS |
-| Connectors marketplace: connect a real MCP server (Hugging Face, 4 tools) | Live | PASS |
+| Connectors marketplace: connect a real MCP server (Hugging Face, 4 tools); Notion redirects to its own sign-in | Live | PASS |
 | Voice: Speak and hands-free Call start and listen | Live with a fake microphone | PASS |
 | Phone Bridge server side: pairing code, command validation, signed requests | Live + `phone-bridge.test.js` | PASS |
 | Download links for all six installers | Live site redirects to v1.5.0 assets | PASS |
@@ -57,6 +67,8 @@ Audit of 2026-11-19, on top of v1.5.0. Statuses: **PASS** (worked, verified), **
 | iOS app | Builds in CI | A simulator runtime or device | NOT TESTED |
 | OpenAI, Anthropic, Gemini and other providers | Same code path as Groq, tested with stand-ins | A key for each | NOT TESTED |
 | Signed installers | Unsigned (your choice) | Apple and Windows certificates, Android keystore | BLOCKED |
+| Free accounts without an API key on the live site | Works locally (`HANNAH_ACCOUNTS_USE_SERVER_KEYS=true`); the live server has it off, so visitors still need a Groq key | Owner decision: it spends the operator's Groq quota, within the per-account limits and daily budget | BLOCKED |
+| Connector sign-in completed with a real vendor account | Registration and the redirect to each vendor's sign-in page are verified; no vendor account was signed in here | A real Notion, Linear or similar account | NOT TESTED |
 | Scheduled server workflows on the live site | Tick endpoint works when called | GitHub secrets `CRON_SECRET` and `HANNAH_PRODUCTION_URL` | BLOCKED |
 | 13 panels not shown anywhere (Collective, Digital twin, Spatial context, Presence feed, Memory evolution, Memory router, Oversight, Personalization health, Perception consent, Intervention log, Cast, PAP settings) | Backed by services, no invented data found, but no screen mounts them | A product decision: surface or leave | NOT TESTED |
 | Billing | Not implemented; HANNAH has no paid tiers | Nothing | n/a |
