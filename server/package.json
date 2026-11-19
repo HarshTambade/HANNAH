@@ -1,6 +1,6 @@
 {
   "name": "hannah-companion-server",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "private": true,
   "type": "commonjs",
   "main": "index.js",
@@ -24,11 +24,17 @@
     "@sentry/node": "^10.78.0",
     "cors": "^2.8.5",
     "croner": "11.0.0",
+    "docx": "9.15.2",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
+    "fast-formula-parser": "1.0.19",
+    "jszip": "3.10.2",
     "mongodb": "^6.22.0",
+    "pdfkit": "0.20.2",
     "pg": "^8.23.1",
+    "pptxgenjs": "4.0.1",
     "quickjs-emscripten-core": "0.32.0",
+    "unpdf": "2.1.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -36,5 +42,8 @@
     "@eslint/js": "9.39.1",
     "eslint": "9.39.1",
     "globals": "15.15.0"
+  },
+  "overrides": {
+    "image-size": "2.0.4"
   }
 }
