@@ -127,10 +127,20 @@ async function loadAccountKeys(db, userId) {
  * Recognize a signed-in user from a session cookie, a session bearer token
  * (hs_…) or a developer API key (hk_…). Runs before requireApiToken.
  */
-function accountAuth() {
+/**
+ * `originAllowed(origin, req)`: for a browser session (the cookie), a request
+ * that changes something must come from HANNAH's own pages. SameSite=Lax
+ * already keeps the cookie off cross-site POSTs in current browsers; this is
+ * the second check, for browsers and embeddings where it doesn't.
+ */
+function accountAuth({ originAllowed } = {}) {
   return async function accountAuthMiddleware(req, res, next) {
     const token = credentialFromRequest(req);
     if (!token) return next();
+    const origin = req.get("origin");
+    if (originAllowed && origin && !req.get("authorization") && !["GET", "HEAD", "OPTIONS"].includes(req.method) && !originAllowed(origin, req)) {
+      return res.status(403).json({ error: "This request came from another site, so HANNAH didn't act on it.", reason: "cross-site" });
+    }
     if (!databaseConfigured()) {
       res.locals.hannahAccountInvalid = "Accounts aren't enabled on this server.";
       return next();

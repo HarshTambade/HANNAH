@@ -22,6 +22,8 @@
 const express = require("express");
 const { randomUUID } = require("node:crypto");
 const { defaultModelFor, listProviders } = require("./providers/catalog");
+const { ensureServed, isChatModel } = require("./providers/runtime");
+const { servedStatus } = require("./providers/served");
 const { streamProvider } = require("./providers/runtime");
 const gateway = require("./gateway");
 const modelRouter = require("./router");
@@ -98,12 +100,15 @@ function parseModelRef(value, fallbackProviderId) {
 function createV1Router({ getRequestProvider, allowedProviderIds = () => null, usableProviders = () => [], defaultProviderId, timeoutMs, chatLimiter }) {
   const router = express.Router();
 
-  router.get("/models", (req, res) => {
+  router.get("/models", async (req, res) => {
     const allowed = allowedProviderIds(req, res);
     const providers = listProviders().filter((provider) => (allowed ? allowed.has(provider.id) : provider.configured));
+    // List what each provider serves today: no retired models, and no speech or classifier models.
+    await ensureServed(providers.map((provider) => { try { return getRequestProvider(req, provider.id); } catch { return null; } }));
     const data = [{ id: "hannah-auto", object: "model", created: 0, owned_by: "hannah", hannah: { description: "HANNAH picks a model by request complexity." } }];
     for (const provider of providers) {
       for (const model of provider.models) {
+        if (!isChatModel(model.id) || servedStatus(provider.id, model.id) === false) continue;
         data.push({ id: `${provider.id}/${model.id}`, object: "model", created: 0, owned_by: provider.label, hannah: { tools: Boolean(model.tools), vision: Boolean(model.vision), context: model.context ?? null } });
       }
     }
@@ -137,6 +142,7 @@ function createV1Router({ getRequestProvider, allowedProviderIds = () => null, u
     let usable = [];
     if (ref.auto && policy) {
       usable = usableProviders(req, res);
+      await ensureServed(usable);
       try {
         decision = modelRouter.route({ messages, tools, policy, usableProviders: usable.map((item) => item.provider), preferredProviderId: req.get("x-hannah-provider") || undefined });
       } catch (error) {
@@ -164,6 +170,7 @@ function createV1Router({ getRequestProvider, allowedProviderIds = () => null, u
       return openAiError(res, 429, error.message, "budget_exceeded", "insufficient_quota");
     }
 
+    if (ref.auto) await ensureServed(target);
     let model = ref.model || defaultModelFor(target.provider);
     let routing = null;
     if (decision) {

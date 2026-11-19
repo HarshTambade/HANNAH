@@ -17,6 +17,7 @@
  */
 
 const express = require("express");
+const { ensureServed } = require("./providers/runtime");
 const gateway = require("./gateway");
 
 const MAX_STEPS = 6;
@@ -144,6 +145,7 @@ function createOrchestrateHandler({ getRequestProvider, preferredProviderId, tim
 
     let model = typeof body.model === "string" && body.model.trim() && body.model !== "auto" ? body.model.trim() : null;
     if (!model) {
+      await ensureServed(target);
       const pick = gateway.pickAutoModel(target.provider.id, { level, task: phase === "plan" ? "reasoning" : "research", reasons: [`${phase} step`] }, { budgetTight: budget.tight });
       model = pick?.model;
     }

@@ -304,3 +304,16 @@ test("webhook helpers: private ranges, DNS checks and signatures", async () => {
   assert.equal(await assertPublicUrl("https://hooks.example/x", { lookup: async () => [{ address: "8.8.8.8" }] }), "https://hooks.example/x");
   assert.match(sign("whsec_test", "1700000000", "{}"), /^sha256=[0-9a-f]{64}$/);
 });
+
+test("a signed-in browser's change from another site is refused; the same request from HANNAH's page works", async () => {
+  const registered = await fetch(`${baseUrl}/api/account/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "csrf@example.com", password: "correct horse battery" }) });
+  const cookie = registered.headers.get("set-cookie").split(";")[0];
+  const create = (origin) => fetch(`${baseUrl}/api/account/api-keys`, { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie, ...(origin ? { Origin: origin } : {}) }, body: JSON.stringify({ name: "k" }) });
+  const crossSite = await create("https://evil.example");
+  assert.equal(crossSite.status, 403);
+  assert.equal((await crossSite.json()).reason, "cross-site");
+  assert.equal((await create(baseUrl)).status, 201);
+  assert.equal((await create(undefined)).status, 201);
+  // Reading is unaffected, and a developer key (no cookie) isn't a browser session.
+  assert.equal((await fetch(`${baseUrl}/api/account/status`, { headers: { Cookie: cookie, Origin: "https://evil.example" } })).status, 200);
+});

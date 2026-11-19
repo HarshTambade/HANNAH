@@ -60,12 +60,13 @@ const {
 } = require("./providers/catalog");
 const {
   discoverProviderModels,
+  ensureServed,
   isChatModel,
   requestWithProviderFallback,
 } = require("./providers/runtime");
 const marketplaceCatalog = require("../shared/marketplace-catalog.json");
 const { createHash } = require("node:crypto");
-const { knowsServed, servedStatus } = require("./providers/served");
+const { servedStatus } = require("./providers/served");
 
 assertProductionApiToken();
 
@@ -206,16 +207,7 @@ function usableProviders(req, res) {
   return out;
 }
 
-/**
- * Learn which models the caller's hosted providers serve (cached for 30
- * minutes, see providers/served.js) before Auto picks one, so it never routes
- * to a model the provider retired.
- */
-async function warmServedModels(providers) {
-  await Promise.all(providers
-    .filter((item) => item?.provider && !item.provider.local && item.provider.id !== "custom" && !knowsServed(item.provider.id))
-    .map((item) => discoverProviderModels(item.provider, item.apiKey, 2_500).catch(() => null)));
-}
+const warmServedModels = (providers) => ensureServed(providers);
 
 function getRequestProvider(req, providerId) {
   let provider;
@@ -344,8 +336,19 @@ app.use("/download", createDownloadRouter());
 // Accounts (when DATABASE_URL is set): recognize a session or developer key first.
 // A Groq key remembered in this browser (HttpOnly cookie) counts as sent with the request.
 app.use("/api", rememberedKeyMiddleware);
-app.use("/api", accountAuth());
-app.use("/v1", accountAuth());
+// A signed-in browser's changes must come from HANNAH's own pages: an allowed origin, or the origin this server is reached at.
+const sessionOriginAllowed = (origin, req) => {
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    if (url.host === req.get("host")) return true;
+    return process.env.NODE_ENV !== "production" && localDevelopmentHosts.has(url.hostname);
+  } catch {
+    return false;
+  }
+};
+app.use("/api", accountAuth({ originAllowed: sessionOriginAllowed }));
+app.use("/v1", accountAuth({ originAllowed: sessionOriginAllowed }));
 app.use("/api", requireApiToken);
 app.use("/api", tokenUsageMiddleware);
 const rateLimits = rateLimitSettings();

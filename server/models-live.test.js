@@ -131,3 +131,17 @@ test("a configured fallback the provider retired is skipped", async () => {
     delete process.env.GROQ_MODEL_FALLBACKS;
   }
 });
+
+test("the OpenAI-compatible API and A2A never pick or list a retired model", async () => {
+  const list = await (await fetch(`${base}/v1/models`, { headers: operator })).json();
+  const groq = list.data.map((model) => model.id).filter((id) => id.startsWith("groq/"));
+  assert.deepEqual(groq.sort(), ["groq/openai/gpt-oss-120b", "groq/openai/gpt-oss-20b"]);
+  resetServed();
+  calls.length = 0;
+  const chat = await fetch(`${base}/v1/chat/completions`, { method: "POST", headers: operator, body: JSON.stringify({ model: "auto", messages: [{ role: "user", content: "hi" }] }) });
+  assert.equal(chat.status, 200, await chat.clone().text());
+  resetServed();
+  const a2a = await (await fetch(`${base}/api/a2a`, { method: "POST", headers: operator, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "message/send", params: { message: { role: "user", messageId: "m", parts: [{ kind: "text", text: "hi" }] } } }) })).json();
+  assert.ok(a2a.result, JSON.stringify(a2a));
+  for (const model of calls) assert.ok(LIVE.includes(model), `asked Groq for ${model}`);
+});

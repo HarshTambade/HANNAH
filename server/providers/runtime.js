@@ -508,7 +508,7 @@ function isChatModel(id) {
   return typeof id === "string" && Boolean(id.trim()) && !NON_CHAT_MODEL.test(id);
 }
 
-const { rememberServed, servedModels, servedStatus } = require("./served");
+const { knowsServed, rememberServed, servedModels, servedStatus } = require("./served");
 
 async function discoverProviderModels(provider, apiKey, timeoutMs) {
   const fallback = [...new Set([
@@ -555,7 +555,19 @@ async function discoverProviderModels(provider, apiKey, timeoutMs) {
   }
 }
 
+/**
+ * Learn which models a hosted provider serves (kept for 30 minutes, see
+ * served.js) before a model is picked for it, so Auto never picks one the
+ * provider retired. Accepts { provider, apiKey } items; never throws.
+ */
+async function ensureServed(...targets) {
+  await Promise.all(targets.flat()
+    .filter((item) => item?.provider && !item.provider.local && item.provider.id !== "custom" && !knowsServed(item.provider.id))
+    .map((item) => discoverProviderModels(item.provider, item.apiKey, 2_500).catch(() => null)));
+}
+
 module.exports = {
+  ensureServed,
   anthropicUrl,
   isChatModel,
   callProvider,
