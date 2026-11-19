@@ -36,6 +36,12 @@ const { RequestBlockedError, checkUrl, safeRequest } = require("./workflows/http
  * listed: their servers only accept apps they approve in advance (Figma's
  * registration endpoint answered 403 when checked again on 2026-11-19).
  *
+ * Vercel, Intercom and Square register HANNAH only for redirect addresses on
+ * their allowlists (checked from the public site on 2026-11-20: each answered
+ * "redirect URI not in the allowlist"), which in practice means a local
+ * install. They are marked localOnly and left out of the directory a public
+ * site serves, so nobody is shown a Connect button that can't work.
+ *
  * Icons are each vendor's own, downloaded from its website and converted to
  * 128 px PNG (client/public/connectors), so the directory doesn't load
  * anything from 30 other sites. An entry without one shows its initials.
@@ -49,7 +55,7 @@ const CATALOG = [
   { id: "jam", icon: "/connectors/jam.png", name: "Jam", category: "Developer tools", url: "https://mcp.jam.dev/mcp", auth: "oauth", description: "Bug reports with console logs, network requests and repro steps.", docs: "https://jam.dev/docs/debug-a-jam/mcp" },
   { id: "huggingface", icon: "/connectors/huggingface.png", name: "Hugging Face", category: "Developer tools", url: "https://huggingface.co/mcp", auth: "none", description: "Search models, datasets, Spaces and papers on the Hub.", docs: "https://huggingface.co/settings/mcp" },
   // Hosting, cloud and databases
-  { id: "vercel", icon: "/connectors/vercel.png", name: "Vercel", category: "Hosting and cloud", url: "https://mcp.vercel.com", auth: "oauth", description: "Projects, deployments, build logs and Vercel's docs.", docs: "https://vercel.com/docs/mcp/vercel-mcp" },
+  { id: "vercel", localOnly: true, icon: "/connectors/vercel.png", name: "Vercel", category: "Hosting and cloud", url: "https://mcp.vercel.com", auth: "oauth", description: "Projects, deployments, build logs and Vercel's docs.", docs: "https://vercel.com/docs/mcp/vercel-mcp" },
   { id: "netlify", icon: "/connectors/netlify.png", name: "Netlify", category: "Hosting and cloud", url: "https://netlify-mcp.netlify.app/mcp", auth: "oauth", description: "Create, deploy and manage Netlify sites.", docs: "https://docs.netlify.com/build/build-with-ai/netlify-mcp-server/" },
   { id: "cloudflare-bindings", icon: "/connectors/cloudflare.png", name: "Cloudflare Workers", category: "Hosting and cloud", url: "https://bindings.mcp.cloudflare.com/mcp", auth: "oauth", description: "Workers, KV, R2, D1 and other resources in your account.", docs: "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/" },
   { id: "cloudflare-observability", icon: "/connectors/cloudflare.png", name: "Cloudflare Observability", category: "Hosting and cloud", url: "https://observability.mcp.cloudflare.com/mcp", auth: "oauth", description: "Logs and analytics from your Workers.", docs: "https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/" },
@@ -64,11 +70,11 @@ const CATALOG = [
   { id: "monday", icon: "/connectors/monday.png", name: "monday.com", category: "Project management", url: "https://mcp.monday.com/mcp", auth: "oauth", description: "Boards, items and updates.", docs: "https://developer.monday.com/apps/docs/mondaycom-mcp-integration" },
   { id: "fireflies", icon: "/connectors/fireflies.png", name: "Fireflies", category: "Productivity", url: "https://api.fireflies.ai/mcp", auth: "oauth", description: "Meeting transcripts, summaries and action items.", docs: "https://docs.fireflies.ai/getting-started/mcp-configuration" },
   { id: "zapier", icon: "/connectors/zapier.png", name: "Zapier", category: "Automation", url: "https://mcp.zapier.com/api/mcp/mcp", auth: "oauth", description: "Actions in the thousands of apps you've set up in Zapier.", docs: "https://zapier.com/mcp" },
-  { id: "intercom", icon: "/connectors/intercom.png", name: "Intercom", category: "Customer support", url: "https://mcp.intercom.com/mcp", auth: "oauth", description: "Conversations, contacts and help center articles.", docs: "https://developers.intercom.com/docs/guides/mcp" },
+  { id: "intercom", localOnly: true, icon: "/connectors/intercom.png", name: "Intercom", category: "Customer support", url: "https://mcp.intercom.com/mcp", auth: "oauth", description: "Conversations, contacts and help center articles.", docs: "https://developers.intercom.com/docs/guides/mcp" },
   // Payments and commerce
   { id: "stripe", icon: "/connectors/stripe.png", name: "Stripe", category: "Payments", url: "https://mcp.stripe.com", auth: "oauth", description: "Customers, payments, invoices, subscriptions and Stripe's docs.", docs: "https://docs.stripe.com/mcp" },
   { id: "paypal", icon: "/connectors/paypal.png", name: "PayPal", category: "Payments", url: "https://mcp.paypal.com/mcp", auth: "oauth", description: "Invoices, orders, transactions and disputes.", docs: "https://developer.paypal.com/tools/mcp-server/" },
-  { id: "square", icon: "/connectors/square.png", name: "Square", category: "Payments", url: "https://mcp.squareup.com/mcp", auth: "oauth", description: "Payments, orders, catalog, customers and inventory.", docs: "https://developer.squareup.com/docs/mcp" },
+  { id: "square", localOnly: true, icon: "/connectors/square.png", name: "Square", category: "Payments", url: "https://mcp.squareup.com/mcp", auth: "oauth", description: "Payments, orders, catalog, customers and inventory.", docs: "https://developer.squareup.com/docs/mcp" },
   // Design and websites
   { id: "canva", icon: "/connectors/canva.png", name: "Canva", category: "Design", url: "https://mcp.canva.com/mcp", auth: "oauth", description: "Find, create and export designs.", docs: "https://www.canva.dev/docs/mcp/" },
   { id: "webflow", icon: "/connectors/webflow.png", name: "Webflow", category: "Websites", url: "https://mcp.webflow.com/mcp", auth: "oauth", description: "Sites, pages and CMS collections.", docs: "https://developers.webflow.com/mcp/reference/overview" },
@@ -213,9 +219,14 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
     }
   };
 
-  router.get("/connectors/catalog", (_req, res) => {
+  /** A local install (this server reached at localhost) can use the connectors that only accept local redirect addresses. */
+  const isLocal = (req) => {
+    try { return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(publicBaseUrl ? publicBaseUrl(req) : `http://${req.get("host")}`).hostname); } catch { return false; }
+  };
+  router.get("/connectors/catalog", (req, res) => {
     res.setHeader("Cache-Control", "public, max-age=3600");
-    res.json({ connectors: CATALOG });
+    res.setHeader("Vary", "Host");
+    res.json({ connectors: CATALOG.filter((entry) => !entry.localOnly || isLocal(req)).map((entry) => { const shown = { ...entry }; delete shown.localOnly; return shown; }) });
   });
 
   router.post("/connectors/discover", json, handle(async (req, res) => {

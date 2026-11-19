@@ -146,7 +146,7 @@ export default function ConnectorsDirectory() {
       <div className="flex flex-col gap-4 rounded-2xl border border-sky-100 bg-sky-50 p-4 sm:flex-row sm:items-start sm:p-5">
         <ShieldCheck size={17} className="mt-0.5 shrink-0 text-sky-700" />
         <p className="text-xs leading-5 text-slate-600">
-          Each connector is the service's own MCP server, and you connect with your own account. Your tokens stay in this browser; HANNAH's server stores none of them. HANNAH asks you before every action a connector takes. Asana, Box, Figma, HubSpot and Slack aren't listed yet: their servers accept only apps they've approved.
+          Each connector is the service's own MCP server, and you connect with your own account. Your tokens stay in this browser; HANNAH's server stores none of them. HANNAH asks you before every action a connector takes. Asana, Box, Figma, HubSpot and Slack aren't listed: their servers accept only apps they've approved. Vercel, Intercom and Square appear only on a local install, because they register local addresses only.
         </p>
       </div>
 

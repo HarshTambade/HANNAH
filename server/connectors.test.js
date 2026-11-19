@@ -187,8 +187,19 @@ test("redirect URIs must be this site's callback, and internal addresses are ref
 test("the catalog lists only checked vendor servers, each with https, an auth type and docs", async () => {
   const response = await fetch(`${api}/connectors/catalog`);
   const { connectors } = await response.json();
-  assert.equal(connectors.length, CATALOG.length);
-  assert.ok(connectors.length >= 30);
+  // This server is reached at a public address (hannah.example), so the connectors that only register local
+  // redirect addresses are left out; a local install lists all of them.
+  const localOnly = CATALOG.filter((entry) => entry.localOnly).map((entry) => entry.id).sort();
+  assert.deepEqual(localOnly, ["intercom", "square", "vercel"]);
+  assert.equal(connectors.length, CATALOG.length - localOnly.length);
+  assert.ok(connectors.length >= 28);
+  assert.ok(connectors.every((entry) => !localOnly.includes(entry.id) && !("localOnly" in entry)));
+  const local = express();
+  local.use("/api", createConnectorsRouter({ publicBaseUrl: () => "http://localhost:3001" }));
+  const localServer = http.createServer(local);
+  localServer.listen(0, "127.0.0.1");
+  await once(localServer, "listening");
+  try { assert.equal((await (await fetch(`http://127.0.0.1:${localServer.address().port}/api/connectors/catalog`)).json()).connectors.length, CATALOG.length); } finally { localServer.close(); }
   const ids = new Set();
   for (const entry of connectors) {
     assert.ok(!ids.has(entry.id), `unique id ${entry.id}`);
