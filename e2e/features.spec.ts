@@ -178,7 +178,7 @@ test("the Integrations guide covers every integration with readable examples", a
     await expect(page.getByRole("heading", { level: 2, name, exact: true })).toBeVisible();
   }
   // The remote MCP example was once white text on a white card.
-  const remote = page.locator("pre", { hasText: "Bearer <MCP_API_TOKEN>" });
+  const remote = page.locator("pre", { hasText: "Bearer <hk_ developer key>" });
   const colors = await remote.evaluate((element) => ({ text: getComputedStyle(element).color, background: getComputedStyle(element.parentElement!).backgroundColor }));
   expect(colors.text).not.toBe(colors.background);
   expect(colors.background).toBe("rgb(2, 6, 23)");
@@ -520,4 +520,42 @@ test("with no database, Settings → Account sets HANNAH up on Vercel and Supaba
   // The other ways are still there.
   await page.getByText("Other ways to connect a database (for the server's operator)").click();
   await expect(page.getByRole("link", { name: /Vercel's Supabase integration/ })).toHaveAttribute("href", "https://vercel.com/marketplace/supabase");
+});
+
+test("the Integrations page tests each integration with the visitor's credential and shows what answered", async ({ page }) => {
+  const key = "gsk_e2eIntegrationsKey0123456789abcdefghij";
+  const seen: Record<string, string | undefined> = {};
+  await page.route(/\/(api|v1|mcp)(\/|$)/, async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    seen[path] = request.headers()["x-groq-api-key"];
+    if (path === "/api/health") return route.fulfill({ json: { status: "ok", provider: "Groq", ready: true } });
+    if (path === "/api/models") return route.fulfill({ json: { provider: "Groq", defaultModel: "openai/gpt-oss-120b", models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b"] } });
+    if (path === "/v1/models") return route.fulfill({ json: { object: "list", data: [{ id: "hannah-auto" }, { id: "groq/openai/gpt-oss-120b" }] } });
+    if (path === "/v1/chat/completions") return route.fulfill({ json: { model: "groq/openai/gpt-oss-20b", choices: [{ message: { role: "assistant", content: "ready" }, finish_reason: "stop" }] } });
+    if (path === "/mcp") {
+      const body = request.postDataJSON();
+      const result = body.method === "tools/list" ? { tools: [{ name: "hannah_chat" }, { name: "hannah_status" }, { name: "hannah_models" }] } : { protocolVersion: "2025-06-18" };
+      return route.fulfill({ contentType: "text/event-stream", body: `event: message\ndata: ${JSON.stringify({ jsonrpc: "2.0", id: body.id, result })}\n\n` });
+    }
+    if (path === "/api/a2a/agent-card") return route.fulfill({ json: { name: "HANNAH", url: "https://hannah.example/api/a2a", protocolVersion: "0.3.0", skills: [{ id: "chat" }] } });
+    return route.fulfill({ status: 404, json: {} });
+  });
+  await page.addInitScript((value) => sessionStorage.setItem("hannah.session.groqKey", value), key);
+  await page.goto("/integrations");
+  const check = page.locator("#live-check");
+  await check.getByRole("button", { name: "Run the checks" }).click();
+  await expect(check.locator('[data-check="webhooks"]')).toHaveAttribute("data-outcome", "skipped");
+  for (const id of ["server", "credential", "openai", "chat", "mcp", "a2a"]) await expect(check.locator(`[data-check="${id}"]`), id).toHaveAttribute("data-outcome", "ok");
+  await expect(check.locator('[data-check="chat"]')).toContainText("“ready” from groq/openai/gpt-oss-20b");
+  await expect(check.locator('[data-check="mcp"]')).toContainText("3 tools: hannah_chat, hannah_status, hannah_models");
+  // The visitor's own key went with each protected check.
+  for (const path of ["/api/models", "/v1/models", "/v1/chat/completions", "/mcp"]) expect(seen[path], path).toBe(key);
+
+  // A failing integration says so, with the server's own words.
+  await page.unroute(/\/(api|v1|mcp)(\/|$)/);
+  await page.route(/\/(api|v1|mcp)(\/|$)/, (route) => route.fulfill({ status: 503, json: { error: "The provider is down." } }));
+  await check.getByRole("button", { name: "Run the checks" }).click();
+  await expect(check.locator('[data-check="openai"]')).toHaveAttribute("data-outcome", "failed");
+  await expect(check.locator('[data-check="openai"]')).toContainText("The provider is down.");
 });

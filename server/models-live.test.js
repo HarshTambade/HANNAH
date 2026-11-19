@@ -18,6 +18,8 @@ delete process.env.GROQ_MODEL_FALLBACKS;
 const LIVE = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "whisper-large-v3-turbo", "meta-llama/llama-prompt-guard-2-86m", "canopylabs/orpheus-v1-english"];
 const calls = [];
 const busy = new Set();
+// Models that spend the whole token limit before writing anything (reasoning models with a small max_tokens).
+const cutShort = new Set();
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -26,6 +28,7 @@ globalThis.fetch = async (input, init = {}) => {
   const body = JSON.parse(init.body || "{}");
   calls.push(body.model);
   if (busy.has(body.model)) return new Response(JSON.stringify({ error: { message: "Rate limit reached", code: "rate_limit_exceeded" } }), { status: 429, headers: { "content-type": "application/json", "retry-after": "2" } });
+  if (cutShort.has(body.model)) return new Response(JSON.stringify({ model: body.model, choices: [{ message: { role: "assistant", content: "" }, finish_reason: "length" }], usage: { prompt_tokens: 10, completion_tokens: 24 } }), { status: 200, headers: { "content-type": "application/json" } });
   if (!LIVE.includes(body.model)) return new Response(JSON.stringify({ error: { message: `The model ${body.model} does not exist`, code: "model_not_found" } }), { status: 404, headers: { "content-type": "application/json" } });
   return new Response(JSON.stringify({ model: body.model, choices: [{ message: { role: "assistant", content: JSON.stringify({ reply: `from ${body.model}`, emotion: "neutral" }) } }], usage: { prompt_tokens: 5, completion_tokens: 3 } }), { status: 200, headers: { "content-type": "application/json" } });
 };
@@ -50,6 +53,7 @@ after(() => {
 beforeEach(() => {
   calls.length = 0;
   busy.clear();
+  cutShort.clear();
   resetServed();
 });
 
@@ -144,4 +148,14 @@ test("the OpenAI-compatible API and A2A never pick or list a retired model", asy
   const a2a = await (await fetch(`${base}/api/a2a`, { method: "POST", headers: operator, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "message/send", params: { message: { role: "user", messageId: "m", parts: [{ kind: "text", text: "hi" }] } } }) })).json();
   assert.ok(a2a.result, JSON.stringify(a2a));
   for (const model of calls) assert.ok(LIVE.includes(model), `asked Groq for ${model}`);
+});
+
+test("a reply the token limit cut off says so on the OpenAI-compatible API", async () => {
+  cutShort.add("openai/gpt-oss-20b");
+  const send = async (model) => (await fetch(`${base}/v1/chat/completions`, { method: "POST", headers: operator, body: JSON.stringify({ model, max_tokens: 24, messages: [{ role: "user", content: "hi" }] }) })).json();
+  const short = await send("groq/openai/gpt-oss-20b");
+  assert.equal(short.choices[0].finish_reason, "length");
+  assert.equal(short.choices[0].message.content, "");
+  const whole = await send("groq/openai/gpt-oss-120b");
+  assert.equal(whole.choices[0].finish_reason, "stop");
 });

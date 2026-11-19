@@ -341,8 +341,10 @@ async function callProviderMeasured({ provider, apiKey, model, messages, tools, 
   if (!message || (typeof message.content !== "string" && !Array.isArray(message.tool_calls))) {
     throw new Error("The provider returned neither a reply nor a tool request.");
   }
+  // "length": the token limit ended the reply (a reasoning model can spend a small limit before writing anything).
+  const finishReason = data.choices?.[0]?.finish_reason === "length" ? "length" : undefined;
   return {
-    message: normalizeOpenAiMessage(message),
+    message: { ...normalizeOpenAiMessage(message), ...(finishReason ? { finishReason } : {}) },
     usage: extractUsage(provider.kind, data),
     ...timing(),
   };

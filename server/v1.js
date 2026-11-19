@@ -253,7 +253,7 @@ function createV1Router({ getRequestProvider, allowedProviderIds = () => null, u
         object: "chat.completion",
         created,
         model: publicModel(message.providerId, usedModel),
-        choices: [{ index: 0, message: { role: "assistant", content: calls.length && !message.content ? null : message.content, ...(calls.length ? { tool_calls: calls } : {}) }, finish_reason: calls.length ? "tool_calls" : "stop" }],
+        choices: [{ index: 0, message: { role: "assistant", content: calls.length && !message.content ? null : message.content, ...(calls.length ? { tool_calls: calls } : {}) }, finish_reason: calls.length ? "tool_calls" : message.finishReason === "length" ? "length" : "stop" }],
         usage: { prompt_tokens: message.usage?.promptTokens ?? null, completion_tokens: message.usage?.completionTokens ?? null, total_tokens: message.usage?.totalTokens ?? null },
         hannah: { provider: message.providerLabel, toolMode: message.toolMode, ...(routing ? { routing } : {}), budget: gateway.budgetStatus(credentialId, callerBudget) },
       });

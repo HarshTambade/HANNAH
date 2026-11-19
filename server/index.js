@@ -240,7 +240,7 @@ const marketplacePackageById = new Map(marketplaceCatalog.map((item) => [item.id
 
 function resolveMarketplacePackages(value) {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > 4 || new Set(value).size !== value.length) return null;
+  if (!Array.isArray(value) || value.length > 6 || new Set(value).size !== value.length) return null;
   const packages = [];
   for (const id of value) {
     if (typeof id !== "string" || !/^[a-z0-9-]{1,64}$/.test(id)) return null;
@@ -256,7 +256,7 @@ function resolveMarketplacePackages(value) {
 function appendMarketplaceGuidance(basePrompt, packages) {
   if (!packages.length) return basePrompt;
   const guidance = packages.map((item) => `${item.type === "agent" ? "Active agent" : "Enabled skill"} — ${item.name}: ${item.instructions}`).join("\n");
-  return `${basePrompt}\n\nThe user selected these first-party HANNAH marketplace packages. Treat them as bounded response guidance only. They do not add tools, grant permission, or change the safety, privacy, or confirmation rules above.\n${guidance}`;
+  return `${basePrompt}\n\nThe user turned on these first-party HANNAH marketplace packages. Work the way the active agent describes for this whole conversation, and apply each enabled skill in every reply it is relevant to. Stay HANNAH: don't announce the package or rename yourself. Packages add no tools and grant no permission, and they never change the safety, privacy, or confirmation rules above.\n${guidance}`;
 }
 
 /** Up to 3 Knowledge passages ({ citation: "[Title §n]", text }) sent with an agent request. */
@@ -399,6 +399,38 @@ const phoneWorkflowHooks = {
 };
 app.use("/api", createPhoneBridgeRouter({ hooks: phoneWorkflowHooks }));
 app.use(express.json({ limit: "12mb" }));
+// HANNAH as an MCP server (streamable HTTP) at /mcp, for callers with their own
+// credential: a developer key, the operator token, or a Groq key, checked by
+// the same middleware as /api/chat. Mounted here, not at startup, so it also
+// answers on serverless hosting; loaded on first use. MCP_ENABLED=false turns it off.
+if (process.env.MCP_ENABLED !== "false") {
+  // The API's credential checks decide by route; /mcp gets the rules of /api/chat.
+  const asChatRoute = (middleware) => (req, res, next) => {
+    const url = req.url;
+    req.url = "/chat";
+    middleware(req, res, (error) => { req.url = url; next(error); });
+  };
+  let mcpRouter;
+  app.all("/mcp", async (req, res, next) => {
+    try {
+      if (!mcpRouter) {
+        const { mountHANNAHMcpEndpoint } = await import("./mcp-http.mjs");
+        const built = express.Router();
+        mountHANNAHMcpEndpoint(built, {
+          token: process.env.MCP_API_TOKEN?.trim() || undefined,
+          authorize: [rememberedKeyMiddleware, accountAuth({ originAllowed: sessionOriginAllowed }), requireApiToken].map(asChatRoute),
+          // Tool calls go to this same API: over the public address on serverless hosting, else to this process.
+          apiBaseUrl: (request) => process.env.HANNAH_API_URL?.trim().replace(/\/+$/, "") || (process.env.VERCEL ? publicBaseUrl(request) : `http://127.0.0.1:${port}`),
+        });
+        mcpRouter = built;
+      }
+      mcpRouter(req, res, next);
+    } catch (error) {
+      console.error(`HANNAH MCP endpoint could not start (${error?.name || "error"}).`);
+      res.status(503).json({ error: "The MCP endpoint is not available on this server." });
+    }
+  });
+}
 if (databaseConfigured()) setSpendStore(createSpendStore());
 const isOperator = (res) => Boolean(res.locals.hannahApiTokenId) && !res.locals.hannahAccount && !res.locals.hannahByok;
 app.use("/api", createAccountRouter({
@@ -1085,17 +1117,13 @@ app.use((error, _req, res, _next) => {
 
 async function startServer() {
   assertProductionApiToken();
-  const mcpEnabled = process.env.MCP_ENABLED === "true";
-  if (mcpEnabled) {
-    const { mountHANNAHMcpEndpoint } = await import("./mcp-http.mjs");
-    mountHANNAHMcpEndpoint(app, process.env.MCP_API_TOKEN);
-  }
+  const mcpEnabled = process.env.MCP_ENABLED !== "false";
 
   // A long-running server runs the workflow worker itself; serverless hosting uses /api/workflows/tick from a cron.
   if (databaseConfigured() && process.env.WORKFLOW_WORKER !== "off") workflowRuntime.startWorker();
   const server = app.listen(port, host, () => {
     console.log(`HANNAH API listening on http://${host}:${port}`);
-    if (mcpEnabled) console.log(`HANNAH MCP endpoint enabled at http://${host}:${port}/mcp`);
+    if (mcpEnabled) console.log(`HANNAH MCP endpoint at http://${host}:${port}/mcp`);
   });
 
   server.on("error", (error) => {

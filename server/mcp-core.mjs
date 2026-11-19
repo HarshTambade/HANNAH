@@ -6,27 +6,35 @@ import * as z from "zod/v4";
 
 dotenv.config({ path: join(dirname(fileURLToPath(import.meta.url)), ".env") });
 
-const apiBaseUrl = (process.env.HANNAH_API_URL || `http://127.0.0.1:${process.env.PORT || "3001"}`)
+const defaultApiBaseUrl = (process.env.HANNAH_API_URL || `http://127.0.0.1:${process.env.PORT || "3001"}`)
   .trim()
   .replace(/\/+$/, "");
 const emotions = ["happy", "sad", "angry", "neutral", "surprised", "thinking"];
 
-async function requestApi(path, options = {}) {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      ...(process.env.HANNAH_API_TOKEN ? { Authorization: "Bearer " + process.env.HANNAH_API_TOKEN.trim() } : {}),
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers,
-    },
-    signal: AbortSignal.timeout(120_000),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(typeof data.error === "string" ? data.error : `HANNAH API returned HTTP ${response.status}.`);
-  }
-  return data;
+/**
+ * Calls to HANNAH's own API. The stdio server uses HANNAH_API_TOKEN from its
+ * environment; the remote endpoint passes the caller's own credential
+ * (`headers`) and the address the API answers at (`apiBaseUrl`).
+ */
+function apiClient({ apiBaseUrl = defaultApiBaseUrl, headers } = {}) {
+  const credential = headers || (process.env.HANNAH_API_TOKEN ? { Authorization: "Bearer " + process.env.HANNAH_API_TOKEN.trim() } : {});
+  return async function requestApi(path, options = {}) {
+    const response = await fetch(`${apiBaseUrl}${path}`, {
+      ...options,
+      headers: {
+        Accept: "application/json",
+        ...credential,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...options.headers,
+      },
+      signal: AbortSignal.timeout(120_000),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(typeof data.error === "string" ? data.error : `HANNAH API returned HTTP ${response.status}.`);
+    }
+    return data;
+  };
 }
 
 function toolError(error) {
@@ -36,7 +44,8 @@ function toolError(error) {
   };
 }
 
-export function createHANNAHMcpServer() {
+export function createHANNAHMcpServer(options = {}) {
+  const requestApi = apiClient(options);
   const server = new McpServer({
     name: "hannah",
     version: "1.0.0",

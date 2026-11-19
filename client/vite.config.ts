@@ -106,6 +106,8 @@ export default defineConfig(({ mode }) => ({
     proxy: {
       "/api": "http://localhost:3001",
       "/v1": "http://localhost:3001",
+      "/mcp": "http://localhost:3001",
+      "/.well-known/agent-card.json": "http://localhost:3001",
     },
   },
 }));

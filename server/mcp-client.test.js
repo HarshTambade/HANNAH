@@ -23,7 +23,7 @@ before(async () => {
   const { mountHANNAHMcpEndpoint } = await import("./mcp-http.mjs");
   const remote = express();
   remote.use(express.json());
-  mountHANNAHMcpEndpoint(remote, MCP_TOKEN);
+  mountHANNAHMcpEndpoint(remote, { token: MCP_TOKEN });
   mcpServer = remote.listen(0, "127.0.0.1");
   await once(mcpServer, "listening");
   process.env.HANNAH_MCP_SERVERS = JSON.stringify([
@@ -72,4 +72,23 @@ test("unknown servers and tools are refused", async () => {
 test("MCP routes need the operator token", async () => {
   const visitor = await fetch(`${baseUrl}/api/mcp/servers`, { headers: { "X-Groq-API-Key": "gsk_visitorkey0123456789abcdefgh" } });
   assert.equal(visitor.status, 401);
+});
+
+test("the built-in /mcp endpoint takes the caller's own credential, and refuses none or a wrong one", async () => {
+  const { McpHttpClient } = require("./mcp-client");
+  const url = `${baseUrl}/mcp`;
+  const none = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(none.status, 401);
+  const wrong = new McpHttpClient({ id: "w", name: "wrong", url, headers: { Authorization: `Bearer ${"x".repeat(48)}` } });
+  await assert.rejects(() => wrong.listTools(), (error) => error.status === 401);
+
+  const client = new McpHttpClient({ id: "own", name: "HANNAH", url, headers: { Authorization: operator.Authorization } });
+  const tools = await client.listTools();
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ["hannah_chat", "hannah_models", "hannah_status"]);
+  const status = await client.callTool("hannah_status", {});
+  assert.equal(status.isError, false);
+  assert.equal(status.structured.status, "ok");
+  // The standalone mount still accepts only its dedicated token.
+  const remote = new McpHttpClient({ id: "r", name: "remote", url: `http://127.0.0.1:${mcpServer.address().port}/mcp`, headers: { Authorization: operator.Authorization } });
+  await assert.rejects(() => remote.listTools(), (error) => error.status === 401);
 });

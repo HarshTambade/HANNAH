@@ -9,6 +9,7 @@ import { pathForScreen } from "../routes";
 import DatabaseIntegration from "./DatabaseIntegration";
 import McpServersCard from "./McpServersCard";
 import { copyText } from "../services/clipboard";
+import IntegrationCheck from "./IntegrationCheck";
 
 type IntegrationsPageProps = { onBack: () => void };
 
@@ -51,7 +52,7 @@ const remoteMcpConfig = JSON.stringify({
   mcpServers: {
     hannah: {
       url: mcpEndpoint,
-      headers: { Authorization: "Bearer <MCP_API_TOKEN>" },
+      headers: { Authorization: "Bearer <hk_ developer key>" },
     },
   },
 }, null, 2);
@@ -219,7 +220,7 @@ const credentials: Array<{ name: string; header: string; access: Access; use: st
   { name: "Your Groq key", header: "X-Groq-API-Key: gsk_…", access: "byok", use: "Chat, agents, models, voice, /v1 and A2A. No account or server token needed. Rate limits are counted per key.", where: "console.groq.com" },
   { name: "Developer API key", header: "Authorization: Bearer hk_…", access: "account", use: "The same routes, using the provider keys saved in your account. Best for scripts, SDKs and other agents.", where: "Settings → Account → Developer API keys" },
   { name: "Operator token", header: "Authorization: Bearer <HANNAH_API_TOKEN>", access: "operator", use: "Every route, including desktop control, calls, feedback, sync and tools from outside MCP servers. Only for whoever runs the server.", where: "server/.env (32–512 characters)" },
-  { name: "MCP token", header: "Authorization: Bearer <MCP_API_TOKEN>", access: "operator", use: "Only the /mcp endpoint, for remote MCP hosts. Separate from the API token, so it can be replaced on its own.", where: "server/.env (32+ characters)" },
+  { name: "MCP token (optional)", header: "Authorization: Bearer <MCP_API_TOKEN>", access: "operator", use: "An extra credential for the /mcp endpoint only, acting as the operator. Remote MCP hosts can also use a developer key or a Groq key, so most setups don't need it.", where: "server/.env (32+ characters)" },
 ];
 
 const mcpTools = [
@@ -260,8 +261,8 @@ const envVars = [
     { name: "OLLAMA_BASE_URL", detail: "Ollama endpoint. Plain HTTP is allowed only on loopback." },
   ] },
   { group: "MCP", items: [
-    { name: "MCP_ENABLED", detail: "true mounts the streamable HTTP MCP endpoint at /mcp." },
-    { name: "MCP_API_TOKEN", detail: "Bearer token remote MCP hosts must send. 32+ characters; /mcp won't start without it." },
+    { name: "MCP_ENABLED", detail: "The streamable HTTP MCP endpoint at /mcp is on by default; false turns it off." },
+    { name: "MCP_API_TOKEN", detail: "Optional extra Bearer token for /mcp that acts as the operator. 32+ characters." },
     { name: "HANNAH_API_URL", detail: "API base the MCP server calls. Defaults to http://127.0.0.1:$PORT." },
     { name: "HANNAH_MCP_SERVERS", detail: "JSON list of outside MCP servers whose tools HANNAH may use." },
   ] },
@@ -300,7 +301,7 @@ const errors = [
 
 const troubleshooting = [
   { title: "No HANNAH tools appear in my MCP host", body: "Check that the host supports MCP, that the path to server/mcp-stdio.mjs is absolute, and that the API server is running at HANNAH_API_URL. Restart the host after editing its config." },
-  { title: "hannah_status works but hannah_chat returns 401", body: "Set HANNAH_API_TOKEN in the MCP server's env block to the operator token or an hk_ developer key. Remote hosts send MCP_API_TOKEN instead." },
+  { title: "hannah_status works but hannah_chat returns 401", body: "Set HANNAH_API_TOKEN in the MCP server's env block to the operator token or an hk_ developer key. Remote hosts send the same key as a Bearer token to /mcp." },
   { title: "The OpenAI SDK gets 401 with my Groq key", body: "SDKs send their key as a Bearer token, and Bearer accepts only hk_ developer keys or the operator token. Use an hk_ key, or send the Groq key in an X-Groq-API-Key header with no Authorization header." },
   { title: "Empty replies or 502", body: "Run hannah_status or GET /api/health to see whether the provider is ready, and check the model ID with /api/models." },
   { title: "Context too large", body: "Keep the MCP prompt plus history under 16,000 characters. /api/chat accepts at most 40 messages of 4,000 characters each." },
@@ -308,6 +309,7 @@ const troubleshooting = [
 ];
 
 const sections = [
+  { id: "live-check", label: "Test this server" },
   { id: "overview", label: "Overview" },
   { id: "authentication", label: "Authentication" },
   { id: "rest-api", label: "REST API" },
@@ -414,7 +416,7 @@ function SectionHeader({ icon: Icon, eyebrow, title, children }: { icon: typeof 
 
 export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
   const [copied, setCopied] = useState("");
-  const [active, setActive] = useState<SectionId>("overview");
+  const [active, setActive] = useState<SectionId>("live-check");
   const scroller = useRef<HTMLElement>(null);
 
   const copy = async (value: string, key: string) => {
@@ -507,6 +509,7 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
           </aside>
 
           <div className="min-w-0 space-y-6">
+            <IntegrationCheck serverRoot={serverRoot} settingsHref={settingsHref} />
             <section id="overview" className={card} aria-labelledby="overview-title">
               <h2 id="overview-title" className="font-['Manrope'] text-xl font-semibold text-ink">Choose an integration</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Everything goes through the same HANNAH server, with the same credentials, rate limits and daily budget. No integration gives an outside app HANNAH's device tools, files or desktop control.</p>
@@ -620,7 +623,7 @@ export default function IntegrationsPage({ onBack }: IntegrationsPageProps) {
               <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
                 <p className="flex items-center gap-2 text-sm font-semibold text-amber-900"><ShieldCheck size={15} /> Remote MCP endpoint</p>
                 <p className="mt-2 break-all font-mono text-[13px] text-ink">{mcpEndpoint}</p>
-                <p className="mt-2 text-[13px] leading-6 text-amber-950">On the server, set <C>MCP_ENABLED=true</C> and an <C>MCP_API_TOKEN</C> of 32 or more characters, then restart. The endpoint stays off until both are set. Keep the token in your host's secret settings, never in this app or in browser code.</p>
+                <p className="mt-2 text-[13px] leading-6 text-amber-950">Send the credential you already have: an <C>hk_</C> developer key or the operator token as a Bearer token, or your Groq key in <C>X-Groq-API-Key</C>. Each tool call runs with that credential's limits and budget. Keep the key in your host's secret settings, never in browser code. Operators can turn the endpoint off with <C>MCP_ENABLED=false</C>. “Test this server now” at the top of this page checks it.</p>
               </div>
               <CodeBlock label="Remote MCP host" code={remoteMcpConfig} id="mcp-remote" {...codeProps} />
             </section>
