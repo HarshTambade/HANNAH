@@ -149,6 +149,17 @@ type Endpoint = { method: Method; path: string; access: Access; description: str
 
 const endpointGroups: Array<{ title: string; items: Endpoint[] }> = [
   {
+    title: "Research and documents",
+    items: [
+      { method: "POST", path: "/api/research", access: "byok", description: "Research a question: searches, reads the pages and returns an answer with checked citations and its sources. Streams each step as server-sent events." },
+      { method: "POST", path: "/api/documents/compose", access: "byok", description: "Write a PowerPoint, PDF, Word or Excel file from a request in plain words, optionally from research, uploaded files or a conversation. Streams its steps; files come back as base64." },
+      { method: "POST", path: "/api/documents/create", access: "byok", description: "Render a ready document or workbook description into validated files. No model call." },
+      { method: "POST", path: "/api/documents/read", access: "byok", description: "Read a PDF, Word, PowerPoint, Excel, CSV, text or JSON file into text and tables, with how much of it was read." },
+      { method: "POST", path: "/api/documents/convert", access: "byok", description: "The content of a file in another format (pptx, pdf, docx, xlsx)." },
+      { method: "GET", path: "/api/account/documents", access: "account", description: "Files made while signed in. Download, keep or delete each by id." },
+    ],
+  },
+  {
     title: "Status and discovery",
     items: [
       { method: "GET", path: "/api/health", access: "public", description: "Whether the API is up and the default cloud provider is ready." },
@@ -227,6 +238,8 @@ const mcpTools = [
   { name: "hannah_chat", input: "prompt (1–4,000 chars), history (up to 12 turns, 2,000 chars each), mode: cloud | ollama, model (optional)", output: "reply, emotion (happy, sad, angry, neutral, surprised, thinking)", note: "Calls the configured AI provider and may incur provider usage. Prompt plus history must stay under 16,000 characters." },
   { name: "hannah_status", input: "none", output: "status, provider, ready", note: "Reads /api/health. Never returns keys." },
   { name: "hannah_models", input: "none", output: "provider, defaultModel, models[]", note: "Lists configured model IDs only." },
+  { name: "hannah_research", input: "question (3–2,000 chars), mode: quick | latest | deep | academic | compare", output: "answer with [n] citations, sources[], couldNotRead[], unconfirmed[], methodology[]", note: "Searches and reads the web; citations are checked against what was read. Can take a few minutes." },
+  { name: "hannah_create_document", input: "request, format: pptx | pdf | docx | xlsx, material (optional text to write from)", output: "name, format, bytes, summary, checks[], and the file as an embedded resource", note: "The file is validated before it is returned." },
 ];
 
 const mcpHosts = [

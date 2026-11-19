@@ -9,4 +9,6 @@ export type ChatMessage = {
   content: string;
   /** Stable id for content reporting and list keys. */
   id?: string;
+  /** What the Studio produced for this reply: research (by id, in this device's history) and files (by id, in this device's files). */
+  studio?: { researchId?: string; fileIds?: string[] };
 };

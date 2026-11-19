@@ -14,9 +14,9 @@ export type TaskType = "quick_chat" | "code_generation" | "system_operation" | "
 export const defaultAgentProfiles: Record<string, AgentProfile> = {
   default: { name: "default", modelTier: "low-cost cloud", allowedTools: "all", maxIterations: 8, timeoutMs: 30000 },
   chat: { name: "chat", modelTier: "low-cost cloud", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
-  code: { name: "code", modelTier: "high-capability cloud", allowedTools: ["list_app_files", "read_app_file", "write_app_file"], maxIterations: 12, timeoutMs: 60000 },
+  code: { name: "code", modelTier: "high-capability cloud", allowedTools: ["list_app_files", "read_app_file", "write_app_file", "research", "create_document", "read_attached_files"], maxIterations: 12, timeoutMs: 60000 },
   system: { name: "system", modelTier: "low-cost cloud", allowedTools: ["get_device_status", "get_battery_status", "open_app", "toggle_setting", "list_app_files", "read_app_file", "write_app_file", "delete_app_file", "create_reminder", "list_reminders", "cancel_reminder", "search_memories", "save_memory"], maxIterations: 6, timeoutMs: 30000 },
-  research: { name: "research", modelTier: "high-capability cloud", allowedTools: ["knowledge_search", "knowledge_documents", "list_app_files", "read_app_file", "web_search", "web_read"], maxIterations: 10, timeoutMs: 90000 },
+  research: { name: "research", modelTier: "high-capability cloud", allowedTools: ["research", "create_document", "read_attached_files", "convert_file", "knowledge_search", "knowledge_documents", "list_app_files", "read_app_file", "web_search", "web_read"], maxIterations: 10, timeoutMs: 90000 },
   maintenance: { name: "maintenance", modelTier: "local", allowedTools: [], maxIterations: 4, timeoutMs: 20000 },
 };
 
@@ -47,6 +47,7 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /remind|reminder|alarm|later|tomorrow|tonight|\bat \d/i, tools: /^(create_reminder|list_reminders|cancel_reminder)$/ },
   { match: /remember|memory|memories|forget|my (favou?rite|preference)/i, tools: /^(search_memories|save_memory)$/ },
   { match: /knowledge|document|uploaded|my notes/i, tools: /^knowledge_/ },
+  { match: /attach|upload|this (file|pdf|document|sheet|spreadsheet|deck|csv|image|picture)|the (file|pdf|csv|spreadsheet)|\bconvert\b|\.(pdf|docx|pptx|xlsx|csv)\b/i, tools: /^(read_attached_files|convert_file)$/ },
   { match: /briefing|weather|agenda|my day/i, tools: /^daily_briefing$/ },
   { match: /workflow|automat/i, tools: /^(create_workflow_draft|list_workflows)$/ },
   { match: /battery|device|setting|wi-?fi|bluetooth|volume|brightness/i, tools: /^(get_device_status|get_battery_status|toggle_setting)$/ },
@@ -54,7 +55,8 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /google chat|\bchat\b|\bspaces?\b|team chat|channel/i, tools: /^gchat_/ },
 ];
 // web_search is always kept, so "can you check…" never finds HANNAH without a way to look.
-export const CORE_TOOLS = ["search_memories", "save_memory", "create_reminder", "web_search"];
+// research and create_document are HANNAH's shared platform services (services/Studio.ts): every agent has them.
+export const CORE_TOOLS = ["search_memories", "save_memory", "create_reminder", "web_search", "research", "create_document"];
 
 /**
  * Keep a request within the server's tool limit by choosing the tools it

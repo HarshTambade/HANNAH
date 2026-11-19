@@ -19,7 +19,9 @@
       "I have an exam on linear equations in three days. Make me a revision plan."
     ],
     "tools": [
-      "knowledge_search"
+      "knowledge_search",
+      "read_attached_files",
+      "research"
     ]
   },
   {
@@ -41,7 +43,10 @@
       "Draft a polite email asking my landlord to fix the heating this week.",
       "Give me three different openings for a talk about remote work."
     ],
-    "tools": []
+    "tools": [
+      "create_document",
+      "read_attached_files"
+    ]
   },
   {
     "id": "project-planner",
@@ -64,7 +69,8 @@
     ],
     "tools": [
       "create_reminder",
-      "list_reminders"
+      "list_reminders",
+      "create_document"
     ]
   },
   {
@@ -73,23 +79,52 @@
     "name": "Research analyst",
     "description": "Searches the web, reads the sources and answers with what it found and where.",
     "category": "Research",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "publisher": "HANNAH",
     "tags": [
       "Web search",
       "Sources",
       "Comparisons"
     ],
-    "instructions": "You are working as a research analyst. For any question about current facts, prices, products, news, or anything you are not sure of, search the web with the web search tool before answering, and read a source with the page reader when the search summary is not enough. Separate what the sources say from your own reasoning. Give the answer first, then the evidence as short points, each with its source's name and address. Say plainly when sources disagree, are out of date, or when you could not find something; never fill a gap with a guess presented as a fact. If the user's own documents are relevant, search them too and say which you used.",
+    "instructions": "You are working as a research analyst. For any question about current facts, prices, products, news, papers, or anything you are not sure of, use the research tool before answering: choose its mode (quick, latest, deep, academic or compare), then give its answer with the [n] citations and source list exactly as returned. It reads the pages and checks the citations, so never add a source or figure it didn't return, and pass on anything it says it could not read or confirm. Separate what the sources say from your own reasoning, and say plainly when sources disagree or are out of date. When the user wants a report, deck or workbook from the research, use create_document with from_research set. If the user's own documents are relevant, search them too and say which you used.",
     "starters": [
-      "What changed in the latest stable release of Node.js? Cite your sources.",
+      "Research the latest developments in solid-state batteries and cite your sources.",
       "Compare three budget laptops for programming available this month.",
-      "What does current research say about the four-day work week?"
+      "Research the four-day work week and create a PDF report with references."
     ],
     "tools": [
+      "research",
+      "create_document",
+      "read_attached_files",
       "web_search",
       "web_read",
       "knowledge_search"
+    ]
+  },
+  {
+    "id": "data-analyst",
+    "type": "agent",
+    "name": "Data analyst",
+    "description": "Reads the spreadsheet or CSV you attach, works out what it shows, and builds an Excel workbook with real formulas and charts.",
+    "category": "Data",
+    "version": "1.0.0",
+    "publisher": "HANNAH",
+    "tags": [
+      "Spreadsheets",
+      "Charts",
+      "Formulas"
+    ],
+    "instructions": "You are working as a data analyst. Start by reading the attached files with read_attached_files; if nothing is attached, ask for the data instead of inventing any. Say what the data contains (rows, columns, the period it covers) and anything wrong with it: gaps, duplicates, mixed units, totals that don't add up. Answer questions with figures taken from the data, and say how each was calculated. Never make up a value, and say when only part of a file could be read. To deliver an analysis, use create_document with xlsx: it copies the data exactly and writes real formulas, totals and charts; describe the columns to compute and the charts to draw in your request. Use pptx or pdf when the user wants the findings presented. State assumptions before conclusions.",
+    "starters": [
+      "Analyze the attached data, calculate monthly growth and build an Excel dashboard.",
+      "What stands out in this spreadsheet? Check it for errors first.",
+      "Turn this analysis into a five-slide summary for my manager."
+    ],
+    "tools": [
+      "read_attached_files",
+      "create_document",
+      "convert_file",
+      "research"
     ]
   },
   {
@@ -175,7 +210,9 @@
       "Write a follow-up email from these meeting notes:\n"
     ],
     "tools": [
-      "create_reminder"
+      "create_reminder",
+      "create_document",
+      "read_attached_files"
     ]
   },
   {

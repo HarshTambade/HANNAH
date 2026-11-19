@@ -13,6 +13,7 @@ import { getDesktopFileTools } from "./DesktopFiles";
 import { getDesktopActionTools } from "./DesktopActions";
 import { getBrowserTools } from "./BrowserTools";
 import { getWebTools } from "./WebTools";
+import { getStudioTools } from "./Studio";
 import { checkNumber } from "./PhoneBridge";
 import { getPhoneTools } from "./PhoneTools";
 import { getConnectionTools } from "./Connections";
@@ -349,7 +350,8 @@ export function setExternalTools(tools: HANNAHTool[], source = "mcp") {
 export function getDeviceTools() {
   const desktop = [...getDesktopFileTools(), ...getDesktopActionTools(), ...getBrowserTools()];
   const connections = getConnectionTools();
-  return [...deviceTools, ...getWebTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...externalTools];
+  // Research and Document Studio are platform services: every agent gets the same four tools (services/Studio.ts).
+  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...externalTools];
 }
 
 /**

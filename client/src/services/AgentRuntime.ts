@@ -7,6 +7,7 @@ import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText, screenToolOutput } from "./AgentGuardrails";
 import { CORE_TOOLS, MAX_TOOLS_PER_REQUEST, RouterAgent, selectToolsForProfile, selectToolsForRequest, defaultAgentProfiles } from "./AgentRouter";
 import { MarketplaceService } from "./MarketplaceService";
+import { getAttachments } from "./Studio";
 import { DynamicFewShotInjector } from "./DynamicFewShotInjector";
 import { ChaosEngine } from "./ChaosEngine";
 import { toolCircuitBreaker } from "./CircuitBreaker";
@@ -40,6 +41,8 @@ export function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentM
   return result.length ? result : allTools;
 }
 const hardMaxIterations = 20;
+/** With files attached to the conversation, the tools that read and convert them are always offered. */
+const attachmentTools = () => (getAttachments().length ? ["read_attached_files", "convert_file"] : []);
 
 export const UNANSWERED_NOTE = "[No reply reached the user for the message above: that request failed or was stopped. Answer the user's latest message; return to the earlier one only if they ask.]";
 
@@ -267,7 +270,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
   const request = [...options.messages].reverse().find((message) => message.role === "user")?.content ?? "";
   const tools = specialistTools
     ? (specialistTools.length > MAX_TOOLS_PER_REQUEST ? selectToolsForRequest(specialistTools, request) : specialistTools)
-    : selectToolsForRequest(allTools, request, { preferred: profileTools.length < allTools.length ? profileTools : [], required: [...(documentsMatch(request) ? ["knowledge_search"] : []), ...MarketplaceService.getAgentTools()] });
+    : selectToolsForRequest(allTools, request, { preferred: profileTools.length < allTools.length ? profileTools : [], required: [...(documentsMatch(request) ? ["knowledge_search"] : []), ...MarketplaceService.getAgentTools(), ...attachmentTools()] });
   const marketplaceItemIds = MarketplaceService.getActivePackageIds();
   const marketplaceInstructions = MarketplaceService.getRuntimeInstructions();
   const personalization = DynamicFewShotInjector.context();
@@ -276,6 +279,10 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
   const conversation: AgentMessage[] = withUnansweredMarked(options.messages
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")
     .map(({ role, content }) => ({ role, content: role === "user" ? screenIncomingPrompt(content) : content })));
+  // The model can't see the paperclip: say which files are attached, so it reads them instead of guessing.
+  const attached = getAttachments();
+  const lastUser = [...conversation].reverse().find((message) => message.role === "user");
+  if (attached.length && lastUser) lastUser.content = `${lastUser.content}\n\n[Files attached to this conversation: ${attached.map((file) => file.name).join(", ")}. Read them with read_attached_files before answering about them.]`;
   // Only the memories that relate to what you just asked, plus a few preferences.
   // Sensitive ones go only to self-hosted models: Ollama, or Auto in Private routing
   // (the server keeps Private on self-hosted providers).
@@ -316,7 +323,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
     let content = "";
     let toolCalls: AgentToolCall[] = [];
     // Specialists already have a narrow tool set; trimming it further could hide the tool they need.
-    const activeTools = specialistTools ? tools : selectRelevantTools(tools, conversation, MarketplaceService.getAgentTools());
+    const activeTools = specialistTools ? tools : selectRelevantTools(tools, conversation, [...MarketplaceService.getAgentTools(), ...attachmentTools()]);
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
       compactToolResults(conversation);

@@ -71,6 +71,22 @@ export function summarizeToolResult(name: string, result: unknown): string {
       const query = /^Search results for “([^”]*)”/.exec(text)?.[1];
       return `${label(name)}${query ? ` for “${short(query, 80)}”` : ""}${sources ? ` · ${count(sources, "source")}` : ""}`;
     }
+    case "research": {
+      const text = typeof value.message === "string" ? value.message : "";
+      const sources = (text.match(/^\[\d+\] /gm) ?? []).length;
+      return sources ? `Researched the web · ${count(sources, "source")} read and cited` : `Research: ${short(text.split("\n")[0] ?? "", 140)}`;
+    }
+    case "create_document":
+    case "convert_file": {
+      const text = typeof value.message === "string" ? value.message : "";
+      const made = /^(?:Created and validated|Converted): (.*?)\. The user/.exec(text)?.[1];
+      return `${name === "convert_file" ? "Converted" : "Created"}: ${short(made || text.split("\n")[0] || "a file", 160)}`;
+    }
+    case "read_attached_files": {
+      const text = typeof value.message === "string" ? value.message : "";
+      const names = [...text.matchAll(/^FILE “([^”]*)”/gm)].map((match) => match[1]);
+      return names.length ? `Read ${names.map((item) => short(item, 40)).join(", ")}` : short(text, 140);
+    }
     case "web_read": {
       const text = typeof value.message === "string" ? value.message : "";
       const title = /“([^”]*)”/.exec(text.split("\n")[0] ?? "")?.[1];

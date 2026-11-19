@@ -55,7 +55,7 @@ describe("adding a package turns it on", () => {
     MarketplaceService.turnOn("research-analyst");
     expect(MarketplaceService.getActiveAgent()?.id).toBe("research-analyst");
     expect(MarketplaceService.getInstalledAgents().map((item) => item.id).sort()).toEqual(["research-analyst", "study-coach"]);
-    expect(MarketplaceService.getAgentTools()).toEqual(["web_search", "web_read", "knowledge_search"]);
+    expect(MarketplaceService.getAgentTools()).toEqual(["research", "create_document", "read_attached_files", "web_search", "web_read", "knowledge_search"]);
     expect(MarketplaceService.getActiveAgent()?.starters.length).toBeGreaterThan(0);
     expect(MarketplaceService.getActivePackageIds()).toEqual(["research-analyst"]);
     expect(MarketplaceService.getRuntimeInstructions()).toContain("research analyst");

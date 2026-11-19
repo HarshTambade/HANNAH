@@ -58,6 +58,16 @@ export const CAPABILITIES = [
     description: "Add first-party agents and community instruction skills, checked for integrity and publisher signatures before install.",
   },
   {
+    icon: "Waypoints",
+    title: "Search and deep research",
+    description: "Turn on Search the web and HANNAH searches, opens the pages and answers with citations you can click. Deep research plans the work and writes a report; every citation is checked against what was read, and pages it couldn't open are listed.",
+  },
+  {
+    icon: "HardDrive",
+    title: "PowerPoint, PDF, Word and Excel",
+    description: "Ask for a deck, a report or a workbook in plain words, from your files or from research. Files are editable, Excel formulas are real formulas, and each file is opened again and checked before you get it.",
+  },
+  {
     icon: "Ear",
     title: "“Hey HANNAH”",
     description: "Turn on the wake word and start talking hands-free in the desktop app, on Android or in a browser tab. It's detected on your device; no audio leaves it until you speak to HANNAH.",
@@ -211,6 +221,10 @@ export const FAQS = [
   {
     q: "Can I use ChatGPT, Claude or Gemini models with HANNAH?",
     a: "Yes. Connect your own key for OpenAI, Anthropic, Google Gemini, Groq, OpenRouter, Mistral, DeepSeek, xAI and other providers, or run models locally with Ollama, LM Studio, llama.cpp, vLLM or WebLLM. Auto mode can pick a model for each message.",
+  },
+  {
+    q: "Can HANNAH search the web and make documents?",
+    a: "Yes. With Search the web on, HANNAH searches, reads the pages and cites them; Deep research writes a full report with its sources and what it couldn't verify. Ask for a PowerPoint, PDF, Word document or Excel workbook and you get a real file to download, written from your attached files, from that research or from the conversation. Web search uses your Groq key unless the server has a search API key; on a free Groq plan, several searches in a row can hit its per-minute limit, and HANNAH says so when that happens.",
   },
   {
     q: "Can I talk to HANNAH hands-free?",

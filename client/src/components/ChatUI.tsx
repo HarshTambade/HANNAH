@@ -44,6 +44,9 @@ import FeedbackModal from "./FeedbackModal";
 import FirstSessionCoach from "./FirstSessionCoach";
 import ActiveAgentBar, { useMarketplace } from "./ActiveAgentBar";
 import { MarketplaceService } from "../services/MarketplaceService";
+import { FORMAT_LABELS, STUDIO_EVENT, clearConversationState, composeDocument, getLastFiles, getResearch, restoreConversationState, resumeResearch, runStudioTurn, setToolConversation, studioIntent, type DocumentFormat, type ResearchMode, type ResearchResult, type StudioEvent } from "../services/Studio";
+import { FileCard, ResearchCard, StudioProgress, citationsOf } from "./StudioCards";
+import { StudioComposer, StudioLibrary } from "./StudioComposer";
 import TaskPanel from "./TaskPanel";
 import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
@@ -145,6 +148,33 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const [input, setInput] = useState(() => MarketplaceService.peekChatDraft());
   useEffect(() => MarketplaceService.clearChatDraft(), []);
   const marketplace = useMarketplace();
+  // Research and Document Studio (services/Studio.ts): the search switch, what a turn produced, and its live steps.
+  const [searchMode, setSearchModeState] = useState<ResearchMode | null>(() => { try { const stored = window.localStorage.getItem("hannah.chat.searchMode"); return ["quick", "latest", "deep", "academic", "compare"].includes(String(stored)) ? stored as ResearchMode : null; } catch { return null; } });
+  const setSearchMode = (next: ResearchMode | null) => { setSearchModeState(next); try { if (next) window.localStorage.setItem("hannah.chat.searchMode", next); else window.localStorage.removeItem("hannah.chat.searchMode"); } catch { /* the switch still works for this session */ } };
+  const [studioEvents, setStudioEvents] = useState<StudioEvent[]>([]);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  /** What the tools made during the turn in progress, to attach to its reply. */
+  const turnStudioRef = useRef<{ researchId?: string; fileIds: string[] }>({ fileIds: [] });
+  /** A follow-up to a research answer is researched too, in the same mode, whether or not the switch is on. */
+  const followUpModeRef = useRef<ResearchMode | null>(null);
+  useEffect(() => {
+    const onStudio = (event: Event) => {
+      const detail = (event as CustomEvent<{ kind: string; event?: StudioEvent; id?: string; ids?: string[] }>).detail;
+      if (detail?.kind === "progress" && detail.event) setStudioEvents((current) => [...current.slice(-80), detail.event!]);
+      else if (detail?.kind === "research-result" && detail.id) turnStudioRef.current.researchId = detail.id;
+      else if (detail?.kind === "files-result" && detail.ids) turnStudioRef.current.fileIds.push(...detail.ids);
+    };
+    window.addEventListener(STUDIO_EVENT, onStudio);
+    return () => window.removeEventListener(STUDIO_EVENT, onStudio);
+  }, []);
+  // A reloaded conversation still knows its last research and files.
+  useEffect(() => {
+    const withResearch = [...messages].reverse().find((message) => message.studio?.researchId);
+    const withFiles = [...messages].reverse().find((message) => message.studio?.fileIds?.length);
+    void restoreConversationState({ researchId: withResearch?.studio?.researchId, fileIds: withFiles?.studio?.fileIds });
+    // Only when the chat opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // The chosen inference mode survives leaving the chat (and "Use in chat" on the Models page sets it).
   const [mode, setMode] = useState<InferenceMode>(() => {
     try {
@@ -203,9 +233,11 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const [voiceEnabled, setVoiceEnabled] = useState(() => {
     try {
       const saved = window.localStorage.getItem("hannah.voiceEnabled");
-      return saved === null ? true : saved === "true";
+      // Voice replies are off by default: HANNAH speaks during talk mode
+      // (hands-free voice input), not on every typed output.
+      return saved === null ? false : saved === "true";
     } catch {
-      return true;
+      return false;
     }
   });
   const [voiceStatus, setVoiceStatus] = useState("");
@@ -573,7 +605,23 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
         }
       };
 
-      if (effectiveMode === "desktop") {
+      turnStudioRef.current = { fileIds: [] };
+      setStudioEvents([]);
+      const plainHistory = nextMessages.filter((message) => message.role !== "system").map(({ role, content: text }) => ({ role, content: text }));
+      setToolConversation(plainHistory);
+      // A message that plainly asks for research or a file goes straight to the Studio; the agent has the same services as tools for everything else.
+      const studioWanted = (effectiveMode === "cloud" || effectiveMode === "ollama") && isOnline
+        ? studioIntent(content, { searchMode: followUpModeRef.current ?? searchMode, recentFile: getLastFiles().length > 0 })
+        : { kind: "none" as const };
+      followUpModeRef.current = null;
+      if (studioWanted.kind !== "none") {
+        const controller = new AbortController();
+        stopRef.current = controller;
+        setAgentActivity({ phase: "acting", message: studioWanted.kind === "research" ? "HANNAH is researching…" : "HANNAH is building your file…" });
+        const turn = await runStudioTurn(content, studioWanted, { conversation: plainHistory, signal: controller.signal });
+        turnStudioRef.current = { researchId: turn.researchId, fileIds: turn.fileIds ?? [] };
+        result = { reply: turn.reply, emotion: "neutral" };
+      } else if (effectiveMode === "desktop") {
         const reply = await runDesktopAgentTurn(guardedContent, publishActivity);
         result = parseAIResponse(reply);
       } else if (effectiveMode === "mobileclaw" && isNative && isOnline && nativeAgentStatus.hasApiKey) {
@@ -638,7 +686,9 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       if (userTurns === 1) trackEvent("first_message_sent");
       if (userTurns === 3) trackEvent("third_message_sent");
       if (transcript !== undefined) trackEvent("voice_used");
-      setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply }]);
+      const made = turnStudioRef.current;
+      const studio = made.researchId || made.fileIds.length ? { ...(made.researchId ? { researchId: made.researchId } : {}), ...(made.fileIds.length ? { fileIds: [...new Set(made.fileIds)] } : {}) } : undefined;
+      setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply, ...(studio ? { studio } : {}) }]);
       onEmotionChange(result.emotion);
       if (!speakReply) {
         if (presentTimerRef.current !== null) window.clearTimeout(presentTimerRef.current);
@@ -677,6 +727,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       stopRef.current = null;
       setIsLoading(false);
       setAgentActivity(null);
+      setStudioEvents([]);
       isSubmittingTurnRef.current = false;
       inputRef.current?.focus();
       const canResumeVoice = voiceInputEnabledRef.current && (!callActiveRef.current || callMicEnabledRef.current);
@@ -822,7 +873,9 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
             voiceTurnPendingRef.current = false;
             return;
           }
-          const shouldSpeakReply = callActiveRef.current ? callSpeakerRef.current : voiceEnabledRef.current;
+          // In talk mode HANNAH dictates her reply even when voice replies are off
+          // for typed messages; the call speaker can still be muted.
+          const shouldSpeakReply = callActiveRef.current ? callSpeakerRef.current : true;
           const accepted = await submitMessage(undefined, transcript, shouldSpeakReply);
           if (!accepted) {
             voiceTurnPendingRef.current = false;
@@ -940,11 +993,46 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     }
   };
 
+  /** "Make a PowerPoint from this research": the report's references are the research's own sources. */
+  const makeFromResearch = async (format: DocumentFormat, research: ResearchResult) => {
+    if (isLoading || isSubmittingTurnRef.current) return;
+    isSubmittingTurnRef.current = true;
+    const request = `Turn the research on “${research.question}” into ${format === "xlsx" ? "an Excel workbook" : format === "pptx" ? "a presentation" : `a ${FORMAT_LABELS[format]} report`}`;
+    resumeResearch(research);
+    setMessages((current) => [...current, { id: createMessageId(), role: "user", content: request }]);
+    setError("");
+    setIsLoading(true);
+    setStudioEvents([]);
+    setAgentActivity({ phase: "acting", message: "HANNAH is building your file…" });
+    const controller = new AbortController();
+    stopRef.current = controller;
+    try {
+      const made = await composeDocument(request, { formats: [format], useResearch: research, useFiles: false, signal: controller.signal });
+      setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: `Here it is, written from the ${research.sources.length} sources of that research, which are its references. It was opened again and checked before I gave it to you.${made.notes.length ? `\n\n${made.notes.map((note) => `- ${note}`).join("\n")}` : ""}`, studio: { fileIds: made.files.map((file) => file.id) } }]);
+    } catch (problem) {
+      setError(controller.signal.aborted ? "Stopped." : problem instanceof Error ? problem.message : "The file couldn't be made.");
+    } finally {
+      stopRef.current = null;
+      setIsLoading(false);
+      setAgentActivity(null);
+      setStudioEvents([]);
+      isSubmittingTurnRef.current = false;
+    }
+  };
+
+  /** The person pressed "Save to memory" on a research answer. */
+  const saveResearchToMemory = (research: ResearchResult) => {
+    const text = `Research on ${new Date(research.createdAt).toISOString().slice(0, 10)} — ${research.question}: ${(research.summary || research.answer).replace(/\s+/g, " ").slice(0, 600)} Sources: ${research.sources.slice(0, 5).map((source) => source.url).join(", ")}`;
+    const outcome = MemoryService.remember(text, { source: { kind: "chat" } });
+    if (outcome.ok) notifyMemoryChanged(); else setError(outcome.reason);
+  };
+
   const resetConversation = () => {
     if (isLoading) return;
     setMessages([welcomeMessage]);
     setRememberedIds({});
     setInterruptedId(null);
+    clearConversationState();
     ChatHistory.clear();
     setError("");
     setInput("");
@@ -1198,6 +1286,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       </header>
 
       <ActiveAgentBar onOpenMarketplace={onOpenMarketplace} />
+      {libraryOpen && <StudioLibrary onClose={() => setLibraryOpen(false)} onContinue={(research) => { resumeResearch(research); followUpModeRef.current = research.mode; inputRef.current?.focus(); }} />}
 
       {degradedState.degraded && <div role="status" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"><strong>Degraded mode</strong> · {degradedState.reason || "Using a fallback model."}<button type="button" onClick={() => ChaosEngine.clearDegraded()} className="ml-2 underline">Dismiss</button></div>}
 
@@ -1255,9 +1344,19 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                 <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
                   {!isUser && <div className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white"><span className="logo-ring !h-4 !w-4" aria-hidden="true" /></div>}
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed text-ink ${isUser ? "whitespace-pre-wrap break-words rounded-br-md border border-brand-100 bg-brand-50" : "rounded-bl-md border border-slate-100 bg-slate-50"}`}>
-                    {isUser ? message.content : <MessageContent text={message.content} />}
+                    {isUser ? message.content : <MessageContent text={message.content} citations={message.studio?.researchId ? citationsOf(getResearch(message.studio.researchId)) : undefined} />}
                   </div>
                 </div>
+                {!isUser && message.studio?.fileIds?.map((fileId) => <FileCard key={fileId} fileId={fileId} />)}
+                {!isUser && message.studio?.researchId && (
+                  <ResearchCard
+                    researchId={message.studio.researchId}
+                    busy={isLoading}
+                    onMakeDocument={(format, research) => void makeFromResearch(format, research)}
+                    onAsk={(question) => { const research = getResearch(message.studio!.researchId!); if (research) { resumeResearch(research); followUpModeRef.current = research.mode; } void submitMessage(undefined, undefined, voiceEnabled, { role: "user", content: question, id: "follow-up" }); }}
+                    onSave={saveResearchToMemory}
+                  />
+                )}
                 {isUser && message.id && (
                   <div className="flex flex-col items-end pr-1">
                     <button
@@ -1322,6 +1421,8 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
               </div>
             );
           })}
+
+          {isLoading && <StudioProgress events={studioEvents} />}
 
           {approvals.map((request) => (
             <div key={request.id} role="alertdialog" aria-labelledby={`approval-${request.id}`} className="mx-1 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-4 shadow-[0_12px_30px_-20px_rgba(180,83,9,0.5)] sm:mx-9">
@@ -1511,6 +1612,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
             </div>
           </div>
         )}
+        <StudioComposer mode={searchMode} onMode={setSearchMode} disabled={isLoading} onLibrary={() => setLibraryOpen(true)} />
         <form onSubmit={(event) => void submitMessage(event)} className="mx-auto flex max-w-[720px] items-end gap-2 rounded-xl border border-slate-200 bg-white p-1.5 transition focus-within:border-brand-400/60 shadow-soft">
           <textarea
             ref={inputRef}
