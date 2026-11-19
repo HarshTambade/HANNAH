@@ -24,6 +24,8 @@ async function post<T>(path: string, body: unknown, timeoutMs: number, sleep = (
       await sleep(waitMs);
       continue;
     }
+    // Said so the model stops instead of trying three more times and using up the limit further.
+    if (response.status === 429) throw new Error("The web tools are over their rate limit and won't work for about a minute. Don't retry now.");
     throw new Error(data.error || `The search answered ${response.status}.`);
   }
 }

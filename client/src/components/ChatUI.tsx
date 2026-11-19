@@ -42,6 +42,8 @@ import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent"
 import { trackEvent } from "../services/events";
 import FeedbackModal from "./FeedbackModal";
 import FirstSessionCoach from "./FirstSessionCoach";
+import ActiveAgentBar, { useMarketplace } from "./ActiveAgentBar";
+import { MarketplaceService } from "../services/MarketplaceService";
 import TaskPanel from "./TaskPanel";
 import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
@@ -120,6 +122,7 @@ type ChatUIProps = {
   initialMode?: InferenceMode;
   /** Called when the server rejects the saved access token. */
   onSessionExpired?: () => void;
+  onOpenMarketplace?: () => void;
 };
 
 type ApiStatus = "checking" | "connected" | "offline" | "misconfigured" | "unauthorized";
@@ -131,14 +134,17 @@ function initialMessages(): ChatMessage[] {
 
 type CloudProviderOption = { id: string; label: string; local: boolean; configured: boolean; defaultModel?: string };
 
-export default function ChatUI({ onEmotionChange, onActivityChange, panel = false, groqApiKey, initialMode = "cloud", onSessionExpired }: ChatUIProps) {
+export default function ChatUI({ onEmotionChange, onActivityChange, panel = false, groqApiKey, initialMode = "cloud", onSessionExpired, onOpenMarketplace }: ChatUIProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   // A saved conversation that ends with your message: the page closed or reloaded before HANNAH answered it.
   const [interruptedId, setInterruptedId] = useState<string | null>(() => interruptedMessageId(messages));
   const [rememberedIds, setRememberedIds] = useState<Record<string, true>>({});
   /** Why "Remember this" was refused for a message (memory off, or it looked like a secret). */
   const [rememberRefusals, setRememberRefusals] = useState<Record<string, string>>({});
-  const [input, setInput] = useState("");
+  // A message handed over from the marketplace's "Try it" or the home page's prompt box.
+  const [input, setInput] = useState(() => MarketplaceService.peekChatDraft());
+  useEffect(() => MarketplaceService.clearChatDraft(), []);
+  const marketplace = useMarketplace();
   // The chosen inference mode survives leaving the chat (and "Use in chat" on the Models page sets it).
   const [mode, setMode] = useState<InferenceMode>(() => {
     try {
@@ -1191,6 +1197,8 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
         )}
       </header>
 
+      <ActiveAgentBar onOpenMarketplace={onOpenMarketplace} />
+
       {degradedState.degraded && <div role="status" className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900"><strong>Degraded mode</strong> · {degradedState.reason || "Using a fallback model."}<button type="button" onClick={() => ChaosEngine.clearDegraded()} className="ml-2 underline">Dismiss</button></div>}
 
       {!isOnline && (
@@ -1226,6 +1234,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
           <FirstSessionCoach
             messageCount={messages.filter((message) => message.role === "user").length}
             onSuggestion={(suggestion) => { setInput(suggestion); inputRef.current?.focus(); }}
+            agent={marketplace.agent}
           />
           <TaskPanel />
           <HITLApprovalCard />

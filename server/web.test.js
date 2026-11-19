@@ -53,7 +53,8 @@ test("web search asks Groq's browser search with the visitor's own key and retur
   groqReply = { status: 200, body: { model: "openai/gpt-oss-20b", choices: [{ message: { content: "Node.js 24 is the current LTS【1†L2】. Source: https://nodejs.org/en/about/previous-releases.", executed_tools: [{ type: "browser_search", search_results: { results: [{ title: "Node.js releases", url: "https://nodejs.org/en/about/previous-releases" }, { title: "Endoflife", url: "https://endoflife.date/nodejs" }] } }] } }] } };
   const answer = await post("/web/search", { query: "current Node.js LTS" }, { "X-Groq-API-Key": "gsk_visitor" });
   assert.equal(answer.status, 200, JSON.stringify(answer.body));
-  assert.match(answer.body.answer, /Node\.js 24/);
+  // Groq's own reference codes (【1†L2】) are removed: they point at nothing the reader can open.
+  assert.equal(answer.body.answer, "Node.js 24 is the current LTS. Source: https://nodejs.org/en/about/previous-releases.");
   assert.deepEqual(answer.body.sources, [{ title: "Node.js releases", url: "https://nodejs.org/en/about/previous-releases" }, { title: "Endoflife", url: "https://endoflife.date/nodejs" }]);
   const sent = groqRequests.at(-1);
   assert.equal(sent.url, "https://api.groq.com/openai/v1/chat/completions");

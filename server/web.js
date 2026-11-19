@@ -110,7 +110,8 @@ async function searchWeb({ baseUrl, apiKey, query, fetchImpl = (...args) => fetc
       continue;
     }
     const message = body?.choices?.[0]?.message || {};
-    const answer = String(message.content || "").trim();
+    // Groq's search marks each claim with its own reference code (【1†L8-L13】); it means nothing outside that call.
+    const answer = String(message.content || "").replace(/【[^】\n]{1,40}】/g, "").replace(/[ \t]+([.,;:])/g, "$1").trim();
     if (!answer) {
       last = { ok: false, status: 502, error: "The search came back empty. Try different words.", reason: "empty" };
       continue;

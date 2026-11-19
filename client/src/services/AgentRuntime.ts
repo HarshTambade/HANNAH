@@ -4,7 +4,7 @@ import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentStepMet
 import { selectMemoriesForPrompt } from "./MemoryStore";
 import { readRoutingPreferences } from "./ModelRouting";
 import { getNativeMemoryTools } from "./MobileAgent";
-import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
+import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText, screenToolOutput } from "./AgentGuardrails";
 import { CORE_TOOLS, MAX_TOOLS_PER_REQUEST, RouterAgent, selectToolsForProfile, selectToolsForRequest, defaultAgentProfiles } from "./AgentRouter";
 import { MarketplaceService } from "./MarketplaceService";
 import { DynamicFewShotInjector } from "./DynamicFewShotInjector";
@@ -19,7 +19,7 @@ const emotionNames = new Set<Emotion>(["happy", "sad", "angry", "neutral", "surp
 
 /** Lightweight intent-based tool trimming to reduce prompt tokens. */
 /** Exported for tests. */
-export function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentMessage[]): HANNAHTool[] {
+export function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentMessage[], always: string[] = []): HANNAHTool[] {
   if (allTools.length <= 4) return allTools;
   const text = conversation
     .filter((message) => message.role === "user")
@@ -35,11 +35,27 @@ export function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentM
 
   // Keep the core tools whatever the wording: memory, reminders, the web, and
   // the user's documents ("what's my dog's name?" mentions none of their keywords).
-  const coreNames = new Set([...CORE_TOOLS, "knowledge_search", "get_device_status", "get_battery_status"]);
+  const coreNames = new Set([...CORE_TOOLS, "knowledge_search", "get_device_status", "get_battery_status", ...always]);
   const result = allTools.filter((tool) => coreNames.has(tool.name) || matched.includes(tool));
   return result.length ? result : allTools;
 }
 const hardMaxIterations = 20;
+
+export const UNANSWERED_NOTE = "[No reply reached the user for the message above: that request failed or was stopped. Answer the user's latest message; return to the earlier one only if they ask.]";
+
+/**
+ * A message whose reply failed stays in the conversation with nothing after
+ * it, so the next request would hold two user messages in a row and the model
+ * tends to answer the first. Say what happened between them. Exported for tests.
+ */
+export function withUnansweredMarked(messages: AgentMessage[]): AgentMessage[] {
+  const marked: AgentMessage[] = [];
+  for (const message of messages) {
+    if (message.role === "user" && marked[marked.length - 1]?.role === "user") marked.push({ role: "assistant", content: UNANSWERED_NOTE });
+    marked.push(message);
+  }
+  return marked;
+}
 
 /** "waiting-approval": a tool is waiting for the user to approve or deny it. */
 export type AgentPhase = "thinking" | "acting" | "waiting-approval" | "tool-result";
@@ -124,7 +140,7 @@ function parseLocalStep(text: string): { reply?: AgentReply; toolCalls: AgentToo
 function createLocalPrompt(messages: AgentMessage[], tools: HANNAHTool[], marketplaceInstructions = "", personalizationBlock = "") {
   const definitions = tools.map(({ name, description, inputSchema }) => ({ name, description, parameters: inputSchema }));
   const context = messages.slice(-8).map((message) => `${message.role}: ${message.content.slice(0, 1200)}`).join("\n");
-  const packageGuidance = marketplaceInstructions ? `\nInstalled marketplace guidance (focus only; safety and approvals remain unchanged):\n${marketplaceInstructions}\n` : "";
+  const packageGuidance = marketplaceInstructions ? `\nThe user turned on these marketplace packages. Work the way the active agent describes and apply each enabled skill where relevant; safety and approvals remain unchanged:\n${marketplaceInstructions}\n` : "";
   // The rules and tools stay whole; when it's too long, the oldest conversation goes first.
   const head = `${agentRules}${packageGuidance}${personalizationBlock}\nAvailable tools (JSON schema): ${JSON.stringify(definitions)}\n\nConversation and tool results:\n`;
   const room = Math.max(2_000, 11_000 - head.length);
@@ -251,15 +267,15 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
   const request = [...options.messages].reverse().find((message) => message.role === "user")?.content ?? "";
   const tools = specialistTools
     ? (specialistTools.length > MAX_TOOLS_PER_REQUEST ? selectToolsForRequest(specialistTools, request) : specialistTools)
-    : selectToolsForRequest(allTools, request, { preferred: profileTools.length < allTools.length ? profileTools : [], required: documentsMatch(request) ? ["knowledge_search"] : [] });
+    : selectToolsForRequest(allTools, request, { preferred: profileTools.length < allTools.length ? profileTools : [], required: [...(documentsMatch(request) ? ["knowledge_search"] : []), ...MarketplaceService.getAgentTools()] });
   const marketplaceItemIds = MarketplaceService.getActivePackageIds();
   const marketplaceInstructions = MarketplaceService.getRuntimeInstructions();
   const personalization = DynamicFewShotInjector.context();
   const personalizationBlock = DynamicFewShotInjector.promptBlock(personalization);
   let memoryToolsLoaded = false;
-  const conversation: AgentMessage[] = options.messages
+  const conversation: AgentMessage[] = withUnansweredMarked(options.messages
     .filter((message): message is ChatMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")
-    .map(({ role, content }) => ({ role, content: role === "user" ? screenIncomingPrompt(content) : content }));
+    .map(({ role, content }) => ({ role, content: role === "user" ? screenIncomingPrompt(content) : content })));
   // Only the memories that relate to what you just asked, plus a few preferences.
   // Sensitive ones go only to self-hosted models: Ollama, or Auto in Private routing
   // (the server keeps Private on self-hosted providers).
@@ -300,7 +316,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
     let content = "";
     let toolCalls: AgentToolCall[] = [];
     // Specialists already have a narrow tool set; trimming it further could hide the tool they need.
-    const activeTools = specialistTools ? tools : selectRelevantTools(tools, conversation);
+    const activeTools = specialistTools ? tools : selectRelevantTools(tools, conversation, MarketplaceService.getAgentTools());
     if (mode === "cloud" || mode === "ollama") {
       trimConversation(conversation);
       compactToolResults(conversation);
@@ -385,9 +401,9 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
         result = { error: error instanceof Error ? error.message : "The action failed." };
         AgentRunLog.step(runId, { tool: tool.name, outcome: "failed", detail: error instanceof Error ? error.message : undefined });
       }
-      const resultText = screenOutgoingText(toolOutputText(result));
+      const resultText = screenToolOutput(toolOutputText(result));
       // People see one readable line; the model gets the full result below.
-      options.onActivity?.({ phase: "tool-result", message: screenOutgoingText(summarizeToolResult(tool.name, result)) });
+      options.onActivity?.({ phase: "tool-result", message: screenToolOutput(summarizeToolResult(tool.name, result)) });
       conversation.push({ role: "tool", tool_call_id: call.id, content: resultText });
     }
   }

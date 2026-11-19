@@ -21,13 +21,13 @@ describe("web search waits out a short rate limit once", () => {
     expect(replies.calls).toBe(2);
   });
 
-  it("a long Retry-After or a second 429 fails with the server's message", async () => {
+  it("a long Retry-After or a second 429 fails saying not to retry now", async () => {
     replies.queue.push(json({ error: "Groq is busy right now." }, 429, { "retry-after": "60" }));
-    await expect(postForTests("/api/web/search", { query: "go" }, 5_000, async () => {})).rejects.toThrow("Groq is busy right now.");
+    await expect(postForTests("/api/web/search", { query: "go" }, 5_000, async () => {})).rejects.toThrow("Don't retry now");
     expect(replies.calls).toBe(1);
     replies.calls = 0;
     replies.queue.push(json({}, 429, { "retry-after": "1" }), json({ error: "Still busy" }, 429, { "retry-after": "1" }));
-    await expect(postForTests("/api/web/search", { query: "go" }, 5_000, async () => {})).rejects.toThrow("Still busy");
+    await expect(postForTests("/api/web/search", { query: "go" }, 5_000, async () => {})).rejects.toThrow("over their rate limit");
     expect(replies.calls).toBe(2);
   });
 

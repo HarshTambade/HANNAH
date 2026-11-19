@@ -76,6 +76,22 @@ export function screenIncomingPrompt(text: string) {
   ].join("\n");
 }
 
+/**
+ * A tool's result on its way to the model. A long result (a web page, a file,
+ * a search) is shortened to the limit with a note, and one the safety screen
+ * objects to is withheld: neither should end the whole turn with an error, as
+ * a reply that breaks the rules does.
+ */
+export function screenToolOutput(text: string) {
+  const note = (hidden: number) => `\n[Shortened: ${hidden.toLocaleString("en")} more characters not shown.]`;
+  const shortened = text.length > maxReplyLength ? `${text.slice(0, maxReplyLength - 80)}${note(text.length - (maxReplyLength - 80))}` : text;
+  try {
+    return screenOutgoingText(shortened);
+  } catch {
+    return "[The tool's output was withheld by the safety screen.]";
+  }
+}
+
 export function screenOutgoingText(text: string) {
   if (text.length > maxReplyLength) throw new Error("The agent response exceeded the configured output limit.");
 
