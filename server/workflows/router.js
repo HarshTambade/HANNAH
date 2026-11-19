@@ -50,6 +50,7 @@ const { encryptSecret, secretHint, vaultConfigured, decryptSecret } = require(".
 const engine = require("./engine");
 const { CREDENTIAL_TYPES, REGISTRY, catalog } = require("./nodes");
 const { FINAL, sha256 } = require("./runtime");
+const { listProviders } = require("../providers/catalog");
 
 const ID = /^[A-Za-z0-9_-]{6,80}$/;
 /** Webhook calls that come from other workflow runs (X-Hannah-Hops) are refused past this many hops. */
@@ -777,15 +778,36 @@ async function aiWithShortWaits(services, request, { waits = 2, maxWaitMs = 15_0
   }
 }
 
+/** example.com and friends: addresses reserved for documentation, never a real service. */
+function isPlaceholderUrl(value) {
+  try {
+    return /(^|\.)example\.(com|org|net)$|^(your|my)[-.]?(api|domain|server)/i.test(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+
+const DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+/** Days as the schedule step stores them (0 = Sunday … 6 = Saturday), from numbers or names. Exported for tests. */
+function normalizeDays(value) {
+  const items = Array.isArray(value) ? value : String(value).split(/[\s,]+/);
+  const days = items.map((item) => {
+    if (typeof item === "number" || /^\d$/.test(String(item))) return Number(item) % 7;
+    return DAY_NAMES.indexOf(String(item).trim().toLowerCase().slice(0, 3));
+  }).filter((day) => day >= 0 && day <= 6);
+  return [...new Set(days)].sort((a, b) => a - b);
+}
+
 async function draftFromText(services, description, timezone, { sleep } = {}) {
   const { nodes } = catalog();
-  const available = nodes.filter((node) => node.status !== "upcoming").map((node) => `${node.type}: ${node.label} — ${node.description} Params: ${node.params.map((param) => `${param.name}${param.options ? ` (${param.options.map((option) => option.value).join("|")})` : ""}`).join(", ") || "none"}. Outputs: ${node.dynamicOutputs ? "dynamic" : node.outputs.join(", ")}.`).join("\n");
+  const available = nodes.filter((node) => node.status !== "upcoming").map((node) => `${node.type}: ${node.label} — ${node.description} Params: ${node.params.map((param) => `${param.name}${param.options ? ` (${param.options.map((option) => option.value).join("|")})` : param.type === "days" ? " (array of day numbers, 0=Sunday … 6=Saturday)" : param.type === "model" ? ' ("auto", or "provider:model" only when the user named one)' : ""}`).join(", ") || "none"}. Outputs: ${node.dynamicOutputs ? "dynamic" : node.outputs.join(", ")}.`).join("\n");
   const system = [
     "You design automations for HANNAH's workflow engine. Reply with one JSON object and nothing else:",
     '{"name": string, "notes": string, "nodes": [{"id": string, "name": string, "type": string, "params": object}], "connections": [{"source": id, "target": id, "sourceOutput": string, "targetInput": string}]}',
     "Rules: exactly one trigger first. Use only the node types listed. Node names are unique and short. Read data from earlier steps with expressions like {{ $json.field }} or {{ $node[\"Step name\"].json.field }}.",
     "Prefer email mode \"draft\" over \"send\". Never put credentials or secrets in params; steps that need a credential leave it unset. In notes, say in one or two sentences what the user must still set up (credentials, connected accounts).",
     "A step that receives no items is skipped, and so is everything after it. When the user wants a message even if a list step (reminders, mail, search, HTTP results) finds nothing, put a logic.aggregate step after that list with whenEmpty \"continue\".",
+    "Never invent web addresses: no example.com or made-up API URLs. For news, prices or anything current, use web.search. Use action.http only with an address the user gave or a well-known public API you are sure of; otherwise leave its url empty and say in notes that it must be set.",
     "The description is the user's request: build what it asks, nothing more.",
   ].join(" ");
   const result = await aiWithShortWaits(services, { model: "auto", json: true, temperature: 0.2, maxTokens: 2500, system, prompt: `Available nodes:\n${available}\n\nTime zone: ${timezone || "UTC"}\n\nDescription:\n"""${description}"""` }, sleep ? { sleep } : {});
@@ -798,7 +820,24 @@ async function draftFromText(services, description, timezone, { sleep } = {}) {
   const allowed = new Set(nodes.filter((node) => node.status !== "upcoming").map((node) => node.type));
   const list = (Array.isArray(draft.nodes) ? draft.nodes : []).filter((node) => allowed.has(node?.type)).slice(0, 30);
   if (!list.length) throw fail(502, "The AI's workflow used no supported steps. Try again or build it in the editor.", "ai-invalid");
+  const byType = new Map(nodes.map((node) => [node.type, node]));
+  const placeholders = [];
+  const providerIds = new Set(listProviders().map((provider) => provider.id));
   list.forEach((node, index) => {
+    // Values the AI tends to get wrong, put into the form each step expects.
+    node.params = node.params && typeof node.params === "object" && !Array.isArray(node.params) ? node.params : {};
+    for (const param of byType.get(node.type)?.params || []) {
+      const value = node.params[param.name];
+      if (value === undefined) continue;
+      if (param.type === "days") node.params[param.name] = normalizeDays(value);
+      // A model the user didn't choose (and may have no key for) becomes Auto.
+      if (param.type === "model" && value !== "auto" && !providerIds.has(String(value).split(":")[0])) node.params[param.name] = "auto";
+      // A placeholder address (example.com) can't work: leave it for the user to fill in.
+      if (param.name === "url" && typeof value === "string" && isPlaceholderUrl(value)) {
+        node.params[param.name] = "";
+        placeholders.push(node.name || node.type);
+      }
+    }
     node.id = /^[A-Za-z0-9_-]{1,64}$/.test(String(node.id)) ? node.id : `n${index + 1}`;
     node.position = { x: 80 + index * 280, y: 160 + (index % 2) * 40 };
     delete node.credentialId;
@@ -806,7 +845,7 @@ async function draftFromText(services, description, timezone, { sleep } = {}) {
   const ids = new Set(list.map((node) => node.id));
   return {
     name: clean(draft.name, 120) || "New automation",
-    notes: clean(draft.notes, 600),
+    notes: clean([clean(draft.notes, 600), placeholders.length ? `Set the address in ${placeholders.join(", ")}: the draft had only a placeholder.` : ""].filter(Boolean).join(" "), 800),
     definition: {
       format: engine.FORMAT, version: engine.VERSION, nodes: list,
       connections: (Array.isArray(draft.connections) ? draft.connections : []).filter((connection) => ids.has(connection?.source) && ids.has(connection?.target)),
@@ -815,4 +854,4 @@ async function draftFromText(services, description, timezone, { sleep } = {}) {
   };
 }
 
-module.exports = { aiWithShortWaits, createHookRouter, createWorkflowRouter, draftFromText };
+module.exports = { aiWithShortWaits, createHookRouter, createWorkflowRouter, draftFromText, normalizeDays };

@@ -9,12 +9,27 @@
 import { apiFetch, apiUrl } from "./api";
 import type { HANNAHTool } from "./DeviceTools";
 
-async function post<T>(path: string, body: unknown, timeoutMs: number): Promise<T> {
-  const response = await apiFetch(apiUrl(path), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
-  const data = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new Error(data.error || `The search answered ${response.status}.`);
-  return data;
+/** Wait at most this long for a busy (429) search before trying once more. */
+const MAX_BUSY_WAIT_MS = 20_000;
+
+async function post<T>(path: string, body: unknown, timeoutMs: number, sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await apiFetch(apiUrl(path), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
+    const data = await response.json().catch(() => ({})) as T & { error?: string };
+    if (response.ok) return data;
+    // Groq's per-minute limit usually clears in seconds: wait it out once instead of failing the search.
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 5_000;
+    if (response.status === 429 && attempt === 0 && waitMs <= MAX_BUSY_WAIT_MS) {
+      await sleep(waitMs);
+      continue;
+    }
+    throw new Error(data.error || `The search answered ${response.status}.`);
+  }
 }
+
+/** Exported for tests. */
+export const postForTests = post;
 
 const tools: HANNAHTool[] = [
   {

@@ -30,6 +30,8 @@ const { encryptSecret, decryptSecret, vaultConfigured } = require("../vault");
 const { loadAccountKeys, accountsUseServerKeys } = require("../accounts");
 const { getProvider, listProviders, providerKey, defaultModelFor } = require("../providers/catalog");
 const { requestWithProviderFallback } = require("../providers/runtime");
+const { servedStatus } = require("../providers/served");
+const { searchWeb } = require("../web");
 const { addressBlocked } = require("./http");
 const engine = require("./engine");
 const { REGISTRY } = require("./nodes");
@@ -98,7 +100,9 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
         if (!provider) throw fail(400, `Unknown AI provider “${providerId}”.`, "bad-model", { retryable: false });
         const apiKey = keyFor(provider);
         if (!apiKey && !provider.local) throw fail(400, `No ${provider.label} key is saved in your account. Add it in Settings → Account, or choose Auto.`, "no-key", { retryable: false });
-        return [{ provider, apiKey, model: rest.join(":") || defaultModelFor(provider) }];
+        const picked = rest.join(":") || defaultModelFor(provider);
+        // A workflow saved with a model the provider has since retired uses its current default.
+        return [{ provider, apiKey, model: servedStatus(provider.id, picked) === false ? defaultModelFor(provider) : picked }];
       }
       const known = new Set(listProviders().map((item) => item.id));
       const chosen = [];
@@ -120,6 +124,21 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
        * and `retryAfterMs`, so the engine waits and tries again instead of
        * failing the run.
        */
+      /** A web search through Groq's browser search, with the Groq key saved in the account. */
+      async webSearch({ query }) {
+        const userKeys = await keys();
+        const provider = getProvider("groq");
+        const apiKey = userKeys.get("groq") || (accountsUseServerKeys() ? providerKey(provider) : "");
+        if (!apiKey) throw fail(400, "Searching the web uses Groq: save your Groq key (free) in Settings → Account → Provider keys.", "no-key", { retryable: false });
+        const result = await searchWeb({ baseUrl: provider.baseUrl, apiKey, query: String(query || "").slice(0, 500), fetchImpl });
+        if (result.ok) return result;
+        if (result.status === 429) {
+          const seconds = Number(result.retryAfter);
+          throw Object.assign(new Error("Groq is rate-limiting your key right now (too many requests per minute)."), { status: 429, rateLimited: true, retryable: true, provider: "Groq", ...(Number.isFinite(seconds) && seconds > 0 ? { retryAfterMs: Math.min(300, seconds) * 1000 } : {}) });
+        }
+        throw Object.assign(new Error(result.error), { status: result.status, retryable: result.status >= 500 });
+      },
+
       async ai({ model, system, prompt, temperature = 0.3, json = false, maxTokens = 1200 }) {
         const candidates = await pickProviders(model);
         let busy = null;

@@ -54,15 +54,17 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /google chat|\bchat\b|\bspaces?\b|team chat|channel/i, tools: /^gchat_/ },
 ];
 // web_search is always kept, so "can you check…" never finds HANNAH without a way to look.
-const CORE_TOOLS = ["search_memories", "save_memory", "create_reminder", "web_search"];
+export const CORE_TOOLS = ["search_memories", "save_memory", "create_reminder", "web_search"];
 
 /**
  * Keep a request within the server's tool limit by choosing the tools it
  * calls for: the families its words mention, then the profile's own tools,
  * then a few core ones. A request that fits already is left alone.
  */
-export function selectToolsForRequest(tools: HANNAHTool[], request: string, { preferred = [] as HANNAHTool[], limit = MAX_TOOLS_PER_REQUEST } = {}): HANNAHTool[] {
-  const wanted = new Set<string>();
+export function selectToolsForRequest(tools: HANNAHTool[], request: string, { preferred = [] as HANNAHTool[], limit = MAX_TOOLS_PER_REQUEST, required = [] as string[] } = {}): HANNAHTool[] {
+  // Tools this request needs whatever its words are (such as knowledge_search when the user's documents match it).
+  const wanted = new Set<string>(required.filter((name) => tools.some((tool) => tool.name === name)));
+  const requiredCount = wanted.size;
   for (const family of TOOL_FAMILIES) {
     if (!family.match.test(request)) continue;
     for (const tool of tools) if (family.tools.test(tool.name)) wanted.add(tool.name);
@@ -73,7 +75,7 @@ export function selectToolsForRequest(tools: HANNAHTool[], request: string, { pr
     const connector = /^mcp_c_([a-z0-9]+)_/.exec(tool.name)?.[1];
     if (connector && connector.length > 2 && words.includes(connector)) wanted.add(tool.name);
   }
-  if (!wanted.size && tools.length <= limit) return tools;
+  if (wanted.size === requiredCount && tools.length <= limit) return tools;
   for (const tool of preferred) wanted.add(tool.name);
   for (const name of CORE_TOOLS) wanted.add(name);
   const chosen = tools.filter((tool) => wanted.has(tool.name));

@@ -41,7 +41,7 @@ export type AdvisorNeeds = {
   monthlyMessages?: number;
 };
 
-export type CatalogModel = { id: string; label: string; tools: boolean; vision: boolean; context: number | null; free: boolean; notes?: string; price: { inputPerMTok: number; outputPerMTok: number; currency: string; verified?: string | null; source?: string | null } | null };
+export type CatalogModel = { id: string; label: string; tools: boolean; vision: boolean; context: number | null; free: boolean; notes?: string; /** false when the provider's live model list doesn't include it (retired); null or absent when unknown. */ available?: boolean | null; price: { inputPerMTok: number; outputPerMTok: number; currency: string; verified?: string | null; source?: string | null } | null };
 export type CatalogProvider = { id: string; label: string; kind: string; local: boolean; free: boolean; docs?: string; configured: boolean; models: CatalogModel[] };
 export type ModelCatalog = { byok: boolean; priceNote?: string; providers: CatalogProvider[] };
 
@@ -295,6 +295,8 @@ function hostedCandidates(needs: AdvisorNeeds, catalog: ModelCatalog | null): Re
     if (provider.local) continue;
     for (const model of provider.models) {
       if (model.notes && /not chat/i.test(model.notes)) continue;
+      // The provider no longer serves it: recommending it would only fail in chat.
+      if (model.available === false) continue;
       const profile = profiles.hosted.find((item) => item.provider === provider.id && item.model === model.id);
       const vision = model.vision || Boolean(profile?.vision);
       if (task === "vision" && !vision) continue;

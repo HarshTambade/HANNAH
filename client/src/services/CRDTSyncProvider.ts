@@ -1,4 +1,4 @@
-import { SyncService, decryptFromSync, type EncryptedEnvelope } from "./SyncService";
+import { SyncService, decryptFromSync, relayBase, type EncryptedEnvelope } from "./SyncService";
 
 /**
  * A state-based CRDT for HANNAH's synced collections (memory, tasks, side
@@ -141,7 +141,7 @@ export const CRDTSyncProvider = {
     let sent = 0;
     if (updates.length) {
       for (const update of updates) SyncService.enqueue(update);
-      const result = await SyncService.sync(relayUrl, passphrase, { fetchImpl, ...(iterations ? { iterations } : {}) });
+      const result = await SyncService.sync(relayUrl, passphrase, { fetchImpl, deviceId: this.deviceId, ...(iterations ? { iterations } : {}) });
       if (result.ok) {
         this.clearPendingUpdates(new Set(updates.map((update) => update.id)));
         sent = updates.length;
@@ -149,7 +149,7 @@ export const CRDTSyncProvider = {
     }
     let merged = 0;
     try {
-      const response = await fetchImpl(`${relayUrl}/sync/${encodeURIComponent(this.deviceId)}`, { signal: AbortSignal.timeout(20_000) });
+      const response = await fetchImpl(`${relayBase(relayUrl)}/sync/${encodeURIComponent(this.deviceId)}`, { signal: AbortSignal.timeout(20_000) });
       if (response.ok) {
         const remote = await response.json() as { envelopes?: EncryptedEnvelope[] };
         for (const envelope of Array.isArray(remote.envelopes) ? remote.envelopes : []) {

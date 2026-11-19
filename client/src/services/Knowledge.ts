@@ -211,7 +211,7 @@ export function getKnowledgeTools(): HANNAHTool[] {
   return [
     {
       name: "knowledge_search",
-      description: "Search the documents the user added to HANNAH's knowledge (notes, papers, files, pasted text) and get the most relevant passages with citation tags. Use it for questions about the user's own documents, research across them, or when they mention a file or notes they gave you. Search more than once with different words for multi-part questions, and quote each passage's citation tag, such as [Title §2], after the claims it supports.",
+      description: "Search the documents the user added to HANNAH's knowledge (notes, papers, files, pasted text) and get the most relevant passages with citation tags. Use it for questions about the user's own documents, research across them, or when they mention a file or notes they gave you. Also search here before saying you don't know a personal detail (plans, bookings, names, numbers): the user may have added it. Search more than once with different words for multi-part questions, and quote each passage's citation tag, such as [Title §2], after the claims it supports.",
       inputSchema: { type: "object", properties: { query: { type: "string", description: "Words likely to appear in the passage, in any language." }, limit: { type: "number", description: "Passages to return, up to 12. Default 6." } }, required: ["query"] },
       execute: async (args) => {
         const query = typeof args.query === "string" ? args.query : "";

@@ -2,6 +2,22 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
+## Unreleased
+
+### Fixed
+
+- **Auto mode failed on every request.** HANNAH's model profiles still listed Groq models that Groq has retired (Llama 3.1 8B, Llama 3.3 70B, Llama 4 Scout and Maverick, Qwen3 32B, Kimi K2), and Auto routed simple messages to one of them, so even "hi" failed. Auto now checks which models each provider serves today and never picks a retired one; a busy (rate-limited) model hands over to another model the provider serves; and the plain chat endpoint no longer sends the word "auto" to Groq as a model name.
+- **Model pickers offered models that can't chat.** The model lists (chat settings, Agents) showed Groq's speech-to-text (Whisper), text-to-speech (Orpheus) and safety-classifier models; picking one broke the agent. Only chat models the provider serves are listed now, and the Models page no longer recommends retired models. The workflow editor's model list was updated the same way, and a workflow saved with a retired model uses the provider's current default.
+- **Raw tool output in chat.** After HANNAH used a tool, chat showed its JSON (`{"saved":true,"id":…}`, whole web pages). It now shows one readable line, such as "Saved to memory: My dog is called Biscuit." or "Searched the web for “…” · 5 sources"; the model still gets the full result.
+- **HANNAH asked before doing what you asked.** "Remind me in 3 minutes to stretch" got "Should I set a reminder?" instead of a reminder. She now uses the tool right away and leaves confirmation to the app's own approval card, which appears only for actions that need one. Asked to remember several facts, she saves each.
+- **Questions about your documents went unanswered.** HANNAH said she didn't know details that were in your Knowledge documents unless you said "document" or "notes". The passages that match your question now go with it (like memories do), and she answers with their citation, such as [Trip notes §1].
+- **Memory, reminders and web search could disappear from a request.** A second, word-matching filter dropped every tool whose description didn't share a word with your message, so "What's my dog's name?" lost the memory tools. Memory, reminders, web search and document search are always available now.
+- **A reply cut off by a reload was lost silently.** When the page closed or reloaded before HANNAH answered, your message sat unanswered and the next reply could answer the wrong question. Chat now says HANNAH didn't finish and offers "Ask again".
+- **Web search failed more often than needed.** A search that Groq answered with an error is tried once more on Groq's other search model; each try is capped so the whole search ends well within the app's wait, and a rate limit is reported at once.
+- **"Export training examples" waited up to two minutes and changed your memory.** It waited for an "idle window", said "No idle window was available" when you had fewer than three rated replies, and copied random chat notes into long-term memory on the way. It now exports at once and changes nothing. The background consolidation keeps a short note only when it came up more than once (it used to keep 30% of them at random).
+- **The self-hosted sync relay didn't match the app.** The app sent changes to one address and fetched them from another the relay didn't serve, the relay's ids were guessable and it had no size limits. The relay and the app now share one protocol (see docs/SYNC_PRIVACY.md), with limits, CORS for browsers, and tests that sync two devices through the real relay.
+- **A rate limit on a local install showed a second, confusing error** ("Python fallback: Could not reach … 127.0.0.1:8000") when no Python fallback was running.
+
 ## 1.5.0 — 2026-11-18
 
 ### New

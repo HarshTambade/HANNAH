@@ -27,6 +27,7 @@ const profiles = require("../shared/model-profiles.json");
 const { defaultModelFor, isLocalHostname } = require("./providers/catalog");
 const { knownPriceFor, verifiedPriceFor } = require("./cost-tracking");
 const { classifyRequest, modelSupportsTools } = require("./gateway");
+const { servedStatus } = require("./providers/served");
 
 const MODES = ["quality", "balanced", "budget", "fastest", "private", "offline", "custom"];
 const TIERS = ["small", "efficient", "strong", "frontier"];
@@ -139,6 +140,8 @@ function collectCandidates(usableProviders, { needsTools }) {
       const preset = provider.models.find((item) => item.id === model);
       if (needsTools && preset && preset.tools === false) return;
       if (preset?.notes && /not chat/i.test(preset.notes)) return;
+      // The provider's live list doesn't have it: it was retired.
+      if (servedStatus(provider.id, model) === false) return;
       seen.add(model);
       out.push({ provider, model, tier, strengths, speed, context: preset?.context ?? null, local: selfHosted(provider) });
     };

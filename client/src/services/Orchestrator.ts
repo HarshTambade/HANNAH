@@ -353,6 +353,8 @@ async function executeSteps(run: TeamRun, options: TeamOptions) {
         messages: [{ role: "user", content: stepPrompt(run, step, agent.instructions) }],
         // Shows on this run, and on your other devices, while a step waits for your yes or no.
         onActivity: (activity) => {
+          // A provider that's rate limiting: show the wait on the run, so it doesn't look stuck.
+          if (activity.phase === "thinking" && /busy right now/.test(activity.message)) options.onActivity?.({ phase: "thinking", message: `${agent.name} agent: ${activity.message}` });
           const waiting = activity.phase === "waiting-approval";
           if (waiting === (step.status === "waiting-approval") || (step.status !== "running" && step.status !== "waiting-approval")) return;
           step.status = waiting ? "waiting-approval" : "running";

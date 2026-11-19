@@ -106,7 +106,7 @@ function withStop(timeoutMs: number, signal?: AbortSignal) {
   return controller.signal;
 }
 
-async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 90_000, groqApiKey?: string, useApiToken = false, stop?: AbortSignal): Promise<AgentStep> {
+async function requestAgentStep(url: string, body: Record<string, unknown>, timeoutMs = 90_000, groqApiKey?: string, useApiToken = false, stop?: AbortSignal, onWait?: (ms: number) => void): Promise<AgentStep> {
   // A busy provider (429) is waited out a few times, so a long task (such as
   // notes from a lecture) isn't lost to a per-minute limit.
   for (let attempt = 0; ; attempt += 1) {
@@ -114,6 +114,8 @@ async function requestAgentStep(url: string, body: Record<string, unknown>, time
       return await requestAgentStepOnce(url, body, timeoutMs, groqApiKey, useApiToken, stop);
     } catch (error) {
       if (stop?.aborted || !(error instanceof AgentApiError) || error.status !== 429 || attempt >= 3 || !error.retryAfterMs) throw error;
+      // Say why nothing is happening: otherwise a minute of waiting looks like a hang.
+      onWait?.(error.retryAfterMs);
       await new Promise((resolve) => {
         const timer = setTimeout(resolve, error.retryAfterMs);
         stop?.addEventListener("abort", () => { clearTimeout(timer); resolve(undefined); }, { once: true });
@@ -233,7 +235,7 @@ export class LLMRouter {
     return resolveInferenceMode(preferred, browserConnected && network.connected);
   }
 
-  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = [], extra: { routeHint?: "simple" | "standard" | "complex"; signal?: AbortSignal } = {}): Promise<AgentStep> {
+  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = [], extra: { routeHint?: "simple" | "standard" | "complex"; signal?: AbortSignal; knowledge?: Array<{ citation: string; text: string }>; onWait?: (ms: number) => void } = {}): Promise<AgentStep> {
     if (mode === "cloud" && ChaosEngine.consume("network-drop")) {
       ChaosEngine.setDegraded("Offline: cloud request dropped; switching to local AI.");
       throw new Error("Chaos injection: simulated cloud network drop.");
@@ -250,6 +252,8 @@ export class LLMRouter {
       ...(marketplaceItemIds.length ? { marketplaceItemIds } : {}),
       ...(personalization ? { personalization } : {}),
       ...(memories.length ? { memories } : {}),
+      // Passages from the user's own documents that match what they asked (server/index.js labels them as untrusted).
+      ...(extra.knowledge?.length ? { knowledge: extra.knowledge } : {}),
       ...(dailyBudgetUsd() ? { budget: { dailyUsd: dailyBudgetUsd() } } : {}),
       ...(CommunitySkills.runtimeSkills().length ? { communitySkills: CommunitySkills.runtimeSkills() } : {}),
       messages,
@@ -257,7 +261,7 @@ export class LLMRouter {
     };
     try {
       // A visitor's Groq key goes along for Auto too; the server only ever uses it with Groq.
-      const result = await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && (selectedProvider === "groq" || model === "auto") ? groqApiKey : undefined, true, extra.signal);
+      const result = await requestAgentStep(apiUrl("/api/agent"), body, 90_000, mode === "cloud" && (selectedProvider === "groq" || model === "auto") ? groqApiKey : undefined, true, extra.signal, extra.onWait);
       if (mode === "cloud") ChaosEngine.clearDegraded();
       return result;
     } catch (primaryError) {
@@ -274,6 +278,8 @@ export class LLMRouter {
         ChaosEngine.setDegraded("Degraded mode: the local Python agent fallback answered this turn.");
         return fallbackStep;
       } catch (fallbackError) {
+        // Nothing runs at the fallback address (the usual case): the first error is the one that matters.
+        if (!(fallbackError instanceof AgentApiError) || fallbackError.status === undefined) throw primaryError;
         const primaryMessage = primaryError instanceof Error ? primaryError.message : "The primary Node API failed.";
         const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "The Python fallback API failed.";
         const retryable = shouldUseLocalFallback(primaryError) || shouldUseLocalFallback(fallbackError);

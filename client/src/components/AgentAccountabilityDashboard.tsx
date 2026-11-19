@@ -71,14 +71,10 @@ export default function AgentAccountabilityDashboard() {
   async function preparePersonalization() {
     setTraining(true);
     setTrainingProgress(0);
-    setTrainingStatus("Waiting for an idle window before preparing local examples…");
+    setTrainingStatus("Preparing your examples…");
     try {
       const result = await OnDeviceLoRAService.prepare(setTrainingProgress);
-      if (!result.ready) {
-        setTrainingStatus("No idle window was available. Keep HANNAH open and try again after a quiet period.");
-        return;
-      }
-      if (!result.examples) {
+      if (!result.ready || !result.examples) {
         setTrainingStatus("No liked, accepted, or edited responses are saved yet. Rate a few replies first.");
         return;
       }
@@ -89,7 +85,7 @@ export default function AgentAccountabilityDashboard() {
       anchor.download = "hannah-personalization.jsonl";
       anchor.click();
       URL.revokeObjectURL(url);
-      setTrainingStatus(`Prepared ${result.examples} approved examples as a local JSONL dataset. No model weights were changed; use the backend LoRA scaffold to train a source checkpoint.`);
+      setTrainingStatus(`Prepared ${result.examples} approved examples as a local JSONL dataset. No model weights were changed here; to fine-tune a model with them, run backend/on_device_lora.py on your own computer.`);
     } catch (error) {
       setTrainingStatus(error instanceof Error ? error.message : "Could not prepare the local dataset.");
     } finally {

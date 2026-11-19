@@ -81,6 +81,27 @@ describe("phase services integration", () => {
     expect(log.length).toBeGreaterThan(0);
   });
 
+  it("dreaming consolidator is deterministic: a short note is kept only when it repeats", async () => {
+    MemoryService.add("session", "User likes green tea mornings");
+    MemoryService.add("session", "User mentioned a one-off parcel today");
+    MemoryService.add("session", "User likes green tea mornings");
+    const log = await DreamingConsolidator.consolidate();
+    const kept = log.filter((entry) => entry.action === "consolidated").map((entry) => entry.content);
+    expect(kept).toEqual(["User likes green tea mornings"]);
+    expect(MemoryService.list("long_term").map((record) => record.content)).toEqual(["User likes green tea mornings"]);
+  });
+
+  it("exporting training examples is immediate and writes no memories", async () => {
+    const { OnDeviceLoRAService } = await import("../services/OnDeviceLoRAService");
+    MemoryService.add("session", "User likes green tea mornings");
+    MemoryService.add("session", "User likes green tea mornings");
+    const started = Date.now();
+    const result = await OnDeviceLoRAService.prepare();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(result).toEqual({ jsonl: expect.any(String), examples: 0, ready: false });
+    expect(MemoryService.list("long_term")).toEqual([]);
+  });
+
   it("ITU identity interop round-trips", () => {
     const identity = IdentityInteropLayer.present();
     expect(identity.identityId.startsWith("hannah:")).toBe(true);

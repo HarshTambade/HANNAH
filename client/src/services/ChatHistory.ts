@@ -38,3 +38,9 @@ export const ChatHistory = {
     }
   },
 };
+
+/** The id of the last message when it's yours with no reply after it (HANNAH was interrupted), else null. */
+export function interruptedMessageId(messages: ChatMessage[]): string | null {
+  const last = [...messages].reverse().find((message) => message.role !== "system");
+  return last?.role === "user" && last.id ? last.id : null;
+}

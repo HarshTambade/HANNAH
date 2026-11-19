@@ -9,8 +9,8 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MODELS = [
   { value: "auto", label: "Auto (HANNAH picks from your keys)" },
   { value: "groq:openai/gpt-oss-120b", label: "Groq · GPT-OSS 120B" },
-  { value: "groq:llama-3.3-70b-versatile", label: "Groq · Llama 3.3 70B" },
-  { value: "groq:llama-3.1-8b-instant", label: "Groq · Llama 3.1 8B (fast)" },
+  { value: "groq:openai/gpt-oss-20b", label: "Groq · GPT-OSS 20B (fast)" },
+  { value: "groq:qwen/qwen3.8-27b", label: "Groq · Qwen3.8 27B" },
   { value: "openai:gpt-4.1-mini", label: "OpenAI · GPT-4.1 mini" },
   { value: "openai:gpt-4.1", label: "OpenAI · GPT-4.1" },
   { value: "anthropic:claude-sonnet-4-5", label: "Anthropic · Claude Sonnet" },

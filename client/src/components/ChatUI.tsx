@@ -13,7 +13,7 @@ import { speakableText } from "../services/SpeakableText";
 
 /** How long after HANNAH finishes speaking the microphone reopens. */
 const RESUME_AFTER_SPEAKING_MS = 900;
-import { ChatHistory } from "../services/ChatHistory";
+import { ChatHistory, interruptedMessageId } from "../services/ChatHistory";
 import { UsageStats } from "../services/UsageStats";
 import { MemoryService, TEMPORARY_CHAT_EVENT } from "../services/MemoryService";
 import { notifyMemoryChanged } from "../services/MemoryStore";
@@ -128,10 +128,13 @@ function initialMessages(): ChatMessage[] {
   const saved = ChatHistory.load();
   return saved.length ? saved : [welcomeMessage];
 }
+
 type CloudProviderOption = { id: string; label: string; local: boolean; configured: boolean; defaultModel?: string };
 
 export default function ChatUI({ onEmotionChange, onActivityChange, panel = false, groqApiKey, initialMode = "cloud", onSessionExpired }: ChatUIProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  // A saved conversation that ends with your message: the page closed or reloaded before HANNAH answered it.
+  const [interruptedId, setInterruptedId] = useState<string | null>(() => interruptedMessageId(messages));
   const [rememberedIds, setRememberedIds] = useState<Record<string, true>>({});
   /** Why "Remember this" was refused for a message (memory off, or it looked like a secret). */
   const [rememberRefusals, setRememberRefusals] = useState<Record<string, string>>({});
@@ -507,9 +510,9 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     setPendingCost(null);
   };
 
-  const submitMessage = async (event?: FormEvent<HTMLFormElement>, transcript?: string, speakReply = voiceEnabled) => {
+  const submitMessage = async (event?: FormEvent<HTMLFormElement>, transcript?: string, speakReply = voiceEnabled, resend?: ChatMessage) => {
     event?.preventDefault();
-    const content = (transcript ?? input).trim();
+    const content = (resend?.content ?? transcript ?? input).trim();
     if (!content || isLoading || isSubmittingTurnRef.current || (voiceTurnPendingRef.current && transcript === undefined)) return false;
     if (effectiveMode === "webllm" && localLLM.status !== "ready") {
       setError(localLLM.error || (localLLM.status === "loading" ? `The browser model is still loading (${Math.round(localLLM.progress * 100)}%). Your message will work once it's ready.` : "The browser model isn't loaded yet."));
@@ -541,7 +544,9 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       }
     }
 
-    const nextMessages = [...messages, { id: createMessageId(), role: "user" as const, content }];
+    // Asking an interrupted message again replaces it, so it isn't in the conversation twice.
+    const nextMessages = [...(resend ? messages.filter((message) => message.id !== resend.id) : messages), { id: createMessageId(), role: "user" as const, content }];
+    setInterruptedId(null);
     CognitiveReadinessEngine.recordInteraction();
     const guardedContent = screenIncomingPrompt(content);
     setMessages(nextMessages);
@@ -933,6 +938,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     if (isLoading) return;
     setMessages([welcomeMessage]);
     setRememberedIds({});
+    setInterruptedId(null);
     ChatHistory.clear();
     setError("");
     setInput("");
@@ -1264,6 +1270,12 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                       {remembered ? <BookmarkCheck size={12} /> : <Bookmark size={12} />} {remembered ? "Remembered" : "Remember this"}
                     </button>
                     {rememberRefusals[message.id] && <p role="status" className="max-w-xs text-right text-xs text-amber-800">{rememberRefusals[message.id]}</p>}
+                    {message.id === interruptedId && !isLoading && (
+                      <p role="status" className="mt-1 flex max-w-xs flex-wrap items-center justify-end gap-x-2 text-right text-xs text-amber-800">
+                        HANNAH didn’t finish replying to this: the page was closed or reloaded.
+                        <button type="button" className="font-semibold underline underline-offset-2 hover:text-amber-950" onClick={() => void submitMessage(undefined, undefined, voiceEnabled, message)}>Ask again</button>
+                      </p>
+                    )}
                   </div>
                 )}
                 {!isUser && message.id && message.id !== welcomeMessage.id && (

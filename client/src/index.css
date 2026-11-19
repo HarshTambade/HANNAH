@@ -45,7 +45,7 @@ textarea {
 }
 
 ::selection {
-  color: #fff;
+  color: inherit;
   background: rgba(129, 104, 255, 0.5);
 }
 

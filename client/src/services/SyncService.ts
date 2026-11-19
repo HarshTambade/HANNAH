@@ -61,6 +61,11 @@ export async function decryptFromSync<T = unknown>(envelope: EncryptedEnvelope, 
   }
 }
 
+/** The relay's base address, from either "https://relay" or "https://relay/sync" (server/sync-relay.js serves /sync). */
+export function relayBase(url: string) {
+  return String(url || "").trim().replace(/\/+$/, "").replace(/\/sync$/, "");
+}
+
 export const SyncService = {
   status: { lastSyncAt: null as string | null, pendingOps: 0, encrypted: true, connected: false, lastError: null as string | null },
   enqueue(op: unknown) {
@@ -70,12 +75,13 @@ export const SyncService = {
     this.status.pendingOps = ops.length;
   },
   /** Send the queued changes, encrypted, to the relay. Returns the status; `ok` says whether the relay stored them. */
-  async sync(relayUrl: string, passphrase: string, { fetchImpl = (...args: Parameters<typeof fetch>) => fetch(...args), iterations = ITERATIONS } = {}): Promise<SyncStatus & { ok: boolean }> {
+  async sync(relayUrl: string, passphrase: string, { fetchImpl = (...args: Parameters<typeof fetch>) => fetch(...args), iterations = ITERATIONS, deviceId = "" } = {}): Promise<SyncStatus & { ok: boolean }> {
     const ops = readOps();
     if (!ops.length) return { ...this.getStatus(), ok: true };
     try {
       const envelope = await encryptForSync(ops, passphrase, iterations);
-      const response = await fetchImpl(relayUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ envelope, count: ops.length }), signal: AbortSignal.timeout(20_000) });
+      // The device id lets the relay hand this envelope to the other devices only.
+      const response = await fetchImpl(`${relayBase(relayUrl)}/sync`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...(deviceId ? { deviceId } : {}), envelope, count: ops.length }), signal: AbortSignal.timeout(20_000) });
       if (!response.ok) throw new Error(`The sync relay answered ${response.status}.`);
       // Only what was sent is cleared; changes queued meanwhile stay.
       const sent = new Set(ops.map((op: { id?: string }) => op.id));

@@ -934,6 +934,23 @@ const NODES = [
 
   // ===== AI =====
   {
+    type: "web.search", category: "ai", label: "Search the web", icon: "Search", status: STATUS.available,
+    description: "Searches the web for current information (news, prices, releases) with Groq's browser search and your Groq key, and returns a short answer with its source links.",
+    inputs: ["main"], outputs: ["main"], permissions: ["ai"],
+    params: [
+      { name: "query", label: "Search for", type: "string", required: true, default: "Top technology news today", expression: true },
+      { name: "outputField", label: "Answer field", type: "string", default: "answer" },
+    ],
+    execute: async (ctx) => ({
+      main: await perItem(ctx, async (params, item) => {
+        const query = toText(params.query).trim();
+        if (!query) throw fail("Say what to search for.");
+        const result = await ctx.services.webSearch({ query });
+        return json({ ...item.json, [params.outputField || "answer"]: result.answer, sources: result.sources, search: { query, model: result.model } });
+      }),
+    }),
+  },
+  {
     type: "ai.prompt", category: "ai", label: "Ask an AI model", icon: "Sparkles", status: STATUS.available,
     description: "Sends a prompt to an AI model through HANNAH's model gateway, with your provider keys, and returns the answer.",
     inputs: ["main"], outputs: ["main"], permissions: ["ai"],

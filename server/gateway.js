@@ -17,6 +17,7 @@ const profiles = require("../shared/model-profiles.json");
 const { defaultModelFor, listProviders, modelChain, providerKey } = require("./providers/catalog");
 const { isNetworkFailure, requestWithProviderFallback } = require("./providers/runtime");
 const { knownPriceFor } = require("./cost-tracking");
+const { servedStatus } = require("./providers/served");
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -192,6 +193,7 @@ function pickAutoModel(providerId, classification, { needsTools = false, budgetT
   for (const profile of candidates) {
     const preset = provider.models.find((model) => model.id === profile.model);
     if (needsTools && preset && preset.tools === false) continue;
+    if (servedStatus(providerId, profile.model) === false) continue;
     const rank = TIER_RANK[profile.tier] || 2;
     let score = rank >= desired ? 3 - (rank - desired) * 0.7 : 3 - (desired - rank) * 1.3;
     if (profile.strengths.includes(classification.task)) score += 1;

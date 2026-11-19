@@ -19,6 +19,9 @@ const express = require("express");
 const { RequestBlockedError, safeRequest } = require("./workflows/http");
 
 const SEARCH_MODEL = process.env.WEB_SEARCH_MODEL || "openai/gpt-oss-20b";
+/** Tried in order; both of Groq's GPT-OSS models can run browser search. */
+const SEARCH_MODELS = [...new Set([SEARCH_MODEL, "openai/gpt-oss-120b"])];
+const SEARCH_ATTEMPT_MS = 30_000;
 const MAX_TEXT = 20_000;
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " ", mdash: "—", ndash: "–", hellip: "…", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“" };
@@ -65,6 +68,58 @@ function sourcesFrom(message) {
   return sources;
 }
 
+/**
+ * One web search through Groq's browser search, for chat (POST /api/web/search)
+ * and for workflows (the "Search the web" step). Groq's browser search
+ * sometimes fails (5xx) or stalls on one model; a second search-capable model
+ * usually answers. Each attempt is capped so the whole search ends well inside
+ * the app's 75-second wait. Resolves to { ok: true, answer, sources, model }
+ * or { ok: false, status, error, reason, retryAfter? }; never throws.
+ */
+async function searchWeb({ baseUrl, apiKey, query, fetchImpl = (...args) => fetch(...args) }) {
+  let last = { ok: false, status: 502, error: "Web search couldn't reach Groq.", reason: "upstream" };
+  for (const model of SEARCH_MODELS) {
+    let response;
+    let body;
+    try {
+      response = await fetchImpl(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: "Search the web to answer. Reply in a few short paragraphs or bullets with the facts found, newest first when it matters, and name each source with its full URL. Say plainly if the search found nothing reliable." },
+            { role: "user", content: query },
+          ],
+          tools: [{ type: "browser_search" }],
+          tool_choice: "required",
+          reasoning_effort: "low",
+          max_completion_tokens: 1500,
+        }),
+        signal: AbortSignal.timeout(SEARCH_ATTEMPT_MS),
+      });
+      body = await response.json().catch(() => ({}));
+    } catch (error) {
+      last = { ok: false, status: 502, error: error?.name === "TimeoutError" ? "The search took too long." : "Web search couldn't reach Groq.", reason: "upstream" };
+      continue;
+    }
+    if (response.status === 429) return { ok: false, status: 429, error: "Groq is busy right now. Try the search again in a moment.", reason: "rate-limited", retryAfter: response.headers.get("retry-after") || null };
+    if (response.status === 401) return { ok: false, status: 401, error: "Groq rejected the key.", reason: "upstream" };
+    if (!response.ok) {
+      last = { ok: false, status: 502, error: `Web search failed (Groq answered ${response.status}).`, reason: "upstream" };
+      continue;
+    }
+    const message = body?.choices?.[0]?.message || {};
+    const answer = String(message.content || "").trim();
+    if (!answer) {
+      last = { ok: false, status: 502, error: "The search came back empty. Try different words.", reason: "empty" };
+      continue;
+    }
+    return { ok: true, answer: answer.slice(0, 12_000), sources: sourcesFrom(message), model: body.model || model };
+  }
+  return last;
+}
+
 function createWebRouter({ getRequestProvider, fetchImpl = (...args) => fetch(...args) } = {}) {
   const router = express.Router();
   const json = express.json({ limit: "64kb" });
@@ -90,36 +145,10 @@ function createWebRouter({ getRequestProvider, fetchImpl = (...args) => fetch(..
       return res.status(error.status || 400).json({ error: error.message, reason: error.reason || "no-key" });
     }
     if (!target?.apiKey) return res.status(400).json({ error: "Web search uses Groq: connect with your Groq key.", reason: "no-key" });
-    try {
-      const response = await fetchImpl(`${target.provider.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${target.apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: SEARCH_MODEL,
-          messages: [
-            { role: "system", content: "Search the web to answer. Reply in a few short paragraphs or bullets with the facts found, newest first when it matters, and name each source with its full URL. Say plainly if the search found nothing reliable." },
-            { role: "user", content: query },
-          ],
-          tools: [{ type: "browser_search" }],
-          tool_choice: "required",
-          reasoning_effort: "low",
-          max_completion_tokens: 1500,
-        }),
-        signal: AbortSignal.timeout(60_000),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const status = response.status === 429 ? 429 : response.status === 401 ? 401 : 502;
-        if (status === 429 && response.headers.get("retry-after")) res.setHeader("Retry-After", response.headers.get("retry-after"));
-        return res.status(status).json({ error: status === 429 ? "Groq is busy right now. Try the search again in a moment." : status === 401 ? "Groq rejected the key." : `Web search failed (Groq answered ${response.status}).`, reason: status === 429 ? "rate-limited" : "upstream" });
-      }
-      const message = body?.choices?.[0]?.message || {};
-      const answer = String(message.content || "").trim();
-      if (!answer) return res.status(502).json({ error: "The search came back empty. Try different words.", reason: "empty" });
-      res.json({ answer: answer.slice(0, 12_000), sources: sourcesFrom(message), model: body.model || SEARCH_MODEL });
-    } catch (error) {
-      res.status(502).json({ error: error?.name === "TimeoutError" ? "The search took too long." : "Web search couldn't reach Groq.", reason: "upstream" });
-    }
+    const result = await searchWeb({ baseUrl: target.provider.baseUrl, apiKey: target.apiKey, query, fetchImpl });
+    if (result.ok) return res.json({ answer: result.answer, sources: result.sources, model: result.model });
+    if (result.retryAfter) res.setHeader("Retry-After", result.retryAfter);
+    res.status(result.status).json({ error: result.error, reason: result.reason });
   });
 
   router.post("/web/read", json, async (req, res) => {
@@ -143,4 +172,4 @@ function createWebRouter({ getRequestProvider, fetchImpl = (...args) => fetch(..
   return router;
 }
 
-module.exports = { createWebRouter, htmlToText, sourcesFrom };
+module.exports = { createWebRouter, htmlToText, searchWeb, sourcesFrom };

@@ -361,9 +361,26 @@ function isNetworkFailure(error) {
     || ["ECONNREFUSED", "ECONNRESET", "EHOSTUNREACH", "ENETUNREACH", "EAI_AGAIN", "ETIMEDOUT"].includes(code);
 }
 
+/**
+ * The models to try, in order: the requested one, the configured fallbacks,
+ * then up to two more chat models the provider serves today. Rate limits are
+ * per model on most providers, so a busy model hands over to another. Models
+ * the provider retired are skipped (the requested one stays first: the
+ * provider says so if it's gone).
+ */
+function fallbackChain(provider, requested) {
+  const chain = modelChain(provider, requested).filter((model, index) => index === 0 || servedStatus(provider.id, model) !== false);
+  const extra = servedModels(provider.id).filter((model) => isChatModel(model) && !chain.includes(model));
+  if (extra.length) {
+    const preferred = defaultModelFor(provider);
+    extra.sort((a, b) => (b === preferred) - (a === preferred));
+  }
+  return [...chain, ...extra.slice(0, 2)];
+}
+
 async function requestWithProviderFallback({ provider, apiKey, requestedModel, messages, tools, systemPrompt, timeoutMs, maxTokens, temperature, singleModel = false }) {
   // singleModel: the caller pinned one exact model, so don't silently swap it.
-  const models = singleModel && requestedModel ? [requestedModel] : modelChain(provider, requestedModel || defaultModelFor(provider));
+  const models = singleModel && requestedModel ? [requestedModel] : fallbackChain(provider, requestedModel || defaultModelFor(provider));
   const trace = createLlmTrace({
     provider,
     requestedModel: requestedModel || models[0] || defaultModelFor(provider),
@@ -480,6 +497,19 @@ async function streamProvider({ provider, apiKey, model, messages, tools, system
   return { content, tool_calls: calls.filter(Boolean), usage, streamed: true };
 }
 
+/**
+ * Whether a model id is a chat model. Providers' model lists also carry speech
+ * (Whisper), text-to-speech (Orpheus, PlayAI, tts-*), safety classifiers
+ * (prompt guards, safeguards), embedding, moderation and image models; none of
+ * those can answer a chat or run tools.
+ */
+const NON_CHAT_MODEL = /(^|[/_.-])(whisper|distil-whisper|orpheus|playai|tts|transcribe|prompt-guard|guard|safeguard|embed|embedding|embeddings|rerank|moderation|dall-e|gpt-image|imagen|veo|lyria|sora)([/_.-]|\d|$)/i;
+function isChatModel(id) {
+  return typeof id === "string" && Boolean(id.trim()) && !NON_CHAT_MODEL.test(id);
+}
+
+const { rememberServed, servedModels, servedStatus } = require("./served");
+
 async function discoverProviderModels(provider, apiKey, timeoutMs) {
   const fallback = [...new Set([
     ...providerModelOverrides(provider),
@@ -514,6 +544,8 @@ async function discoverProviderModels(provider, apiKey, timeoutMs) {
       : (openAiModels.length ? openAiModels : Array.isArray(data.models) ? data.models.map((model) => model.id || model.name) : []);
     const models = discovered.filter((model) => typeof model === "string" && model.trim()).map((model) => model.trim());
     const liveModels = [...new Set(models)].slice(0, 200);
+    // A hosted provider's list is the same for every key; local and custom ones differ per address.
+    if (!provider.local && provider.id !== "custom") rememberServed(provider.id, liveModels);
     return {
       models: liveModels.length ? [...new Set([...liveModels, ...providerModelOverrides(provider)])].slice(0, 200) : fallback,
       liveModels,
@@ -525,6 +557,7 @@ async function discoverProviderModels(provider, apiKey, timeoutMs) {
 
 module.exports = {
   anthropicUrl,
+  isChatModel,
   callProvider,
   callProviderMeasured,
   discoverProviderModels,

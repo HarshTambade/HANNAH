@@ -26,7 +26,9 @@ before(async () => {
   siteUrl = `http://127.0.0.1:${site.address().port}`;
   const fakeFetch = async (url, init) => {
     groqRequests.push({ url, headers: init.headers, body: JSON.parse(init.body) });
-    return new Response(JSON.stringify(groqReply.body), { status: groqReply.status, headers: { "content-type": "application/json" } });
+    // An array of replies answers one request each, in order.
+    const reply = Array.isArray(groqReply) ? groqReply.shift() : groqReply;
+    return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { "content-type": "application/json" } });
   };
   const getRequestProvider = (req) => {
     const key = req.get("x-groq-api-key");
@@ -94,4 +96,33 @@ test("reading a page returns its title and readable text, without scripts, style
   } finally {
     process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK = "true";
   }
+});
+
+test("a search that fails on the first model is tried once more on the second", async () => {
+  groqRequests = [];
+  groqReply = [
+    { status: 500, body: { error: { message: "internal" } } },
+    { status: 200, body: { model: "openai/gpt-oss-120b", choices: [{ message: { content: "Go 1.25 is current. https://go.dev/doc/devel/release" } }] } },
+  ];
+  const response = await fetch(`${api}/web/search`, { method: "POST", headers: { "Content-Type": "application/json", "X-Groq-API-Key": "gsk_test" }, body: JSON.stringify({ query: "latest go" }) });
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.match(data.answer, /Go 1.25/);
+  assert.deepEqual(groqRequests.map((request) => request.body.model), ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]);
+});
+
+test("a rate-limited search answers 429 right away instead of trying the other model", async () => {
+  groqRequests = [];
+  groqReply = [{ status: 429, body: {} }, { status: 200, body: { choices: [{ message: { content: "unused" } }] } }];
+  const response = await fetch(`${api}/web/search`, { method: "POST", headers: { "Content-Type": "application/json", "X-Groq-API-Key": "gsk_test" }, body: JSON.stringify({ query: "latest go" }) });
+  assert.equal(response.status, 429);
+  assert.equal(groqRequests.length, 1);
+});
+
+test("when every search model fails, the last error is reported", async () => {
+  groqRequests = [];
+  groqReply = [{ status: 503, body: {} }, { status: 500, body: {} }];
+  const response = await fetch(`${api}/web/search`, { method: "POST", headers: { "Content-Type": "application/json", "X-Groq-API-Key": "gsk_test" }, body: JSON.stringify({ query: "latest go" }) });
+  assert.equal(response.status, 502);
+  assert.match((await response.json()).error, /Groq answered 500/);
 });

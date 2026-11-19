@@ -52,14 +52,24 @@ export const DreamingConsolidator = {
       domainCounts.set(m.content.slice(0, 20), (domainCounts.get(m.content.slice(0, 20)) || 0) + 1);
     }
 
+    // A short note is kept only when it came up more than once in these
+    // sessions; a one-off remark isn't worth a long-term memory.
+    const seen = new Map<string, number>();
+    for (const session of sessions) {
+      const key = session.content.trim().toLowerCase().replace(/\s+/g, " ");
+      seen.set(key, (seen.get(key) || 0) + 1);
+    }
+    const kept = new Set<string>();
     for (const session of sessions) {
       const content = session.content.trim();
+      const key = content.toLowerCase().replace(/\s+/g, " ");
+      if (kept.has(key)) continue;
       if (content.length < 20) {
         log.push({ id: crypto.randomUUID(), action: "discarded", content, domain: "session", at: Date.now() });
         continue;
       }
       const durable = content.length > 80 ? "strategy" : "observation";
-      if (durable === "observation" && Math.random() > 0.3) {
+      if (durable === "observation" && (seen.get(key) || 0) < 2) {
         log.push({ id: crypto.randomUUID(), action: "discarded", content, domain: "session", at: Date.now() });
         continue;
       }
@@ -69,6 +79,7 @@ export const DreamingConsolidator = {
         continue;
       }
       MemoryService.add("long_term", content, durable === "strategy" ? 3 : 1);
+      kept.add(key);
       domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
       log.push({ id: crypto.randomUUID(), action: "consolidated", content, domain, at: Date.now() });
     }

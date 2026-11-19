@@ -225,3 +225,30 @@ describe("memories are checked again before they reach the model", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("relay sync end to end (server/sync-relay.js)", () => {
+  it("two devices exchange encrypted updates through the real relay", async () => {
+    const { createRequire } = await import("node:module");
+    const { createRelayServer } = createRequire(import.meta.url)("../../../server/sync-relay.js") as { createRelayServer: () => import("node:http").Server };
+    const server = createRelayServer().listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    const relay = `http://127.0.0.1:${(server.address() as { port: number }).port}/sync`;
+    try {
+      CRDTSyncProvider.reset("laptop");
+      CRDTSyncProvider.createUpdate("memory", "insert", { id: "trip", content: "Goa on 12 December" });
+      const sent = await CRDTSyncProvider.sync(relay, "correct horse battery", { iterations: 1_000 });
+      expect(sent).toEqual({ synced: 1, merged: 0, pending: 0 });
+
+      CRDTSyncProvider.reset("phone");
+      const received = await CRDTSyncProvider.sync(relay, "correct horse battery", { iterations: 1_000 });
+      expect(received.merged).toBe(1);
+      expect(CRDTSyncProvider.values("memory")).toEqual([{ id: "trip", content: "Goa on 12 December" }]);
+
+      // The wrong passphrase merges nothing (and doesn't throw).
+      CRDTSyncProvider.reset("tablet");
+      expect((await CRDTSyncProvider.sync(relay, "wrong passphrase", { iterations: 1_000 })).merged).toBe(0);
+    } finally {
+      server.close();
+    }
+  });
+});

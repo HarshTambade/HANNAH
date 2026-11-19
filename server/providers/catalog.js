@@ -405,7 +405,7 @@ function defaultModelFor(provider) {
   const envDefaultModel = provider?.envDefaultModel || (provider ? `${provider.id.replace(/[^a-z0-9]/gi, "_").toUpperCase()}_MODEL` : "");
   return (envDefaultModel && String(process.env[envDefaultModel] || "").trim())
     || providerModelOverrides(provider)[0]
-    || (provider && provider.models[0] ? provider.models[0].id : "");
+    || (Array.isArray(provider?.models) && provider.models[0] ? provider.models[0].id : "");
 }
 
 /** Build the ordered model retry list without trying every catalog seed. */

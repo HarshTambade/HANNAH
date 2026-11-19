@@ -5,18 +5,21 @@ import { selectMemoriesForPrompt } from "./MemoryStore";
 import { readRoutingPreferences } from "./ModelRouting";
 import { getNativeMemoryTools } from "./MobileAgent";
 import { getAgentRuntimePolicy, normalizeToolName, screenIncomingPrompt, screenOutgoingText } from "./AgentGuardrails";
-import { MAX_TOOLS_PER_REQUEST, RouterAgent, selectToolsForProfile, selectToolsForRequest, defaultAgentProfiles } from "./AgentRouter";
+import { CORE_TOOLS, MAX_TOOLS_PER_REQUEST, RouterAgent, selectToolsForProfile, selectToolsForRequest, defaultAgentProfiles } from "./AgentRouter";
 import { MarketplaceService } from "./MarketplaceService";
 import { DynamicFewShotInjector } from "./DynamicFewShotInjector";
 import { ChaosEngine } from "./ChaosEngine";
 import { toolCircuitBreaker } from "./CircuitBreaker";
 import { GuardianBlockedError, HITLDeniedError } from "./SafetyGuard";
 import { AgentRunLog } from "./AgentRunLog";
+import { summarizeToolResult } from "./ToolResultSummary";
+import { Knowledge } from "./Knowledge";
 
 const emotionNames = new Set<Emotion>(["happy", "sad", "angry", "neutral", "surprised", "thinking"]);
 
 /** Lightweight intent-based tool trimming to reduce prompt tokens. */
-function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentMessage[]): HANNAHTool[] {
+/** Exported for tests. */
+export function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentMessage[]): HANNAHTool[] {
   if (allTools.length <= 4) return allTools;
   const text = conversation
     .filter((message) => message.role === "user")
@@ -30,8 +33,9 @@ function selectRelevantTools(allTools: HANNAHTool[], conversation: AgentMessage[
     return keywords.some((keyword) => text.includes(keyword));
   });
 
-  // Keep a small core set even when keyword matching is uncertain.
-  const coreNames = new Set(["get_device_status", "get_battery_status"]);
+  // Keep the core tools whatever the wording: memory, reminders, the web, and
+  // the user's documents ("what's my dog's name?" mentions none of their keywords).
+  const coreNames = new Set([...CORE_TOOLS, "knowledge_search", "get_device_status", "get_battery_status"]);
   const result = allTools.filter((tool) => coreNames.has(tool.name) || matched.includes(tool));
   return result.length ? result : allTools;
 }
@@ -192,6 +196,25 @@ type AgentTurnOptions = {
   agentLabel?: string;
 };
 
+/** Up to three passages from the user's documents that match the request (empty when nothing matches). */
+function knowledgeFor(request: string): Array<{ citation: string; text: string }> {
+  try {
+    if (!request.trim() || !Knowledge.usage().docs) return [];
+    return Knowledge.search(request, 3).map((hit) => ({ citation: hit.citation, text: hit.text.slice(0, 1_200) }));
+  } catch {
+    return [];
+  }
+}
+
+/** Whether the user's Knowledge documents have a passage that matches this request (so knowledge_search is offered whatever the wording). */
+function documentsMatch(request: string) {
+  try {
+    return Boolean(request.trim()) && Knowledge.usage().docs > 0 && Knowledge.search(request, 1).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export const STOPPED_REPLY = "Stopped. HANNAH ran nothing further after you pressed stop; steps that already finished stay done.";
 
 /** Runs one agent turn and records it in the persistent execution log. */
@@ -228,7 +251,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
   const request = [...options.messages].reverse().find((message) => message.role === "user")?.content ?? "";
   const tools = specialistTools
     ? (specialistTools.length > MAX_TOOLS_PER_REQUEST ? selectToolsForRequest(specialistTools, request) : specialistTools)
-    : selectToolsForRequest(allTools, request, { preferred: profileTools.length < allTools.length ? profileTools : [] });
+    : selectToolsForRequest(allTools, request, { preferred: profileTools.length < allTools.length ? profileTools : [], required: documentsMatch(request) ? ["knowledge_search"] : [] });
   const marketplaceItemIds = MarketplaceService.getActivePackageIds();
   const marketplaceInstructions = MarketplaceService.getRuntimeInstructions();
   const personalization = DynamicFewShotInjector.context();
@@ -250,6 +273,9 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
     return memorySelections.get(allowSensitive)!;
   };
   const latestUserRequest = [...options.messages].reverse().find((message) => message.role === "user")?.content.slice(0, 500);
+  // The best-matching passages from the user's Knowledge documents go with the request, like memories do,
+  // so "which hotel are we in?" is answered from their trip notes without the model having to think of searching.
+  const documentPassages = knowledgeFor(request);
   let preferredMode = options.mode;
   const meta: AgentStepMeta = {};
   const completeTurn = (reply: AgentReply): AgentReply => (Object.keys(meta).length ? { ...reply, meta } : reply);
@@ -279,7 +305,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
       trimConversation(conversation);
       compactToolResults(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memoriesFor(mode), { routeHint: options.routeHint, signal: options.signal });
+        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memoriesFor(mode), { routeHint: options.routeHint, signal: options.signal, knowledge: documentPassages, onWait: (ms) => options.onActivity?.({ phase: "thinking", message: `The AI provider is busy right now · trying again in ${Math.max(1, Math.round(ms / 1000))} s…` }) });
         // Stop pressed while the model worked: don't show or speak what it said.
         if (options.signal?.aborted) return stopped();
         content = step.content;
@@ -360,7 +386,8 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
         AgentRunLog.step(runId, { tool: tool.name, outcome: "failed", detail: error instanceof Error ? error.message : undefined });
       }
       const resultText = screenOutgoingText(toolOutputText(result));
-      options.onActivity?.({ phase: "tool-result", message: resultText });
+      // People see one readable line; the model gets the full result below.
+      options.onActivity?.({ phase: "tool-result", message: screenOutgoingText(summarizeToolResult(tool.name, result)) });
       conversation.push({ role: "tool", tool_call_id: call.id, content: resultText });
     }
   }
