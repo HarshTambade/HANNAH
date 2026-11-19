@@ -34,6 +34,10 @@ export default function ConnectPanel({ onStart, onClose }: ConnectPanelProps) {
     return () => { active = false; };
   }, []);
   const accountsEnabled = Boolean(accountInfo?.accounts.enabled);
+  // This server answers for its accounts with its own models: a new visitor needs an email, not an API key.
+  const keyless = Boolean(accountInfo?.accounts.enabled && accountInfo.accounts.signup && accountInfo.accounts.serverKeys);
+  const [choseKey, setChoseKey] = useState(false);
+  useEffect(() => { if (keyless && !choseKey) setAccountMode(true); }, [keyless, choseKey]);
 
   const beginConversation = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -91,17 +95,19 @@ export default function ConnectPanel({ onStart, onClose }: ConnectPanelProps) {
           <span className="flex items-center gap-2 text-sm font-medium text-ink"><span className="logo-ring" aria-hidden="true" /> HANNAH</span>
           {onClose && <button type="button" aria-label="Close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-slate-600 transition hover:bg-white hover:text-ink"><X size={15} /></button>}
         </div>
-        <span className="pill-badge mt-6"><span className="pill-badge-dot"><Check size={9} strokeWidth={3} /></span>{accountMode ? "Your account on this server" : "Free · No sign-up"}</span>
-        <h2 id="connect-title" className="display-title mt-3 text-[2rem]">{accountMode ? "Welcome back." : "Connect with HANNAH."}</h2>
+        <span className="pill-badge mt-6"><span className="pill-badge-dot"><Check size={9} strokeWidth={3} /></span>{accountMode ? (keyless ? "Free · No API key needed" : "Your account on this server") : "Free · No sign-up"}</span>
+        <h2 id="connect-title" className="display-title mt-3 text-[2rem]">{accountMode ? (keyless ? "Start talking to HANNAH." : "Welcome back.") : "Connect with HANNAH."}</h2>
         <p className="mt-2 text-sm leading-6 text-slate-700">{accountMode
-          ? `Sign in to use your saved keys, memories and reminders on any device. Stored on ${databaseLabel(accountInfo?.database.provider)}, run by this server's operator.`
+          ? keyless
+            ? "Create a free account with an email and a password. There's no API key to find and nothing to pay; your memories and reminders follow you to any device."
+            : `Sign in to use your saved keys, memories and reminders on any device. Stored on ${databaseLabel(accountInfo?.database.provider)}, run by this server's operator.`
           : "Paste your own Groq API key and start talking. There's no account and nothing to pay."}</p>
       </div>
 
       {accountMode && accountInfo ? (
         <div className="px-6 pb-6 pt-5 sm:px-7">
-          <SignInForm signupAllowed={accountInfo.accounts.signup} vault={accountInfo.vault} onSignedIn={(key) => onStart({ apiToken: "", groqApiKey: key })} />
-          <button type="button" onClick={() => setAccountMode(false)} className="mt-4 w-full text-center text-xs font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-ink">Use a Groq key without an account</button>
+          <SignInForm key={keyless ? "keyless" : "keyed"} signupAllowed={accountInfo.accounts.signup} vault={accountInfo.vault} serverKeys={accountInfo.accounts.serverKeys} startWith={keyless ? "signup" : "signin"} onSignedIn={(key) => onStart({ apiToken: "", groqApiKey: key })} />
+          <button type="button" onClick={() => { setChoseKey(true); setAccountMode(false); }} className="mt-4 w-full text-center text-xs font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-ink">Use a Groq key without an account</button>
         </div>
       ) : (
       <form className="px-6 pb-6 pt-5 sm:px-7" onSubmit={beginConversation}>

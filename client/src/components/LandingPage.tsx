@@ -12,11 +12,14 @@ import {
 import AppTour from "./AppTour";
 import { APP_VERSION, PLATFORM_DOWNLOADS, RELEASE_NOTES_URL, RELEASES_URL, REPOSITORY_URL } from "../config/project";
 import { SITE_URL } from "../config/site";
+import { ConnectorWall, FactsStrip, HeroPrompt, StartSteps, UseCases, useServerFacts, type TryIt } from "./LandingExtras";
 
 type LandingPageProps = {
   onStart: (credentials: { apiToken: string; groqApiKey: string }) => void;
   onIntegrations: () => void;
   onMarketplace: () => void;
+  /** Open the chat with this message in the message box (and that marketplace agent on), connecting first if needed. */
+  onTry: TryIt;
   /** A verified token is already saved for this tab. */
   hasSession?: boolean;
   onResume?: () => void;
@@ -65,9 +68,16 @@ const API_EXAMPLE = `curl "${SITE_URL}/v1/chat/completions" \\
 /** The pillars are their own sections; the overview lists everything else. */
 const PILLAR_TITLES = new Set(["Any model, your choice", "Picks the right model for you", "A team of specialist agents", "Memory you own", "Local and offline", "Visual workflow automation", "Build on it", "Skills marketplace"]);
 
-export default function LandingPage({ onStart, onIntegrations, onMarketplace, hasSession = false, onResume, openConnect = false, onConnectHandled }: LandingPageProps) {
+export default function LandingPage({ onStart, onIntegrations, onMarketplace, onTry, hasSession = false, onResume, openConnect = false, onConnectHandled }: LandingPageProps) {
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  // Phones: once the hero's button has scrolled away, keep one within reach.
+  const [pastHero, setPastHero] = useState(false);
+  // What this server really offers a newcomer (free accounts without a key? which connectors?), asked from the server.
+  const { keyless, connectors } = useServerFacts();
+  const freeNote = keyless
+    ? "Free: create an account with an email. No API key, no card, no paid tiers."
+    : "Free to use with your own Groq key, or with models on your own hardware. No paid tiers.";
   useEffect(() => {
     if (!openConnect) return;
     setKeyDialogOpen(true);
@@ -115,7 +125,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
   const others = capabilities.filter((item) => !PILLAR_TITLES.has(item.title));
 
   return (
-    <main className="landing-page relative h-[100dvh] overflow-x-hidden overflow-y-auto bg-slate-50 text-ink selection:bg-brand-200/30">
+    <main onScroll={(event) => setPastHero(event.currentTarget.scrollTop > 560)} className="landing-page relative h-[100dvh] overflow-x-hidden overflow-y-auto bg-slate-50 text-ink selection:bg-brand-200/30">
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
         <div className="absolute -left-40 -top-40 h-[42rem] w-[42rem] rounded-full bg-brand-100/50 blur-[140px]" />
         <div className="landing-grain absolute inset-0 opacity-[0.06]" />
@@ -176,10 +186,10 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
         {/* Hero */}
         <section id="home" tabIndex={-1} className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 pt-10 outline-none sm:px-8 sm:pt-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-20">
           <div className="min-w-0 max-w-[40rem]">
-            <a {...sectionLink("automation")} className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-200 hover:text-ink">
+            <a {...sectionLink("try")} className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-200 hover:text-ink">
               <span className="font-semibold text-brand-700">New</span>
               <span className="h-3 w-px shrink-0 bg-slate-200" aria-hidden="true" />
-              <span className="truncate">Workflows from email, files, code and your desktop</span> <ArrowRight size={12} className="shrink-0" />
+              <span className="truncate">Agents, skills and connectors you can turn on in one click</span> <ArrowRight size={12} className="shrink-0" />
             </a>
             <h1 className="display-title mt-6 text-[clamp(2.5rem,5.6vw,4.9rem)]">
               Your Personal AI.
@@ -187,9 +197,10 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
               <span className="block">Your World.</span>
             </h1>
             <p className="mt-6 max-w-[36rem] text-[16px] leading-[1.75] text-slate-600">
-              HANNAH is an AI companion that talks with you, remembers what you ask it to, and gets real work done: a team of agents for hard questions, and workflows that run on their own. You choose the models, where they run, and what HANNAH is allowed to do.
+              HANNAH is an AI companion that talks with you, remembers what you ask her to, and gets real work done: she searches the web, sets your reminders, works in the tools you connect and runs workflows on her own. You choose the model and approve every action.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <HeroPrompt onTry={onTry} />
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
               <button type="button" onClick={openKeyDialog} className="btn-primary group min-h-[3.25rem] !gap-3 !rounded-2xl !px-6 text-sm">
                 {hasSession ? "Open HANNAH" : "Talk to HANNAH"}
                 <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />
@@ -198,7 +209,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
                 <Download size={15} /> Download the app
               </a>
             </div>
-            <p className="mt-4 text-[13px] text-slate-500">Free to use with your own Groq key, or with models on your own hardware. No paid tiers.</p>
+            <p className="mt-4 text-[13px] text-slate-500">{freeNote}</p>
             <ul className="mt-9 grid gap-3 border-t border-slate-200 pt-6 text-[13px] text-slate-600 sm:grid-cols-3">
               <li className="flex items-center gap-2"><ShieldCheck size={15} className="shrink-0 text-emerald-600" aria-hidden="true" /> You approve every action</li>
               <li className="flex items-center gap-2"><LockKeyhole size={15} className="shrink-0 text-brand-600" aria-hidden="true" /> Private mode stays local</li>
@@ -226,6 +237,16 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
             <p className="text-[13px] leading-6 text-slate-600">{[...providers.cloud.slice(0, 9), "Ollama", "LM Studio", "llama.cpp", "WebLLM"].join(" · ")} <span className="text-slate-500">and more</span></p>
           </div>
         </div>
+
+        <FactsStrip connectors={connectors?.length ?? null} />
+
+        {/* Try it */}
+        <section id="try" tabIndex={-1} className="border-y border-slate-200/70 bg-white/60 outline-none">
+          <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12">
+            <SectionHeading kicker="Try it now" title="Pick something. HANNAH takes it from there.">Each one opens the chat with the right agent switched on and the message ready to send. Change it, send it, or write your own.</SectionHeading>
+            <UseCases onTry={onTry} />
+          </div>
+        </section>
 
         {/* Overview */}
         <section id="features" tabIndex={-1} className="mx-auto max-w-7xl px-5 py-14 outline-none sm:px-8 sm:py-20 lg:py-24 lg:px-12">
@@ -383,6 +404,14 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
             </div>
           </div>
         </section>
+
+        {/* Connectors */}
+        {connectors && connectors.length > 0 && (
+          <section id="connect" tabIndex={-1} className="mx-auto max-w-7xl px-5 py-14 outline-none sm:px-8 sm:py-20 lg:px-12 lg:py-24">
+            <SectionHeading kicker="Connectors" title="Works in the tools you already use.">Connect {connectors.length} services with your own sign-in, each through the service's own MCP server. Your tokens stay in your browser, and HANNAH asks before every action she takes in them.</SectionHeading>
+            <ConnectorWall connectors={connectors} onMarketplace={onMarketplace} marketplaceHref="/marketplace" />
+          </section>
+        )}
 
         {/* Real screens */}
         <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:py-24 lg:px-12">
@@ -546,12 +575,18 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
           </ul>
         </section>
 
+        {/* How to start */}
+        <section id="start" tabIndex={-1} className="mx-auto max-w-7xl px-5 pb-14 outline-none sm:px-8 sm:pb-20 lg:px-12">
+          <SectionHeading kicker="Getting started" title="Talking to HANNAH takes about a minute." />
+          <StartSteps keyless={keyless} />
+        </section>
+
         {/* Closing call to action */}
         <section className="mx-auto max-w-7xl px-5 pb-14 sm:px-8 sm:pb-20 lg:px-12">
           <div className="flex flex-col items-start justify-between gap-6 rounded-[2rem] bg-ink px-7 py-10 text-white sm:px-10 lg:flex-row lg:items-center">
             <div>
               <h2 className="font-display text-[clamp(1.6rem,3vw,2.3rem)] font-medium tracking-tight">Say hello to HANNAH.</h2>
-              <p className="mt-2 max-w-xl text-[15px] text-slate-300">Start in your browser in a minute with a free Groq key, or download the app.</p>
+              <p className="mt-2 max-w-xl text-[15px] text-slate-300">{keyless ? "Start in your browser with a free account, no API key needed, or download the app." : "Start in your browser in a minute with a free Groq key, or download the app."}</p>
             </div>
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={openKeyDialog} className="inline-flex min-h-[3rem] items-center gap-2 rounded-2xl bg-white px-6 text-sm font-semibold text-ink transition hover:bg-slate-100">
@@ -610,6 +645,14 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, ha
           <p className="mx-auto max-w-7xl px-5 pb-8 text-[12px] text-slate-500 sm:px-8 lg:px-12">© {new Date().getFullYear()} Harsh Tambade and HANNAH contributors. Source-available under the HANNAH Non-Commercial License.</p>
         </footer>
       </div>
+
+      {pastHero && !keyDialogOpen && !mobileNavigationOpen && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:hidden">
+          <button type="button" onClick={openKeyDialog} className="btn-primary min-h-[3rem] w-full !rounded-2xl text-sm">
+            {hasSession ? "Open HANNAH" : keyless ? "Start free: no API key needed" : "Talk to HANNAH: it's free"} <ArrowRight size={15} />
+          </button>
+        </div>
+      )}
 
       {keyDialogOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-ink/40 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setKeyDialogOpen(false); }}>

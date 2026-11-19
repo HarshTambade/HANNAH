@@ -21,16 +21,22 @@ test("landing navigation sections and marketplace actions work", async ({ page }
   await expect(page.getByRole("heading", { name: "Connect your tools. Shape how she works." })).toBeVisible();
   await page.getByRole("tab", { name: "Agents and skills" }).click();
 
+  // One click adds a package and turns it on; adding another agent replaces the active one.
   const studyCoach = page.getByRole("article").filter({ hasText: "Study coach" });
-  await studyCoach.getByRole("button", { name: "Install" }).click();
-  await studyCoach.getByRole("button", { name: "Activate Study coach" }).click();
-  await expect(studyCoach.getByRole("button", { name: "Deactivate Study coach" })).toBeVisible();
+  await studyCoach.getByRole("button", { name: "Use Study coach" }).click();
+  await expect(page.getByRole("status")).toContainText("Study coach is on");
+  await expect(studyCoach.getByRole("button", { name: "Turn off Study coach" })).toBeVisible();
+  const researcher = page.getByRole("article").filter({ hasText: "Research analyst" });
+  await researcher.getByRole("button", { name: "Use Research analyst" }).click();
+  await expect(researcher.getByRole("button", { name: "Turn off Research analyst" })).toBeVisible();
+  await expect(studyCoach.getByRole("button", { name: "Use Study coach" })).toBeVisible();
+  await expect(page.getByText("Active agent: Research analyst")).toBeVisible();
 
   await page.getByRole("button", { name: "skills", exact: true }).click();
   const conciseReplies = page.getByRole("article").filter({ hasText: "Concise replies" });
-  await conciseReplies.getByRole("button", { name: "Install" }).click();
-  await conciseReplies.getByRole("switch", { name: "Enable Concise replies" }).click();
-  await expect(conciseReplies.getByRole("switch", { name: "Disable Concise replies" })).toHaveAttribute("aria-checked", "true");
+  await conciseReplies.getByRole("switch", { name: "Turn on Concise replies" }).click();
+  await expect(conciseReplies.getByRole("switch", { name: "Turn off Concise replies" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText("Skills on: 1 of 5")).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: /Your Personal AI/ })).toBeVisible();
@@ -102,4 +108,22 @@ test("landing scroll keeps the navbar available and About has a built route", as
   await expect(page.locator("#features")).toBeInViewport();
   await expect(page).toHaveURL(/\/$/);
   expect(new URL(page.url()).hash).toBe("");
+});
+
+test("the home page's prompts lead a new visitor to connect, then into chat with the message and agent ready", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+  // Counts come from the product's own data.
+  await expect(page.getByLabel("HANNAH in numbers")).toContainText("agents and skills");
+  await page.getByRole("button", { name: "Try it: Learn something properly" }).click();
+  // Not connected yet: the connect dialog comes first, and the message waits.
+  await expect(page.getByRole("dialog")).toBeVisible();
+  expect(await page.evaluate(() => window.sessionStorage.getItem("hannah.chat.draft"))).toContain("photosynthesis");
+  expect(await page.evaluate(() => JSON.parse(window.localStorage.getItem("hannah.marketplace.v1") || "{}").activeAgentId)).toBe("study-coach");
+  await page.keyboard.press("Escape");
+
+  await page.getByLabel("Your first message to HANNAH").fill("What is the capital of Australia?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  expect(await page.evaluate(() => window.sessionStorage.getItem("hannah.chat.draft"))).toBe("What is the capital of Australia?");
 });

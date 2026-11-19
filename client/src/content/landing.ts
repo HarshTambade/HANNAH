@@ -182,7 +182,7 @@ export const FAQS = [
   },
   {
     q: "What do I need to start?",
-    a: "A free Groq API key from console.groq.com is enough for the web app. Your key stays in this browser tab and goes only to Groq. A HANNAH server operator can also give you an access token or an account.",
+    a: "A free Groq API key from console.groq.com is enough for the web app. Your key stays in this browser tab and goes only to Groq. Where a HANNAH server includes its own models for accounts, an email and a password are all you need; the page says so when that's the case. A server operator can also give you an access token.",
   },
   {
     q: "Is it free?",

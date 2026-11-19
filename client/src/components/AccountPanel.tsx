@@ -20,8 +20,15 @@ const KEY_PROVIDERS = [
 const errorText = (error: unknown) => (error instanceof Error ? error.message : "Something went wrong.");
 
 /** Email + password sign-in or sign-up. Used in the connect dialog and Settings. */
-export function SignInForm({ signupAllowed, vault, onSignedIn }: { signupAllowed: boolean; vault: boolean; onSignedIn: (groqKeyForTab: string) => void }) {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+export function SignInForm({ signupAllowed, vault, onSignedIn, serverKeys = false, startWith = "signin" }: {
+  signupAllowed: boolean;
+  vault: boolean;
+  onSignedIn: (groqKeyForTab: string) => void;
+  /** This server lets accounts use its own models, so a new account needs no API key. */
+  serverKeys?: boolean;
+  startWith?: "signin" | "signup";
+}) {
+  const [mode, setMode] = useState<"signin" | "signup">(startWith === "signup" && signupAllowed ? "signup" : "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -80,11 +87,19 @@ export function SignInForm({ signupAllowed, vault, onSignedIn }: { signupAllowed
         <input id="account-password" type="password" required minLength={mode === "signup" ? 10 : 1} value={password} onChange={(event) => { setPassword(event.target.value); setError(""); }} autoComplete={mode === "signup" ? "new-password" : "current-password"} className={inputClass} />
         {mode === "signup" && <p className="mt-1 text-[11px] text-slate-500">At least 10 characters.</p>}
       </div>
-      {mode === "signup" && (
+      {mode === "signup" && serverKeys && (
+        <details className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+          <summary className="cursor-pointer select-none text-xs font-medium text-slate-600">Use my own Groq key instead (optional)</summary>
+          <label htmlFor="account-groq" className="sr-only">Groq API key (optional)</label>
+          <input id="account-groq" type="password" value={groqKey} onChange={(event) => setGroqKey(event.target.value)} placeholder="gsk_…" autoComplete="off" spellCheck={false} className={`${inputClass} mt-2 font-mono`} />
+          <p className="mt-1 text-[11px] text-slate-500">Without one, HANNAH uses this server's models, within its daily limits. {vault ? "Your key would be saved encrypted to your account." : "Your key would be kept in this tab only."}</p>
+        </details>
+      )}
+      {mode === "signup" && !serverKeys && (
         <div>
-          <label htmlFor="account-groq" className="mb-1 block text-xs font-medium text-slate-600">Groq API key (optional)</label>
+          <label htmlFor="account-groq" className="mb-1 block text-xs font-medium text-slate-600">Groq API key</label>
           <input id="account-groq" type="password" value={groqKey} onChange={(event) => setGroqKey(event.target.value)} placeholder="gsk_…" autoComplete="off" spellCheck={false} className={`${inputClass} font-mono`} />
-          <p className="mt-1 text-[11px] text-slate-500">{vault ? "Saved encrypted to your account so it works on every device." : "This server can't store keys, so it's kept in this tab only."}</p>
+          <p className="mt-1 text-[11px] text-slate-500">HANNAH needs it to answer. It's free at <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="underline">console.groq.com/keys</a>, and you can add it later in Settings. {vault ? "Saved encrypted to your account so it works on every device." : "This server can't store keys, so it's kept in this tab only."}</p>
         </div>
       )}
       {error && <p role="alert" className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
@@ -391,7 +406,7 @@ export default function AccountPanel({ onSignedOut, onTabGroqKey }: { onSignedOu
     return (
       <div className="max-w-sm">
         <p className="mb-3 text-sm text-slate-600">Sign in to keep your keys, memories and reminders across devices. Stored on {databaseLabel(status.database.provider)}, run by this server's operator.</p>
-        <SignInForm signupAllowed={status.accounts.signup} vault={status.vault} onSignedIn={(key) => { if (key) onTabGroqKey(key); void reload(); void syncNow(); }} />
+        <SignInForm signupAllowed={status.accounts.signup} vault={status.vault} serverKeys={status.accounts.serverKeys} onSignedIn={(key) => { if (key) onTabGroqKey(key); void reload(); void syncNow(); }} />
       </div>
     );
   }

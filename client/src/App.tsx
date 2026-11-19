@@ -29,6 +29,7 @@ import type { Emotion, InferenceMode } from "./types";
 import NotFoundPage from "./components/NotFoundPage";
 import { legacyHashRedirect, pathForScreen, ROUTE_TITLES, screenForLocation, type AppScreen, type Screen } from "./routes";
 import AppWelcome from "./components/AppWelcome";
+import { MarketplaceService } from "./services/MarketplaceService";
 import { IS_WEBSITE } from "./config/site";
 
 const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "settings"]);
@@ -179,7 +180,7 @@ export default function App() {
   };
 
   if (screen === "integrations") return <IntegrationsPage onBack={() => navigate(returnScreen === "integrations" ? "landing" : returnScreen)} />;
-  if (screen === "marketplace") return <MarketplacePage onBack={() => navigate(returnScreen === "marketplace" ? "landing" : returnScreen)} />;
+  if (screen === "marketplace") return <MarketplacePage onBack={() => navigate(returnScreen === "marketplace" ? "landing" : returnScreen)} onOpenChat={() => navigate("conversation")} />;
 
   if (screen === "not-found") return <NotFoundPage onHome={() => navigate("landing")} onChat={() => navigate("conversation")} />;
 
@@ -214,6 +215,12 @@ export default function App() {
         onResume={() => { navigate(pendingScreen ?? "conversation"); setPendingScreen(null); }}
         onIntegrations={() => openSecondary("integrations")}
         onMarketplace={() => openSecondary("marketplace")}
+        onTry={(prompt, agentId) => {
+          // The message waits for the chat; a visitor who isn't connected yet connects first and lands on it.
+          if (agentId) { try { MarketplaceService.turnOn(agentId); } catch { /* the chat still opens with the message */ } }
+          MarketplaceService.setChatDraft(prompt);
+          navigate("conversation");
+        }}
       />
     );
   }
@@ -237,7 +244,7 @@ export default function App() {
               <AvatarScene emotion={emotion} activity={avatarActivity} onMotionChange={setAvatarMotion} />
             </section>
             <div className="min-h-0 min-w-0">
-              <ChatUI onEmotionChange={setEmotion} onActivityChange={setAvatarActivity} panel groqApiKey={groqApiKey} initialMode={preferredMode} onSessionExpired={reconnect} />
+              <ChatUI onEmotionChange={setEmotion} onActivityChange={setAvatarActivity} panel groqApiKey={groqApiKey} initialMode={preferredMode} onSessionExpired={reconnect} onOpenMarketplace={() => openSecondary("marketplace")} />
             </div>
           </div>
         </div>

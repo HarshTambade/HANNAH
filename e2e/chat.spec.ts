@@ -8,8 +8,8 @@ test("a visitor connects with only a Groq key and chats with the WebGL avatar", 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    // Public endpoints (health, whether this server offers accounts) need no credentials.
-    if (!["/api/health", "/api/account/status", "/api/db/status"].includes(url.pathname)) {
+    // Public endpoints (health, whether this server offers accounts, the connector directory the home page shows) need no credentials.
+    if (!["/api/health", "/api/account/status", "/api/db/status", "/api/connectors/catalog"].includes(url.pathname)) {
       protectedRequests.push({ authorization: request.headers().authorization ?? "", groqKey: request.headers()["x-groq-api-key"] ?? "" });
     }
 
