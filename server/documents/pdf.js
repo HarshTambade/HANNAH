@@ -11,12 +11,10 @@
  * Devanagari for Hindi and Marathi, so the file doesn't depend on fonts the
  * reader's device has.
  */
-const path = require("node:path");
 const PDFDocument = require("pdfkit");
 const { normalizeDocument } = require("./model");
 const { themeFor } = require("./theme");
 
-const FONTS = path.join(__dirname, "fonts");
 const PAGE = { size: "A4", margins: { top: 78, bottom: 70, left: 58, right: 58 } };
 // eslint-disable-next-line no-misleading-character-class -- a whole script block (letters and their combining signs) is meant
 const DEVANAGARI = /[ऀ-ॿ᳐-᳿꣠-ꣿ]/;
@@ -54,14 +52,14 @@ const display = (cell) => (typeof cell === "number" ? cell.toLocaleString("en-US
 async function renderPdf(input) {
   const model = normalizeDocument(input);
   const theme = themeFor(model.theme);
-  const doc = new PDFDocument({ ...PAGE, bufferPages: true, autoFirstPage: false, info: { Title: model.title, Author: model.author || "HANNAH", Creator: "HANNAH", Subject: model.subtitle || "" } });
+  const doc = new PDFDocument({ ...PAGE, bufferPages: true, autoFirstPage: false, font: null, info: { Title: model.title, Author: model.author || "HANNAH", Creator: "HANNAH", Subject: model.subtitle || "" } });
   const chunks = [];
   doc.on("data", (chunk) => chunks.push(chunk));
   const done = new Promise((resolve, reject) => { doc.on("end", resolve); doc.on("error", reject); });
-  doc.registerFont("body", path.join(FONTS, "NotoSans-Regular.ttf"));
-  doc.registerFont("bold", path.join(FONTS, "NotoSans-Bold.ttf"));
-  doc.registerFont("deva", path.join(FONTS, "NotoSansDevanagari-Regular.ttf"));
-  doc.registerFont("devaBold", path.join(FONTS, "NotoSansDevanagari-Bold.ttf"));
+  doc.registerFont("body", require.resolve("./fonts/NotoSans-Regular.ttf"));
+  doc.registerFont("bold", require.resolve("./fonts/NotoSans-Bold.ttf"));
+  doc.registerFont("deva", require.resolve("./fonts/NotoSansDevanagari-Regular.ttf"));
+  doc.registerFont("devaBold", require.resolve("./fonts/NotoSansDevanagari-Bold.ttf"));
 
   const width = () => doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const left = () => doc.page.margins.left;

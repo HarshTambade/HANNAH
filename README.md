@@ -19,18 +19,15 @@ Three rules shape the product:
 2. **Bring your own key (BYOK).** Paste your own free Groq key and start talking: no account, no sign-up. An operator access token is optional. Keys are kept for the browser tab session only.
 3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
-> **Status:** active development. The latest published release is [v1.4.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.4.0). `main` is version **1.5.0**, which isn't released yet. It's listed under [1.5.0 in the changelog](./docs/CHANGELOG.md):
-> - web research with checked citations, and PowerPoint, PDF, Word and Excel files made from a sentence;
-> - connectors to 29 services and chat apps (Telegram, Slack, Discord, Google Chat, Teams, WhatsApp, and iMessage and Signal on the desktop);
-> - web search on every platform;
-> - HANNAH using your Mac's apps;
-> - setting up Vercel and Supabase from the app;
-> - a command sandbox, a `hannah` command-line tool, Docker self-hosting and a plugin kit;
-> - reliable phone reminders;
-> - workflows that use your phone (find a contact, call, text, each approved) and your desktop (open apps, projects and links);
-> - mail that still needs your reply, reply drafts in the thread, archiving and labels, and Google Chat as you;
-> - "Hey HANNAH" that keeps listening (desktop window hidden, Android in the background; "Hey Siri, talk to HANNAH" on iPhone);
-> - memories that update when a fact changes, temporary chat, and Markdown export.
+> **Status:** active development. The latest published release is [v1.6.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.6.0). `main` is version **1.6.0**. What's new in 1.6.0 (see [1.6.0 in the changelog](./docs/CHANGELOG.md)):
+> - search the web with checked citations, five modes (quick, latest, deep research, academic, compare), a sources panel and research history;
+> - PowerPoint, PDF, Word and Excel files from a sentence, with real formulas, charts and revisions;
+> - attach PDF, Word, PowerPoint, Excel, CSV, text, JSON and images to a chat, and a **Library** of generated files and research;
+> - research and documents as platform services, used by chat, voice, Team specialists, marketplace agents, workflows and MCP hosts (plus a new **Data analyst** agent);
+> - more search providers: Tavily, Brave Search, SearXNG, Wikipedia, OpenAlex and arXiv;
+> - Vercel, Intercom and Square connectors listed only on a local install.
+>
+> Earlier releases: [1.5.1](./docs/CHANGELOG.md) (agents and skills that do visible work, integration tests, a home page) and [1.5.0](./docs/CHANGELOG.md) (web research and documents, connectors and chat apps, web search, macOS app control, Vercel and Supabase setup, command sandbox, CLI, Docker, plugin kit, phone and desktop workflows, mail and Google Chat, "Hey HANNAH", memory updates).
 >
 > See [Project status](#project-status) for what is finished, what is experimental, and what still needs a real-device run.
 
@@ -76,7 +73,7 @@ Three rules shape the product:
 
 ## Downloads
 
-Installers for **HANNAH 1.4.0** are attached to the [latest release](https://github.com/HarshTambade/HANNAH/releases/latest), with a `SHA256SUMS` file to check them. The links below always point at the newest release.
+Installers for **HANNAH 1.6.0** are attached to the [latest release](https://github.com/HarshTambade/HANNAH/releases/latest), with a `SHA256SUMS` file to check them. The links below always point at the newest release.
 
 | Platform | Download | Before you install |
 | --- | --- | --- |
@@ -98,13 +95,13 @@ Every screen has its own address, so refresh, bookmarks and the back button work
 | Screen | Route | What it does |
 | --- | --- | --- |
 | **Landing** | `/` | Introduces HANNAH. **Talk to HANNAH** opens the connect dialog: paste your Groq key (checked with Groq before the app opens). **I have an access token** is optional, for operator-provided models and features. When the server has a database, **Sign in or create one** opens email and password sign-in. |
-| **Chat** | `/chat` | Conversation beside the 3D avatar. Pick a model, or **Auto** to let HANNAH choose a provider and model for each message in your [routing mode](#model-routing). A line above the message box previews the choice before you send. Speak or type, rate replies, approve or decline actions on the in-chat approval cards, and press **Stop** to halt a running task before its next step. Turn on **Team** to have HANNAH plan the task with specialist agents and verify the result. |
+| **Chat** | `/chat` | Conversation beside the 3D avatar. Pick a model, or **Auto** to let HANNAH choose a provider and model for each message in your [routing mode](#model-routing). A line above the message box previews the choice before you send. Speak or type, rate replies, approve or decline actions on the in-chat approval cards, and press **Stop** to halt a running task before its next step. Turn on **Team** to have HANNAH plan the task with specialist agents and verify the result. **Attach** files (PDF, Word, PowerPoint, Excel, CSV, text, JSON, images) to ask about them, and open **Library** for files HANNAH made and your research history. Use **Search the web** (quick, latest, deep research, academic, compare) for cited answers. |
 | **Dashboard** | `/dashboard` | Bento-style overview built only from data on this device: replies this week, success rate, a 30-day activity matrix, your reply feedback, where you left off, memory and Guardian counts, and per-model latency and tokens. **Across your devices** shows agent team tasks and automations from all your signed-in devices and lets you approve or deny their next step here (see [Tasks across devices](#tasks-across-devices)). Also holds **Reminders**: add, cancel, and allow notifications. Empty states show `—` or `0`, never sample numbers. |
 | **Agents** | `/agents` | The agent team: Research, Coding, Memory and Tasks specialists with their tools and model choice (Auto or a specific model), the always-on verification agent, and **Team activity**: every team run's plan, which steps ran in parallel, each step's status and result, verification and the final answer. Interrupted or stopped runs can be resumed, on this device or, when you're signed in, on any of your devices; runs another device is working on show its name and a **Cancel** button. |
 | **Models** | `/models` | Model advisor. Enter or detect your device (RAM, GPU, VRAM, Apple unified memory) and pick a task, budget and goal (cheapest, fastest, best coding, privacy-first and so on). HANNAH ranks hosted and local models, shows whether each fits your memory (weights + KV cache + runtime), cost, privacy and limitations, and sets your choice for chat. |
 | **Memory & trust** | `/memory` | The accountability page: an **Agent runs** log (every request with each tool step and how it ended, which survives reloads), Guardian strictness and its decision log (allowed and blocked, with reasons), the memory center (search, filter by category, edit, mark sensitive, export, switch kinds of memory or all memory off; each memory shows where it came from and when it was last used), **Knowledge** (your own documents, indexed on the device so HANNAH answers from them with citations; see [Knowledge](#knowledge)), personalization examples, the active persona, and installed plugins. |
 | **Automations** | `/automations` | Routines built from trigger, agent-task, daily-briefing, action and output steps that run on a schedule while HANNAH is open, with approval before every action and a run history. See [Automations](#automations). |
-| **Marketplace** | `/marketplace` | **Connectors**: 29 services (GitHub, Linear, Notion, Atlassian, Stripe, Vercel, Supabase and more) with their official icons, connected without needing an AI key, or any MCP server by URL once you're signed in. **Chat apps**: talk to HANNAH from Telegram, Slack, Discord, Google Chat, Teams or WhatsApp, and in the desktop app iMessage and Signal. **Agents and skills**: 10 agents (Study coach, Research analyst, Daily organizer and more) that set how HANNAH works for a conversation, the tools she keeps to hand and the prompts she suggests, and 12 skills that adjust every reply. One click turns one on; chat shows which agent is active and lets you switch. Plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
+| **Marketplace** | `/marketplace` | **Connectors**: 30 services (GitHub, Linear, Notion, Atlassian, Stripe, Vercel, Supabase and more) with their official icons, connected without needing an AI key, or any MCP server by URL once you're signed in. **Chat apps**: talk to HANNAH from Telegram, Slack, Discord, Google Chat, Teams or WhatsApp, and in the desktop app iMessage and Signal. **Agents and skills**: 11 agents (Study coach, Research analyst, Data analyst, Daily organizer and more) that set how HANNAH works for a conversation, the tools she keeps to hand and the prompts she suggests, and 12 skills that adjust every reply. One click turns one on; chat shows which agent is active and lets you switch. Plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
 | **Integrations** | `/integrations` | **Test this server now**: runs the REST API, the OpenAI-compatible API, a real reply, the MCP endpoint, A2A and webhooks with your credential and shows what came back; create a developer key there. REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
 | **Settings** | `/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Calendar and email**: connect Google or Microsoft with their own sign-in. **Voice**: speaking and listening engines, voice choice, interrupt-by-talking and the **“Hey HANNAH”** wake word. **Daily briefing**: which sections, the place for the weather, and a preview (see [Daily briefing](#daily-briefing)). **Setup check**: one pass over the server, model, account, connections, voice, microphone, notifications, storage, desktop app and recent errors, with a verdict and a fix for each. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. Also **Appearance** (text size), **Desktop app** (update channel, check for updates, update history, shortcut and `hannah://` links; desktop only), **Backup and restore** (one file with your data and choices, never your keys; optional passphrase; merge or replace on restore) and **Diagnostics** (what went wrong on this device, redacted, searchable, exportable). |
 
@@ -807,10 +804,10 @@ Turn on **Team** under the chat box (cloud and Ollama modes) and HANNAH works on
 
 | Specialist | Tools | Auto tier |
 | --- | --- | --- |
-| Research | list and read app files (no web access; it says when facts may be out of date) | complex |
-| Coding | list, read and write app files (can't run code) | complex |
+| Research | research, web search and read, create document, read attached files, list and read app files (desktop adds browser and YouTube tools) | complex |
+| Coding | list, read and write app files, desktop files and commands, research, create document | complex |
 | Memory | search memories, save memory | simple |
-| Tasks | reminders, device status, open app, message and call drafts | standard |
+| Tasks | reminders, device status, open app, message and call drafts, create document, read and convert files | standard |
 
 On the **Agents** screen you can turn specialists off, pick a model for each, and watch runs live. Every run is saved after each change. A run cut short by Stop or a closed tab can be **resumed**: finished steps keep their results and only the rest runs again. When you're signed in, each change is also a checkpoint in your account, so you can resume the run on another device, or cancel it from there (see [Tasks across devices](#tasks-across-devices)). Code: [`Orchestrator.ts`](./client/src/services/Orchestrator.ts), [`TaskRecords.ts`](./client/src/services/TaskRecords.ts), [`server/task-runs.js`](./server/task-runs.js), [`SpecialistAgents.ts`](./client/src/services/SpecialistAgents.ts) and [`server/orchestrate.js`](./server/orchestrate.js).
 
@@ -820,14 +817,14 @@ On the **Agents** screen you can turn specialists off, pick a model for each, an
 
 ### Connectors
 
-Marketplace → Connectors lists 29 services on a public site and 32 on a local install (Vercel, Intercom and Square register local addresses only), each the vendor's own MCP server, shown with its official icon.
+Marketplace → Connectors lists 30 services on a public site and 33 on a local install (Vercel, Intercom and Square register local addresses only), each the vendor's own MCP server, shown with its official icon.
 - **Connecting:** with your own sign-in (OAuth with PKCE), a token (GitHub), or no sign-in at all (docs search). You can also add any remote MCP server by URL.
 - **Safety:** your tokens stay in your browser, and HANNAH asks before every action a connector takes.
 - **Code:** the directory and its checks are in `server/connectors.js`.
 
-### Web search
+### Web search and research
 
-HANNAH searches on every platform with Groq's browser search, using your own Groq key, and cites her sources. She reads public pages through HANNAH's server (`server/web.js`). The desktop app also has its own visible browser.
+HANNAH searches on every platform. With a server key she uses Tavily, Brave Search or your own SearXNG; otherwise she uses Groq's browser search with your Groq key, then Wikipedia, OpenAlex and arXiv (no key needed). Research mode plans searches, reads the pages, scores sources and checks every citation; see [Research and Document Studio](#research-and-document-studio). She reads public pages through HANNAH's server (`server/web.js` and `server/research/`). The desktop app also has its own visible browser.
 
 ### Chat apps
 
@@ -899,7 +896,7 @@ Signed-in users bring their own provider keys unless the operator sets `HANNAH_A
 
 The catalog is bundled in [`shared/marketplace-catalog.json`](./shared/marketplace-catalog.json) and is first-party and offline.
 
-- **Agents** are specialists, such as a study coach. Install one, then activate it; only one agent is active at a time.
+- **Agents** are specialists, such as a study coach or the research analyst. Install one, then activate it; only one agent is active at a time. The catalog now includes a **Data analyst** that reads an attached spreadsheet or CSV and builds an Excel workbook with real formulas and charts.
 - **Skills**, such as concise replies, can be combined. Enable the ones you want.
 
 Entries add **prompt guidance only**. They don't add tools, request permissions, download code, or get around the Guardian. Choices are stored on this device.
@@ -1467,7 +1464,8 @@ Not covered automatically: physical-device permissions, speech, calls, app resum
 
 **Shipped in the app:**
 - everything described above under [What you can do](#what-you-can-do), the safety chain, and all six inference modes;
-- device tools, Marketplace (connectors, chat apps, agents and skills), MCP, web search, voice and the Pinecall integration;
+- device tools, Marketplace (connectors, chat apps, agents and skills), MCP, web search and research, voice and the Pinecall integration;
+- research and Document Studio: search with checked citations, PowerPoint/PDF/Word/Excel from a sentence, attachments and Library;
 - desktop files and terminal (with the optional Docker sandbox), and HANNAH using your apps on macOS (beta);
 - desktop computer use, only in a desktop app you build with the bridge set up;
 - the native and desktop builds, the `hannah` command-line tool and Docker self-hosting.

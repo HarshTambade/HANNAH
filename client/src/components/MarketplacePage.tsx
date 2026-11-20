@@ -13,17 +13,21 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
   const [state, setState] = useState(() => MarketplaceService.getState());
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   // "/marketplace#agents" opens on the agents and skills tab.
   const [tab, setTab] = useState<"connectors" | "packages">(() => (typeof window !== "undefined" && window.location.hash === "#agents" ? "packages" : "connectors"));
+  const allPackages = MarketplaceService.list();
+  const categories = useMemo(() => ["all", ...Array.from(new Set(allPackages.map((item) => item.category))).sort()], [allPackages]);
   const packages = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return MarketplaceService.list().filter((item) => {
+    return allPackages.filter((item) => {
       if (typeFilter !== "all" && item.type !== typeFilter) return false;
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
       if (!normalizedQuery) return true;
       return [item.name, item.description, item.category, item.type, ...item.tags].join(" ").toLowerCase().includes(normalizedQuery);
     });
-  }, [query, typeFilter]);
+  }, [query, typeFilter, categoryFilter, allPackages]);
   const installedCount = state.installedIds.length;
 
   const update = (action: () => MarketplaceState, successMessage: string) => {
@@ -72,7 +76,7 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
         </section>
 
         <div role="tablist" aria-label="Marketplace sections" className="mt-8 inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-soft">
-          {([["connectors", "Connectors"], ["packages", "Agents and skills"]] as const).map(([id, label]) => (
+          {([["connectors", "Connectors"], ["packages", `Agents and skills (${allPackages.length})`]] as const).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-lg px-4 py-2 text-xs font-semibold transition ${tab === id ? "bg-ink text-white" : "text-slate-600 hover:text-ink"}`}>{label}</button>
           ))}
         </div>
@@ -117,6 +121,20 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
           <button type="button" onClick={() => openChat()} className="ml-auto inline-flex items-center gap-1 font-semibold text-violet-700 hover:underline"><MessageSquare size={12} /> Open chat</button>
         </div>
 
+        <div className="mt-4 flex flex-wrap gap-1.5" aria-label="Filter by category">
+          {categories.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setCategoryFilter(category)}
+              aria-pressed={categoryFilter === category}
+              className={`rounded-full border px-3 py-1 text-[11px] font-medium transition ${categoryFilter === category ? "border-violet-200 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-ink"}`}
+            >
+              {category === "all" ? "All categories" : category}
+            </button>
+          ))}
+        </div>
+
         {status && <p role="status" className={`mt-3 text-xs ${status.ok ? "text-emerald-700" : "text-rose-700"}`}>{status.text}</p>}
 
         {packages.length ? (
@@ -127,20 +145,23 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
               const enabled = item.type === "skill" && state.enabledSkillIds.includes(item.id);
               const on = active || enabled;
               return (
-                <article key={item.id} className="deck-frame flex flex-col"><div className={`deck-card flex flex-1 flex-col ${item.type === "agent" ? "tone-lavender" : "tone-mint"}`}>
+                <article key={item.id} className="deck-frame flex flex-col transition hover:-translate-y-0.5"><div className={`deck-card flex flex-1 flex-col ${item.type === "agent" ? "tone-lavender" : "tone-mint"}`}>
                   <div className="flex items-start justify-between gap-3">
-                    <span className={`flex h-10 w-10 items-center justify-center rounded-xl border ${item.type === "agent" ? "border-violet-100 bg-violet-50 text-violet-700" : "border-cyan-100 bg-cyan-50 text-cyan-700"}`}>
-                      {item.type === "agent" ? <Bot size={18} /> : <Sparkles size={17} />}
+                    <span className={`flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm ${item.type === "agent" ? "border-violet-100 bg-gradient-to-br from-violet-50 to-white text-violet-700" : "border-cyan-100 bg-gradient-to-br from-cyan-50 to-white text-cyan-700"}`}>
+                      {item.type === "agent" ? <Bot size={20} /> : <Sparkles size={19} />}
                     </span>
-                    <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">{item.type} · {item.category}</span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">{item.type} · {item.category}</span>
+                      {item.tools?.length ? <span className="text-[10px] text-slate-500">{item.tools.length} tool{item.tools.length === 1 ? "" : "s"}</span> : null}
+                    </div>
                   </div>
                   <div className="mt-4 flex items-center gap-2">
                     <h2 className="font-['Manrope'] text-sm font-semibold text-ink">{item.name}</h2>
-                    {on && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.type === "agent" ? "bg-violet-50 text-violet-700" : "bg-cyan-50 text-cyan-700"}`}>On</span>}
+                    {on && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.type === "agent" ? "bg-violet-100 text-violet-700" : "bg-cyan-100 text-cyan-700"}`}>On</span>}
                   </div>
-                  <p className="mt-2 text-xs leading-5 text-slate-500">{item.description}</p>
+                  <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-500">{item.description}</p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {item.tags.map((tag) => <span key={tag} className="rounded-md bg-slate-100 px-2 py-1 text-[10px] text-slate-600">{tag}</span>)}
+                    {item.tags.map((tag) => <span key={tag} className="rounded-md bg-white/80 px-2 py-1 text-[10px] text-slate-600 ring-1 ring-slate-100">{tag}</span>)}
                   </div>
                   {item.starters.length > 0 && (
                     <div className="mt-3">
