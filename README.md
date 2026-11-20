@@ -19,13 +19,13 @@ Three rules shape the product:
 2. **Bring your own key (BYOK).** Paste your own free Groq key and start talking: no account, no sign-up. An operator access token is optional. Keys are kept for the browser tab session only.
 3. **Nothing runs unchecked.** Every tool call is reviewed by the **GuardianAgent** first, and anything that changes your device or data also waits for **your approval**.
 
-> **Status:** active development. The latest published release is [v1.6.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.6.0). `main` is version **1.6.0**. What's new in 1.6.0 (see [1.6.0 in the changelog](./docs/CHANGELOG.md)):
-> - search the web with checked citations, five modes (quick, latest, deep research, academic, compare), a sources panel and research history;
-> - PowerPoint, PDF, Word and Excel files from a sentence, with real formulas, charts and revisions;
-> - attach PDF, Word, PowerPoint, Excel, CSV, text, JSON and images to a chat, and a **Library** of generated files and research;
-> - research and documents as platform services, used by chat, voice, Team specialists, marketplace agents, workflows and MCP hosts (plus a new **Data analyst** agent);
-> - more search providers: Tavily, Brave Search, SearXNG, Wikipedia, OpenAlex and arXiv;
-> - Vercel, Intercom and Square connectors listed only on a local install.
+> **Status:** active development. The latest published release is [v1.7.0](https://github.com/HarshTambade/HANNAH/releases/tag/v1.7.0). `main` is version **1.7.0**. What's new in 1.7.0 (see [1.7.0 in the changelog](./docs/CHANGELOG.md)):
+> - one Action Engine that asks permission, runs an action once, reads back the result and keeps the record, with a permission manager (five levels, standing permissions, emergency stop) and an **Actions** screen;
+> - calendar, email and messaging through the engine (free time, scheduling, updates, deletes, drafts and sends, approved messages through connected bots);
+> - a coding service over GitHub or a local repository: scan, review, prepare a diff, run the project's own tests, publish a branch and pull request after approval;
+> - new tools for every agent and specialist (`calendar_*`, `message_*`, `code_*`), plus workflow steps "Do an action" and "Check a repository" and an MCP `hannah_action` tool;
+> - `GET /api/account/integrations`: every connection with its account, supported actions, last success and last error;
+> - migration 17 (six new tables on first start) and new settings `HANNAH_CODE_ROOTS` / `HANNAH_GITHUB_API`.
 >
 > Earlier releases: [1.5.1](./docs/CHANGELOG.md) (agents and skills that do visible work, integration tests, a home page) and [1.5.0](./docs/CHANGELOG.md) (web research and documents, connectors and chat apps, web search, macOS app control, Vercel and Supabase setup, command sandbox, CLI, Docker, plugin kit, phone and desktop workflows, mail and Google Chat, "Hey HANNAH", memory updates).
 >
@@ -73,7 +73,7 @@ Three rules shape the product:
 
 ## Downloads
 
-Installers for **HANNAH 1.6.0** are attached to the [latest release](https://github.com/HarshTambade/HANNAH/releases/latest), with a `SHA256SUMS` file to check them. The links below always point at the newest release.
+Installers for **HANNAH 1.7.0** are attached to the [latest release](https://github.com/HarshTambade/HANNAH/releases/latest), with a `SHA256SUMS` file to check them. The links below always point at the newest release.
 
 | Platform | Download | Before you install |
 | --- | --- | --- |
