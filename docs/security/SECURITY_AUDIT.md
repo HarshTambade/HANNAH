@@ -39,6 +39,26 @@ New code that fetches from the web, reads uploaded files and stores generated fi
 | Storage exhaustion | 12 MB per file, 200 files and 250 MB per account, 30-day expiry, oldest unkept files evicted | `studio.test.js` (expiry) |
 | New dependencies | `pptxgenjs` 4.0.1, `docx` 9.15.2, `pdfkit` 0.20.2, `jszip` 3.10.2, `unpdf` 2.1.0, `fast-formula-parser` 1.0.19, all pinned and at least two weeks old. `exceljs` was rejected for vulnerable dependencies. `image-size` (declared by `pptxgenjs`, not loaded by it) is overridden to a patched 2.0.4 | `npm audit`: 0 vulnerabilities |
 
+## Action Engine and coding service (1.7.0)
+
+Reviewed on 2026-11-20. The model is in [`PERMISSION_AND_TRUST_MODEL.md`](./PERMISSION_AND_TRUST_MODEL.md).
+
+| Risk | What prevents it | Test |
+|---|---|---|
+| Something with only an API key approves its own action or widens permissions | Approvals, levels, standing permissions, tokens and lifting the stop are session-only routes | `operator.test.js`: a developer key gets 403 on each |
+| An action runs twice | Conditional status updates; idempotency keys; a published task can't be published again | Same key twice, double approval, workflow retry |
+| A failure reported as success | `done` only with a confirmed verification; the client tells the model "did NOT happen" for every other state | Every `done` in the history is checked |
+| Text from a repository, an email or a web page steers an action | It is data in a labelled block; a model's output is only a proposal that code checks | A model that obeys an injected README is refused three ways |
+| A model names a command | Only a script name the index found in the project can be run; no shell | Command-line strings are refused |
+| A project's script sees server secrets | Its environment is PATH, HOME, language and CI only | The fixture's own test asserts the secret is absent |
+| A change escapes the repository | Path checks on every edit and write; no writing through links; work in a separate worktree | Traversal and `.git` paths refused; the checkout is unchanged |
+| A token leaks | Sealed with the vault; sent only to its host; absent from responses, records and the hub | The token is searched for in the database row and responses |
+| A secret found in a scan is copied into a report | Findings quote the line with the value replaced | The seeded key is searched for in findings and in the page |
+| Force push, deleting, bypassing branch rules | Not in the code; refs move with `force: false`; default branch off by default; merge refused over failing checks | Asserted against the stand-in |
+| One account reading another's actions, repositories or tasks | Every query filters by user | Cross-account requests get 404 or a failed record with no data |
+
+Open: running a project's test script is not sandboxed (it needs approval for that reason); desktop commands and browser typing are not yet in the engine's history; nothing was exercised against real provider accounts.
+
 ## Checked and found in order
 
 | Area | What was checked | Result |

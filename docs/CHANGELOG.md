@@ -2,6 +2,42 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
+## 1.7.0 — 2026-11-20
+
+HANNAH can act, not only answer: one engine that asks permission, waits for approval, does the thing once, checks it happened and keeps the record; and a coding service on top of it.
+
+### Added
+
+- **Action Engine** (`server/actions`). Every action HANNAH takes for an account goes through it, whoever asks: chat, voice, an agent, a workflow, an MCP host or a device. It shows what will happen before it runs, runs it at most once, reads the result back from the service, and records the request, the permission decision, the approval, the response and the check. "Done" means confirmed; accepted-but-unconfirmed, failed and unknown are said as they are.
+- **Permission manager.** Five levels per service (Read only, Suggest, Approval before action, Scoped autonomy, Advanced delegation). Standing permissions limited to an action, a repository or recipient, a daily count, hours of the day and an end date; revocable at once. Paying, deleting, merging and committing to a default branch always ask. An emergency stop cancels what is waiting and leaves HANNAH able only to read.
+- **Actions screen** (`/actions`): approvals, the history of actions with how each was confirmed, permission levels and standing permissions with their last use, what every connection can and can't do, and code.
+- **Calendar**: find free time (working hours, buffers, attendees' free/busy where it can be read), events with attendees, repeats, reminders and a meeting link, change and delete, conflict and duplicate warnings, time zones.
+- **Email**: sending and drafts through the engine, with files HANNAH made attached; a send is confirmed in the Sent folder.
+- **Messaging**: send a message you approve through a connected Telegram, Slack or WhatsApp Business bot, or Google Chat, to a person that channel already knows, matched exactly.
+- **Coding service** (`server/coding`): connect GitHub (a fine-grained token) or a local repository; read and index it; scan for files that don't parse, broken imports, undeclared dependencies, committed secrets, conflict markers and dependencies with published advisories (OSV); a model review whose findings are kept only when the quoted line is in the file; prepare a change as a reviewed diff; run the project's own tests in a separate working copy; publish to a new branch and pull request after approval; read CI results. Tasks are saved after every stage and continue from where they stopped.
+- **Tools for every agent**: `calendar_find_free_time`, `calendar_schedule`, `calendar_update_event`, `calendar_delete_event`, `message_people`, `message_send`, `code_repos`, `code_overview`, `code_search`, `code_read_file`, `code_github`, `code_scan`, `code_change`, `code_publish`, `code_task`, `code_issue_create`, `code_comment`.
+- **Workflows**: steps "Do an action (with your permissions)" and "Check a repository". **MCP**: tool `hannah_action` (it can ask; it can't approve).
+- `GET /api/account/integrations`: every connection with its account, what it supports, what it doesn't, its last success and last error.
+
+### Changed
+
+- The existing calendar and email tools now run through the engine for a signed-in account, so they follow the permission levels and appear in the history. Without an account they ask on the device as before.
+- File writes, device settings, the dialer, message drafts and outside connector tools ask the permission manager first and report their outcome.
+- The Tasks specialist is the personal assistant (calendar, email, messaging); the Coding specialist has the code tools.
+
+### Not included
+
+- Bookings: no booking provider's API is connected. HANNAH researches options, drafts a request and adds a calendar event; it never reports a booking as made.
+- Personal WhatsApp and Telegram accounts: the platforms offer no official API for them. Bots answer and send only to people who wrote to them.
+- GitLab, Bitbucket, GitHub OAuth sign-in, installing dependencies, runtime profiling.
+- Nothing here was run against a real Google, Microsoft, Telegram or GitHub account. Details: `docs/testing/AUTONOMOUS_ACTION_TESTS.md`.
+
+### Operators
+
+- Migration 17 adds six tables on first start.
+- New settings: `HANNAH_CODE_ROOTS` (folders local repositories may live in; off when unset and on serverless hosting), `HANNAH_GITHUB_API` (GitHub Enterprise Server).
+- New dependency: acorn 8.19.0 (MIT), to check that JavaScript files parse.
+
 ## 1.6.0 — 2026-11-20
 
 ### New

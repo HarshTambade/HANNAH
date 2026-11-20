@@ -2,6 +2,18 @@
 
 Run on 2026-11-19 on macOS (Apple silicon), Node 25, against the 1.5.1 working tree. Only tests that were actually executed are listed.
 
+## 1.7.0: Action Engine, permissions and coding service (2026-11-20)
+
+| Suite | Result |
+|---|---|
+| Server (`npm test`) | 418 tests: 417 pass, 1 skipped (needs a live key), 0 fail |
+| Client (`vitest run`) | 398 pass (68 files) |
+| Browser, `e2e/actions.spec.ts` against a real server and a real git repository | 3 pass |
+| Lint and typecheck | 0 errors (3 older client warnings) |
+| Secret scan, licence check, `npm audit --omit=dev`, audit gate | Clean (595 files; 424 dependencies, all permissive; 0 vulnerabilities) |
+
+New tests: 50 on the server (11 permission rules, 5 calendar and mail helpers, 12 coding, 22 API end to end), 13 on the client, 3 in the browser. What each covers, what the stand-ins are, and what was not run: [`AUTONOMOUS_ACTION_TESTS.md`](./AUTONOMOUS_ACTION_TESTS.md).
+
 ## 1.6.0: search, research and Document Studio (2026-11-20)
 
 | Suite | Result |

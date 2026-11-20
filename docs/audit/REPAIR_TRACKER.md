@@ -74,6 +74,23 @@ What existed before: a single web lookup (`web_search`, Groq's browser search) a
 | Sharing a file by link | NOT IMPLEMENTED | Files are downloaded; nothing is published or emailed |
 | Project workspaces | NOT PRESENT | HANNAH has no "projects"; files and research are per account and per device |
 
+## Action Engine, permissions and coding service (1.7.0)
+
+Built on 2026-11-20. Full states, with evidence, are in `docs/architecture/AUTONOMOUS_OPERATOR_ARCHITECTURE.md`, `docs/engineering/CODING_AGENT_CAPABILITIES.md` and `docs/integrations/PROVIDER_CAPABILITY_MATRIX.md`; tests in `docs/testing/AUTONOMOUS_ACTION_TESTS.md`.
+
+| Area | State | Note |
+|---|---|---|
+| Action Engine, permission levels, standing permissions, emergency stop, audit history | Implemented and verified | 22 API tests, 11 rule tests, 3 browser tests |
+| Calendar: free time, attendees, repeats, change, delete | Implemented; read, free time, create and delete verified against a stand-in | Update, repeats, meeting links and Outlook have no test; real accounts need the owner's OAuth apps |
+| Email through the engine, with attachments | Implemented; drafts and sending verified against a stand-in | Attachments checked as a message, not sent through a provider |
+| Messaging through connected bots | Implemented; Telegram verified against a stand-in | Slack, WhatsApp Business and Google Chat untested on this path; personal accounts are not reachable by any official API |
+| Coding: local repositories | Implemented and verified | Real git, worktree, the project's own tests, commit |
+| Coding: GitHub | Implemented, not verified against real GitHub | Needs the owner's token; nothing was written to a real repository |
+| Bookings | Not implemented | No provider API connected; stated in the app |
+| Browser actions in the engine's history, desktop commands in the history | Not done | They keep the desktop app's own dialogs and log |
+
+Found and fixed while building: a working copy left by a crashed task could be reopened for a different repository (now per repository and checked); a file with conflict markers was reported twice; the password detector missed "password is: …"; a `beforeEach` in a client test returned a function that the runner called as cleanup.
+
 ## Verified working (no change needed)
 
 | Feature | Evidence | Status |
