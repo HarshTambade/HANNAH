@@ -54,7 +54,7 @@ function insideRoots(target, roots) {
   return real;
 }
 
-const slug = (text) => String(text || "change").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "change";
+const slug = (text) => String(text || "change").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+/, "").slice(0, 40).replace(/-+$/, "") || "change";
 const branchFor = (title, id) => assertBranch(`hannah/${slug(title)}-${String(id).replace(/[^A-Za-z0-9]/g, "").slice(0, 8)}`);
 
 /** The exact argv for one of the project's own checks. Nothing else can be run. */

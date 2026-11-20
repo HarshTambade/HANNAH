@@ -112,10 +112,10 @@ function codeActions({ coding }) {
       normalize: (raw) => ({ taskId: text(raw.taskId, 80), pullRequest: raw.pullRequest !== false, draft: raw.draft === true, target: raw.target === "default" ? "default" : "branch" }),
       async assess(params, ctx) {
         const plan = await coding.publishPlan(ctx.db, ctx.userId, params);
-        return { resource: resource(plan.repo), account: plan.repo.name, flags: plan.flags, branch: plan.branch, direct: plan.direct, wantsPull: plan.wantsPull, message: plan.message, stat: plan.state.review.stat, diffs: plan.state.review.diffs.map(({ path, added, removed, kind }) => ({ path, added, removed, kind })), runs: (plan.state.runs || []).map(({ script, passed, skipped, preexisting }) => ({ script, passed, skipped, preexisting })), base: plan.state.base };
+        return { resource: resource(plan.repo), account: plan.repo.name, flags: plan.flags, branch: plan.branch, direct: plan.direct, wantsPull: plan.wantsPull, willPush: plan.willPush, message: plan.message, stat: plan.state.review.stat, diffs: plan.state.review.diffs.map(({ path, added, removed, kind }) => ({ path, added, removed, kind })), runs: (plan.state.runs || []).map(({ script, passed, skipped, preexisting }) => ({ script, passed, skipped, preexisting })), base: plan.state.base };
       },
       preview: (params, _ctx, assessed) => ({
-        title: assessed.direct ? `Commit to ${assessed.branch} in ${assessed.account}` : `${assessed.wantsPull ? "Open a pull request" : "Push a branch"} in ${assessed.account}`,
+        title: assessed.direct ? `Commit to ${assessed.branch} in ${assessed.account}` : `${assessed.wantsPull ? "Open a pull request" : assessed.willPush ? "Push a branch" : "Commit to a new branch (not pushed)"} in ${assessed.account}`,
         lines: [
           { label: "Repository", value: assessed.account }, { label: "Branch", value: assessed.direct ? `${assessed.branch} (the default branch)` : `${assessed.branch} (new), from ${assessed.base.branch} at ${assessed.base.sha.slice(0, 7)}` },
           ...(assessed.wantsPull ? [{ label: "Pull request", value: `Into ${assessed.base.defaultBranch}${params.draft ? ", as a draft" : ""}` }] : []),

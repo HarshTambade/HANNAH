@@ -258,6 +258,7 @@ test("only the project's own scripts can be run, by name", () => {
   assert.throws(() => insideRoots(os.tmpdir(), [repo.root]), /outside the folders/);
   assert.throws(() => createLocalWorkspace({ root: repo.root, roots: [] }), /outside the folders/);
   assert.match(branchFor("Fix the average!! (urgent)", "1234abcd-ef"), /^hannah\/fix-the-average-urgent-1234abcd$/);
+  assert.equal(branchFor("The order average is too high: average([2,4,6]) returns 6", "430c8fa0-11"), "hannah/the-order-average-is-too-high-average-2-430c8fa0", "a title cut at a separator leaves no doubled dash");
 });
 
 test("a change is made in a separate working copy: the checkout, its branch and its uncommitted work stay as they were", async () => {

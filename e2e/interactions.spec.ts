@@ -13,7 +13,7 @@ import { join } from "node:path";
  */
 const here = __dirname;
 const serverDir = join(here, "..", "server");
-const SCREENS = ["/chat", "/dashboard", "/agents", "/models", "/memory", "/automations", "/settings", "/integrations", "/marketplace"];
+const SCREENS = ["/chat", "/dashboard", "/agents", "/models", "/memory", "/automations", "/actions", "/settings", "/integrations", "/marketplace"];
 const IGNORED = [/WebGL|THREE\.|GL_INVALID|webgl/i, /fonts\.(googleapis|gstatic)\.com/i, /play\(\) failed|NotAllowedError/i, /net::ERR_/i, /open-meteo|algolia/i, /getUserMedia|microphone|Permission denied|NotFoundError: Requested device not found/i, /speechSynthesis|SpeechRecognition/i];
 // Controls whose job is to leave HANNAH or start an outside sign-in.
 const SKIP = /^(sign out|log out|disconnect|connect google|connect microsoft|download|open in|install the app|delete everything|delete my account)/i;

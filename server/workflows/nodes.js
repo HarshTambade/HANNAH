@@ -1018,7 +1018,7 @@ const NODES = [
   },
   {
     type: "code.check", category: "ai", label: "Check a repository", icon: "GitBranch", status: STATUS.available,
-    description: "Looks at a connected repository and reports what needs attention: failing CI on the default branch, new issues and pull requests, dependencies with published advisories, high-severity static findings. It reads only. Nothing in the repository is changed; put it on a schedule for continuous checks.",
+    description: "Looks at a connected repository and reports what needs attention: failing CI on the default branch, new issues and pull requests, dependencies with known security advisories, high-severity static findings. It reads only. Nothing in the repository is changed; put it on a schedule for continuous checks.",
     inputs: ["main"], outputs: ["main"], permissions: ["actions"],
     params: [{ name: "repo", label: "Repository", type: "string", required: true, default: "", expression: true, help: "owner/name of a repository connected in Actions → Code." }],
     execute: async (ctx) => ({

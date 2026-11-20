@@ -34,6 +34,7 @@ const screens: Array<{ path: string; ready: (page: Page) => Promise<void> }> = [
   { path: "/models", ready: (page) => expect(page.getByRole("heading", { name: "Find the right model for you." })).toBeVisible() },
   { path: "/memory", ready: (page) => expect(page.getByLabel("Add something for HANNAH to remember")).toBeVisible() },
   { path: "/automations", ready: (page) => expect(page.getByRole("button", { name: "New automation" })).toBeVisible() },
+  { path: "/actions", ready: (page) => expect(page.getByRole("heading", { name: "Actions", level: 1 })).toBeVisible() },
   { path: "/settings", ready: (page) => expect(page.getByRole("heading", { name: "Settings" })).toBeVisible() },
 ];
 

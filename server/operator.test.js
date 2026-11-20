@@ -591,6 +591,7 @@ test("a change on a local repository runs the project's tests in a separate copy
   const published = await call(users.asha, "POST", `/coding/tasks/${task.id}/publish`, {});
   const final = await decide(users.asha, published.body.record.id, true);
   assert.equal(final.body.record.status, "done", JSON.stringify(final.body.record));
+  assert.equal(published.body.record.preview.title, `Commit to a new branch (not pushed) in ${local.root}`, "a repository with no remote isn't promised a push or a pull request");
   assert.match(final.body.record.verification.evidence, /It was not pushed/);
   const branch = final.body.record.response.branch;
   assert.ok(local.git("show", `${branch}:src/math.js`).includes(FIXED_AVERAGE));

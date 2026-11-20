@@ -217,7 +217,7 @@ async function vulnerabilityFindings(snapshot, index, { request, max = 600 } = {
     const label = (vuln) => String(vuln?.database_specific?.severity || "").toLowerCase();
     const worst = known.map(label).sort((a, b) => (SEVERITY_ORDER[a === "moderate" ? "medium" : a] ?? 9) - (SEVERITY_ORDER[b === "moderate" ? "medium" : b] ?? 9))[0];
     const severity = worst === "critical" ? "critical" : worst === "high" ? "high" : worst === "low" ? "low" : "medium";
-    const fixed = [...new Set(known.flatMap((vuln) => (vuln.affected || []).filter((item) => item.package?.name === pack.name).flatMap((item) => (item.ranges || []).flatMap((range) => (range.events || []).map((event) => event.fixed).filter(Boolean)))))].slice(0, 4);
+    const fixed = [...new Set(known.flatMap((vuln) => (vuln.affected || []).filter((item) => item.package?.name === pack.name).flatMap((item) => (item.ranges || []).flatMap((range) => (range.events || []).map((event) => event.fixed).filter(Boolean)))))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).slice(-4);
     const text = snapshot.files.get(pack.file)?.text || "";
     const at = text.indexOf(`node_modules/${pack.name}"`);
     const line = at >= 0 ? text.slice(0, at).split("\n").length : 1;
@@ -225,7 +225,7 @@ async function vulnerabilityFindings(snapshot, index, { request, max = 600 } = {
       ...finding("vulnerable-dependency", pack.dev ? (severity === "critical" ? "high" : severity === "high" ? "medium" : "low") : severity, "certain", pack.file, line,
         `${pack.name} ${pack.version} has ${ids.length} published advisor${ids.length === 1 ? "y" : "ies"}`,
         `${known[0]?.summary ? `${String(known[0].summary).slice(0, 220)}. ` : ""}${pack.direct ? "It is a direct dependency." : "It is installed as a dependency of another package."}${pack.dev ? " It is a development dependency, so it doesn't ship." : ""} Whether this project calls the affected code isn't something a version check can tell.`,
-        `${pack.name}@${pack.version}`, fixed.length ? `Upgrade to ${fixed.join(" or ")} or later.` : "Check the advisory for a fixed version."),
+        `${pack.name}@${pack.version}`, fixed.length ? (fixed.length === 1 ? `Upgrade to ${fixed[0]} or later.` : `The advisories name these fixed versions: ${fixed.join(", ")}. Upgrading to ${fixed[fixed.length - 1]} or later clears all of them.`) : "Check the advisory for a fixed version."),
       advisories: ids.slice(0, 8), links: ids.slice(0, 4).map((id) => `https://osv.dev/vulnerability/${id}`),
     });
   }

@@ -348,6 +348,10 @@ function createCodingService({ fetchImpl = (...args) => fetch(...args), request 
             state.reviewed.batches = wanted;
           } else {
             state.reviewed.files.push(...result.reviewed); state.reviewed.dropped += result.dropped; state.reviewed.batches += 1; state.reviewed.candidates = result.candidates + state.reviewed.files.length - result.reviewed.length;
+            const known = new Set((state.findings || []).filter((item) => item.source === "check").map((item) => `${item.file}:${item.line}`));
+            const fresh = result.findings.filter((item) => !known.has(`${item.file}:${item.line}`));
+            state.reviewed.repeated = (state.reviewed.repeated || 0) + result.findings.length - fresh.length;
+            result.findings = fresh;
             state.findings = checks.sortFindings([...(state.findings || []), ...result.findings]);
             log("reviewed", `Reviewed ${result.reviewed.join(", ")}: ${result.findings.length} suspected${result.dropped ? `; ${result.dropped} dropped because the quoted line wasn't in the file` : ""}`);
             if (result.candidates <= result.reviewed.length) state.reviewed.batches = wanted;
@@ -495,9 +499,17 @@ function createCodingService({ fetchImpl = (...args) => fetch(...args), request 
     const failing = (state.runs || []).filter((run) => !run.skipped && !run.passed && !run.preexisting);
     if (failing.length) flags.push(`${failing.map((run) => run.script).join(", ")} failed with this change`);
     if (state.review?.introduced?.length) flags.push(`${state.review.introduced.length} new static-check finding${state.review.introduced.length === 1 ? "" : "s"} in the changed files`);
-    const wantsPull = !direct && pullRequest && at(access) >= at("pull-request");
     const branch = direct ? state.base.defaultBranch : state.branch || branchFor(row.title, row.id);
-    return { row, state, repo, flags, branch, direct, wantsPull, draft, message: commitMessage(row.title, state) };
+    // What will really happen: a local repository is pushed only when it has a remote, and gets a pull request only when that remote is GitHub and GitHub is connected.
+    let willPush = repo.host === "github";
+    let canPull = repo.host === "github";
+    if (repo.host === "local") {
+      const origin = await createLocalWorkspace({ root: repo.name, roots: roots() }).origin().catch(() => ({ url: "", github: null }));
+      willPush = Boolean(origin.url) && at(access) >= at("pull-request");
+      canPull = willPush && Boolean(origin.github) && (await githubStatus(db, userId)).connected;
+    }
+    const wantsPull = !direct && pullRequest && canPull && at(access) >= at("pull-request");
+    return { row, state, repo, flags, branch, direct, wantsPull, willPush, draft, message: commitMessage(row.title, state) };
   }
   function commitMessage(title, state) {
     const subject = clean(state.plan?.understanding || title, 72).replace(/\.$/, "");
