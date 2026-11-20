@@ -35,6 +35,7 @@ const { createVisionRouter } = require("./vision");
 const { createMcpClientRouter } = require("./mcp-client");
 const { createConnectorsRouter } = require("./connectors");
 const { createStudioRouter } = require("./studio");
+const { createOperator, createOperatorRouter } = require("./actions/router");
 const { createWebRouter } = require("./web");
 const { createHostingSetupRouter } = require("./hosting-setup");
 const { createChannelHookRouter, createChannelsRouter } = require("./channels");
@@ -361,6 +362,13 @@ app.post("/api/documents/compose", createRateLimiter(rateLimits.agent));
 app.post("/api/documents/create", createRateLimiter(rateLimits.chat));
 app.post("/api/documents/read", createRateLimiter(rateLimits.chat));
 app.post("/api/documents/convert", createRateLimiter(rateLimits.chat));
+app.post("/api/actions", createRateLimiter(rateLimits.agent));
+app.post("/api/actions/:id/decision", createRateLimiter(rateLimits.chat));
+app.post("/api/coding/tasks", createRateLimiter(rateLimits.agent));
+app.post("/api/coding/tasks/:id/continue", createRateLimiter(rateLimits.agent));
+app.post("/api/coding/tasks/:id/publish", createRateLimiter(rateLimits.chat));
+app.post("/api/coding/repos/check", createRateLimiter(rateLimits.chat));
+app.put("/api/account/integrations/github", createRateLimiter(rateLimits.chat));
 app.post("/api/route/preview", createRateLimiter(rateLimits.events));
 app.post("/api/a2a", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
@@ -466,6 +474,9 @@ app.use("/api", createMcpClientRouter({ timeoutMs: cloudRequestTimeout }));
 app.use("/api", createConnectorsRouter({ publicBaseUrl, allowedOrigins, timeoutMs: cloudRequestTimeout }));
 // Research (search, read, cite) and Document Studio (PowerPoint, PDF, Word, Excel): server/studio.js.
 app.use("/api", createStudioRouter({ getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
+// The Action Engine (permission, approval, execution, verification, audit), the integrations hub and the coding service: server/actions, server/coding.
+const operator = createOperator();
+app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
 app.use("/api", createWebRouter({ getRequestProvider }));
 // "Set up HANNAH": connect this deployment to Vercel and Supabase with the person's own tokens.

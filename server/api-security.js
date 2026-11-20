@@ -46,7 +46,9 @@ function isPublic(path) {
 function accountMayUse(path) {
   return BYOK_PATHS.has(path) || path === "/sync/memory" || path === "/account" || path.startsWith("/account/")
     || path === "/workflows" || path.startsWith("/workflows/") || path === "/notifications" || path.startsWith("/notifications/")
-    || path.startsWith("/phone/") || path.startsWith("/connectors/") || path.startsWith("/web/") || path.startsWith("/setup/hosting/") || path === "/channels" || path.startsWith("/channels/");
+    || path.startsWith("/phone/") || path.startsWith("/connectors/") || path.startsWith("/web/") || path.startsWith("/setup/hosting/") || path === "/channels" || path.startsWith("/channels/")
+    // The Action Engine and the coding service: an account's own actions, permissions, repositories and tasks.
+    || path === "/actions" || path.startsWith("/actions/") || path.startsWith("/coding/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 

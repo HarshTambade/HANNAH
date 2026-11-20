@@ -524,6 +524,115 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_research_recent ON hannah_research (user_id, created_at)",
     ],
   },
+  {
+    version: 17,
+    name: "action engine, permissions, integrations and coding tasks",
+    // One record per meaningful action HANNAH takes or asks to take for an
+    // account (the audit trail and the approval queue are the same rows), the
+    // account's permission policy and standing grants, token-based
+    // integrations (GitHub) sealed with the vault, connected repositories and
+    // durable coding tasks. Every row is per user.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_actions (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        idempotency_key TEXT NOT NULL,
+        action TEXT NOT NULL,
+        service TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        executor TEXT NOT NULL,
+        request TEXT,
+        intent TEXT,
+        agent TEXT,
+        source TEXT,
+        task_id TEXT,
+        resource TEXT,
+        account TEXT,
+        params TEXT NOT NULL,
+        preview TEXT,
+        permission TEXT,
+        approval TEXT,
+        response TEXT,
+        verification TEXT,
+        error TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        executed_at BIGINT,
+        expires_at BIGINT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS hannah_actions_once ON hannah_actions (user_id, idempotency_key)",
+      "CREATE INDEX IF NOT EXISTS hannah_actions_recent ON hannah_actions (user_id, created_at)",
+      "CREATE INDEX IF NOT EXISTS hannah_actions_waiting ON hannah_actions (user_id, status)",
+      `CREATE TABLE IF NOT EXISTS hannah_permissions (
+        user_id TEXT PRIMARY KEY REFERENCES hannah_users(id) ON DELETE CASCADE,
+        policy TEXT NOT NULL,
+        stopped_at BIGINT,
+        updated_at BIGINT NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_grants (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        service TEXT NOT NULL,
+        actions TEXT NOT NULL,
+        resource TEXT,
+        limits TEXT,
+        note TEXT,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT,
+        revoked_at BIGINT,
+        last_used_at BIGINT,
+        uses INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_integrations (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        account TEXT,
+        scopes TEXT,
+        meta TEXT,
+        key_id TEXT NOT NULL,
+        wrapped_key TEXT NOT NULL,
+        ciphertext TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        last_ok_at BIGINT,
+        last_error TEXT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_repos (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        host TEXT NOT NULL,
+        name TEXT NOT NULL,
+        default_branch TEXT,
+        settings TEXT NOT NULL,
+        overview TEXT,
+        indexed_ref TEXT,
+        indexed_at BIGINT,
+        checked_at BIGINT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_coding_tasks (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        repo_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        state TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_coding_tasks_recent ON hannah_coding_tasks (user_id, updated_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };
