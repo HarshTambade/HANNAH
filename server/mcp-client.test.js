@@ -84,7 +84,7 @@ test("the built-in /mcp endpoint takes the caller's own credential, and refuses 
 
   const client = new McpHttpClient({ id: "own", name: "HANNAH", url, headers: { Authorization: operator.Authorization } });
   const tools = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ["hannah_chat", "hannah_create_document", "hannah_models", "hannah_research", "hannah_status"]);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ["hannah_action", "hannah_chat", "hannah_create_document", "hannah_models", "hannah_research", "hannah_status"]);
   const status = await client.callTool("hannah_status", {});
   assert.equal(status.isError, false);
   assert.equal(status.structured.status, "ok");

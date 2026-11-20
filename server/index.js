@@ -476,6 +476,8 @@ app.use("/api", createConnectorsRouter({ publicBaseUrl, allowedOrigins, timeoutM
 app.use("/api", createStudioRouter({ getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 // The Action Engine (permission, approval, execution, verification, audit), the integrations hub and the coding service: server/actions, server/coding.
 const operator = createOperator();
+// Workflows reach the same engine ("Do an action", "Check a repository").
+workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
 app.use("/api", createWebRouter({ getRequestProvider }));

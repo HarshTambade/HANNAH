@@ -84,6 +84,8 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
   const running = new Map(); // execution id → AbortController, in this process
   // Where research steps search and fetch. Null means the real providers and the SSRF-safe client; tests supply stand-ins.
   const researchConfig = { providers: researchProviders, request: researchRequest };
+  // The server's one Action Engine and coding service (server/actions/router.js), set by the server once both exist.
+  const operatorRef = { current: null };
 
   // ---------- services for one user ----------
 
@@ -170,6 +172,23 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
        * opens pages, scores sources and checks citations. Web search runs with
        * the account's Groq key; scholarly and reference searches need no key.
        */
+      /**
+       * One action through the Action Engine, as this account: the permission
+       * manager decides (a workflow has nobody to ask, so without a standing
+       * permission the action waits in Actions), and the record comes back.
+       * The key makes a retried step the same action, not a second one.
+       */
+      async action({ action, params, key, workflow }) {
+        if (!operatorRef.current) throw fail(503, "Actions aren't available on this server.", "unavailable", { retryable: false });
+        const { outcomeText } = require("../actions/engine");
+        const record = await operatorRef.current.engine.run(await database(), userId, { action, params, request: workflow ? `Workflow “${workflow}”` : "A workflow", agent: "Workflow", source: "workflow", idempotencyKey: String(key).replace(/[^A-Za-z0-9_.:-]/g, "-").slice(0, 120) });
+        return { ...record, outcome: outcomeText(record) };
+      },
+      /** A read-only report on a connected repository (server/coding/service.js checkRepo). */
+      async codeCheck({ repo }) {
+        if (!operatorRef.current) throw fail(503, "The coding service isn't available on this server.", "unavailable", { retryable: false });
+        return operatorRef.current.coding.checkRepo(await database(), userId, repo);
+      },
       async research({ question, mode = "deep", model = "auto" }) {
         const { runResearch, methodology } = require("../research/engine");
         const { createProviders } = require("../research/providers");
@@ -821,7 +840,7 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
     loop = null;
   }
 
-  return { cancel, claim, pause, emitEvent, enqueue, extendWait, publishedDefinition, researchConfig, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
+  return { cancel, claim, pause, emitEvent, enqueue, extendWait, operatorRef, publishedDefinition, researchConfig, resume, rotateWebhookSecret, runClaimed, servicesFor, startWorker, stopWorker, syncTriggers, tick, workerId };
 }
 
 module.exports = { FINAL, createRuntime, explainProviderError, sha256 };

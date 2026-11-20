@@ -653,3 +653,32 @@ test("one account never sees another's actions, permissions, repositories or tas
   assert.equal(events.status, "failed", "bo has no calendar connected");
   assert.equal(events.response, null);
 });
+
+// ---------- workflows and MCP hosts use the same engine ----------
+
+test("a workflow step asks the same engine: it waits without a standing permission, runs with one, and a retry isn't a second action", async () => {
+  const { createRuntime } = require("./workflows/runtime");
+  const runtime = createRuntime({});
+  runtime.operatorRef.current = require("./actions/router").createOperator();
+  const services = runtime.servicesFor(users.ashaId, { executionId: "exec-1", workflowId: "wf-1" });
+  const mail = { to: ["dev@team.example"], subject: "Weekly report", body: "Attached below." };
+  const waiting = await services.action({ action: "mail.send", params: mail, key: "wf:exec-1:node-1:0", workflow: "Weekly report" });
+  assert.equal(waiting.status, "waiting-approval");
+  assert.equal(waiting.source, "workflow");
+  assert.match(waiting.outcome, /Waiting for your approval/);
+  const again = await services.action({ action: "mail.send", params: mail, key: "wf:exec-1:node-1:0", workflow: "Weekly report" });
+  assert.equal(again.id, waiting.id, "a retried step is the same action");
+  await decide(users.asha, waiting.id, false);
+  await levels(users.asha, { mail: 4 });
+  const grant = (await call(users.asha, "POST", "/account/permissions/grants", { service: "mail", actions: ["mail.send"], resource: { type: "recipient", match: "dev@team.example" }, limits: { perDay: 1 }, note: "Weekly report" })).body.grant;
+  const before = google.mail.length;
+  const sent = await services.action({ action: "mail.send", params: mail, key: "wf:exec-2:node-1:0", workflow: "Weekly report" });
+  assert.equal(sent.status, "done");
+  assert.equal(google.mail.length, before + 1);
+  // The permission's own daily limit holds for the workflow too.
+  assert.equal((await services.action({ action: "mail.send", params: mail, key: "wf:exec-3:node-1:0", workflow: "Weekly report" })).status, "waiting-approval");
+  await call(users.asha, "DELETE", `/account/permissions/grants/${grant.id}`);
+  await levels(users.asha, { mail: 3 });
+  const report = await services.codeCheck({ repo: "asha/hosted-shop" });
+  assert.match(report.note, /changed nothing/);
+});

@@ -174,6 +174,7 @@ export function defaultsFor(definition: NodeDefinition): Record<string, unknown>
 
 export const PERMISSION_LABELS: Record<string, string> = {
   network: "Call internet services over HTTP",
+  actions: "Ask HANNAH's Action Engine for actions (each still needs your approval or a standing permission), and read your connected repositories",
   "receive-webhooks": "Receive requests from other services at a private URL",
   notify: "Send you notifications",
   "send-email": "Send or draft email from your connected account",

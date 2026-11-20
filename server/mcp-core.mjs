@@ -49,7 +49,7 @@ export function createHANNAHMcpServer(options = {}) {
   const server = new McpServer({
     name: "hannah",
     version: "1.0.0",
-    instructions: "HANNAH is a conversational AI companion exposed over MCP. Use hannah_chat for responses, hannah_research for cited web research, hannah_create_document for PowerPoint, PDF, Word and Excel files, hannah_status to check service readiness, and hannah_models to inspect configured models. This MCP server has no access to the host application's files, accounts, or device controls. Do not claim it has performed actions in another application.",
+    instructions: "HANNAH is a conversational AI companion exposed over MCP. Use hannah_chat for responses, hannah_research for cited web research, hannah_create_document for PowerPoint, PDF, Word and Excel files, hannah_action to ask for calendar, email, messaging and repository actions through the account's permission manager (it cannot approve them), hannah_status to check service readiness, and hannah_models to inspect configured models. This MCP server has no access to the host application's files, accounts, or device controls. Do not claim it has performed actions in another application.",
   });
 
   server.registerTool(
@@ -198,6 +198,37 @@ export function createHANNAHMcpServer(options = {}) {
         const file = done.files[0];
         const output = { name: file.name, format: file.format, mime: file.mime, bytes: file.bytes, summary: file.summary, checks: file.checks, notes: done.notes, ...(file.id ? { id: file.id } : {}) };
         return { content: [{ type: "text", text: JSON.stringify(output) }, { type: "resource", resource: { uri: `hannah://documents/${encodeURIComponent(file.name)}`, mimeType: file.mime, blob: file.data } }], structuredContent: output };
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "hannah_action",
+    {
+      title: "Ask HANNAH to do something",
+      description: "Ask HANNAH's Action Engine for one action for the account whose HANNAH API key this server uses: read the calendar or mail, find free time, create an event, draft or send an email, message someone a connected chat app knows, read a connected repository, its issues, pull requests and CI, and so on (action ids such as calendar.events, calendar.create, mail.search, mail.send, messages.send, code.search, code.ci). The account's permission manager decides. Reading runs at once. Anything that changes something or reaches someone runs only if a standing permission covers it; otherwise it waits for the person to approve it in the HANNAH app, and this tool says so. This tool can never approve an action. The result's status is the truth: only \"done\" means it happened and was confirmed.",
+      inputSchema: z.object({
+        action: z.string().trim().min(3).max(60).describe("The action id."),
+        params: z.record(z.string(), z.unknown()).optional().describe("What the action needs."),
+        request: z.string().trim().max(1000).optional().describe("What the person asked for, in their words; kept in the action's record."),
+        idempotencyKey: z.string().trim().min(8).max(120).optional().describe("Repeat a call with the same key to get the first result instead of acting twice."),
+      }),
+    },
+    async ({ action, params, request, idempotencyKey }) => {
+      try {
+        const response = await fetch(`${options.apiBaseUrl || defaultApiBaseUrl}/api/actions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(options.headers || (process.env.HANNAH_API_TOKEN ? { Authorization: "Bearer " + process.env.HANNAH_API_TOKEN.trim() } : {})) },
+          body: JSON.stringify({ action, params: params || {}, request, agent: "MCP host", idempotencyKey }),
+          signal: AbortSignal.timeout(120_000),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `HANNAH API returned HTTP ${response.status}.`);
+        const record = data.record;
+        const output = { id: record.id, action: record.action, status: record.status, outcome: record.outcome, ...(record.status === "done" || record.status === "unverified" ? { result: record.response } : {}), ...(record.verification ? { verification: record.verification } : {}), ...(record.permission ? { permission: record.permission.reason } : {}) };
+        return { content: [{ type: "text", text: JSON.stringify(output) }], structuredContent: output };
       } catch (error) {
         return toolError(error);
       }

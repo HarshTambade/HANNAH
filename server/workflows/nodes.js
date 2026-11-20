@@ -994,6 +994,43 @@ const NODES = [
     }),
   },
   {
+    type: "action.run", category: "ai", label: "Do an action (with your permissions)", icon: "ShieldCheck", status: STATUS.available,
+    description: "Asks HANNAH's Action Engine for one action: a calendar event, an email, a message, a GitHub comment and so on. The permission manager decides exactly as it does in chat. With a standing permission that covers it, it runs now and is checked afterwards. Without one, it waits in Actions for your approval and this step reports that it is waiting; it never runs unapproved.",
+    inputs: ["main"], outputs: ["main"], permissions: ["actions"],
+    params: [
+      { name: "action", label: "Action", type: "string", required: true, default: "calendar.events", help: "An action id, such as calendar.create, mail.send, mail.draft, messages.send, code.issue_create. The list is in Actions → Permissions." },
+      { name: "params", label: "Details (JSON)", type: "json", default: "{}", expression: true, help: "What the action needs, for example {\"to\": [\"me@example.com\"], \"subject\": \"Weekly report\", \"body\": \"…\"}." },
+      { name: "waitIsOk", label: "If it needs approval, continue the workflow", type: "boolean", default: true, help: "Off: the step fails when the action is left waiting for you." },
+    ],
+    execute: async (ctx) => ({
+      main: await perItem(ctx, async (params, item, index) => {
+        const action = toText(params.action).trim();
+        if (!action) throw fail("Choose the action.", { retryable: false });
+        let details = params.params;
+        if (typeof details === "string") { try { details = details.trim() ? JSON.parse(details) : {}; } catch { throw fail("The action's details aren't valid JSON.", { retryable: false }); } }
+        const record = await ctx.services.action({ action, params: details && typeof details === "object" ? details : {}, key: `wf:${ctx.execution.id}:${ctx.node.id}:${index}`, workflow: ctx.workflow?.name || "" });
+        // Only a confirmed action is a success. Everything else is said as it is, and stops the workflow unless waiting was allowed.
+        if (record.status === "waiting-approval" && params.waitIsOk !== false) return json({ ...item.json, action: { id: record.id, status: record.status, outcome: record.outcome, waiting: true } });
+        if (record.status !== "done" && record.status !== "unverified") throw fail(record.outcome, { retryable: false });
+        return json({ ...item.json, action: { id: record.id, status: record.status, outcome: record.outcome, confirmed: record.status === "done", result: record.response } });
+      }),
+    }),
+  },
+  {
+    type: "code.check", category: "ai", label: "Check a repository", icon: "GitBranch", status: STATUS.available,
+    description: "Looks at a connected repository and reports what needs attention: failing CI on the default branch, new issues and pull requests, dependencies with published advisories, high-severity static findings. It reads only. Nothing in the repository is changed; put it on a schedule for continuous checks.",
+    inputs: ["main"], outputs: ["main"], permissions: ["actions"],
+    params: [{ name: "repo", label: "Repository", type: "string", required: true, default: "", expression: true, help: "owner/name of a repository connected in Actions → Code." }],
+    execute: async (ctx) => ({
+      main: await perItem(ctx, async (params, item) => {
+        const repo = toText(params.repo).trim();
+        if (!repo) throw fail("Say which repository.", { retryable: false });
+        const report = await ctx.services.codeCheck({ repo });
+        return json({ ...item.json, report, needsAttention: report.items.length > 0, summary: report.summary });
+      }),
+    }),
+  },
+  {
     type: "ai.prompt", category: "ai", label: "Ask an AI model", icon: "Sparkles", status: STATUS.available,
     description: "Sends a prompt to an AI model through HANNAH's model gateway, with your provider keys, and returns the answer.",
     inputs: ["main"], outputs: ["main"], permissions: ["ai"],
