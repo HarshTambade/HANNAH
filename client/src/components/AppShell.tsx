@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
-import { Brain, Cpu, LayoutDashboard, MessageSquare, Settings2, Users, Workflow } from "lucide-react";
+import { Brain, Cpu, LayoutDashboard, MessageSquare, Settings2, ShieldCheck, Users, Workflow } from "lucide-react";
 import { ReminderToasts } from "./Reminders";
 import { AutomationToasts } from "./AutomationToasts";
 import { RemoteApprovalToasts } from "./DeviceTasksPanel";
@@ -7,7 +7,7 @@ import { ScreenWatchIndicator } from "./DesktopControlSections";
 import { desktopFilesAvailable } from "../services/DesktopFiles";
 import { pathForScreen } from "../routes";
 
-export type AppSection = "conversation" | "companion" | "agents" | "models" | "accountability" | "automations" | "settings";
+export type AppSection = "conversation" | "companion" | "agents" | "models" | "accountability" | "automations" | "actions" | "settings";
 
 const navItems: Array<{ id: AppSection; label: string; shortLabel: string; Icon: typeof MessageSquare }> = [
   { id: "conversation", label: "Chat", shortLabel: "Chat", Icon: MessageSquare },
@@ -16,6 +16,7 @@ const navItems: Array<{ id: AppSection; label: string; shortLabel: string; Icon:
   { id: "models", label: "Models", shortLabel: "Models", Icon: Cpu },
   { id: "accountability", label: "Memory & style", shortLabel: "Memory", Icon: Brain },
   { id: "automations", label: "Automations", shortLabel: "Flows", Icon: Workflow },
+  { id: "actions", label: "Actions", shortLabel: "Actions", Icon: ShieldCheck },
   { id: "settings", label: "Settings", shortLabel: "Settings", Icon: Settings2 },
 ];
 
@@ -73,7 +74,7 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
       <div className={`relative z-10 ${fill ? "flex min-h-0 flex-1 flex-col" : "flex-1"}`}>{children}</div>
       {/* Phones and small tablets: a bottom tab bar, as on iOS and Android. */}
       <nav aria-label="App navigation" className="sticky bottom-0 z-30 shrink-0 border-t border-slate-200/80 bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-7">
+        <div className="mx-auto grid max-w-xl grid-cols-8">
           {navItems.map(({ id, label, shortLabel, Icon }) => {
             const selected = id === active;
             return (

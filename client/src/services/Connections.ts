@@ -135,6 +135,7 @@ const timeZone = () => {
   }
 };
 const str = (value: unknown) => (typeof value === "string" ? value : value === undefined || value === null ? "" : String(value));
+const recipientList = (value: unknown) => (Array.isArray(value) ? value.map(str) : str(value).split(/[,;]/).map((item) => item.trim()).filter(Boolean));
 const recipientText = (value: unknown) => (Array.isArray(value) ? value.map(str).join(", ") : str(value));
 
 const tools: HANNAHTool[] = [
@@ -172,6 +173,7 @@ const tools: HANNAHTool[] = [
     requiresApproval: true,
     sensitive: "create_event",
     approvalDetails: (args) => ({ title: args.title, start: args.start, end: args.end, location: args.location, provider: args.provider }),
+    engine: { action: "calendar.create", params: (args) => ({ title: str(args.title), start: str(args.start), end: str(args.end) || undefined, location: str(args.location) || undefined, description: str(args.description) || undefined, provider: str(args.provider) || undefined, timeZone: timeZone() }) },
     execute: async (args) => Connections.createEvent({ title: str(args.title), start: str(args.start), end: str(args.end) || undefined, location: str(args.location) || undefined, description: str(args.description) || undefined, provider: str(args.provider) || undefined }),
   },
   {
@@ -203,6 +205,7 @@ const tools: HANNAHTool[] = [
     requiresApproval: true,
     sensitive: "save_email_draft",
     approvalDetails: (args) => ({ to: recipientText(args.to), cc: recipientText(args.cc), subject: args.subject, body: args.body, provider: args.provider }),
+    engine: { action: "mail.draft", params: (args) => ({ to: recipientList(args.to), cc: args.cc ? recipientList(args.cc) : undefined, subject: str(args.subject), body: str(args.body), provider: str(args.provider) || undefined }) },
     execute: async (args) => Connections.saveDraft({ to: recipientText(args.to), cc: recipientText(args.cc) || undefined, subject: str(args.subject), body: str(args.body), provider: str(args.provider) || undefined }),
   },
   {
@@ -210,12 +213,13 @@ const tools: HANNAHTool[] = [
     description: "Send an email from the user's connected Gmail or Outlook. The user sees the recipients and full text and approves it first. Prefer email_draft unless the user asked to send.",
     inputSchema: {
       type: "object",
-      properties: { to: { type: "string", description: "Comma-separated email addresses." }, cc: { type: "string" }, subject: { type: "string" }, body: { type: "string" }, provider: providerProp },
+      properties: { to: { type: "string", description: "Comma-separated email addresses." }, cc: { type: "string" }, subject: { type: "string" }, body: { type: "string" }, attachments: { type: "array", items: { type: "string" }, description: "Ids of files HANNAH made (from create_document results or the Library) to attach, up to 5 and 3 MB together." }, provider: providerProp },
       required: ["to", "subject", "body"],
     },
     requiresApproval: true,
     sensitive: "send_email",
     approvalDetails: (args) => ({ to: recipientText(args.to), cc: recipientText(args.cc), subject: args.subject, body: args.body, provider: args.provider }),
+    engine: { action: "mail.send", params: (args) => ({ ...((args) => ({ to: recipientList(args.to), cc: args.cc ? recipientList(args.cc) : undefined, subject: str(args.subject), body: str(args.body), provider: str(args.provider) || undefined }))(args), attachments: Array.isArray(args.attachments) ? args.attachments.map(str) : undefined }) },
     execute: async (args) => Connections.sendMail({ to: recipientText(args.to), cc: recipientText(args.cc) || undefined, subject: str(args.subject), body: str(args.body), provider: str(args.provider) || undefined }),
   },
 ];
@@ -234,6 +238,7 @@ tools.push(
     requiresApproval: true,
     sensitive: "save_email_draft",
     approvalDetails: (args) => ({ to: str(args.to) || "the sender of the original email", subject: `Re: ${str(args.subject)}`, body: args.body, provider: args.provider }),
+    engine: { action: "mail.reply_draft", params: (args) => ({ id: str(args.id), provider: str(args.provider), body: str(args.body), replyAll: args.replyAll === true }) },
     execute: async (args) => Connections.replyDraft(str(args.provider), str(args.id), { body: str(args.body), replyAll: args.replyAll === true }),
   },
   {
@@ -243,6 +248,7 @@ tools.push(
     requiresApproval: true,
     sensitive: "organize_email",
     approvalDetails: (args) => ({ provider: args.provider, archive: args.archive === true, labels: Array.isArray(args.labels) ? args.labels : [], subject: args.subject, id: args.id }),
+    engine: { action: "mail.organize", params: (args) => ({ id: str(args.id), provider: str(args.provider), archive: args.archive === true, labels: Array.isArray(args.labels) ? args.labels.map(str) : [] }) },
     execute: async (args) => Connections.organize(str(args.provider), str(args.id), { archive: args.archive === true, labels: Array.isArray(args.labels) ? args.labels.map(str) : [] }),
   },
 );
@@ -268,6 +274,7 @@ const chatTools: HANNAHTool[] = [
     requiresApproval: true,
     sensitive: "send_chat_message",
     approvalDetails: (args) => ({ spaceName: args.spaceName || args.space, text: args.text }),
+    engine: { action: "messages.send", params: (args) => ({ channel: "google-chat", to: str(args.space), text: str(args.text) }) },
     execute: async (args) => Connections.chatSend({ space: str(args.space), text: str(args.text), thread: str(args.thread) || undefined }),
   },
 ];

@@ -11,6 +11,7 @@ import AvatarScene, { type AvatarActivity, type AvatarMotion } from "./component
 import AppShell, { type AppSection } from "./components/AppShell";
 import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
+import OperatorPage from "./components/OperatorPage";
 import { REMINDER_FIRED_EVENT, startReminderScheduler, type Reminder } from "./services/ReminderService";
 import { startAutomationRunner } from "./services/AutomationService";
 import { Diagnostics } from "./services/Diagnostics";
@@ -32,7 +33,7 @@ import AppWelcome from "./components/AppWelcome";
 import { MarketplaceService } from "./services/MarketplaceService";
 import { IS_WEBSITE } from "./config/site";
 
-const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "settings"]);
+const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "settings"]);
 const base = import.meta.env.BASE_URL;
 
 function currentScreen(): Screen {
@@ -280,6 +281,14 @@ export default function App() {
     return (
       <AppShell {...shellProps}>
         <AutomationsScreen />
+      </AppShell>
+    );
+  }
+
+  if (screen === "actions") {
+    return (
+      <AppShell {...shellProps}>
+        <OperatorPage />
       </AppShell>
     );
   }

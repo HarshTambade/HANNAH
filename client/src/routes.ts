@@ -20,7 +20,8 @@ export type AppScreen =
   | "automations"
   | "settings"
   | "integrations"
-  | "marketplace";
+  | "marketplace"
+  | "actions";
 
 export type Screen = AppScreen | "not-found";
 
@@ -35,6 +36,7 @@ export const ROUTE_PATHS: Record<AppScreen, string> = {
   settings: "/settings",
   integrations: "/integrations",
   marketplace: "/marketplace",
+  actions: "/actions",
 };
 
 export const ROUTE_TITLES: Record<Screen, string> = {
@@ -48,6 +50,7 @@ export const ROUTE_TITLES: Record<Screen, string> = {
   settings: "Settings · HANNAH",
   integrations: "Integrations · HANNAH",
   marketplace: "Marketplace · HANNAH",
+  actions: "Actions · HANNAH",
   "not-found": "Page not found · HANNAH",
 };
 
@@ -55,7 +58,7 @@ export const ROUTE_TITLES: Record<Screen, string> = {
 export const APP_ROUTE_PATHS = Object.values(ROUTE_PATHS).filter((path) => path !== "/");
 
 /** Older names some links used; they open the current screen. */
-const ALIASES: Record<string, AppScreen> = { "/conversation": "conversation", "/home": "landing", "/workflows": "automations", "/tasks": "agents", "/connectors/callback": "marketplace" };
+const ALIASES: Record<string, AppScreen> = { "/conversation": "conversation", "/home": "landing", "/workflows": "automations", "/tasks": "agents", "/permissions": "actions", "/code": "actions", "/connectors/callback": "marketplace" };
 
 /** Extra pages the build emits (an index.html each) that open another screen: a connector's sign-in returns to /connectors/callback. */
 export const EXTRA_PAGE_PATHS: Record<string, AppScreen> = { "/connectors/callback": "marketplace" };

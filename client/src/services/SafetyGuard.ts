@@ -37,7 +37,7 @@ export class GuardianBlockedError extends HITLDeniedError {
   }
 }
 
-function describeAction(action: SensitiveAction, args: Record<string, unknown>) {
+export function describeAction(action: SensitiveAction, args: Record<string, unknown>) {
   if (action === "external_tool") {
     const shown = JSON.stringify(args.arguments ?? {}, null, 1);
     return `Run “${String(args.tool ?? "a tool")}” on ${String(args.server ?? "an outside MCP server")}? It's an outside tool, so HANNAH can't check what it changes.\n\nArguments:\n${shown.length > 600 ? `${shown.slice(0, 600)}…` : shown}`;

@@ -14,6 +14,8 @@ import { getDesktopActionTools } from "./DesktopActions";
 import { getBrowserTools } from "./BrowserTools";
 import { getWebTools } from "./WebTools";
 import { getStudioTools } from "./Studio";
+import { Operator, getOperatorTools } from "./Operator";
+import { describeAction } from "./SafetyGuard";
 import { checkNumber } from "./PhoneBridge";
 import { getPhoneTools } from "./PhoneTools";
 import { getConnectionTools } from "./Connections";
@@ -37,6 +39,12 @@ export type HANNAHTool = {
   approvalDetails?: (args: Record<string, unknown>) => Record<string, unknown>;
   /** The tool itself waits for the user's yes (a system dialog), without HANNAH's approval card. */
   asksUser?: boolean;
+  /**
+   * The Action Engine action this tool is, for a signed-in account: the engine
+   * then decides permission, asks, runs it on the server, verifies and records
+   * it (services/Operator.ts). Without an account the tool's own path is used.
+   */
+  engine?: { action: string; params: (args: Record<string, unknown>) => Record<string, unknown> };
   execute: (args: Record<string, unknown>) => Promise<unknown>;
 };
 
@@ -351,7 +359,8 @@ export function getDeviceTools() {
   const desktop = [...getDesktopFileTools(), ...getDesktopActionTools(), ...getBrowserTools()];
   const connections = getConnectionTools();
   // Research and Document Studio are platform services: every agent gets the same four tools (services/Studio.ts).
-  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...externalTools];
+  // The Action Engine's tools (calendar scheduling, messaging, code) for a signed-in account: one execution path for every agent.
+  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...getOperatorTools({ calendar: connections.length > 0 }), ...externalTools];
 }
 
 /**
@@ -360,9 +369,29 @@ export function getDeviceTools() {
  */
 export async function executeHANNAHTool(tool: HANNAHTool, args: Record<string, unknown>, context: { intent?: string } = {}) {
   SafetyGuard.screen(tool.name, args, context.intent);
+  // Signed in: the server's Action Engine is the one place that decides, asks, runs, verifies and records.
+  if (tool.engine && Operator.available()) {
+    const record = await Operator.perform(tool.engine.action, tool.engine.params(args), { intent: context.intent, agent: "Chat" });
+    if (record.status === "declined") throw new HITLDeniedError(record.outcome);
+    if (record.status === "done") return { ...(record.response || {}), status: "done", confirmed: record.verification?.evidence };
+    return { status: record.status, outcome: record.outcome, ...(record.status === "unverified" ? { result: record.response } : {}), note: record.status === "unverified" ? "Accepted, but not confirmed. Don't say it is done." : "It did NOT happen. Tell the user exactly this outcome." };
+  }
   if (tool.requiresApproval) {
     if (!tool.sensitive) throw new Error(`The approval-required tool "${tool.name}" has no SafetyGuard action configured.`);
-    if (!await SafetyGuard.confirm(tool.sensitive, tool.approvalDetails ? tool.approvalDetails(args) : args)) throw new HITLDeniedError();
+    const details = tool.approvalDetails ? tool.approvalDetails(args) : args;
+    // Something this device does itself: the same permission levels apply, and the outcome goes into the same history.
+    const gate = await Operator.gate(tool.sensitive, details, { tool: tool.name, intent: context.intent, summary: describeAction(tool.sensitive, details) });
+    if (gate) {
+      try {
+        const result = await tool.execute(args);
+        gate.report(true);
+        return result;
+      } catch (error) {
+        gate.report(false, error instanceof Error ? error.message : "It failed.");
+        throw error;
+      }
+    }
+    if (!await SafetyGuard.confirm(tool.sensitive, details)) throw new HITLDeniedError();
   }
   return tool.execute(args);
 }

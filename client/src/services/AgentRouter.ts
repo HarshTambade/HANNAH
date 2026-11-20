@@ -53,6 +53,10 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /battery|device|setting|wi-?fi|bluetooth|volume|brightness/i, tools: /^(get_device_status|get_battery_status|toggle_setting)$/ },
   { match: /mail|e-?mail|inbox|gmail|outlook|calendar|meeting|event|schedule/i, tools: /^(email_|calendar_)/ },
   { match: /google chat|\bchat\b|\bspaces?\b|team chat|channel/i, tools: /^gchat_/ },
+  // The Action Engine's tools (services/Operator.ts).
+  { match: /repo|github|pull request|\bPRs?\b|\bbugs?\b|codebase|source code|commit|branch|\bCI\b|build (is )?fail|deploy|refactor|stack trace|vulnerab|dependenc|my (code|project)/i, tools: /^code_/ },
+  { match: /whats ?app|telegram|slack|\bmessages?\b|\btext\b|\breply to\b|\bdm\b/i, tools: /^message_/ },
+  { match: /free (time|slot)|availab|reschedul|\bmove my\b|cancel (my|the) (meeting|event|appointment)|invite|recurring|every (day|week|month|morning|monday|tuesday|wednesday|thursday|friday)|\bbook(ing)?\b|reserv|appointment/i, tools: /^calendar_/ },
 ];
 // web_search is always kept, so "can you check…" never finds HANNAH without a way to look.
 // research and create_document are HANNAH's shared platform services (services/Studio.ts): every agent has them.
