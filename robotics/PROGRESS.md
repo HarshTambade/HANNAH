@@ -25,7 +25,7 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 
 | # | Requirement | Status | Verified at | Tests | Note |
 |---|---|---|---|---|---|
-| 1.1 | Audit of the existing codebase | IMPLEMENTED | — | — | A document (docs/robotics/BLOCK1_AUDIT.md, in git history). It was deleted from the working tree on 2026-11-21 by something other than this work; whether that was intended is the owner's to say. |
+| 1.1 | Audit of the existing codebase | IMPLEMENTED | — | — | The audit was a document. The owner removed it from the repository with other audit and status documents on 2026-11-21 (commit cbb1f93); it is in git history. The version choices it recorded are in robotics/ros2_ws/VERSIONS.yaml. |
 | 1.2a | Robot device registry | VERIFIED | server | `robotics.test.js`, `robotics.pglite.test.js` |  |
 | 1.2b | Robot capability registry | VERIFIED | unit, server | `robotics.contract.test.js`, `robotics.test.js` |  |
 | 1.2c | Hardware adapter registry and interface | VERIFIED | unit, sim | `test_adapters.py` | Three adapters chosen by the robot's profile: mobile-robot simulator, arm simulator, ROS 2 (see 2.2a). |
@@ -196,10 +196,11 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 ## Last full verification
 
 - date: 2026-11-21
-- server: 525 tests: 524 passed, 1 skipped (older), 0 failed; lint clean
-- runtime: 97 passed on Python 3.14.6 and 3.9.6; 5 of 5 scenarios; generated world files current
+- server: 532 tests: 531 passed, 1 skipped (older), 0 failed; lint clean
+- runtime: 105 passed on Python 3.14.6 and 3.9.6; 5 of 5 scenarios; generated world files current
 - client: 409 passed; typecheck clean; lint 0 errors
-- browser: robotics spec 11 of 11 on the built app; the whole browser suite was last run before plans and the camera were added (110 of 110)
+- browser: 112 of 112, the whole suite on the final build (robotics spec 11 of 11)
+- robotics tests: 241 in all: unit, integration (SQLite and embedded Postgres), simulation and browser
 
 ## To resume
 

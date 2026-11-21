@@ -84,16 +84,21 @@ Things the tests caught in this work, all fixed:
 
 ## Whole project
 
+Each suite run alone, on the final code.
+
 | Check | Result |
 |---|---|
-| Server tests (`npm test` in `server`) | 502 tests: 501 passed, 1 skipped (an older skip), 0 failed |
-| Browser suite (`npx playwright test`), whole, on the final build, run alone | 110 passed |
-| Client tests (`npx vitest run`) | 407 passed |
-| Runtime tests | 78 passed, on Python 3.14.6 and 3.9.6 |
+| Server tests (`npm test` in `server`) | 532 tests: 531 passed, 1 skipped (an older skip), 0 failed |
+| Browser suite (`npm run test:e2e` in `client`), whole, on the final build | 112 passed |
+| Client tests (`npm test` in `client`) | 409 passed, and 43 desktop-tool tests |
+| Runtime tests | 105 passed, on Python 3.14.6 and 3.9.6; 5 of 5 scenarios |
 | Client typecheck, client lint, server lint | Clean (3 older lint warnings in the workflow builder) |
-| Secret scan | No findings (677 files) |
+| Secret scan | No findings |
 | Licence check | 424 production dependencies, all permissive; none added |
+| Generated Gazebo world and map | Current with the world file (the files themselves have never been loaded by Gazebo) |
 | Version check | All fields 1.7.0 (no version change in this work) |
+
+One older test, `server/vercel-supabase.test.js`, starts a server on a port chosen at random from eighty and fails when another test happens to hold that port. It failed once that way in a full run and passes alone and in the later full runs. It is not a robotics test and was left as it is.
 
 ## Added after Block 1: what tests what
 

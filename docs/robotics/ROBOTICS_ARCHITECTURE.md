@@ -6,7 +6,6 @@ Read this first; the other documents in this folder go into each part.
 
 | Document | What it covers |
 |---|---|
-| [BLOCK1_AUDIT.md](./BLOCK1_AUDIT.md) | What existed before, what is reused, the machine this was built on |
 | [HARDWARE_ABSTRACTION.md](./HARDWARE_ABSTRACTION.md) | The adapter interface between the runtime and a robot |
 | [DEVICE_DATA_MODEL.md](./DEVICE_DATA_MODEL.md) | The robot registry: every stored field |
 | [CAPABILITY_CONTRACT.md](./CAPABILITY_CONTRACT.md) | The operations a robot can be asked for |
@@ -115,7 +114,7 @@ Whatever the permission level and whatever standing permission exists. Block 1 h
 The person says "simulated" or "physical" when creating the record; the runtime says which it is when enrolling. A mismatch refuses the enrollment. The label then follows the robot everywhere it appears.
 
 **9. ROS 2 Jazzy with Gazebo Harmonic.**
-The pairing Gazebo's own table recommends; every framework in the directive has a release for it. See the audit, section 7, for what was checked and what could not be.
+The pairing Gazebo's own table recommends; every framework in the directive has a release for it. What was checked against the official tables, and what could not be, is recorded in `robotics/ros2_ws/VERSIONS.yaml`.
 
 **10. A built-in simulator, labelled as not Gazebo.**
 ROS 2 and Gazebo could not be installed on the development machine. Rather than leave the pipeline untested, the first adapter is a small kinematic simulator that needs only Python. It computes real motion, sensing, planning and failures; it is not a physics engine and is never called Gazebo. The Gazebo robot is written beside it and awaits its first run.
