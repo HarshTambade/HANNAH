@@ -32,7 +32,7 @@ from . import PROTOCOL, __version__
 from .hal.base import RobotAdapter
 from .link import Link, LinkError
 from .protocol import CommandGuard
-from .safety import MOTION, LocalSafety
+from .safety import ARM, EXCLUSIVE, LocalSafety
 
 
 @dataclass
@@ -185,7 +185,10 @@ class Runtime:
                 self._report(mission_id, "resumed" if mission.status == "accepted" else "paused")
                 return
             # Moving again gets the same checks as starting: the robot may not be fit to move any more.
-            decision = self.safety.check("navigate_to", {**mission.waypoints[mission.index], "tolerance": mission.params.get("tolerance", 0.25)}, self.adapter.state(), {"maxLinearSpeed": mission.max_speed}, busy=False)
+            if mission.capability in ARM:
+                decision = self.safety.check(mission.capability, mission.params, self.adapter.state(), busy=False)
+            else:
+                decision = self.safety.check("navigate_to", {**mission.waypoints[mission.index], "tolerance": mission.params.get("tolerance", 0.25)}, self.adapter.state(), {"maxLinearSpeed": mission.max_speed}, busy=False)
             if self._revoked or self._link_lost or not decision.ok:
                 reason = "the link to HANNAH is down" if self._link_lost else "this robot's credentials were refused" if self._revoked else decision.reason
                 self._report(mission_id, "resume-refused", reason=f"Refused by the robot's own safety checks: {reason}.")
@@ -208,7 +211,7 @@ class Runtime:
         if capability in ("report_surroundings", "report_robot_state", "read_sensor", "report_battery_state"):
             self._report(mission_id, "rejected", reason="Reading is answered from the robot's reports; it is not a command.")
             return
-        decision = self.safety.check(capability, params, state, command.get("limits"), busy=self._active is not None and capability in MOTION)
+        decision = self.safety.check(capability, params, state, command.get("limits"), busy=self._active is not None and capability in EXCLUSIVE)
         if not decision.ok:
             self._report(mission_id, "rejected", reason=f"Refused by the robot's own safety checks: {decision.reason}.")
             self._event("command-rejected", "warning", f"{capability} refused: {decision.reason}.")
@@ -241,9 +244,16 @@ class Runtime:
 
     def _start_leg(self, mission: Mission) -> None:
         goal = mission.waypoints[mission.index]
-        mission.phase = f"driving to point {mission.index + 1} of {len(mission.waypoints)}" if len(mission.waypoints) > 1 else "driving"
+        mission.phase = {"move_robot_arm": "moving the arm", "grasp_object": "closing the gripper", "release_object": "opening the gripper"}.get(mission.capability) or (f"driving to point {mission.index + 1} of {len(mission.waypoints)}" if len(mission.waypoints) > 1 else "driving")
         try:
-            self.adapter.navigate(goal, mission.max_speed, mission.params.get("tolerance", 0.25))
+            if mission.capability == "move_robot_arm":
+                self.adapter.move_arm(goal)
+            elif mission.capability == "grasp_object":
+                self.adapter.grasp(goal["object"])
+            elif mission.capability == "release_object":
+                self.adapter.release()
+            else:
+                self.adapter.navigate(goal, mission.max_speed, mission.params.get("tolerance", 0.25))
         except Exception as error:  # noqa: BLE001 - an adapter that can't take the goal is a failed mission, not a crashed runtime
             self._abort(f"The robot's navigation stack didn't take the goal ({type(error).__name__}).")
 
@@ -259,7 +269,7 @@ class Runtime:
         elif mission is not None and mission.status == "paused":
             mode = "paused"
         elif mission is not None:
-            mode = "navigating"
+            mode = "manipulating" if mission.capability in ARM else "navigating"
         elif raw.get("docked"):
             mode = "docked"
         elif self._link_lost or self._revoked:

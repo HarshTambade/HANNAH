@@ -4,7 +4,8 @@ Everything that runs on or beside a robot. The server side is in `server/robotic
 
 | Folder | What it is | State |
 |---|---|---|
-| `runtime/` | The HANNAH Robotics Runtime: the program on the robot's own computer. Python 3.9+, standard library only | Tested (69 tests) |
+| `runtime/` | The HANNAH Robotics Runtime: the program on the robot's own computer. Python 3.9+, standard library only | Tested (78 tests) |
+| `runtime/hannah_robot/hal/arm.py`, `worlds/bench.json`, `profiles/sim-arm.json` | A built-in simulated three-joint arm with a gripper. **Not MoveIt 2 or Gazebo.** | Tested |
 | `runtime/hannah_robot/hal/kinematic.py` | A built-in simulated differential-drive robot. **Not Gazebo.** | Tested |
 | `runtime/hannah_robot/hal/ros2.py`, `ros2_watchdog.py` | The ROS 2 adapter (Nav2) and its watchdog | **Written, never run** |
 | `ros2_ws/src/hannah_sim/` | A robot, a world and Nav2 for Gazebo Harmonic on ROS 2 Jazzy | **Written, never run** |

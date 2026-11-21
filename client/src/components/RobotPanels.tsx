@@ -230,3 +230,51 @@ export function FleetPanel({ onSelect, onAsked }: { onSelect: (robotId: string) 
     </section>
   );
 }
+
+/** A robot arm seen from above: where its joints say it is, what it holds, and the three things it can be asked to do. */
+export function ArmPanel({ robot, busy, onAsk }: { robot: Robot; busy: boolean; onAsk: (action: "robots.move_robot_arm" | "robots.grasp_object" | "robots.release_object", params: Record<string, unknown>) => void }) {
+  const [pose, setPose] = useState("");
+  const [object, setObject] = useState("");
+  const bounds = robot.world?.bounds;
+  const state = robot.state;
+  if (robot.status !== "enrolled" || !bounds || !state?.arm) return null;
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  const polygon = (points: number[][]) => points.map(([x, y]) => `${x},${-y}`).join(" ");
+  const objects = state.scene?.objects || [];
+  const holding = state.gripper?.holding || null;
+  const can = (id: string) => robot.capabilities.includes(id) && !robot.disabled.includes(id);
+  return (
+    <section className={`${card} space-y-3`} data-testid="arm-panel">
+      <h3 className="font-semibold text-slate-900">The arm{!robot.online && <span className="ml-2 text-xs font-normal text-amber-800">last report, not current</span>}</h3>
+      <svg data-testid="arm-view" viewBox={`${bounds.minX - 0.05} ${-bounds.maxY - 0.05} ${width + 0.1} ${height + 0.1}`} className="w-full max-w-xl rounded-xl border border-slate-300 bg-slate-50" role="img"
+        aria-label={`The arm seen from above. Its tool is at ${fixed(state.pose?.x, 3)}, ${fixed(state.pose?.y, 3)}. ${holding ? `It is holding the ${holding}.` : "Its gripper is empty."}`}>
+        <rect x={bounds.minX} y={-bounds.maxY} width={width} height={height} fill="#ffffff" stroke="#0f172a" strokeWidth="0.01" />
+        {robot.limits.keepOut.map((zone) => <polygon key={zone.name} points={polygon(zone.polygon)} fill="#fecdd3" stroke="#be123c" strokeWidth="0.006" strokeDasharray="0.03 0.02"><title>Keep-out zone: {zone.name}</title></polygon>)}
+        {(robot.world?.obstacles || []).map((rect, index) => <rect key={index} x={rect.x} y={-(rect.y + rect.h)} width={rect.w} height={rect.h} fill="#94a3b8" stroke="#475569" strokeWidth="0.006"><title>A fixture the arm must not touch</title></rect>)}
+        {Object.entries(robot.places).map(([name, place]) => <g key={name}><circle cx={place.x} cy={-place.y} r="0.012" fill="#0369a1" /><text x={place.x + 0.02} y={-place.y + 0.012} fontSize="0.04" fill="#0f172a">{name}</text></g>)}
+        {objects.map((item) => <g key={item.id}><rect x={item.x - 0.02} y={-item.y - 0.02} width="0.04" height="0.04" fill={item.held ? "#7c3aed" : "#b45309"} /><text x={item.x + 0.03} y={-item.y - 0.025} fontSize="0.035" fill="#0f172a">{item.id}</text></g>)}
+        <polyline points={polygon(state.arm.points)} fill="none" stroke={state.estop?.engaged ? "#e11d48" : "#0f172a"} strokeWidth="0.03" strokeLinecap="round" strokeLinejoin="round" opacity={robot.online ? 1 : 0.45} />
+        {state.arm.points.map(([x, y], index) => <circle key={index} cx={x} cy={-y} r={index === state.arm!.points.length - 1 ? 0.018 : 0.014} fill={index === state.arm!.points.length - 1 ? "#2563eb" : "#ffffff"} stroke="#0f172a" strokeWidth="0.006" />)}
+      </svg>
+      <p className="text-sm text-slate-700" data-testid="arm-state">Tool at ({fixed(state.pose?.x, 3)}, {fixed(state.pose?.y, 3)}) m, from {state.pose?.source || "the robot"}. Gripper {state.gripper?.open ? "open" : "closed"}{holding ? `, holding the ${holding}` : ", holding nothing"}.</p>
+      <p className="text-xs text-slate-600">Objects shown are {state.scene?.source || "what the robot reports"}. HANNAH grasps only what the robot itself reports at its tool, and the gripper's own feedback decides whether it has it.</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-sm text-slate-700">Move the tool to
+          <select className={`${input} mt-1 block w-44`} value={pose} onChange={(event) => setPose(event.target.value)} aria-label="Where to move the arm">
+            <option value="">a pose or an object…</option>
+            {Object.keys(robot.places).map((name) => <option key={name} value={`pose:${name}`}>{name}</option>)}
+            {objects.map((item) => <option key={item.id} value={`object:${item.id}`}>over the {item.id}</option>)}
+          </select>
+        </label>
+        <button type="button" className={primary} data-testid="arm-move" disabled={busy || !pose || !can("move_robot_arm")} onClick={() => { const [kind, name] = [pose.slice(0, pose.indexOf(":")), pose.slice(pose.indexOf(":") + 1)]; const item = objects.find((entry) => entry.id === name); onAsk("robots.move_robot_arm", kind === "pose" ? { place: name } : { x: item?.x, y: item?.y }); }}>Ask to move there</button>
+        <label className="text-sm text-slate-700">Grasp
+          <select className={`${input} mt-1 block w-36`} value={object} onChange={(event) => setObject(event.target.value)} aria-label="Object to grasp"><option value="">an object…</option>{objects.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}</select>
+        </label>
+        <button type="button" className={button} data-testid="arm-grasp" disabled={busy || !object || Boolean(holding) || !can("grasp_object")} onClick={() => onAsk("robots.grasp_object", { object })}>Ask to grasp</button>
+        <button type="button" className={button} data-testid="arm-release" disabled={busy || !holding || !can("release_object")} onClick={() => onAsk("robots.release_object", {})}>Ask to release</button>
+      </div>
+      <p className="text-xs text-slate-600">An arm is high risk: every step asks you, whatever your permission level. The arm's own planner chooses the joint motion; HANNAH sends a target, never joint values. This is HANNAH's built-in planar arm simulator when the badge says so: not MoveIt 2, not Gazebo.</p>
+    </section>
+  );
+}

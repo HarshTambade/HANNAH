@@ -67,6 +67,7 @@ function normalizeLimits(input) {
   bounded("linkTimeoutS", 1, 600);
   bounded("commandTtlS", 2, 300);
   bounded("robotRadius", 0.01, 5);
+  bounded("maxJointSpeed", 0.01, 20);
   const polygon = cleanPolygon(input?.workspace?.polygon);
   if (polygon) out.workspace = { frame: String(input.workspace.frame || "map").slice(0, 20), polygon };
   const zones = cleanZones(input?.keepOut);
@@ -90,6 +91,7 @@ function effectiveLimits(safety) {
     maxLinearSpeed: stricter("maxLinearSpeed", Math.min),
     maxAngularSpeed: stricter("maxAngularSpeed", Math.min),
     maxLinearAccel: stricter("maxLinearAccel", Math.min),
+    maxJointSpeed: stricter("maxJointSpeed", Math.min),
     minBatteryPercent: stricter("minBatteryPercent", Math.max),
     linkTimeoutS: stricter("linkTimeoutS", Math.min),
     commandTtlS: stricter("commandTtlS", Math.min) ?? 20,
@@ -177,8 +179,21 @@ function check({ robot, capabilityId, params = {}, now = Date.now(), active = nu
       sent.sensor = params.sensor;
     } else if (definition.id === "stop_motion") {
       if (params.reason) sent.reason = params.reason;
+    } else if (definition.id === "move_robot_arm") {
+      const { point, problem } = resolvePoint(params, robot.places, "Target");
+      if (problem) refuse("invalid-input", problem);
+      else { Object.assign(sent, point); violations.push(...pointProblems(point, limits, "The target")); }
+      if (!limits.workspaces.length) refuse("no-workspace", `${robot.name} didn't report a workspace, so HANNAH won't move its arm.`);
+    } else if (definition.id === "grasp_object") {
+      // Only something the robot itself reports in its scene, and only with an empty gripper.
+      const objects = (robot.state?.scene?.objects || []).map((item) => item.id);
+      if (!objects.includes(params.object)) refuse("unknown-object", `${robot.name} doesn't report an object called “${params.object}”${objects.length ? ` (it reports: ${objects.join(", ")})` : ""}.`);
+      if (robot.state?.gripper?.holding) refuse("gripper-full", `${robot.name}'s gripper is already holding ${robot.state.gripper.holding}.`);
+      sent.object = params.object;
+    } else if (definition.id === "release_object") {
+      if (!robot.state?.gripper?.holding) refuse("nothing-held", `${robot.name}'s gripper isn't holding anything.`);
     }
-    if (definition.motion) {
+    if (definition.motion && ["navigate_to", "return_to_dock", "inspect_area"].includes(definition.id)) {
       if (finite(params.maxSpeed)) {
         if (finite(limits.maxLinearSpeed) && params.maxSpeed > limits.maxLinearSpeed) refuse("over-speed", `The requested speed ${params.maxSpeed} m/s is above ${robot.name}'s limit of ${limits.maxLinearSpeed} m/s.`);
         else sent.maxSpeed = params.maxSpeed;

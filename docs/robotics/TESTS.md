@@ -19,14 +19,15 @@ Run on 2026-11-21 on macOS 27 (arm64), Node 25.9, Python 3.14.6 and 3.9.6.
 | `server/robotics.packages.test.js` | Unit | 4 | 4 |
 | `server/robotics.fleet.test.js` | Unit (3) and integration (1) | 4 | 4 |
 | `robotics/runtime/tests/test_protocol.py`, `test_safety.py`, `test_adapters.py` | Unit | 21 | 21 |
-| `client/src/__tests__/Robotics.test.ts` | Unit (scripted server) | 8 | 8 |
+| `client/src/__tests__/Robotics.test.ts` | Unit (scripted server) | 9 | 9 |
 | `server/robotics.test.js` | Integration | 18 | 18 |
 | `server/robotics.stage2.test.js` (commissioning, destinations, pause and resume) | Integration | 7 | 7 |
 | `server/robotics.pglite.test.js`, `robotics.stage2.pglite.test.js` | Integration, the same suites on embedded Postgres | 25 | 25 |
-| `robotics/runtime/tests/test_kinematic.py`, `test_runtime.py`, `test_stage2.py` | Simulation (and a few unit) | 48 | 48 |
+| `robotics/runtime/tests/test_kinematic.py`, `test_runtime.py`, `test_stage2.py`, `test_arm.py` | Simulation (and a few unit) | 57 | 57 |
 | `server/robotics.sim.test.js` | Simulation (server + runtime process) | 12 | 12 |
-| `e2e/robotics.spec.ts` | Simulation (browser + server + one or two runtime processes) | 8 | 8 |
-| **Robotics total** | | **165** | **165** |
+| `server/robotics.arm.sim.test.js` | Simulation (server + runtime process, the arm simulator) | 4 | 4 |
+| `e2e/robotics.spec.ts` | Simulation (browser + server + one or two runtime processes) | 9 | 9 |
+| **Robotics total** | | **180** | **180** |
 
 Also: 5 of 5 navigation scenarios (`python3 -m hannah_robot.scenarios`), which `test_stage2.py` runs as a test.
 
@@ -82,12 +83,12 @@ Things the tests caught in this work, all fixed:
 
 | Check | Result |
 |---|---|
-| Server tests (`npm test` in `server`) | 498 tests: 497 passed, 1 skipped (an older skip), 0 failed |
-| Browser suite (`npx playwright test`), whole, on the final build, run alone | 109 passed |
-| Client tests (`npx vitest run`) | 406 passed |
-| Runtime tests | 69 passed, on Python 3.14.6 and 3.9.6 |
+| Server tests (`npm test` in `server`) | 502 tests: 501 passed, 1 skipped (an older skip), 0 failed |
+| Browser suite (`npx playwright test`), whole, on the final build, run alone | 110 passed |
+| Client tests (`npx vitest run`) | 407 passed |
+| Runtime tests | 78 passed, on Python 3.14.6 and 3.9.6 |
 | Client typecheck, client lint, server lint | Clean (3 older lint warnings in the workflow builder) |
-| Secret scan | No findings (664 files) |
+| Secret scan | No findings (677 files) |
 | Licence check | 424 production dependencies, all permissive; none added |
 | Version check | All fields 1.7.0 (no version change in this work) |
 
@@ -107,7 +108,8 @@ Things the tests caught in this work, all fixed:
 | Package signature, integrity, permissions, contract rules | Unit | `robotics.packages.test.js` |
 | Flood of requests in a robot's name | Integration | `robotics.stage2.test.js` |
 | Simulation and physical shown separately | Browser | `e2e` (the kind badge, the operating mode) |
+| Manipulation: kinematics inside joint limits, joint speed limit, collision-checked motion, refusals, gripper state, cancellation by stop, a simulated pick and place | Unit, simulation, browser | `test_arm.py`, `robotics.arm.sim.test.js`, `e2e` |
 
-Still not tested, in addition to the list above: a phone or the desktop app; voice requests for robots; a live model with the robot agents; hardware-in-the-loop; any physical robot; manipulation (nothing to test); localization failure on a real stack; ROS 2 node, topic, service and action behaviour.
+Still not tested, in addition to the list above: a phone or the desktop app; voice requests for robots; a live model with the robot agents; hardware-in-the-loop; any physical robot; manipulation with MoveIt 2 or a physical arm (the built-in arm simulator is tested); pause and resume of an arm motion; localization failure on a real stack; ROS 2 node, topic, service and action behaviour.
 
 One run of the whole server suite failed two older, unrelated tests (a server that didn't start in time) while the browser suite was running at the same time on the same machine. Run alone, the suite passes; the numbers above are from runs made alone.

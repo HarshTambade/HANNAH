@@ -39,7 +39,12 @@ test("every capability carries the whole contract", () => {
   assert.equal(contract.CAPABILITIES.some((item) => item.risk === "critical"), false);
   assert.deepEqual(Object.keys(contract.APPROVAL), Object.keys(contract.RISK));
   // What moves an arm or works near machinery is high risk and has no runtime.
-  for (const id of ["move_robot_arm", "grasp_object", "release_object", "follow_target", "inspect_machine"]) assert.deepEqual([contract.capability(id).risk, contract.capability(id).status], ["high", "contract-only"], id);
+  for (const id of ["follow_target", "inspect_machine"]) assert.deepEqual([contract.capability(id).risk, contract.capability(id).status], ["high", "contract-only"], id);
+  // Arms and grippers are high risk, have a runtime (the built-in arm simulator), and belong to arms only.
+  for (const id of ["move_robot_arm", "grasp_object", "release_object"]) {
+    assert.deepEqual([contract.capability(id).risk, contract.capability(id).status], ["high", "implemented"], id);
+    assert.deepEqual(contract.capability(id).robotTypes, ["manipulator-arm", "mobile-manipulator"]);
+  }
 });
 
 test("no capability takes a raw actuator value", () => {
@@ -51,11 +56,13 @@ test("no capability takes a raw actuator value", () => {
 });
 
 test("a robot registers only what the contract has, for its type, with a runtime behind it", () => {
-  const result = contract.registerCapabilities("differential-drive", ["navigate_to", "stop_motion", "navigate_to", "set_motor_pwm", "move_robot_arm", "capture_image", { id: "read_sensor" }]);
+  const result = contract.registerCapabilities("differential-drive", ["navigate_to", "stop_motion", "navigate_to", "set_motor_pwm", "follow_target", "capture_image", { id: "read_sensor" }, "move_robot_arm"]);
   assert.deepEqual(result.accepted, ["navigate_to", "stop_motion", "read_sensor"]);
+  assert.match(result.refused[3].reason, /Not a capability of a Differential-drive mobile robot/);
+  assert.deepEqual(contract.registerCapabilities("manipulator-arm", ["move_robot_arm", "grasp_object", "release_object", "navigate_to"]).accepted, ["move_robot_arm", "grasp_object", "release_object"]);
   // Cancel, pause, resume and the battery report are HANNAH's own for every robot: a robot neither registers nor is refused them.
   assert.deepEqual(contract.registerCapabilities("differential-drive", ["cancel_mission", "pause_mission", "resume_mission", "report_battery_state", "report_surroundings"]), { accepted: ["report_surroundings"], refused: [] });
-  assert.deepEqual(result.refused.map((item) => item.id), ["set_motor_pwm", "move_robot_arm", "capture_image"]);
+  assert.deepEqual(result.refused.map((item) => item.id), ["set_motor_pwm", "follow_target", "capture_image", "move_robot_arm"]);
   assert.match(result.refused[0].reason, /Not in HANNAH's capability contract/);
   assert.match(result.refused[1].reason, /no runtime implements it yet/);
   // A sensor station doesn't drive.

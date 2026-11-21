@@ -74,7 +74,7 @@ describe("robot tools and the Robot Agent", () => {
 
   it("three robot agents share the robot tools between them, and none has a tool that could bypass the engine", async () => {
     const agents = SPECIALISTS.filter((item) => item.id.startsWith("robot"));
-    expect(agents.map((item) => item.id)).toEqual(["robot", "robot_fleet", "robot_care"]);
+    expect(agents.map((item) => item.id)).toEqual(["robot", "robot_fleet", "robot_arm", "robot_care"]);
     expect([...new Set(agents.flatMap((item) => item.tools))].sort()).toEqual([...ROBOT_TOOL_NAMES].sort());
     for (const agent of agents) {
       expect(agent.tools.some((name) => /desktop_|write_|run_command|external/.test(name))).toBe(false);
@@ -85,8 +85,9 @@ describe("robot tools and the Robot Agent", () => {
     expect(mission.instructions).toMatch(/not an emergency stop/);
     expect(mission.instructions).toMatch(/a room name the robot doesn't have is not a place/);
     // The care agent reads; it has nothing that moves a robot.
-    expect(agents[2].tools.some((name) => /navigate|dock|inspect|assign|resume|set_device/.test(name))).toBe(false);
-    expect(agents[2].instructions).toMatch(/never what the object is/);
+    const care = agents[3];
+    expect(care.tools.some((name) => /navigate|dock|inspect|assign|resume|set_device|arm_move|grasp|release/.test(name))).toBe(false);
+    expect(care.instructions).toMatch(/never what the object is/);
     for (const item of getRobotTools()) expect(JSON.stringify(item.inputSchema)).not.toMatch(/pwm|velocity|torque|wheel|motor/i);
     // The fleet agent needs more than one robot.
     expect(activeSpecialists().map((item) => item.id).filter((id) => id.startsWith("robot"))).toEqual(["robot", "robot_care"]);
@@ -167,6 +168,30 @@ describe("robot tools and the Robot Agent", () => {
     expect(await tool("robot_wait_for_mission").execute({ missionId: "ms_1" })).toMatchObject({ status: "unverified", verified: false, note: "The mission did NOT succeed. Tell the user this status and reason." });
     respond = () => ({ mission: mission("lost", { error: "The robot accepted the mission and then stopped reporting. Its outcome is unknown." }) });
     expect(await tool("robot_wait_for_mission").execute({ missionId: "ms_1" })).toMatchObject({ status: "lost", verified: false, reason: expect.stringMatching(/outcome is unknown/) });
+  });
+
+  it("arm tools ask the engine for a target, an object or a release, and the Manipulation agent exists only with an arm", async () => {
+    expect(activeSpecialists().some((item) => item.id === "robot_arm")).toBe(false);
+    await withRobots([robot({ id: "rb_arm", name: "Arm", robotType: "manipulator-arm", simulator: "hannah-arm-kinematic" })]);
+    const agent = activeSpecialists().find((item) => item.id === "robot_arm")!;
+    expect(agent.name).toBe("Manipulation");
+    expect(agent.instructions).toMatch(/“closed on nothing” is a failure/);
+    expect(agent.instructions).toMatch(/an object the user mentions that the robot doesn't report can't be grasped/);
+    expect(agent.tools.some((name) => /navigate|dock|assign/.test(name))).toBe(false);
+    respond = () => ({ record: record("waiting-approval", { action: "robots.move_robot_arm" }) });
+    await tool("robot_arm_move").execute({ robot: "Arm", pose: "bin" });
+    expect(calls.at(-1)!.body).toMatchObject({ action: "robots.move_robot_arm", params: { robot: "Arm", place: "bin" } });
+    await tool("robot_arm_move").execute({ robot: "Arm", x: "0.55", y: 0.3 });
+    expect(calls.at(-1)!.body).toMatchObject({ params: { robot: "Arm", x: 0.55, y: 0.3 } });
+    await tool("robot_grasp").execute({ robot: "Arm", object: "red block" });
+    expect(calls.at(-1)!.body).toMatchObject({ action: "robots.grasp_object", params: { robot: "Arm", object: "red block" } });
+    const released = await tool("robot_release").execute({ robot: "Arm" }) as Record<string, unknown>;
+    expect(calls.at(-1)!.body).toMatchObject({ action: "robots.release_object", params: { robot: "Arm" } });
+    expect(released).toMatchObject({ status: "waiting-approval", note: expect.stringMatching(/has NOT happened/) });
+    for (const name of ["robot_arm_move", "robot_grasp", "robot_release"]) expect(JSON.stringify(tool(name).inputSchema)).not.toMatch(/joint|torque|angle|velocity/i);
+    const picked = selectToolsForRequest(getDeviceTools(), "Pick up the red block with the arm and put it in the bin").map((item) => item.name);
+    expect(picked).toEqual(expect.arrayContaining(["robot_stop", "robot_arm_move", "robot_grasp", "robot_release", "robot_state", "robot_wait_for_mission"]));
+    expect(picked.length).toBeLessThanOrEqual(20);
   });
 
   it("the Robots screen has its own address", () => {

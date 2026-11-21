@@ -78,6 +78,8 @@ function robotActions({ robotics }) {
     const definition = capability(capabilityId);
     const inputOf = (params) => { const { robot: _robot, ...rest } = params; return rest; };
     return {
+      // High risk (an arm, a gripper) always asks: no standing permission can cover it, in simulation or not.
+      ...(definition.risk === "high" ? { standing: false } : {}),
       id: `robots.${capabilityId}`, service: "robots", kind: "write", title, description: definition.description, needs: "A robot enrolled under Robots, connected",
       input: { type: "object", properties: { robot: ROBOT, ...definition.input.properties }, required: definition.input.required || [] },
       normalize: (raw) => ({ robot: clip(raw.robot, 80), ...coerce(definition.input, Object.fromEntries(Object.entries(raw || {}).filter(([key]) => key !== "robot" && Object.hasOwn(definition.input.properties, key)))) }),
@@ -95,10 +97,10 @@ function robotActions({ robotics }) {
             { label: "Robot", value: `${robot.name} — ${kindLabel(robot)}` },
             ...(verdict.params.maxSpeed !== undefined ? [{ label: "Speed limit", value: `${round(verdict.params.maxSpeed)} m/s` }] : []),
             { label: "Risk", value: verdict.risk },
-            { label: "Checked", value: verdict.ok ? "Inside the workspace, outside keep-out zones, robot ready" : "Refused by the Safety Gateway" },
+            { label: "Checked", value: !verdict.ok ? "Refused by the Safety Gateway" : definition.motion && !["navigate_to", "return_to_dock", "inspect_area"].includes(capabilityId) ? "Robot ready; the arm's planner checks joint limits and collisions before it moves" : "Inside the workspace, outside keep-out zones, robot ready" },
             { label: "If the link drops", value: "The robot stops by itself" },
           ],
-          body: verdict.ok ? `The robot's own planner drives it; HANNAH sends the goal, not wheel commands. The command is valid for ${Math.round(verdict.limits?.commandTtlS ?? 20)} seconds after it is sent.` : verdict.violations.map((item) => item.message).join("\n"),
+          body: verdict.ok ? `${["move_robot_arm", "grasp_object", "release_object"].includes(capabilityId) ? "The arm's own planner chooses the joint motion; HANNAH sends the target, never joint values." : "The robot's own planner drives it; HANNAH sends the goal, not wheel commands."} The command is valid for ${Math.round(verdict.limits?.commandTtlS ?? 20)} seconds after it is sent.` : verdict.violations.map((item) => item.message).join("\n"),
           warnings: verdict.warnings,
         };
       },
@@ -135,6 +137,7 @@ function robotActions({ robotics }) {
   const stateOf = (robot) => ({
     robot: summary(robot), online: robot.online, stale: !robot.online, ageS: robot.stateAgeS,
     note: robot.online ? "Current: reported in the last few seconds." : robot.lastSeenAt ? `Not current: ${robot.name} is offline; this is its last report.` : `${robot.name} has never connected.`,
+    gripper: robot.state?.gripper ?? undefined, scene: robot.state?.scene ?? undefined,
     mode: robot.state?.mode ?? null, pose: robot.state?.pose ?? null, velocity: robot.state?.velocity ?? null, battery: robot.state?.battery ?? null, emergencyStop: robot.state?.estop ?? null, motorsEnabled: robot.state?.motorsEnabled ?? null,
     localized: robot.state?.localized ?? null, faults: robot.state?.faults ?? [], mission: robot.state?.mission ?? null, devices: robot.state?.devices ?? null,
   });
@@ -224,6 +227,9 @@ function robotActions({ robotics }) {
     missionAction({ capabilityId: "return_to_dock", title: "Send a robot to its dock", describe: (sent) => `returns to its dock at (${round(sent.x)}, ${round(sent.y)})` }),
     missionAction({ capabilityId: "inspect_area", title: "Have a robot visit points and report", describe: (sent) => `visits ${sent.waypoints.length} point${sent.waypoints.length === 1 ? "" : "s"}: ${sent.waypoints.map(pointText).join(", ")}` }),
     missionAction({ capabilityId: "set_supported_device_state", title: "Switch a robot's onboard device", describe: (sent) => `switches its ${sent.device} ${sent.state}` }),
+    missionAction({ capabilityId: "move_robot_arm", title: "Move a robot arm", describe: (sent) => `moves its arm to ${sent.place ? `${sent.place} (${round(sent.x, 3)}, ${round(sent.y, 3)})` : `(${round(sent.x, 3)}, ${round(sent.y, 3)})`}` }),
+    missionAction({ capabilityId: "grasp_object", title: "Grasp an object with a robot arm", describe: (sent) => `closes its gripper on the ${sent.object}` }),
+    missionAction({ capabilityId: "release_object", title: "Release what a robot arm holds", describe: () => "opens its gripper" }),
   ];
   return [
     readAction({

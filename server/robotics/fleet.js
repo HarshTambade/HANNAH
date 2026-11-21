@@ -67,7 +67,8 @@ function unavailable(robot, definition) {
  */
 function choose({ robots, task, active = [], only = "" }) {
   const definition = contract.capability(task.capability);
-  if (!definition || !definition.motion || definition.status !== "implemented") return { chosen: null, considered: [], problem: `“${String(task.capability).slice(0, 40)}” isn't a task a robot can be assigned.` };
+  // Only tasks where "which robot" is a question of where it stands. An arm isn't chosen by distance.
+  if (!definition || !["navigate_to", "return_to_dock", "inspect_area"].includes(definition.id)) return { chosen: null, considered: [], problem: `“${String(task.capability).slice(0, 40)}” isn't a task a robot can be assigned.` };
   const busy = new Map(active.filter((mission) => contract.capability(mission.capability)?.motion).map((mission) => [mission.robotId, mission]));
   const byId = new Map(robots.map((robot) => [robot.id, robot]));
   const considered = robots

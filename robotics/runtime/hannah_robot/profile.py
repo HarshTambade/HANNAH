@@ -29,8 +29,8 @@ def load_profile(path: str) -> dict:
         raise ProfileError(f"The profile {path} can't be read ({type(error).__name__}).") from None
     except ValueError:
         raise ProfileError(f"The profile {path} isn't valid JSON.") from None
-    if profile.get("adapter") not in ("kinematic", "ros2"):
-        raise ProfileError("The profile's adapter must be 'kinematic' or 'ros2'.")
+    if profile.get("adapter") not in ("kinematic", "arm-kinematic", "ros2"):
+        raise ProfileError("The profile's adapter must be 'kinematic', 'arm-kinematic' or 'ros2'.")
     profile["_dir"] = os.path.dirname(os.path.abspath(path))
     return profile
 
@@ -56,6 +56,9 @@ def build_adapter(profile: dict, sim_speed: float = 1.0, state_dir: str | None =
         limits = dict(profile.get("limits") or {})
         limits.setdefault("keepOut", world.get("keepOut", []))
         return KinematicSimAdapter(world, limits, profile.get("robot"), profile.get("simulation"), time_factor=sim_speed, inputs_path=os.path.join(state_dir, "sim-inputs.json") if state_dir else None)
+    if profile["adapter"] == "arm-kinematic":
+        from .hal.arm import ArmSimAdapter
+        return ArmSimAdapter(_world(profile), dict(profile.get("limits") or {}), profile.get("simulation"), time_factor=sim_speed, inputs_path=os.path.join(state_dir, "sim-inputs.json") if state_dir else None)
     from .hal.ros2 import Ros2Adapter  # needs a sourced ROS 2 environment
     return Ros2Adapter(profile)
 

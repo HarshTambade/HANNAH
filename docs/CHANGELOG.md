@@ -25,13 +25,14 @@ Robotics, Block 1: the foundation for HANNAH to work with robots. Proven end to 
 - **A home world** with rooms and doorways and **five navigation scenarios** with a regression runner, including recovery when a blocked doorway clears.
 - **Fleet:** HANNAH chooses the robot for a task, says why, and why not the others; two robots aren't sent to the same spot. **Diagnostics** from what a robot reported, each finding with its evidence; a maintenance log.
 - **Screens** for all of the above, **nine more robot tools**, and two more agents (Fleet, Robot care).
+- **Manipulation in simulation.** A built-in planar arm simulator (not MoveIt 2 or Gazebo) with kinematics, joint limits, collision-checked motion and a gripper with feedback; `move_robot_arm`, `grasp_object` and `release_object` with a runtime, both gateways and verification from joint and gripper feedback; an arm view and a Manipulation agent. Arm steps ask every time. A pick and place is verified end to end.
 - **Signed robot packages:** a manifest with every file's hash and an Ed25519 signature, a verifier and a command-line tool. Verifying installs nothing.
 - Migration 19. Requests in one robot's name are rate-limited.
 
 ### Not done
 
 - The ROS 2 adapter, its watchdog, the Gazebo robot and the container have never been run: ROS 2 and Gazebo could not be installed on the development machine.
-- No physical robot. No arm, gripper or camera. No firmware updates (design only). No mission queues or traffic management between robots. No industrial or IoT connectors. No installing of robot packages. State per stage: [`robotics/STAGE_STATUS.md`](./robotics/STAGE_STATUS.md).
+- No physical robot. No MoveIt 2 and no physical arm or gripper. No camera. No firmware updates (design only). No mission queues or traffic management between robots. No industrial or IoT connectors. No installing of robot packages. State per stage: [`robotics/STAGE_STATUS.md`](./robotics/STAGE_STATUS.md).
 
 ### Changed
 

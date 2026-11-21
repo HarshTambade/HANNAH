@@ -40,9 +40,9 @@ A capability is a high-level operation. There is no capability for a wheel speed
 | `resume_mission` | mobile ground robots (HANNAH's own) | moderate | 20 s | can be paused or cancelled again | The robot reports it resumed; the command expires and works once | Implemented |
 | `capture_image` | any | none | 15 s | no image kept | An image with its capture time | Contract only |
 | `follow_target` | mobile ground robots | high | 300 s | robot stops and holds | The tracker's record | Contract only |
-| `move_robot_arm` | arms, mobile manipulators | high | 60 s | trajectory stopped, arm holds | Measured joint positions | Contract only |
-| `grasp_object` | arms, mobile manipulators | high | 30 s | gripper stops; does not open | Gripper position and force | Contract only |
-| `release_object` | arms, mobile manipulators | high | 15 s | — | Gripper position | Contract only |
+| `move_robot_arm` | arms, mobile manipulators | high | 60 s | motion stopped, arm holds | Tool position from measured joint angles within 2 cm, joints still | Implemented (built-in arm simulator) |
+| `grasp_object` | arms, mobile manipulators | high | 30 s | gripper stops; does not open | The gripper reports holding that object | Implemented (built-in arm simulator) |
+| `release_object` | arms, mobile manipulators | high | 15 s | — | The gripper reports open and empty | Implemented (built-in arm simulator) |
 | `inspect_machine` | mobile ground robots, arms | high | 600 s | robot stops and holds | Readings and images recorded at the machine | Contract only |
 | `execute_approved_workflow` | any | moderate | 900 s | current step cancelled | Each step by its own rule | Contract only |
 
@@ -100,7 +100,7 @@ A read is answered from the registry's last report and never sends anything to t
 | none | state, sensors, battery, surroundings | Nothing: it reads the registry's last report |
 | low | stop, cancel, pause; a switchable device | Nothing for stop, cancel and pause; a device follows your permission level |
 | moderate | navigation in a controlled space | Your permission level. A physical robot always asks and must be commissioned |
-| high | arms, grippers, following a person, work at a machine | Always a person's approval, a commissioned robot, the robot's own interlocks. No standing permission. **No runtime exists for any capability in this class** |
+| high | arms, grippers, following a person, work at a machine | Always a person's approval, a commissioned robot if physical, the robot's own interlocks. No standing permission. The arm capabilities have a runtime in the built-in arm simulator only; following a person and working at a machine have none |
 | critical | hazardous machinery, something that can't be undone, a change to a safety system | **Not offered.** HANNAH has no capability in this class |
 
 "HANNAH's own" capabilities (cancel, pause, resume, battery) are provided for every robot and are not registered by it. The directive's `stop_navigation` is `stop_motion`.

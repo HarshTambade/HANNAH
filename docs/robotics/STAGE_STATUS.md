@@ -16,7 +16,7 @@ Updated 2026-11-21. One rule for reading this page: **"verified" always says whe
 |---|---|
 | 1. A sentence → a registered simulated robot → validated destination → permission → goal → **ROS 2 and Nav2 execute it in Gazebo** → real feedback → cancel → independent verification | Steps 1–6, 8, 9, 10: **verified (sim)** with the built-in simulator. Step 7, Gazebo and Nav2: **written, not run**. The milestone as written is **not met** until the Gazebo acceptance check passes |
 | 2. The same on a physical robot, after commissioning | **Not started.** The commissioning procedure exists and is verified (server); no robot has been commissioned |
-| 3. A second class of hardware (an arm) | **Not started.** Capabilities are in the contract; there is no runtime, adapter or simulation |
+| 3. A second class of hardware (an arm), with a dedicated manipulation integration | **Partly.** A pick and place is verified with HANNAH's built-in arm simulator, through the same registry, gateway, approval and verification. The dedicated integration the milestone means, MoveIt 2 with a real or Gazebo arm, is **not started** |
 
 ## Stage by stage
 
@@ -34,12 +34,13 @@ Updated 2026-11-21. One rule for reading this page: **"verified" always says whe
 | **4. Physical hardware** | Commissioning: seven steps with server-checked evidence, trial mode, withdrawal on hardware change | **Verified (server)** with a stand-in. No hardware |
 | | Adapter contract for a ROS 2 robot | **Written, not run** |
 | | micro-ROS, embedded controllers, CAN, serial buses, motor controllers, battery systems, hardware-in-the-loop tests | **Not started** |
-| **5. Agents, voice, missions** | Three robot agents (Robot, Fleet, Robot care) with 18 tools; requests routed to robot tools | **Verified** by client tests with a scripted server. No live model run |
+| **5. Agents, voice, missions** | Four robot agents (Robot, Fleet, Manipulation, Robot care) with 21 tools; requests routed to robot tools | **Verified** by client tests with a scripted server. No live model run |
 | | Mission lifecycle: create, check, approve, execute, feedback, pause, resume, cancel, verify, history; durable records | **Verified (sim)** |
 | | Multi-step mission planning, checkpoints, automatic failure recovery, robot memories (maps, preferences) | **Not started**. Multi-step plans come only from the existing Team orchestrator |
 | | Voice | Uses the existing voice path into the same tools. **Not tested** for robot requests |
-| | Navigation, Perception, Manipulation, Maintenance and Verification as separate agents | Folded into the three agents above and the server's own verification. Manipulation: not started |
-| **6. Arms and manipulation** | MoveIt 2, kinematics, planning scene, grippers, pick and place, simulation | **Not started.** Contract entries only |
+| | Navigation, Perception, Maintenance and Verification as separate agents | Folded into the agents below and the server's own verification. There are four robot agents: Robot, Fleet, Manipulation, Robot care |
+| **6. Arms and manipulation** | A three-joint planar arm in a built-in simulator: kinematics, joint limits, collision-checked motion, a gripper with feedback; move, grasp and release as approved, verified steps; a pick and place | **Verified (sim)** — the built-in arm simulator, not MoveIt 2 |
+| | MoveIt 2, a planning scene from sensors, trajectory controllers, real grippers, object localization, grasp validation, Gazebo manipulation | **Not started** |
 | **7. Fleet** | Overview, choosing a robot with reasons, one-spot reservation, approval of the chosen robot | **Verified (server)**; browser test with two simulated robots |
 | | Mission queues, priorities, traffic management, shared-resource scheduling | **Not started** |
 | **8. Industrial and IoT** | Home Assistant, MQTT, Modbus, OPC UA, PLCs, CAN | **Not started.** Any future connector must be an Action Engine action; PLC writes will not be model tools |
@@ -56,7 +57,8 @@ Updated 2026-11-21. One rule for reading this page: **"verified" always says whe
 1. Everything runs against one simulator written for this project. It is kinematic: no physics, friction, wheel slip, sensor noise models, or timing of a real machine.
 2. The planner in the simulator is not Nav2. Behaviour in Gazebo will differ.
 3. Position is odometry (drifting) corrected only in the dock. There is no map-based localization in the simulator.
-4. Perception is range-sensor geometry. HANNAH cannot say what an object is.
+4. Perception is range-sensor geometry. HANNAH cannot say what an object is. The arm simulator's objects come from its own scene, not from a camera.
+4a. The arm simulator is planar, with no dynamics, payload or grasp physics, and a small fixed set of planning strategies.
 5. One robot per runtime; one account per robot; missions of minutes, not hours.
 6. Commands reach a robot at its next exchange (about a second). HANNAH is not for anything needing a faster reaction; that belongs to the robot's controller.
 7. A physical robot's every movement needs approval. There is no scoped autonomy for hardware.
@@ -70,4 +72,4 @@ Updated 2026-11-21. One rule for reading this page: **"verified" always says whe
 | A Linux machine or container host, or a run of the manual "Robotics — Gazebo acceptance check" job | Milestone 1, all of stage 2's ROS side |
 | A decision between ROS 2 Jazzy and Lyrical | The ROS files' versions |
 | A physical robot with Nav2 working, a hardware emergency stop, and a qualified person's risk assessment | Milestone 2 |
-| Which arm, if any | Milestone 3 |
+| A Linux environment with MoveIt 2, and which arm | The rest of milestone 3 |

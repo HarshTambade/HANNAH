@@ -52,7 +52,7 @@ const MISSIONS_KEEP_MS = 180 * 24 * 60 * 60_000;
 const MAX_STATE = 24_000;
 const MAX_ROBOTS = 20;
 const FINAL = new Set(["succeeded", "unverified", "failed", "cancelled", "rejected", "expired", "timed-out", "lost"]);
-const MODES = new Set(["idle", "navigating", "paused", "holding", "stopping", "docked", "estopped", "fault", "starting"]);
+const MODES = new Set(["idle", "navigating", "manipulating", "paused", "holding", "stopping", "docked", "estopped", "fault", "starting"]);
 const MAX_DESTINATIONS = 60;
 const RESUME_TTL_MS = 20_000;
 const AUTH_LABEL = "hannah-robot-auth-v1";
@@ -413,6 +413,21 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       const tolerance = (params.tolerance ?? 0.3) + 0.03;
       const missed = wanted.findIndex((point, index) => !(visited[index]?.reached === true && finite(visited[index]?.pose?.x) && Math.hypot(visited[index].pose.x - point.x, visited[index].pose.y - point.y) <= tolerance));
       return missed === -1 && still ? { confirmed: true, evidence: `All ${wanted.length} points were reached within ${round(tolerance - 0.03)} m, by the robot's reported position at each.` } : { confirmed: false, evidence: missed === -1 ? "Every point was reached but the robot is still moving." : `Point ${missed + 1} wasn't reached within ${round(tolerance - 0.03)} m.` };
+    }
+    if (mission.capability === "move_robot_arm") {
+      if (!finite(pose?.x) || !finite(pose?.y)) return { confirmed: false, evidence: "The robot reported success but sent no tool position to check it against." };
+      const distance = Math.hypot(pose.x - params.x, pose.y - params.y);
+      const where = `The tool position from the measured joint angles${source} is (${round(pose.x, 3)}, ${round(pose.y, 3)}), ${round(distance * 100, 1)} cm from the target (${round(params.x, 3)}, ${round(params.y, 3)})`;
+      if (distance > 0.02) return { confirmed: false, evidence: `${where}: further than the 2 cm allowed.` };
+      return turning <= 0.02 ? { confirmed: true, evidence: `${where}, joints still.` } : { confirmed: false, evidence: `${where}, but the joints are still moving.` };
+    }
+    if (mission.capability === "grasp_object") {
+      const holding = state?.gripper?.holding ?? null;
+      return holding === params.object ? { confirmed: true, evidence: `The gripper reports it is holding ${holding}.` } : { confirmed: false, evidence: `The robot reported a grasp, but its gripper reports ${holding ? `holding ${holding}` : "holding nothing"}.` };
+    }
+    if (mission.capability === "release_object") {
+      const gripper = state?.gripper;
+      return gripper && gripper.open === true && !gripper.holding ? { confirmed: true, evidence: "The gripper reports open and holding nothing." } : { confirmed: false, evidence: `The robot reported a release, but its gripper reports ${gripper?.holding ? `holding ${gripper.holding}` : gripper?.open === false ? "closed" : "nothing"}.` };
     }
     if (mission.capability === "set_supported_device_state") {
       const actual = state?.devices?.[params.device];

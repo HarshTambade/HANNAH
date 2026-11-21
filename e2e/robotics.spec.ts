@@ -283,6 +283,55 @@ test("with two robots the fleet view says which can take a task, chooses one and
   second = null;
 });
 
+test("a simulated arm picks up a block from the screen: each step asks, and a grasp is shown only when the gripper has it", async ({ page }) => {
+  await signedIn(page);
+  await page.goto("/robotics");
+  await expect(detail(page).getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  const created = await page.request.post(`${api}/api/robots`, { data: { name: "Arm", simulated: true } });
+  expect(created.status(), await created.text()).toBe(201);
+  const armDir = join(stateDir, "..", "arm");
+  const profile = resolve(runtimeDir, "..", "profiles", "sim-arm.json");
+  const enrolled = await run(["enroll", "--server", api, "--code", (await created.json()).enrollment.code, "--state-dir", armDir, "--profile", profile]);
+  expect(enrolled.code, enrolled.output).toBe(0);
+  second = spawn("python3", ["-m", "hannah_robot", "run", "--state-dir", armDir, "--profile", profile, "--sim-speed", "4", "--sync-interval", "0.2"], { cwd: runtimeDir, stdio: ["ignore", "ignore", "ignore"] });
+  await page.getByTestId("robot-card").filter({ hasText: "Arm" }).click();
+  await expect(detail(page).getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  await expect(detail(page).getByTestId("robot-kind")).toHaveText("SIMULATION · HANNAH's built-in arm simulator (not MoveIt or Gazebo)");
+  const arm = page.getByTestId("arm-panel");
+  await expect(arm.getByTestId("arm-view")).toBeVisible();
+  await expect(arm.getByTestId("arm-state")).toContainText("Gripper open, holding nothing.");
+  await expect(arm).toContainText("the simulator's own scene (not a camera)");
+  await expect(page.getByTestId("robot-map")).toHaveCount(0);
+  let finished = 0;
+  const step = async (title: RegExp) => {
+    const approval = page.getByTestId("robot-approval");
+    await expect(approval).toContainText(title, { timeout: 15_000 });
+    await expect(approval).toContainText("Riskhigh");
+    await approval.getByRole("button", { name: "Approve and start" }).click();
+    // One more finished, verified mission than before: the step is over before the next one is asked for.
+    finished += 1;
+    await expect(page.locator('[data-testid="mission-row"][data-status="succeeded"]')).toHaveCount(finished, { timeout: 30_000 });
+  };
+  await arm.getByLabel("Where to move the arm").selectOption("object:red block");
+  await arm.getByTestId("arm-move").click();
+  await step(/Start a mission: Arm moves its arm to \(0\.55, 0\.3\)/);
+  await expect(page.locator('[data-testid="mission-row"]').first()).toContainText(/0 cm from the target \(0\.55, 0\.3\), joints still/);
+  await arm.getByLabel("Object to grasp").selectOption("red block");
+  await arm.getByTestId("arm-grasp").click();
+  await step(/Arm closes its gripper on the red block/);
+  await expect(arm.getByTestId("arm-state")).toContainText("Gripper closed, holding the red block.", { timeout: 15_000 });
+  await expect(page.locator('[data-testid="mission-row"]').first()).toContainText("The gripper reports it is holding red block.");
+  await arm.getByLabel("Where to move the arm").selectOption("pose:bin");
+  await arm.getByTestId("arm-move").click();
+  await step(/Arm moves its arm to bin \(0\.25, -0\.5\)/);
+  await arm.getByTestId("arm-release").click();
+  await step(/Arm opens its gripper/);
+  await expect(arm.getByTestId("arm-state")).toContainText("Tool at (0.250, -0.500) m", { timeout: 15_000 });
+  await expect(arm.getByTestId("arm-state")).toContainText("Gripper open, holding nothing.");
+  second?.kill("SIGKILL");
+  second = null;
+});
+
 test("when the robot's runtime is gone the screen says offline and marks what it shows as old", async ({ page }) => {
   await signedIn(page);
   await page.goto("/robotics");

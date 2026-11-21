@@ -22,7 +22,7 @@ import { Operator, toolResult, type ActionRecord } from "./Operator";
 
 export type Point = { x: number; y: number; yaw?: number };
 export type RobotLimits = {
-  maxLinearSpeed?: number; maxAngularSpeed?: number; maxLinearAccel?: number; minBatteryPercent?: number; linkTimeoutS?: number; commandTtlS: number; robotRadius?: number;
+  maxLinearSpeed?: number; maxAngularSpeed?: number; maxLinearAccel?: number; maxJointSpeed?: number; minBatteryPercent?: number; linkTimeoutS?: number; commandTtlS: number; robotRadius?: number;
   workspaces: Array<{ frame: string; polygon: number[][] }>; keepOut: Array<{ name: string; polygon: number[][] }>;
   environment: string | null; estop: { hardware: boolean; description: string } | null; motionRequiresApproval: boolean;
 };
@@ -36,6 +36,9 @@ export type RobotState = {
   mission?: { id: string; capability: string; phase?: string; distanceRemaining?: number | null; secondsLeft?: number } | null;
   nav?: { goal?: Point | null; path?: number[][]; status?: string };
   perception?: Perception;
+  arm?: { points: number[][]; target: Point | null; status: string };
+  gripper?: { open: boolean; holding: string | null };
+  scene?: { source: string; objects: Array<{ id: string; x: number; y: number; held: boolean }> };
   map?: { coveragePercent?: number; discovered?: number[][] };
   link?: { ok: boolean; silentS: number; timeoutS: number };
   sim?: { kind: string; timeFactor?: number; truth?: Point; odometryError?: number };
@@ -81,11 +84,11 @@ export const ROBOTICS_EVENT = "hannah:robotics";
 const HINT = "hannah.robots.v1";
 const json = (value: unknown) => JSON.stringify(value);
 const id = (value: string) => encodeURIComponent(value);
-let known: Array<{ id: string; name: string; simulated: boolean }> = [];
+let known: Array<{ id: string; name: string; simulated: boolean; type?: string }> = [];
 try { known = JSON.parse(globalThis.localStorage?.getItem(HINT) || "[]"); } catch { known = []; }
 
 function remember(robots: Robot[]) {
-  const next = robots.filter((robot) => robot.status === "enrolled").map((robot) => ({ id: robot.id, name: robot.name, simulated: robot.simulated }));
+  const next = robots.filter((robot) => robot.status === "enrolled").map((robot) => ({ id: robot.id, name: robot.name, simulated: robot.simulated, type: robot.robotType }));
   const changed = json(next) !== json(known);
   known = next;
   try { globalThis.localStorage?.setItem(HINT, json(known)); } catch { /* storage is a convenience */ }
@@ -136,7 +139,7 @@ export const Robotics = {
   telemetry: async (robotId: string, minutes = 15) => (await accountRequest<{ samples: TelemetrySample[] }>(`/api/robots/${id(robotId)}/telemetry?minutes=${minutes}`)).samples,
   events: async (robotId?: string) => (await accountRequest<{ events: RobotEvent[] }>(`/api/robots/events${robotId ? `?robot=${id(robotId)}` : ""}`)).events,
   /** Ask for a mission. The record says whether it started, waits for approval, or was refused and why. */
-  ask: (action: "robots.navigate_to" | "robots.return_to_dock" | "robots.inspect_area" | "robots.set_supported_device_state" | "robots.resume_mission", params: Record<string, unknown>, request = "Asked on the Robots screen") =>
+  ask: (action: "robots.navigate_to" | "robots.return_to_dock" | "robots.inspect_area" | "robots.set_supported_device_state" | "robots.resume_mission" | "robots.move_robot_arm" | "robots.grasp_object" | "robots.release_object", params: Record<string, unknown>, request = "Asked on the Robots screen") =>
     Operator.run(action, params, { request, agent: "You", intent: "robots" }),
   /** Watch a mission until it ends or the time is up. Returns it as it is then. */
   async waitFor(missionId: string, seconds: number, signal?: AbortSignal) {
@@ -187,6 +190,12 @@ const tools: HANNAHTool[] = [
     inputSchema: { type: "object", properties: { robot: robotProp, reason: { type: "string" } } },
     execute: async (args) => toolResult(await Operator.perform("robots.stop_motion", compact({ robot: str(args.robot), reason: str(args.reason) }), { agent: "Robot agent" })),
   },
+  mission("robot_arm_move", "robots.move_robot_arm", "Move a robot arm's tool to one of its named poses (use the exact name from robot_list) or to x and y in metres in the arm's base frame. The arm's own planner chooses the joint motion inside its joint limits and clear of collisions; you never send joint values. High risk: the user approves every arm motion, always.",
+    { pose: { type: "string", description: "A named pose from robot_list." }, x: { type: "number" }, y: { type: "number" } }, [],
+    (args) => ({ place: str(args.pose), x: num(args.x), y: num(args.y) })),
+  mission("robot_grasp", "robots.grasp_object", "Close a robot arm's gripper on a named object from the objects the robot itself reports (robot_state lists them). The tool must already be at the object: move the arm there first. The gripper's own feedback decides whether anything was grasped; a gripper that closed on nothing is a failure, and you report it as one. Never assume an object can be grasped because it was mentioned or seen.",
+    { object: { type: "string", description: "An object id exactly as robot_state reports it." } }, ["object"], (args) => ({ object: str(args.object) })),
+  mission("robot_release", "robots.release_object", "Open a robot arm's gripper and let go of what it holds, where the tool is now.", {}, [], () => ({})),
   control("robot_pause", "robots.pause_mission", "Pause a robot's running mission: it holds where it is and keeps the mission. Never needs approval."),
   control("robot_cancel", "robots.cancel_mission", "Cancel a robot's mission: it stops where it is and the mission ends. Never needs approval. Use this for “cancel the mission”; use robot_stop for “stop the robot”."),
   read("robot_list", "robots.list", "List the robots enrolled in the user's account: each one's name, whether it is a SIMULATION or a PHYSICAL robot, whether it is connected, what it can do (its capabilities), and the named places it knows. Call this first; never assume a robot or a capability exists.", {}, () => ({})),

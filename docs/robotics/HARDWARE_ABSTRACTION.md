@@ -15,6 +15,8 @@ The runtime never talks to motors, sensors or ROS directly. It talks to one inte
 | `cancel_navigation()` | Cancel the goal. Safe to repeat |
 | `hold()` | Stand still now: cancel goals and command zero motion. Safe to repeat |
 | `heartbeat()` | Called every tick while the runtime is healthy, for an adapter-side watchdog |
+| `move_arm(target)`, `arm_status()` | Hand the arm's planner a tool position; never joint values |
+| `grasp(object)`, `release()` | Close the gripper on a named object at the tool; open it |
 | `set_device(id, on)` | Switch a listed on/off device |
 | `acknowledge_fault()` | A local operator action. No HANNAH command can reach it |
 
@@ -77,3 +79,7 @@ Block 1 has no network discovery. A robot becomes known when a person creates it
 | Controller limits | Modelled: speed, acceleration, 0.5 s command timeout | The robot's own controller (Gazebo `DiffDrive`, or `ros2_control`) |
 | Emergency stop | A simulated input, pressed through a local file | Read from a topic if the profile names one; otherwise "not monitored" |
 | If the runtime dies | The simulator dies with it | `ros2_watchdog.py`, a separate process, cancels Nav2 goals and zeroes velocity when the heartbeat stops |
+
+## A third adapter
+
+`hal/arm.py` (`arm-kinematic`): HANNAH's built-in planar arm simulator, tested. See MANIPULATION.md. The method list a test enforces now includes `move_arm`, `arm_status`, `grasp` and `release`, and still nothing that takes a joint value.

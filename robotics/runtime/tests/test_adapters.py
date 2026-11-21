@@ -28,13 +28,14 @@ HAS_ROS = importlib.util.find_spec("rclpy") is not None
 class Contract(unittest.TestCase):
     def test_the_interface_has_no_way_to_command_an_actuator(self):
         names = {name for name, _ in inspect.getmembers(RobotAdapter, predicate=inspect.isfunction)}
-        self.assertEqual(names, {"describe", "state", "start", "step", "close", "navigate", "navigation_status", "cancel_navigation", "hold", "heartbeat", "set_device", "acknowledge_fault"})
+        self.assertEqual(names, {"describe", "state", "start", "step", "close", "navigate", "navigation_status", "cancel_navigation", "hold", "heartbeat", "set_device", "acknowledge_fault", "move_arm", "arm_status", "grasp", "release"})
         for forbidden in ("velocity", "pwm", "torque", "effort", "wheel", "motor", "joint"):
             self.assertFalse(any(forbidden in name for name in names), forbidden)
 
     def test_both_adapters_implement_it(self):
         from hannah_robot.hal.ros2 import Ros2Adapter
-        for adapter in (KinematicSimAdapter, Ros2Adapter):
+        from hannah_robot.hal.arm import ArmSimAdapter
+        for adapter in (KinematicSimAdapter, ArmSimAdapter, Ros2Adapter):
             self.assertTrue(issubclass(adapter, RobotAdapter))
             self.assertFalse(getattr(adapter, "__abstractmethods__", None), adapter.__name__)
 
@@ -56,6 +57,8 @@ class Contract(unittest.TestCase):
     def test_a_bad_profile_is_refused_with_the_reason(self):
         with self.assertRaisesRegex(ProfileError, "can't be read"):
             load_profile(os.path.join(HERE, "no-such-profile.json"))
+        arm = build_adapter(load_profile(os.path.join(ROBOTICS, "profiles", "sim-arm.json")))
+        self.assertEqual((arm.name, arm.describe()["robotType"], arm.describe()["simulation"]["kind"]), ("arm-kinematic", "manipulator-arm", "hannah-arm-kinematic"))
         with self.assertRaisesRegex(ProfileError, "adapter must be"):
             path = os.path.join(HERE, "__bad_profile.json")
             with open(path, "w", encoding="utf-8") as handle:

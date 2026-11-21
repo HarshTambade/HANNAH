@@ -5,7 +5,8 @@ RobotAdapter, which presents one robot as: a description of itself, a current
 state, and a few high-level operations that the robot's own planner and
 controller carry out. An adapter exists per way of reaching a robot:
 
-  KinematicSimAdapter   HANNAH's built-in simulator (hal/kinematic.py)
+  KinematicSimAdapter   HANNAH's built-in mobile-robot simulator (hal/kinematic.py)
+  ArmSimAdapter         HANNAH's built-in arm simulator (hal/arm.py)
   Ros2Adapter           any ROS 2 robot with Nav2: Gazebo or hardware (hal/ros2.py)
 
 Adding a robot family means writing an adapter (or, for a ROS 2 robot, only a
@@ -70,6 +71,22 @@ class RobotAdapter(ABC):
     @abstractmethod
     def hold(self) -> None:
         """Ask the base to stand still now (cancel goals, command zero motion). Idempotent."""
+
+    # ---- manipulation: carried out by the arm's own planner (MoveIt 2 on a real arm) ----
+    def move_arm(self, target: dict) -> None:
+        """Give the arm's planner a tool position ({x, y}, base frame). Never joint values."""
+        raise NotImplementedError(f"{self.name} has no arm")
+
+    def arm_status(self) -> NavigationStatus:
+        return self.navigation_status()
+
+    def grasp(self, object_id: str) -> None:
+        """Close the gripper on a named object that is at the tool."""
+        raise NotImplementedError(f"{self.name} has no gripper")
+
+    def release(self) -> None:
+        """Open the gripper."""
+        raise NotImplementedError(f"{self.name} has no gripper")
 
     def heartbeat(self) -> None:
         """Called every tick while the runtime is healthy, for an adapter-side watchdog."""

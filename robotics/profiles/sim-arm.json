@@ -1,0 +1,7 @@
+{
+  "adapter": "arm-kinematic",
+  "identity": { "manufacturer": "HANNAH", "model": "Simulated three-joint planar arm", "robotType": "manipulator-arm", "os": "host operating system", "compute": "host computer", "softwareVersion": "0.1.0", "firmwareVersion": "none (simulated)", "serialNumber": "SIM-ARM-0001" },
+  "world": "../worlds/bench.json",
+  "limits": { "maxJointSpeed": 1.2, "linkTimeoutS": 5, "commandTtlS": 20, "environment": "simulation" },
+  "simulation": { "seed": 5 }
+}

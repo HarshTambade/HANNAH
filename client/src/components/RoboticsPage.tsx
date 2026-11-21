@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, Loader2, MapPin, OctagonX, Plus, Radio, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
-import { CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, SurroundingsPanel } from "./RobotPanels";
+import { ArmPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, SurroundingsPanel } from "./RobotPanels";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -28,7 +28,7 @@ const heading = "text-[11px] font-semibold uppercase tracking-[0.14em] text-slat
 const message = (error: unknown) => (error instanceof Error ? error.message : "That didn't work.");
 const clock = (at: number | null | undefined) => (at ? new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "never");
 const fixed = (value: number | null | undefined, digits = 2) => (typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "–");
-const SIMULATORS: Record<string, string> = { "hannah-kinematic": "HANNAH's built-in simulator (not Gazebo)", "gazebo-harmonic": "Gazebo Harmonic", "stand-in": "scripted test robot" };
+const SIMULATORS: Record<string, string> = { "hannah-arm-kinematic": "HANNAH's built-in arm simulator (not MoveIt or Gazebo)", "hannah-kinematic": "HANNAH's built-in simulator (not Gazebo)", "gazebo-harmonic": "Gazebo Harmonic", "stand-in": "scripted test robot" };
 const CONNECTION: Record<Robot["connection"], { label: string; tone: string }> = {
   online: { label: "Connected", tone: "bg-emerald-50 text-emerald-800 border-emerald-200" },
   offline: { label: "Offline", tone: "bg-amber-50 text-amber-900 border-amber-200" },
@@ -36,7 +36,7 @@ const CONNECTION: Record<Robot["connection"], { label: string; tone: string }> =
   "awaiting-enrollment": { label: "Waiting for its runtime to enroll", tone: "bg-sky-50 text-sky-900 border-sky-200" },
   revoked: { label: "Access revoked", tone: "bg-rose-50 text-rose-800 border-rose-200" },
 };
-const MODE: Record<string, string> = { paused: "Paused", idle: "Idle", navigating: "Driving", holding: "Holding position", stopping: "Stopping", docked: "In its dock", estopped: "Emergency stop engaged", fault: "Fault", offline: "Offline", starting: "Starting", unknown: "Unknown" };
+const MODE: Record<string, string> = { manipulating: "Moving the arm", paused: "Paused", idle: "Idle", navigating: "Driving", holding: "Holding position", stopping: "Stopping", docked: "In its dock", estopped: "Emergency stop engaged", fault: "Fault", offline: "Offline", starting: "Starting", unknown: "Unknown" };
 const MISSION: Record<string, { label: string; tone: string; Icon: typeof Clock }> = {
   queued: { label: "Waiting to be delivered", tone: "bg-sky-50 text-sky-900 border-sky-200", Icon: Clock },
   sent: { label: "Delivered, not accepted yet", tone: "bg-sky-50 text-sky-900 border-sky-200", Icon: Clock },
@@ -248,6 +248,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
   if (error && !robot) return <Notice tone="rose">{error}</Notice>;
   if (!robot) return <p className="text-sm text-slate-600"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden="true" />Loading…</p>;
   const state = robot.state;
+  const isArm = robot.robotType === "manipulator-arm";
   const offered = capabilities.filter((item) => robot.capabilities.includes(item.id));
   const can = (id: string) => robot.capabilities.includes(id) && !robot.disabled.includes(id);
   const show = (record: ActionRecord) => setOutcome({ text: record.outcome, tone: record.status === "failed" || record.status === "denied" ? "rose" : record.status === "unverified" || record.status === "unknown" ? "amber" : "slate" });
@@ -302,7 +303,15 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
 
       {robot.status === "enrolled" && <CommissioningPanel robot={robot} onChanged={() => void refresh()} />}
 
-      {robot.status === "enrolled" && (
+      {isArm && <ArmPanel robot={robot} busy={Boolean(busy)} onAsk={(action, params) => void ask(action, action, params)} />}
+      {isArm && active && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950" data-testid="active-mission">
+          <span>{active.summary}</span>
+          <button type="button" className={button} onClick={() => void act("cancel", () => Robotics.cancel(active.id))} disabled={busy === "cancel" || Boolean(active.cancelRequestedAt)}>{active.cancelRequestedAt ? "Cancelling…" : "Cancel"}</button>
+        </div>
+      )}
+
+      {robot.status === "enrolled" && !isArm && (
         <section className={`${card} space-y-3`}>
           <h3 className="font-semibold text-slate-900">Where it is</h3>
           <MapView robot={robot} target={target} onPick={setTarget} />
@@ -333,14 +342,16 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
         </section>
       )}
 
-      <DestinationsPanel robot={robot} picked={target} />
+      {!isArm && <DestinationsPanel robot={robot} picked={target} />}
       <SurroundingsPanel robot={robot} />
 
       {robot.status === "enrolled" && state && (
         <section className={`${card} space-y-3`}>
           <h3 className="font-semibold text-slate-900">Telemetry{!robot.online && <span className="ml-2 text-xs font-normal text-amber-800">last report, not current</span>}</h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Figure label="Speed" value={`${fixed(Math.abs(state.velocity?.linear ?? 0))} m/s`} note={`Limit ${fixed(robot.limits.maxLinearSpeed)} m/s`}><Sparkline values={speeds} label="Speed over the last 15 minutes" /></Figure>
+            {isArm
+              ? <Figure label="Fastest joint" value={`${fixed(Math.abs(state.velocity?.angular ?? 0))} rad/s`} note={`Limit ${fixed(robot.limits.maxJointSpeed)} rad/s`} />
+              : <Figure label="Speed" value={`${fixed(Math.abs(state.velocity?.linear ?? 0))} m/s`} note={`Limit ${fixed(robot.limits.maxLinearSpeed)} m/s`}><Sparkline values={speeds} label="Speed over the last 15 minutes" /></Figure>}
             <Figure label="Battery" value={state.battery ? `${Math.round(state.battery.percent)}%` : "Not reported"} note={state.battery?.charging ? "Charging" : `Minimum to start ${robot.limits.minBatteryPercent ?? "–"}%`}>
               {state.battery && <span className="inline-flex items-center gap-1 text-xs text-slate-600">{state.battery.charging ? <BatteryCharging className="h-4 w-4" aria-hidden="true" /> : <BatteryMedium className="h-4 w-4" aria-hidden="true" />}</span>}
               <Sparkline values={batteries} label="Battery over the last 15 minutes" />
@@ -419,7 +430,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
           <div>
             <p className={heading}>Limits in force</p>
             <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-sm text-slate-800">
-              <dt className="text-slate-600">Top speed</dt><dd>{fixed(robot.limits.maxLinearSpeed)} m/s{robot.safety.owner?.maxLinearSpeed !== undefined ? " (you lowered it)" : " (the robot's own)"}</dd>
+              <dt className="text-slate-600">Top speed</dt><dd>{isArm ? `${fixed(robot.limits.maxJointSpeed)} rad/s at any joint (the robot's own)` : `${fixed(robot.limits.maxLinearSpeed)} m/s${robot.safety.owner?.maxLinearSpeed !== undefined ? " (you lowered it)" : " (the robot's own)"}`}</dd>
               <dt className="text-slate-600">Workspace</dt><dd>{robot.limits.workspaces.length ? "Goals outside it are refused" : "None reported: HANNAH won't move this robot"}</dd>
               <dt className="text-slate-600">Keep-out zones</dt><dd>{robot.limits.keepOut.map((zone) => zone.name).join(", ") || "None"}</dd>
               <dt className="text-slate-600">A command is valid for</dt><dd>{robot.limits.commandTtlS} s</dd>

@@ -19,7 +19,9 @@ from dataclasses import dataclass, field
 from .geometry import distance_to_rect, point_in_polygon
 
 MOTION = {"navigate_to", "return_to_dock", "inspect_area"}
-KNOWN = MOTION | {"stop_motion", "set_supported_device_state"}
+ARM = {"move_robot_arm", "grasp_object", "release_object"}
+EXCLUSIVE = MOTION | ARM   # one of these at a time
+KNOWN = EXCLUSIVE | {"stop_motion", "set_supported_device_state"}
 
 
 @dataclass
@@ -89,6 +91,21 @@ class LocalSafety:
                 return Decision(False, f"the {sensor} sensor isn't reporting")
         if busy:
             return Decision(False, "another motion mission is running")
+        if capability in ARM:
+            # The arm's planner checks joint limits and collisions along the whole motion; here, only where the tool may go.
+            if capability == "move_robot_arm":
+                problem = self._point_problem(params, "the target")
+                return Decision(False, problem) if problem else Decision(True, params={"x": float(params["x"]), "y": float(params["y"])})
+            if capability == "grasp_object":
+                name = params.get("object")
+                if not isinstance(name, str) or not name:
+                    return Decision(False, "no object was named")
+                if (state.get("gripper") or {}).get("holding"):
+                    return Decision(False, f"the gripper is already holding {state['gripper']['holding']}")
+                return Decision(True, params={"object": name})
+            if not (state.get("gripper") or {}).get("holding"):
+                return Decision(False, "the gripper isn't holding anything")
+            return Decision(True, params={})
         local_max = self.limits.get("maxLinearSpeed")
         if not _number(local_max) or local_max <= 0:
             return Decision(False, "this robot has no speed limit configured")

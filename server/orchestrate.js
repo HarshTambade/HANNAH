@@ -40,7 +40,7 @@ function parseJson(text) {
 const clean = (value, max) => (typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "");
 
 function normalizeAgents(value) {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 8) return null;
+  if (!Array.isArray(value) || value.length < 1 || value.length > 12) return null;
   const agents = [];
   for (const item of value) {
     if (!item || !AGENT_ID.test(String(item.id)) || typeof item.description !== "string") return null;
@@ -110,7 +110,7 @@ function createOrchestrateHandler({ getRequestProvider, preferredProviderId, tim
     const task = clean(body.task, 4000);
     if (!task) return res.status(400).json({ error: "Describe the task." });
     const agents = normalizeAgents(body.agents);
-    if (!agents) return res.status(400).json({ error: "agents must be 1–8 entries with an id and description." });
+    if (!agents) return res.status(400).json({ error: "agents must be 1–12 entries with an id and description." });
     const context = Array.isArray(body.context) ? body.context.slice(-6).filter((item) => item && ["user", "assistant"].includes(item.role) && typeof item.content === "string").map((item) => `${item.role}: ${item.content.slice(0, 800)}`).join("\n") : "";
 
     let target;
