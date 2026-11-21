@@ -1,0 +1,53 @@
+# HANNAH Robotics Runtime as a systemd service, for a robot's own computer.
+#
+# NOT YET RUN: this unit was written on a machine without systemd and has
+# never been started. Expect to adjust paths. See docs/robotics/DEPLOYMENT.md.
+#
+# Install:
+#   sudo useradd --system --home /var/lib/hannah-robot --create-home hannah-robot
+#   sudo cp -r robotics/runtime /opt/hannah-robot
+#   sudo install -m 600 -o hannah-robot your-profile.json /etc/hannah-robot/profile.json
+#   sudo -u hannah-robot python3 -m hannah_robot enroll --server https://… --code … \
+#        --profile /etc/hannah-robot/profile.json --state-dir /var/lib/hannah-robot/state
+#   sudo cp robotics/deploy/hannah-robot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hannah-robot
+#
+# A restart never resumes a mission: the runtime starts with the robot holding
+# and waits for a new, signed command.
+
+[Unit]
+Description=HANNAH Robotics Runtime
+Documentation=https://github.com/HarshTambade
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hannah-robot
+Group=hannah-robot
+WorkingDirectory=/opt/hannah-robot
+Environment=PYTHONUNBUFFERED=1
+# For a ROS 2 robot, source the ROS environment first, for example:
+#   ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && exec python3 -m hannah_robot run …'
+# Refuse to start on a computer that isn't ready (bad clock, unreadable profile, secret readable by others).
+ExecStartPre=/usr/bin/python3 -m hannah_robot doctor --profile /etc/hannah-robot/profile.json --state-dir /var/lib/hannah-robot/state
+ExecStart=/usr/bin/python3 -m hannah_robot run --profile /etc/hannah-robot/profile.json --state-dir /var/lib/hannah-robot/state
+# SIGTERM makes the runtime hold the robot and exit.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5
+
+# The runtime needs the network, its profile and its state directory. Nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadOnlyPaths=/etc/hannah-robot /opt/hannah-robot
+ReadWritePaths=/var/lib/hannah-robot
+
+[Install]
+WantedBy=multi-user.target

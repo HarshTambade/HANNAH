@@ -301,6 +301,7 @@ const NODES = [
         { value: "reminder.fired", label: "A reminder fires" }, { value: "team.completed", label: "An agent team task finishes" },
         { value: "budget.exceeded", label: "The daily budget is exceeded" }, { value: "approval.requested", label: "An approval is requested" },
         { value: "workflow.completed", label: "Another workflow completes" }, { value: "workflow.failed", label: "Another workflow fails" },
+        { value: "robot.mission.finished", label: "A robot's mission ends" }, { value: "robot.plan.finished", label: "A robot's plan ends" }, { value: "robot.alert", label: "A robot reports an emergency stop, a fault or a lost link" },
         { value: "custom", label: "A custom event" },
       ] },
       { name: "customName", label: "Custom event name", type: "string", default: "", pattern: "^[a-z0-9][a-z0-9._-]{0,63}$", showIf: { event: "custom" }, help: "Send it with POST /api/workflows/events {\"name\": \"…\", \"data\": {…}}." },

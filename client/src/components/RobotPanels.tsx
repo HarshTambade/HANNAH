@@ -23,7 +23,7 @@ function Notice({ children, tone = "slate" }: { children: ReactNode; tone?: "sla
   return <p role={tone === "rose" ? "alert" : "status"} className={`rounded-xl border px-3 py-2 text-sm ${tones[tone]}`}>{children}</p>;
 }
 
-/** The seven checks a physical robot passes before it may move. */
+/** The commissioning steps a physical robot passes before it may move. */
 export function CommissioningPanel({ robot, onChanged }: { robot: Robot; onChanged: () => void }) {
   const [view, setView] = useState<Commissioning | null>(null);
   const [note, setNote] = useState("");

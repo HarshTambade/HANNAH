@@ -21,6 +21,11 @@ delete process.env.VERCEL;
 
 const { createRobotClient, descriptor, state } = require("./test-fixtures/robot-client");
 const { createRoboticsService } = require("./robotics/service");
+const { onUserEvent } = require("./webhooks");
+
+// What the account's webhooks and workflow triggers hear, collected from the same bus they listen on.
+const heard = [];
+onUserEvent((userId, event, data) => { if (event.startsWith("robot.")) heard.push({ event, data }); });
 
 let server;
 let base;
@@ -333,4 +338,32 @@ test("fleet figures are computed from what was recorded in this run", async () =
   const asked = await act(users.key, "robots.analytics", { days: 1 });
   assert.equal(asked.body.record.response.fleet.robots, 2);
   assert.deepEqual((await call(users.bo, "GET", "/robots/analytics")).body.analytics.robots, []);
+});
+
+test("webhooks and workflows hear when a mission or a plan ends and when a robot raises an alert, with what really happened", async () => {
+  await sleep(100);
+  const missions = heard.filter((item) => item.event === "robot.mission.finished").map((item) => item.data);
+  const plansHeard = heard.filter((item) => item.event === "robot.plan.finished").map((item) => item.data);
+  // A verified arrival is announced as verified; a failure with its reason; a stop is a control and isn't announced as a mission.
+  const arrived = missions.find((item) => item.status === "succeeded");
+  assert.deepEqual([arrived.robot, arrived.kind, arrived.capability, arrived.verified, typeof arrived.planId], ["Rover", "simulation", "navigate_to", true, "string"]);
+  assert.match(arrived.evidence, /from the goal/);
+  const failed = missions.find((item) => item.status === "failed");
+  assert.deepEqual([failed.verified, failed.error], [false, "No path to the goal: the doorway is blocked."]);
+  assert.ok(missions.some((item) => item.status === "cancelled"));
+  assert.equal(missions.some((item) => item.capability === "stop_motion"), false);
+  assert.ok(plansHeard.some((item) => item.status === "succeeded" && item.steps === 4 && item.stepsSucceeded === 4 && item.stoppedAtStep === null));
+  const stopped = plansHeard.find((item) => item.status === "failed" && /doorway is blocked/.test(item.error || ""));
+  assert.deepEqual([stopped.steps, stopped.stepsSucceeded, stopped.stoppedAtStep], [3, 0, 1]);
+  assert.ok(plansHeard.some((item) => item.status === "cancelled"));
+  // An alert the robot itself raises.
+  heard.length = 0;
+  await users.rover.sync({ events: [{ type: "estop-engaged", severity: "error", message: "The emergency stop was engaged." }, { type: "device-switched", severity: "info", message: "Beacon on." }] });
+  await sleep(100);
+  assert.deepEqual(heard.map((item) => [item.event, item.data.type, item.data.robot, item.data.source]), [["robot.alert", "estop-engaged", "Rover", "robot"]]);
+  // They can be chosen for a webhook and as a workflow trigger.
+  const offered = (await call(users.asha, "GET", "/account/webhooks")).body.events;
+  for (const name of ["robot.mission.finished", "robot.plan.finished", "robot.alert"]) assert.ok(offered.includes(name), name);
+  const options = require("./workflows/nodes").REGISTRY.get("trigger.event").params.find((param) => param.name === "event").options.map((option) => option.value);
+  for (const name of ["robot.mission.finished", "robot.plan.finished", "robot.alert"]) assert.ok(options.includes(name), name);
 });

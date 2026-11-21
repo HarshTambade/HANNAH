@@ -94,8 +94,8 @@ test("commissioning: a physical robot moves only after a person has taken it thr
   users.forklift = robot;
   const view = async () => (await call(users.asha, "GET", `/robots/${robot.robotId}/commissioning`)).body.commissioning;
   let now = await view();
-  assert.deepEqual([now.required, now.status, now.done, now.total, now.next], [true, "required", 0, 7, "identity"]);
-  assert.deepEqual(now.steps.map((step) => step.id), ["identity", "inventory", "limits", "estop", "diagnostics", "trial", "approval"]);
+  assert.deepEqual([now.required, now.status, now.done, now.total, now.next], [true, "required", 0, 11, "identity"]);
+  assert.deepEqual(now.steps.map((step) => step.id), ["identity", "inventory", "software", "limits", "frames", "estop", "diagnostics", "watchdog", "trial", "odometry", "approval"]);
   // Both sides show the same fingerprint, computed from the secret the robot holds.
   assert.equal(robot.fingerprint, fingerprintOf(robot.secret));
   assert.deepEqual(now.steps[0].check.facts, [`Fingerprint: ${robot.fingerprint}`]);
@@ -106,11 +106,15 @@ test("commissioning: a physical robot moves only after a person has taken it thr
   assert.equal((await confirm(users.asha, robot, "identity", {})).body.reason, "not-attested");
   assert.equal((await confirm(users.asha, robot, "estop")).body.reason, "out-of-order");
   assert.equal((await confirm(users.asha, robot, "wiring")).status, 404);
-  for (const step of ["identity", "inventory", "limits"]) assert.equal((await confirm(users.asha, robot, step, { attest: true, note: "checked at the machine" })).status, 200, step);
+  for (const step of ["identity", "inventory", "software", "limits", "frames"]) assert.equal((await confirm(users.asha, robot, step, { attest: true, note: "checked at the machine" })).status, 200, step);
   now = await view();
-  assert.deepEqual([now.status, now.done, now.next], ["in-progress", 3, "estop"]);
+  assert.deepEqual([now.status, now.done, now.next], ["in-progress", 5, "estop"]);
   assert.equal(now.steps[1].note, "checked at the machine");
-  assert.match((await act(users.asha, "robots.navigate_to", { robot: "Forklift", place: "workbench" })).body.record.permission.reason, /hasn't been commissioned: 3 of 7 checks are done/);
+  // What the server read for itself is kept with each step.
+  assert.deepEqual(now.steps[2].check.facts, ["Runtime test", "Software 0.0.1", "Firmware n/a", "ROS not used or not reported", "Adapter stand-in", "Speaks hannah-robot-v1"]);
+  assert.match(now.steps[4].check.facts[0], /Position reported in the frame “map”, from odometry/);
+  assert.match(now.steps[4].check.facts.join(" "), /No frame registered for: lidar, odometry, battery/);
+  assert.match((await act(users.asha, "robots.navigate_to", { robot: "Forklift", place: "workbench" })).body.record.permission.reason, /hasn't been commissioned: 5 of 11 checks are done/);
 
   // The emergency stop: a tick is not enough. HANNAH has to have seen it engage and release.
   const unseen = await confirm(users.asha, robot, "estop");
@@ -134,6 +138,16 @@ test("commissioning: a physical robot moves only after a person has taken it thr
   robot.state = state();
   await robot.sync();
   assert.equal((await confirm(users.asha, robot, "diagnostics")).status, 200);
+  // Still no movement: the watchdog has not been seen working.
+  now = await view();
+  assert.deepEqual([now.status, now.trialSpeed, now.next], ["in-progress", null, "watchdog"]);
+  assert.match((await confirm(users.asha, robot, "watchdog")).body.error, /HANNAH hasn't seen it report a lost link since the diagnostics step/);
+  await sleep(5);
+  await robot.sync({ events: [{ type: "link-lost", severity: "warning", message: "No contact with HANNAH for 6 s. Holding position." }] });
+  assert.match((await confirm(users.asha, robot, "watchdog")).body.error, /hasn't seen it report that the link returned/);
+  await sleep(5);
+  await robot.sync({ events: [{ type: "link-restored", severity: "info", message: "Contact with HANNAH is back." }] });
+  assert.equal((await confirm(users.asha, robot, "watchdog", { attest: true, note: "pulled the network cable for 10 s; the base stopped" })).status, 200);
   now = await view();
   assert.deepEqual([now.status, now.trialSpeed, now.next], ["trial", 0.2, "trial"]);
 
@@ -154,8 +168,15 @@ test("commissioning: a physical robot moves only after a person has taken it thr
   await live.stop();
   assert.equal((await mission(started.body.record.response.missionId)).status, "succeeded");
   assert.equal((await confirm(users.asha, robot, "trial")).status, 200);
+  // Approval can't be given before the trip was compared with a measurement, and that step needs the measurement written down.
+  assert.equal((await confirm(users.asha, robot, "approval")).body.reason, "out-of-order");
+  assert.equal((await confirm(users.asha, robot, "odometry", { attest: true })).body.reason, "note-missing");
+  now = await view();
+  assert.deepEqual([now.status, now.trialSpeed, now.next, now.steps[9].needsNote], ["trial", 0.2, "odometry", true]);
+  assert.match(now.steps[9].check.facts.join(" "), /Trial mission ms_[0-9a-f]+: goal \(3, 2\).*standing still/);
+  assert.equal((await confirm(users.asha, robot, "odometry", { attest: true, note: "Tape measure: stopped 4 cm short of the mark; both wheels forward." })).status, 200);
   const approved = await confirm(users.asha, robot, "approval");
-  assert.deepEqual([approved.body.commissioning.status, approved.body.commissioning.done], ["approved", 7]);
+  assert.deepEqual([approved.body.commissioning.status, approved.body.commissioning.done], ["approved", 11]);
   assert.equal((await confirm(users.asha, robot, "approval")).body.reason, "already-approved");
 
   // Approved: full speed is available, and each movement still asks.
@@ -165,7 +186,7 @@ test("commissioning: a physical robot moves only after a person has taken it thr
   assert.ok(full.body.record.preview.lines.some((line) => line.label === "Speed limit" && line.value === "0.5 m/s"));
   await decide(users.asha, full.body.record.id, false);
   const events = (await call(users.asha, "GET", `/robots/events?robot=${robot.robotId}&limit=100`)).body.events.map((event) => event.type);
-  assert.ok(events.includes("commissioned") && events.filter((type) => type === "commissioning-step").length === 6);
+  assert.ok(events.includes("commissioned") && events.filter((type) => type === "commissioning-step").length === 10);
 });
 
 test("commissioning is withdrawn when the robot reports different hardware or limits, and can be withdrawn by its owner", async () => {
@@ -174,13 +195,13 @@ test("commissioning is withdrawn when the robot reports different hardware or li
   await robot.sync({ described: descriptor({ ...PHYSICAL, limits: { ...PHYSICAL.limits, maxLinearSpeed: 1.5 } }) });
   const refused = await act(users.asha, "robots.navigate_to", { robot: "Forklift", place: "workbench" });
   assert.equal(refused.body.record.status, "denied");
-  assert.match(refused.body.record.permission.reason, /hasn't been commissioned: 0 of 7 checks are done \(The robot now reports different sensors, actuators, capabilities or limits than it was commissioned with\.\)/);
+  assert.match(refused.body.record.permission.reason, /hasn't been commissioned: 0 of 11 checks are done \(The robot now reports different sensors, actuators, capabilities or limits than it was commissioned with\.\)/);
   const view = (await call(users.asha, "GET", `/robots/${robot.robotId}`)).body.robot;
   assert.equal(view.commissioning.status, "required");
   assert.equal(view.fingerprint, robot.fingerprint, "its identity is unchanged");
   assert.equal(JSON.stringify(view).includes("commissioningRecord"), false);
   // An unchanged description changes nothing.
-  for (const step of ["identity", "inventory", "limits"]) assert.equal((await confirm(users.asha, robot, step)).status, 200);
+  for (const step of ["identity", "inventory", "software"]) assert.equal((await confirm(users.asha, robot, step)).status, 200);
   await robot.sync({ described: descriptor({ ...PHYSICAL, limits: { ...PHYSICAL.limits, maxLinearSpeed: 1.5 } }) });
   assert.equal((await call(users.asha, "GET", `/robots/${robot.robotId}/commissioning`)).body.commissioning.done, 3);
   assert.equal((await call(users.key, "POST", `/robots/${robot.robotId}/commissioning/reset`, { reason: "moved to another hall" })).status, 403);

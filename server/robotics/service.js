@@ -163,7 +163,16 @@ function normalizeDescriptor(input) {
   };
 }
 
-function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(process.env.HANNAH_ROBOT_ACK_WAIT_MS) || 6000, pollMs = 150 } = {}) {
+const ALERTS = new Set(["estop-engaged", "fault", "link-lost", "commissioning-reset", "revoked"]);
+
+function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(process.env.HANNAH_ROBOT_ACK_WAIT_MS) || 6000, pollMs = 150, emit = null } = {}) {
+  /**
+   * Tell the account's webhooks and workflows that something happened. Never
+   * waited for: a robot's exchange must not depend on someone else's server
+   * answering. So a delivery is best effort, and the record in the database
+   * is what counts.
+   */
+  const announce = (userId, event, data) => { if (emit) Promise.resolve().then(() => emit(userId, event, data)).catch(() => {}); };
   const lastSample = new Map();
   let housekeeping = 0;
 
@@ -475,12 +484,16 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     };
     const reason = clean(report.reason, 400);
     const result = report.result && typeof report.result === "object" ? JSON.stringify(tidy(report.result)).slice(0, 12_000) : null;
+    const ended = async () => {
+      const mission = publicMission((await db.query("SELECT * FROM hannah_robot_missions WHERE user_id = $1 AND id = $2", [robot.userId, id])).rows[0], at);
+      if (mission?.final && mission.capability !== "stop_motion") announce(robot.userId, "robot.mission.finished", { robotId: robot.id, robot: robot.name, kind: robot.simulated ? "simulation" : "physical", missionId: mission.id, planId: mission.planId, capability: mission.capability, status: mission.status, verified: mission.verification?.confirmed === true, evidence: mission.verification?.evidence || null, error: mission.error });
+    };
     switch (report.status) {
       case "accepted":
         await set({ status: "accepted", accepted_at: at }, ["queued", "sent"]);
         break;
       case "rejected":
-        if (await set({ status: "rejected", error: reason || "The robot's own checks refused the command.", finished_at: at }, ["queued", "sent"])) await addEvent(db, robot.userId, robot.id, { type: "command-rejected", severity: "warning", message: `The robot refused ${row.capability}: ${reason || "no reason given"}.`, source: "robot", at });
+        if (await set({ status: "rejected", error: reason || "The robot's own checks refused the command.", finished_at: at }, ["queued", "sent"])) { await addEvent(db, robot.userId, robot.id, { type: "command-rejected", severity: "warning", message: `The robot refused ${row.capability}: ${reason || "no reason given"}.`, source: "robot", at }); await ended(); }
         break;
       case "progress":
         if (report.progress && typeof report.progress === "object") await set({ progress: JSON.stringify(tidy(report.progress)).slice(0, 4000) }, ["accepted"]);
@@ -499,12 +512,12 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
         if (row.capability === "capture_image") report.image = await storeImage(db, robot, row, report, at).catch(() => null);
         const stored = report.image ? JSON.stringify({ ...tidy(report.result || {}), imageId: report.image.id, expiresAt: report.image.expiresAt }).slice(0, 12_000) : result;
         const verification = verifyMission(row, report, state, robot);
-        if (report.image) { await set({ status: verification.confirmed ? "succeeded" : "unverified", accepted_at: row.accepted_at || at, result: stored, verification: JSON.stringify({ ...verification, checkedAt: at }), finished_at: at }, ["queued", "sent", "accepted"]); break; }
-        await set({ status: verification.confirmed ? "succeeded" : "unverified", accepted_at: row.accepted_at || at, result, verification: JSON.stringify({ ...verification, checkedAt: at }), finished_at: at }, ["queued", "sent", "accepted"]);
+        if (report.image) { if (await set({ status: verification.confirmed ? "succeeded" : "unverified", accepted_at: row.accepted_at || at, result: stored, verification: JSON.stringify({ ...verification, checkedAt: at }), finished_at: at }, ["queued", "sent", "accepted"])) await ended(); break; }
+        if (await set({ status: verification.confirmed ? "succeeded" : "unverified", accepted_at: row.accepted_at || at, result, verification: JSON.stringify({ ...verification, checkedAt: at }), finished_at: at }, ["queued", "sent", "accepted"])) await ended();
         break;
       }
       case "failed": case "cancelled": case "timed-out":
-        await set({ status: report.status, error: reason || (report.status === "cancelled" ? "Cancelled." : report.status === "timed-out" ? "The mission ran out of time; the robot stopped." : "The robot reported a failure."), result, finished_at: at }, ["queued", "sent", "accepted", "paused"]);
+        if (await set({ status: report.status, error: reason || (report.status === "cancelled" ? "Cancelled." : report.status === "timed-out" ? "The mission ran out of time; the robot stopped." : "The robot reported a failure."), result, finished_at: at }, ["queued", "sent", "accepted", "paused"])) await ended();
         break;
       default:
     }
@@ -534,6 +547,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     if (state) { fields.state = JSON.stringify(state); fields.mode = state.mode; }
     for (const event of Array.isArray(body.events) ? body.events.slice(0, 20) : []) {
       await addEvent(db, row.user_id, row.id, { type: event?.type, severity: event?.severity, message: event?.message, source: "robot", at: finite(event?.at) && Math.abs(at - event.at) < 86_400_000 ? Math.round(event.at) : at });
+      if (ALERTS.has(String(event?.type))) announce(row.user_id, "robot.alert", { robotId: row.id, robot: row.name, kind: robot.simulated ? "simulation" : "physical", type: String(event.type), severity: clean(event?.severity, 20) || "warning", message: clean(event?.message, 300), source: "robot" });
     }
     for (const report of Array.isArray(body.reports) ? body.reports.slice(0, 40) : []) await applyReport(db, robot, report || {}, state, at);
     const names = Object.keys(fields);
@@ -774,6 +788,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     });
     const done = await db.query(`UPDATE hannah_robot_plans SET status = $1, error = $2, steps = $3, finished_at = $4, updated_at = $4 WHERE user_id = $5 AND id = $6 AND status IN ${PLAN_OPEN}`, [status, error ? clean(error, 500) : null, JSON.stringify(steps), at, row.user_id, row.id]);
     if (!done.rowCount) return false;
+    announce(row.user_id, "robot.plan.finished", { robotId: row.robot_id, planId: row.id, title: row.title, template: row.template || null, status, error: error ? clean(error, 300) : null, steps: steps.length, stepsSucceeded: steps.filter((step) => step.status === "succeeded").length, stoppedAtStep: status === "succeeded" ? null : Math.min(cursor + 1, steps.length) });
     if (status !== "succeeded") {
       await addEvent(db, row.user_id, row.robot_id, { type: `plan-${status}`, severity: status === "failed" ? "warning" : "info", message: `Plan “${clean(row.title, 80)}” ${status === "expired" ? "never started" : status}: ${clean(error, 300) || "no reason recorded"}`, at }).catch(() => {});
       // Work queued behind a plan that didn't finish is not started: whatever stopped this one hasn't been looked at.

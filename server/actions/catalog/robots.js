@@ -418,6 +418,26 @@ function robotActions({ robotics }) {
       },
     }),
     readAction({
+      id: "robots.arm_state", title: "Report a robot arm's state", description: "An arm's own report: where its tool is (computed from its joint encoders), each joint's angle and speed, what its gripper holds, the named poses it registered (its safe pose is the one called home, when it has one), and the objects it reports with their positions. The answer says how old it is.", input: { robot: ROBOT },
+      run: async (params, ctx) => {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        if (!robot.capabilities.includes("move_robot_arm")) throw fail(409, `${robot.name} has no arm.`, "no-arm");
+        const state = robot.state;
+        if (!state) throw fail(409, `${robot.name} hasn't reported its state yet.`, "no-reading");
+        const joints = state.sensors?.joint_encoders;
+        const poses = Object.fromEntries(Object.entries(robot.places || {}).map(([name, point]) => [name, { x: point.x, y: point.y }]));
+        return {
+          robot: robot.name, kind: robot.simulated ? "simulation" : "physical", online: robot.online, stale: !robot.online, ageS: robot.stateAgeS,
+          note: robot.online ? "Current: reported in the last few seconds." : `Not current: ${robot.name} is offline; this is its last report.`,
+          mode: state.mode ?? null, tool: state.pose ?? null, moving: Math.abs(Number(state.velocity?.angular) || 0) > 0.02,
+          joints: joints && joints.ok !== false ? { positions: joints.positions ?? null, speeds: joints.speeds ?? null, unit: joints.unit || "rad", measuredAt: joints.measuredAt ?? null, source: joints.source || null } : null,
+          gripper: state.gripper ?? null, target: state.arm?.target ?? null, emergencyStop: state.estop ?? null, faults: state.faults ?? [],
+          namedPoses: poses, safePose: Object.keys(poses).find((name) => name.toLowerCase() === "home") || null,
+          objects: state.scene?.objects ?? [], objectsSource: state.scene?.source ?? null,
+        };
+      },
+    }),
+    readAction({
       id: "robots.camera", title: "Report what a robot's camera last saw", description: "The most recent picture a robot took on request: when, with which camera and frame, and the coloured regions a detector found, each with its confidence and, when the camera has depth, a distance and position. The answer says how old the picture is; an old picture is not what the robot sees now. It never says what an object is. Reading this is not viewing the picture.", input: { robot: ROBOT },
       run: async (params, ctx) => {
         const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);

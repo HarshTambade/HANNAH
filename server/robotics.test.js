@@ -563,9 +563,9 @@ test("a physical robot doesn't move just because it enrolled; once commissioned,
   await call(users.asha, "POST", `/robots/${robot.robotId}/destinations`, { fromPlace: "workbench" });
   const early = await act(users.asha, "robots.navigate_to", { robot: "Forklift", place: "workbench" });
   assert.equal(early.body.record.status, "denied");
-  assert.match(early.body.record.permission.reason, /Forklift hasn't been commissioned: 0 of 7 checks are done\. Finish them under Robots → Commissioning before it may move\./);
+  assert.match(early.body.record.permission.reason, /Forklift hasn't been commissioned: 0 of 11 checks are done\. Finish them under Robots → Commissioning before it may move\./);
   // The commissioning steps themselves are tested in robotics.stage2.test.js; here it is marked as done.
-  const steps = Object.fromEntries(["identity", "inventory", "limits", "estop", "diagnostics", "trial", "approval"].map((id) => [id, { at: Date.now(), note: "test" }]));
+  const steps = Object.fromEntries(require("./robotics/commissioning").ORDER.map((id) => [id, { at: Date.now(), note: "test" }]));
   await db.query("UPDATE hannah_robots SET commissioning = $1 WHERE id = $2", [JSON.stringify({ startedAt: Date.now(), steps }), robot.robotId]);
   await levels(users.asha, 5);
   const grant = await call(users.asha, "POST", "/account/permissions/grants", { service: "robots", actions: ["*"], expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
@@ -615,7 +615,7 @@ test("robots appear in the permission screen, the action catalog and the integra
   assert.equal(service.level, 3);
   assert.ok(service.actions.some((action) => action.id === "robots.navigate_to"));
   const catalog = (await call(users.asha, "GET", "/actions/catalog")).body.actions.filter((action) => action.service === "robots");
-  assert.deepEqual(catalog.map((action) => action.id).sort(), ["robots.analytics", "robots.assign", "robots.battery", "robots.camera", "robots.cancel_mission", "robots.cancel_plan", "robots.capture_image", "robots.destinations", "robots.diagnostics", "robots.fleet", "robots.grasp_object", "robots.inspect_area", "robots.list", "robots.mission", "robots.move_robot_arm", "robots.navigate_to", "robots.pause_mission", "robots.plan", "robots.read_sensor", "robots.release_object", "robots.resume_mission", "robots.return_to_dock", "robots.run_plan", "robots.set_supported_device_state", "robots.state", "robots.stop_motion", "robots.surroundings", "robots.templates"]);
+  assert.deepEqual(catalog.map((action) => action.id).sort(), ["robots.analytics", "robots.arm_state", "robots.assign", "robots.battery", "robots.camera", "robots.cancel_mission", "robots.cancel_plan", "robots.capture_image", "robots.destinations", "robots.diagnostics", "robots.fleet", "robots.grasp_object", "robots.inspect_area", "robots.list", "robots.mission", "robots.move_robot_arm", "robots.navigate_to", "robots.pause_mission", "robots.plan", "robots.read_sensor", "robots.release_object", "robots.resume_mission", "robots.return_to_dock", "robots.run_plan", "robots.set_supported_device_state", "robots.state", "robots.stop_motion", "robots.surroundings", "robots.templates"]);
   const list = await act(users.ashaKey, "robots.list", {});
   assert.deepEqual(list.body.record.response.robots.map((robot) => [robot.name, robot.kind]), [["Rover", "simulation"]]);
   assert.deepEqual(list.body.record.response.robots[0].places, ["dock", "workbench", "door"]);

@@ -48,6 +48,7 @@ const { codeActions } = require("./catalog/code");
 const { deviceActions } = require("./catalog/device");
 const { robotActions } = require("./catalog/robots");
 const { createRoboticsService } = require("../robotics/service");
+const { emitUserEvent } = require("../webhooks");
 const { createCodingService } = require("../coding/service");
 const { DRIVERS } = require("../channel-drivers");
 const connections = require("../connections");
@@ -61,7 +62,7 @@ const fail = (status, message, reason) => Object.assign(new Error(message), { st
 /** One engine, one coding service and one robot registry for the whole server: routes, workflows and MCP all use these. */
 function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs } = {}) {
   const coding = createCodingService({ fetchImpl, now, ...(request ? { request } : {}), ...(roots ? { roots } : {}) });
-  const robotics = createRoboticsService({ now, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
+  const robotics = createRoboticsService({ now, emit: emitUserEvent, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
   const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics })] });
   return { coding, engine, robotics };
 }

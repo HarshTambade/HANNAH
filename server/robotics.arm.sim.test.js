@@ -100,6 +100,20 @@ test("the arm enrolls as a simulated arm with arm capabilities only", { skip }, 
   assert.equal((await act("robots.assign", { task: "navigate_to", x: 0.3, y: 0.3 })).status, 409);
 });
 
+test("the arm's state is its own report: tool position from the joints, the gripper, its named poses and safe pose, the objects it reports", { skip }, async () => {
+  const said = (await act("robots.arm_state", { robot: "Arm" })).body.record.response;
+  assert.deepEqual([said.kind, said.online, said.stale, said.safePose, said.moving], ["simulation", true, false, "home", false]);
+  assert.equal(said.tool.source, "joint encoders (forward kinematics)");
+  assert.equal(said.joints.positions.length, 3);
+  assert.deepEqual([said.joints.unit, said.joints.source], ["rad", "simulated"]);
+  assert.deepEqual(said.gripper, { open: true, holding: null });
+  assert.deepEqual(Object.keys(said.namedPoses), ["home", "inspection", "bin"]);
+  assert.deepEqual(said.objects.map((item) => item.id), ["red block", "blue block"]);
+  assert.equal(said.objectsSource, "the simulator's own scene (not a camera)");
+  // The tool is where the home pose says it is, to within what the encoders round to.
+  assert.ok(Math.hypot(said.tool.x - said.namedPoses.home.x, said.tool.y - said.namedPoses.home.y) < 0.005, JSON.stringify(said.tool));
+});
+
 test("pick and place: each step is approved, moved by the arm's planner, and verified from joint and gripper feedback", { skip }, async () => {
   // Even at the widest permission level with a standing permission for everything, an arm asks every time.
   await call("PUT", "/account/permissions", { levels: { robots: 5 } });

@@ -290,6 +290,26 @@ test("the fingerprint the runtime printed is the one HANNAH shows", { skip }, as
   assert.equal((await robot()).fingerprint, printed);
 });
 
+test("the runtime's own health check passes against this server, makes no signed request and never prints the secret", { skip }, async () => {
+  const before = (await call("GET", `/robots/events?robot=${robotId}&limit=5`)).body.events.length;
+  // Not spawnSync: the server it checks runs in this process and has to be able to answer.
+  const child = spawn("python3", runtimeArgs("doctor", ["--json"]), { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
+  const checked = { stdout: "", stderr: "" };
+  child.stdout.on("data", (chunk) => { checked.stdout += chunk; });
+  child.stderr.on("data", (chunk) => { checked.stderr += chunk; });
+  [checked.status] = await once(child, "exit");
+  assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  const found = Object.fromEntries(JSON.parse(checked.stdout).map((item) => [item.id, item]));
+  assert.deepEqual([found.credentials.ok, found.server.ok, found.clock.ok, found["server-address"].ok], [true, true, true, true]);
+  assert.match(found.credentials.message, new RegExp(`Enrolled as ${robotId}\\. Fingerprint [0-9A-F]{4}( [0-9A-F]{4}){3}`));
+  const secret = JSON.parse(fs.readFileSync(path.join(stateDir, "credentials.json"), "utf8")).secret;
+  assert.equal(checked.stdout.includes(secret), false);
+  // The robot is still connected afterwards: the check used none of its request numbers.
+  await sleep(1500);
+  assert.equal((await robot()).online, true);
+  assert.equal((await call("GET", `/robots/events?robot=${robotId}&limit=5`)).body.events.length, before);
+});
+
 test("a mission is paused where the robot stands and resumed to its goal, after approval", { skip: skip || (GAZEBO ? "pause and resume are not implemented in the ROS 2 adapter path yet" : false) }, async () => {
   await idle();
   const home = await start("robots.return_to_dock", { robot: "Rover" });

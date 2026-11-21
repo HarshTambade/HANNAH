@@ -3,10 +3,12 @@
     python3 -m hannah_robot describe [--profile FILE]
     python3 -m hannah_robot enroll --server https://… --code XXXXX-XXXXX [--profile FILE] [--state-dir DIR]
     python3 -m hannah_robot run [--profile FILE] [--state-dir DIR] [--sim-speed N]
+    python3 -m hannah_robot doctor [--profile FILE] [--state-dir DIR] [--json]
 
 Enrollment exchanges the one-time code from HANNAH's Robots screen for this
 robot's secret and stores it in the state directory, readable only by this
-user. `run` then keeps the robot connected until it is interrupted.
+user. `run` then keeps the robot connected until it is interrupted. `doctor`
+checks that this computer is ready to run it; it moves nothing.
 """
 from __future__ import annotations
 
@@ -35,7 +37,7 @@ def _credentials_path(state_dir: str) -> str:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="hannah_robot", description=f"HANNAH Robotics Runtime {__version__}")
-    parser.add_argument("command", choices=["describe", "enroll", "run"])
+    parser.add_argument("command", choices=["describe", "enroll", "run", "doctor"])
     parser.add_argument("--profile", default=DEFAULT_PROFILE, help="The robot's profile file (default: the simulated differential-drive robot).")
     parser.add_argument("--state-dir", help="Where this robot's credentials and replay state are kept.")
     parser.add_argument("--server", help="HANNAH's address, for enroll.")
@@ -43,7 +45,14 @@ def main(argv=None) -> int:
     parser.add_argument("--allow-insecure", action="store_true", help="Allow http:// to another computer. Only for a closed development network.")
     parser.add_argument("--sim-speed", type=float, default=1.0, help="Simulated seconds per real second (built-in simulator only).")
     parser.add_argument("--sync-interval", type=float, default=None, help="Seconds between exchanges with the server (default: what the server asks for).")
+    parser.add_argument("--json", action="store_true", help="For doctor: print the checks as JSON.")
     args = parser.parse_args(argv)
+    if args.command == "doctor":
+        from .doctor import checks, report
+        state_dir = args.state_dir or os.path.join(os.path.expanduser("~"), ".hannah-robot", os.path.splitext(os.path.basename(args.profile))[0])
+        found = checks(args.profile, state_dir, args.allow_insecure)
+        print(json.dumps(found, indent=2) if args.json else report(found))
+        return 1 if any(item["ok"] is False for item in found) else 0
     log = json_logger()
     try:
         profile = load_profile(args.profile)
