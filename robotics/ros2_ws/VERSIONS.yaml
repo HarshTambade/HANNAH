@@ -1,0 +1,22 @@
+# The versions HANNAH's ROS 2 files were written against. Checked 2026-11-21 against the
+# projects' own pages (see docs/robotics/ROS2_GAZEBO_INTEGRATION.md, section 1).
+# NOTHING HERE HAS BEEN RUN: this records the choice, it is not evidence that it works.
+chosen:
+  ros2: jazzy            # Jazzy Jalisco, long-term support to May 2029
+  ubuntu: "24.04"
+  gazebo: harmonic       # the pairing Gazebo's table recommends for Jazzy
+  nav2: jazzy            # ros-jazzy-navigation2, ros-jazzy-nav2-bringup
+  ros2_control: jazzy    # not configured yet: the Gazebo robot uses Gazebo's DiffDrive system
+  moveit2: jazzy         # not used yet
+  micro_ros: jazzy       # not used yet
+  slam_toolbox: jazzy    # not used yet: the map is generated from the world file
+  isaac_ros: none        # its current release targets Lyrical; optional
+container: robotics/Dockerfile.gazebo   # FROM ros:jazzy-ros-base, never built
+apt_packages: [ros-jazzy-ros-gz, ros-jazzy-navigation2, ros-jazzy-nav2-bringup, ros-jazzy-robot-state-publisher, ros-jazzy-tf2-ros]
+evaluated_and_not_chosen:
+  - { ros2: lyrical, gazebo: jetty, why: "The newer long-term pair (May 2026). Nav2 builds for it and Isaac ROS 5.1 targets it; micro-ROS and MoveIt 2 support could not be confirmed on the day. Revisit in the next stage." }
+  - { ros2: kilted, gazebo: ionic, why: "Not long-term; ends December 2026." }
+  - { ros2: humble, gazebo: fortress, why: "Supported to May 2027 only; older Nav2." }
+runtime:
+  python: ">=3.9"        # tested on 3.9.6 and 3.14.6; standard library only
+  node: ">=20"           # the server

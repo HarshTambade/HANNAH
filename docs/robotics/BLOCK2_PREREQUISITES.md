@@ -1,4 +1,8 @@
-# Prerequisites for Block 2
+# Prerequisites for the next stages
+
+> Since this was written, several items listed under "could then build" were built and verified in simulation: destinations managed from the app, pause and resume, perception from the range sensor, fleet assignment, diagnostics and commissioning. STAGE_STATUS.md has the current state. Section 1 below is unchanged and still blocks everything that involves ROS 2, Gazebo or hardware.
+
+## Original text
 
 Block 1 built the foundation and proved it end to end with a simulator that needs only Python. Block 2 can't responsibly start on hardware until the items in section 1 are done, because everything about ROS 2, Gazebo and real robots is still unproven.
 
@@ -19,7 +23,7 @@ Block 1 built the foundation and proved it end to end with a simulator that need
 | Item | Notes |
 |---|---|
 | An independent security review of the robot protocol | It has had none. Open items are listed in SECURITY_ARCHITECTURE.md section 11 |
-| Rate limiting on the signed sync endpoint | Enrollment is limited; sync is not |
+| Rate limiting shared across server instances | The sync limit is per process |
 | A Nav2 parameter file for the robot instead of the defaults | And a start-up check that the profile's limits don't exceed the controller's |
 | Emergency-stop state from the real robot, on a dedicated read-only topic | The profile has the field; nothing has fed it yet |
 | A retry for the initial pose, and a deliberate margin between Nav2's goal tolerance and HANNAH's check | Both are known weak points |

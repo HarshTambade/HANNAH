@@ -4,12 +4,15 @@ Everything that runs on or beside a robot. The server side is in `server/robotic
 
 | Folder | What it is | State |
 |---|---|---|
-| `runtime/` | The HANNAH Robotics Runtime: the program on the robot's own computer. Python 3.9+, standard library only | Tested (52 tests) |
+| `runtime/` | The HANNAH Robotics Runtime: the program on the robot's own computer. Python 3.9+, standard library only | Tested (69 tests) |
 | `runtime/hannah_robot/hal/kinematic.py` | A built-in simulated differential-drive robot. **Not Gazebo.** | Tested |
 | `runtime/hannah_robot/hal/ros2.py`, `ros2_watchdog.py` | The ROS 2 adapter (Nav2) and its watchdog | **Written, never run** |
 | `ros2_ws/src/hannah_sim/` | A robot, a world and Nav2 for Gazebo Harmonic on ROS 2 Jazzy | **Written, never run** |
 | `worlds/workcell.json` | One room, used by the built-in simulator and to generate the Gazebo world and the Nav2 map | |
 | `profiles/` | Robot profiles: what a robot is and the limits it enforces | |
+| `worlds/home.json`, `scenarios/` | A home with rooms and doorways; five navigation scenarios (`python3 -m hannah_robot.scenarios`) | Tested |
+| `sdk/examples/` | An example signed robot package | Tested |
+| `ros2_ws/VERSIONS.yaml` | The ROS 2 and Gazebo versions the files were written for | |
 | `tools/build_world.py` | Regenerates the Gazebo world and map from the world file | Tested |
 | `tools/gazebo_check.sh`, `Dockerfile.gazebo` | The Gazebo acceptance check | **Never run** |
 
@@ -69,3 +72,5 @@ docker run --rm hannah-gazebo
 ```
 
 After changing `worlds/workcell.json`, run `python3 tools/build_world.py`.
+
+What works and what doesn't, stage by stage: `docs/robotics/STAGE_STATUS.md`.

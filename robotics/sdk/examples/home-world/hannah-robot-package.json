@@ -1,0 +1,19 @@
+{
+  "id": "in.eliteforums.hannah.home-world",
+  "name": "Home world",
+  "author": "HANNAH",
+  "version": "0.1.0",
+  "kind": "simulation-environment",
+  "description": "A 12 m by 8 m home with four rooms around a corridor, for HANNAH's built-in simulator.",
+  "supportedHardware": ["hannah-kinematic simulator"],
+  "operatingSystems": ["any with Python 3.9"],
+  "rosDistributions": [],
+  "dependencies": [],
+  "capabilities": [],
+  "permissions": [],
+  "safetyConstraints": [],
+  "documentation": "README.md",
+  "tests": { "level": "simulation", "passed": 5, "total": 5, "evidence": "robotics/scenarios, run with python3 -m hannah_robot.scenarios" },
+  "files": [],
+  "signature": { "algorithm": "ed25519", "keyId": "unsigned-example", "value": "" }
+}

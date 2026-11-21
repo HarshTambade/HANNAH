@@ -14,7 +14,14 @@ Read this first; the other documents in this folder go into each part.
 | [SECURITY_ARCHITECTURE.md](./SECURITY_ARCHITECTURE.md) | Identity, enrollment, signed commands, firmware-update design |
 | [ROS2_GAZEBO_INTEGRATION.md](./ROS2_GAZEBO_INTEGRATION.md) | The ROS 2 adapter and the Gazebo robot (written, not yet run) |
 | [TESTS.md](./TESTS.md) | What was tested, at which level, and what was not |
-| [BLOCK2_PREREQUISITES.md](./BLOCK2_PREREQUISITES.md) | What has to be true before Block 2 starts |
+| [BLOCK2_PREREQUISITES.md](./BLOCK2_PREREQUISITES.md) | What has to be true before work with ROS 2, Gazebo or hardware can go on |
+| [STAGE_STATUS.md](./STAGE_STATUS.md) | **Start here for what works:** every stage and milestone with its state, and known limitations |
+| [ONBOARDING_AND_COMMISSIONING.md](./ONBOARDING_AND_COMMISSIONING.md) | Adding a robot; the seven checks before a physical robot may move |
+| [NAVIGATION_AND_MISSIONS.md](./NAVIGATION_AND_MISSIONS.md) | Destinations, a mission's life, pause and resume, worlds and scenarios |
+| [SENSORS_AND_PERCEPTION.md](./SENSORS_AND_PERCEPTION.md) | Readings, sensor health, what the range sensor detects |
+| [FLEET.md](./FLEET.md) | Choosing a robot, conflicts, condition and maintenance |
+| [MANIPULATION.md](./MANIPULATION.md) | Arms: design only, not started |
+| [DEVELOPER_SDK.md](./DEVELOPER_SDK.md) | Adding robots, capabilities, worlds and packages; the HTTP API |
 
 ## 1. The one rule
 
@@ -121,3 +128,7 @@ Why: the runtime should need nothing beyond the Python standard library, which h
 - micro-ROS, ros2_control configuration, MoveIt 2, Isaac ROS (design notes only, in the ROS 2 document).
 - Fleet task allocation, firmware updates, multi-user roles on one robot.
 - Any safety certification. HANNAH is not safety-certified and Block 1 makes no step towards certification.
+
+## 6. Added after Block 1
+
+Commissioning for physical robots, destinations bound to a map, pause and resume, more sensors with fault injection, perception from the range sensor, a second world and scenarios, fleet assignment, diagnostics and a maintenance log, signed robot packages, and two more agents. All verified with the built-in simulator or on the server; none with ROS 2, Gazebo or hardware. Section 5 otherwise still holds: no physical robot, no Gazebo run, no arms, no cameras, no firmware updates, no certification.

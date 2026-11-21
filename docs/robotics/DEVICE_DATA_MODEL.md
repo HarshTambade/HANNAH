@@ -1,6 +1,6 @@
 # Robot device data model
 
-Migration 18 (`server/db/migrations.js`) adds four tables. Every row belongs to one account; a robot belongs to exactly one account.
+Migrations 18 and 19 (`server/db/migrations.js`) add six tables. Both are additive. Every row belongs to one account; a robot belongs to exactly one account.
 
 ## `hannah_robots` — the registry
 
@@ -66,3 +66,16 @@ What a robot or the server recorded about a robot: created, enrolled, an enrollm
 | Action Engine records for robot actions | 180 days (the engine's rule) |
 
 Removing a robot deletes its missions, events and telemetry. The Action Engine's records of what was asked remain in the account's history.
+
+## Added by migration 19
+
+| Where | What |
+|---|---|
+| `hannah_robots.commissioning` | A physical robot's commissioning record: when it started, each confirmed step with its time, note and the facts seen, and the reason if it was withdrawn |
+| `hannah_robots.config_version` | The **device configuration version**: goes up with every change a person makes (limits, capabilities, destinations) |
+| `profile.serialNumber`, `profile.fingerprint` | The serial number the robot reports; a short fingerprint of its secret, shown on both sides |
+| `hannah_robot_destinations` | A destination a person defined or approved: name, **map**, **frame**, x, y, heading, source (`owner` or `robot-profile`) |
+| `hannah_robot_missions.pause_requested_at`, `resume_requested_at`, `paused_at`, `control_nonce` | Pause and resume. A mission's status can also be `paused` |
+| `hannah_robot_maintenance` | A maintenance log: time, kind, note |
+
+Not stored anywhere: maps themselves (the robot holds its map; HANNAH stores an outline for display and the map's name), sensor recordings, camera images, firmware metadata. There is no object storage or time-series database for robots.

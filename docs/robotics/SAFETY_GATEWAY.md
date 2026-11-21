@@ -47,6 +47,7 @@ Layers 6 to 11 work with the server, the internet, the model provider and the ap
 | Emergency stop released | "has to be released at the robot" |
 | Motors enabled, no active fault, localized | the fault's own message |
 | Battery above the minimum (not for returning to dock) | both percentages |
+| Range and odometry sensors reporting | which sensor; "it won't be moved" |
 | No other motion mission running | which one |
 
 **How risky is it, and must a person approve?**
@@ -56,7 +57,9 @@ Layers 6 to 11 work with the server, the internet, the model provider and the ap
 | Reading state or a sensor | Allowed |
 | Stopping | Allowed at every level, during the account's emergency stop, by an agent's key |
 | Movement, simulated robot | Follows the account's level: asks at level 3; a standing permission naming that robot can cover it at level 4 |
-| Movement, **physical robot** | **Always asks**, whatever the level or standing permission. Risk is "high" in a space shared with people or with no environment declared |
+| Movement, **physical robot, not commissioned** | **Refused.** Enrolling proves which device it is, not that it is safe to move. See ONBOARDING_AND_COMMISSIONING.md |
+| Movement, physical robot in its commissioning trial | Asks, capped at 0.2 m/s, with a warning that a person must be at the robot |
+| Movement, **physical robot, commissioned** | **Always asks**, whatever the level or standing permission. Risk is "high" in a space shared with people or with no environment declared |
 | Owner set "ask before every movement" or "always ask" for a capability | Always asks |
 
 A refusal is recorded in the account's history with its reason and is never shown for approval. The second run at sending time catches what changed while an approval waited; a test covers an emergency stop pressed in that window.
@@ -112,6 +115,9 @@ The app says this in three places: a notice on the Robots screen, the caption un
 | The runtime crashes | Simulator: it stops with it. ROS: the watchdog process stops the robot (not yet run) |
 | The robot reports success it didn't achieve | The server checks the reported position against the goal; a mismatch is recorded as "unverified", not as success |
 | The robot stops reporting during a mission | The mission becomes "lost: outcome unknown" after its deadline. Never "succeeded" |
+| A sensor it needs to drive stops reporting | The trip fails and the robot stops; new movement is refused on both sides |
+| The link is lost while a mission is paused | The robot is already holding; the mission is kept; only a signed resume, with the link up, restarts it |
+| A resume command is replayed | Recognised and ignored: a resume expires in 20 seconds and its nonce works once |
 | The robot's credentials are revoked | It can no longer exchange; it holds; unfinished missions become "lost" |
 
 ## 7. Standards and engineering reviews, by robot category

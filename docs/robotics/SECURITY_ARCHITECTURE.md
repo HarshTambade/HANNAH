@@ -140,6 +140,14 @@ Robots use HMAC because the runtime is meant to run on any robot computer with n
 
 1. An independent review of the protocol; it has had none.
 2. A request counter that survives a server restore from backup (a restored database could accept an older counter).
-3. Rate limiting on the signed sync endpoint (enrollment is limited; sync is not, beyond the signature check).
+3. Done since: requests in one robot's name are limited (100 in five seconds by default) before any work is done. The limit is per server process, not shared across instances.
 4. Certificate pinning or mutual TLS for deployments that want it.
 5. Telemetry retention and who may export it, before any robot with a camera is supported.
+
+## 12. Robot packages
+
+Third-party code and data for robots is described by a signed manifest and checked by `server/robotics/packages.js`: Ed25519 signature against keys the owner trusts, revoked keys refused, every file's SHA-256, exact dependency versions, permissions from a fixed list, capabilities from the contract only. See DEVELOPER_SDK.md, section 4. Verification installs nothing; there is no installer or sandbox yet, so the rule stands that a driver goes onto a physical robot only after a person has reviewed it.
+
+## 13. ROS 2 network security
+
+Not implemented, and it matters before any real robot: DDS traffic should stay on the robot or on a network that only the robot's computers are on; DDS must not be reachable from the internet; SROS2 (DDS security: authentication, encryption, access control) should be evaluated for any robot whose ROS graph spans more than one computer. HANNAH's own link does not use DDS: it is HTTPS from the robot to the server.

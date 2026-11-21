@@ -14,7 +14,9 @@ A capability is a high-level operation. There is no capability for a wheel speed
 | `preconditions` | What must be true before it is sent |
 | `permissions` | The Action Engine service (`robots`) and the minimum level |
 | `constraints` | The operating limits that apply |
-| `risk` | none, low, moderate, high |
+| `risk` | none, low, moderate, high, critical (no capability is in the critical class) |
+| `failures` | What happens when it goes wrong and what the person is told |
+| `approval` | What its risk class requires before anything is sent |
 | `timeoutS` | Default and maximum run time |
 | `cancel` | Whether it can be cancelled and what cancelling does |
 | `verification` | How the result is checked |
@@ -31,11 +33,18 @@ A capability is a high-level operation. There is no capability for a wheel speed
 | `return_to_dock` | mobile ground robots | moderate | 240 s | as above | As above, at the dock | Implemented |
 | `inspect_area` | mobile ground robots | moderate | 600 s | robot stops; visited points stay in the report | Every point reached within tolerance | Implemented |
 | `set_supported_device_state` | any | low | 10 s | — | The next state report shows the device in that state | Implemented |
+| `report_battery_state` | any (HANNAH's own) | none | 5 s | — | The reading's age; no battery sensor is said plainly | Implemented |
+| `report_surroundings` | any | none | 5 s | — | Each item names its sensor, time and confidence | Implemented |
+| `cancel_mission` | any (HANNAH's own) | low | 10 s | — | The robot reports it cancelled | Implemented |
+| `pause_mission` | any (HANNAH's own) | low | 10 s | — | The robot reports it paused | Implemented |
+| `resume_mission` | mobile ground robots (HANNAH's own) | moderate | 20 s | can be paused or cancelled again | The robot reports it resumed; the command expires and works once | Implemented |
 | `capture_image` | any | none | 15 s | no image kept | An image with its capture time | Contract only |
 | `follow_target` | mobile ground robots | high | 300 s | robot stops and holds | The tracker's record | Contract only |
 | `move_robot_arm` | arms, mobile manipulators | high | 60 s | trajectory stopped, arm holds | Measured joint positions | Contract only |
 | `grasp_object` | arms, mobile manipulators | high | 30 s | gripper stops; does not open | Gripper position and force | Contract only |
 | `release_object` | arms, mobile manipulators | high | 15 s | — | Gripper position | Contract only |
+| `inspect_machine` | mobile ground robots, arms | high | 600 s | robot stops and holds | Readings and images recorded at the machine | Contract only |
+| `execute_approved_workflow` | any | moderate | 900 s | current step cancelled | Each step by its own rule | Contract only |
 
 ## Preconditions
 
@@ -68,6 +77,10 @@ Asking a robot for a capability it didn't register is refused by the Safety Gate
 | `robots.inspect_area` | `inspect_area` | write |
 | `robots.set_supported_device_state` | `set_supported_device_state` | write |
 | `robots.stop_motion` | `stop_motion` | write, `deescalates` |
+| `robots.cancel_mission`, `robots.pause_mission` | `cancel_mission`, `pause_mission` | write, `deescalates` |
+| `robots.resume_mission` | `resume_mission` | write |
+| `robots.battery`, `robots.surroundings`, `robots.destinations`, `robots.fleet`, `robots.diagnostics` | `report_battery_state`, `report_surroundings`, — | read |
+| `robots.assign` | chooses a robot, then one of the movement capabilities | write |
 
 A read is answered from the registry's last report and never sends anything to the robot. A write starts a mission.
 
@@ -79,3 +92,15 @@ A read is answered from the registry's last report and never sends anything to t
 4. Add its verification in `service.js` (`verifyMission`). A capability whose result can't be checked is not finished.
 5. Add the action in `server/actions/catalog/robots.js` and the tool in `client/src/services/Robotics.ts`.
 6. Change the status to `implemented` and add tests at each level.
+
+## Risk classes
+
+| Class | Examples | Before anything is sent |
+|---|---|---|
+| none | state, sensors, battery, surroundings | Nothing: it reads the registry's last report |
+| low | stop, cancel, pause; a switchable device | Nothing for stop, cancel and pause; a device follows your permission level |
+| moderate | navigation in a controlled space | Your permission level. A physical robot always asks and must be commissioned |
+| high | arms, grippers, following a person, work at a machine | Always a person's approval, a commissioned robot, the robot's own interlocks. No standing permission. **No runtime exists for any capability in this class** |
+| critical | hazardous machinery, something that can't be undone, a change to a safety system | **Not offered.** HANNAH has no capability in this class |
+
+"HANNAH's own" capabilities (cancel, pause, resume, battery) are provided for every robot and are not registered by it. The directive's `stop_navigation` is `stop_motion`.

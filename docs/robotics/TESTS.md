@@ -13,20 +13,22 @@ Run on 2026-11-21 on macOS 27 (arm64), Node 25.9, Python 3.14.6 and 3.9.6.
 
 ## Results
 
-| Suite | Level | Tests | Passed | Command |
-|---|---|---|---|---|
-| `server/robotics.contract.test.js` | Unit | 10 | 10 | `node --test robotics.contract.test.js` |
-| `robotics/runtime/tests/test_protocol.py` | Unit | 7 | 7 | `python3 -m unittest discover -s tests -t .` |
-| `robotics/runtime/tests/test_safety.py` | Unit | 7 | 7 | 〃 |
-| `robotics/runtime/tests/test_adapters.py` | Unit | 7 | 7 | 〃 |
-| `client/src/__tests__/Robotics.test.ts` | Unit (scripted server) | 8 | 8 | `npx vitest run src/__tests__/Robotics.test.ts` |
-| `server/robotics.test.js` | Integration | 18 | 18 | `node --test robotics.test.js` |
-| `server/robotics.pglite.test.js` | Integration, the same suite on embedded Postgres | 18 | 18 | `node --test robotics.pglite.test.js` |
-| `robotics/runtime/tests/test_kinematic.py` | Simulation | 15 | 15 | `python3 -m unittest …` |
-| `robotics/runtime/tests/test_runtime.py` | Simulation | 16 | 16 | 〃 |
-| `server/robotics.sim.test.js` | Simulation (server + runtime process) | 9 | 9 | `node --test robotics.sim.test.js` |
-| `e2e/robotics.spec.ts` | Simulation (browser + server + runtime process) | 5 | 5 | `npx playwright test robotics.spec.ts` |
-| **Robotics total** | | **120** | **120** | |
+| Suite | Level | Tests | Passed |
+|---|---|---|---|
+| `server/robotics.contract.test.js` | Unit | 10 | 10 |
+| `server/robotics.packages.test.js` | Unit | 4 | 4 |
+| `server/robotics.fleet.test.js` | Unit (3) and integration (1) | 4 | 4 |
+| `robotics/runtime/tests/test_protocol.py`, `test_safety.py`, `test_adapters.py` | Unit | 21 | 21 |
+| `client/src/__tests__/Robotics.test.ts` | Unit (scripted server) | 8 | 8 |
+| `server/robotics.test.js` | Integration | 18 | 18 |
+| `server/robotics.stage2.test.js` (commissioning, destinations, pause and resume) | Integration | 7 | 7 |
+| `server/robotics.pglite.test.js`, `robotics.stage2.pglite.test.js` | Integration, the same suites on embedded Postgres | 25 | 25 |
+| `robotics/runtime/tests/test_kinematic.py`, `test_runtime.py`, `test_stage2.py` | Simulation (and a few unit) | 48 | 48 |
+| `server/robotics.sim.test.js` | Simulation (server + runtime process) | 12 | 12 |
+| `e2e/robotics.spec.ts` | Simulation (browser + server + one or two runtime processes) | 8 | 8 |
+| **Robotics total** | | **165** | **165** |
+
+Also: 5 of 5 navigation scenarios (`python3 -m hannah_robot.scenarios`), which `test_stage2.py` runs as a test.
 
 The Python suite passes on Python 3.9.6 (the declared minimum) and 3.14.6.
 
@@ -80,11 +82,32 @@ Things the tests caught in this work, all fixed:
 
 | Check | Result |
 |---|---|
-| Server tests (`npm test` in `server`) | 473 tests: 472 passed, 1 skipped (an older skip), 0 failed |
-| Browser suite (`npx playwright test`), whole, on the final build | 106 passed |
-| Client tests (`npx vitest run`) | 406 passed (8 new) |
-| Runtime tests | 52 passed |
+| Server tests (`npm test` in `server`) | 498 tests: 497 passed, 1 skipped (an older skip), 0 failed |
+| Browser suite (`npx playwright test`), whole, on the final build, run alone | 109 passed |
+| Client tests (`npx vitest run`) | 406 passed |
+| Runtime tests | 69 passed, on Python 3.14.6 and 3.9.6 |
 | Client typecheck, client lint, server lint | Clean (3 older lint warnings in the workflow builder) |
-| Secret scan | No findings |
+| Secret scan | No findings (664 files) |
 | Licence check | 424 production dependencies, all permissive; none added |
 | Version check | All fields 1.7.0 (no version change in this work) |
+
+## Added after Block 1: what tests what
+
+| Requirement | Level | Where |
+|---|---|---|
+| Commissioning: order, who may confirm, evidence the server checks, trial speed cap, approval, withdrawal on changed hardware | Integration (stand-in declared physical) | `robotics.stage2.test.js` |
+| Destinations: validation, physical robots by approved name only, a destination made for another map set aside | Integration | `robotics.stage2.test.js` |
+| Invalid destination | Integration, browser | `robotics.stage2.test.js`, `e2e` (keep-out corner refused on the map) |
+| Pause, resume (approval, expiry, single use, refusal by the robot), cancel as an action | Unit, simulation, integration, browser | `test_stage2.py`, `robotics.stage2.test.js`, `robotics.sim.test.js`, `e2e` |
+| Blocked route, obstacle handling, recovery when it clears | Simulation | scenarios; `test_stage2.py` |
+| Sensor registration, missing data, connection loss, health; not moved without a range sensor | Simulation, integration | `test_stage2.py`, `robotics.sim.test.js`, `robotics.stage2.test.js` |
+| Detection result shape, confidence, sensor provenance | Simulation | `test_stage2.py`, `robotics.sim.test.js`, `e2e` |
+| Multiple robots, capability matching, assignment, conflicts, unavailability | Unit, integration, browser | `robotics.fleet.test.js`, `e2e` (two runtime processes) |
+| Diagnostics from evidence only | Unit, integration, browser | `robotics.fleet.test.js`, `e2e` |
+| Package signature, integrity, permissions, contract rules | Unit | `robotics.packages.test.js` |
+| Flood of requests in a robot's name | Integration | `robotics.stage2.test.js` |
+| Simulation and physical shown separately | Browser | `e2e` (the kind badge, the operating mode) |
+
+Still not tested, in addition to the list above: a phone or the desktop app; voice requests for robots; a live model with the robot agents; hardware-in-the-loop; any physical robot; manipulation (nothing to test); localization failure on a real stack; ROS 2 node, topic, service and action behaviour.
+
+One run of the whole server suite failed two older, unrelated tests (a server that didn't start in time) while the browser suite was running at the same time on the same machine. Run alone, the suite passes; the numbers above are from runs made alone.

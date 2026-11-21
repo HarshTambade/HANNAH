@@ -18,10 +18,20 @@ Robotics, Block 1: the foundation for HANNAH to work with robots. Proven end to 
 - **Robot Agent** and nine robot tools, offered only to an account that has a robot.
 - **Gazebo Harmonic and Nav2 package** for ROS 2 Jazzy (`robotics/ros2_ws`), its world and map generated from the same file the built-in simulator reads, a container and a manual CI job to run it.
 
+- **Commissioning.** A physical robot no longer moves because it enrolled: a signed-in person takes it through seven checks, the server verifying what it can see (the emergency stop engaging and releasing, diagnostics, a verified trial at 0.2 m/s). Changed hardware or limits withdraw it. Tested with a stand-in; no physical robot.
+- **Destinations** bound to the robot's map and frame, validated when added; a physical robot goes by name only to ones a person defined or approved.
+- **Pause, resume and cancel** for missions. Pausing and cancelling never need approval; resuming is checked and approved like starting, and its command expires and works once.
+- **Sensors and perception** in the simulator: IMU, temperature and humidity, readings with time and source, sensor faults, heading fused from wheels and gyroscope, obstacles grouped from range returns with confidence, a blocked-route report, map changes. A robot is not moved without its range sensor.
+- **A home world** with rooms and doorways and **five navigation scenarios** with a regression runner, including recovery when a blocked doorway clears.
+- **Fleet:** HANNAH chooses the robot for a task, says why, and why not the others; two robots aren't sent to the same spot. **Diagnostics** from what a robot reported, each finding with its evidence; a maintenance log.
+- **Screens** for all of the above, **nine more robot tools**, and two more agents (Fleet, Robot care).
+- **Signed robot packages:** a manifest with every file's hash and an Ed25519 signature, a verifier and a command-line tool. Verifying installs nothing.
+- Migration 19. Requests in one robot's name are rate-limited.
+
 ### Not done
 
 - The ROS 2 adapter, its watchdog, the Gazebo robot and the container have never been run: ROS 2 and Gazebo could not be installed on the development machine.
-- No physical robot. No arm, gripper or camera. No firmware updates (design only). No fleet task allocation.
+- No physical robot. No arm, gripper or camera. No firmware updates (design only). No mission queues or traffic management between robots. No industrial or IoT connectors. No installing of robot packages. State per stage: [`robotics/STAGE_STATUS.md`](./robotics/STAGE_STATUS.md).
 
 ### Changed
 
