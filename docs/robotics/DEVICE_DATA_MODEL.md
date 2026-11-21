@@ -1,6 +1,6 @@
 # Robot device data model
 
-Migrations 18 and 19 (`server/db/migrations.js`) add six tables. Both are additive. Every row belongs to one account; a robot belongs to exactly one account.
+Migrations 18 to 21 (`server/db/migrations.js`) add eight tables. All are additive. Every row belongs to one account; a robot belongs to exactly one account.
 
 ## `hannah_robots` — the registry
 
@@ -87,4 +87,14 @@ Removing a robot deletes its missions, events and telemetry. The Action Engine's
 
 Plans are kept until the robot is removed.
 
-Not stored anywhere: maps themselves (the robot holds its map; HANNAH stores an outline for display and the map's name), sensor recordings, camera images, firmware metadata. There is no object storage or time-series database for robots.
+## Added by migration 21
+
+| Where | What |
+|---|---|
+| `hannah_robot_images` | A picture a robot took on request: the robot, the mission that asked for it, when, its metadata (sensor, frame number, capture time, size, source, pose, whether simulated, the detector), the detections, the PNG as base64, its size and when it is deleted |
+| `hannah_robots.permissions.camera` | `{enabled, retentionHours}`: whether camera use is switched on for the robot, and how long its pictures are kept |
+| `profile.sensors[]` | Now also `frame`, `rateHz`, `resolution`, `messageType`, `calibration`, `manufacturer`, `model` when the robot gives them |
+
+Pictures are deleted when their time is up, when a person deletes them, and with the robot.
+
+Not stored anywhere: maps themselves (the robot holds its map; HANNAH stores an outline for display and the map's name), sensor recordings, video, firmware metadata. Pictures are stored in the database as text; there is no object storage. There is no object storage or time-series database for robots.

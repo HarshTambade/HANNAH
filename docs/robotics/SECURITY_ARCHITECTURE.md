@@ -142,7 +142,7 @@ Robots use HMAC because the runtime is meant to run on any robot computer with n
 2. A request counter that survives a server restore from backup (a restored database could accept an older counter).
 3. Done since: requests in one robot's name are limited (100 in five seconds by default) before any work is done. The limit is per server process, not shared across instances.
 4. Certificate pinning or mutual TLS for deployments that want it.
-5. Telemetry retention and who may export it, before any robot with a camera is supported.
+5. Who may export telemetry and pictures. Pictures have a retention limit, a per-robot switch and an access log (SENSORS_AND_PERCEPTION.md); telemetry is kept two hours. Neither can be exported or shared yet, and a physical camera has not been connected.
 
 ## 12. Robot packages
 

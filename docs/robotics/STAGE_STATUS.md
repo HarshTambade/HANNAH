@@ -22,7 +22,7 @@ Updated 2026-11-21. The requirement-by-requirement record is [ROBOTICS_PROGRESS.
 
 | Stage | What | State |
 |---|---|---|
-| **1. Audit and foundation** | Audit, registry, device model, capability registry, mission and state models, adapter interface, Safety Gateway, telemetry, audit history, migrations 18 to 20 | **Verified (server)** and **(sim)** |
+| **1. Audit and foundation** | Audit, registry, device model, capability registry, mission and state models, adapter interface, Safety Gateway, telemetry, audit history, migrations 18 to 21 | **Verified (server)** and **(sim)** |
 | **2. ROS 2, Gazebo, navigation** | Built-in differential-drive simulation: planning, obstacle avoidance, re-planning, recovery when a blocked route clears, cancel, pose verification; a home world with rooms and doorways; five scenarios | **Verified (sim)** |
 | | Destination management: names bound to a map and frame, validated, approved | **Verified (server)** |
 | | ROS 2 adapter (topics, tf, Nav2 action, feedback, cancel), watchdog node, Gazebo robot model with lidar, world, bridge, launch, container | **Written, not run** |
@@ -30,11 +30,13 @@ Updated 2026-11-21. The requirement-by-requirement record is [ROBOTICS_PROGRESS.
 | **3. Sensors and perception** | Sensor readings with time and source; health; fault injection; movement refused without range or odometry sensor | **Verified (sim)** |
 | | Perception from the range sensor: obstacles grouped with distance, bearing, size, confidence and sensor; blocked route; changes from the map, cleared when gone | **Verified (sim)** |
 | | Heading fused from wheels and gyroscope | **Verified (sim)** — a simple complementary filter, not a general fusion framework |
-| | Cameras, depth, object classification, person detection, visual inspection, GPS, 3-D lidar, visual odometry, calibration metadata | **Not started** |
+| | A simulated camera with depth; one picture at a time on request; a colour-region detector whose detections carry sensor, frame, time, detector and confidence; camera use off until a person switches it on; pictures kept for a limited time; every opening logged; forged or stale images refused | **Verified (sim)** and **(server)**. The built-in simulator's camera only |
+| | Sensor registration: frame, rate, resolution, message type, calibration | **Verified (sim)** and **(server)** |
+| | A physical or Gazebo camera, a learned detector (ONNX Runtime, YOLO), classification, person detection, visual inspection, a live preview, GPS, 3-D lidar, visual odometry | **Not started** |
 | **4. Physical hardware** | Commissioning: seven steps with server-checked evidence, trial mode, withdrawal on hardware change | **Verified (server)** with a stand-in. No hardware |
 | | Adapter contract for a ROS 2 robot | **Written, not run** |
 | | micro-ROS, embedded controllers, CAN, serial buses, motor controllers, battery systems, hardware-in-the-loop tests | **Not started** |
-| **5. Agents, voice, missions** | Four robot agents (Robot, Fleet, Manipulation, Robot care) with 26 tools; requests routed to robot tools | **Verified** by client tests with a scripted server. No live model run |
+| **5. Agents, voice, missions** | Four robot agents (Robot, Fleet, Manipulation, Robot care) with 28 tools; requests routed to robot tools | **Verified** by client tests with a scripted server. No live model run |
 | | Mission lifecycle: create, check, approve, execute, feedback, pause, resume, cancel, verify, history; durable records | **Verified (sim)** |
 | | Plans: several steps under one approval, each step checked again when sent and kept as a checkpoint with its evidence; templates offered only for hardware the robot has; a queue per robot | **Verified (sim)** and **(server)**. Simulated robots only: a physical robot is refused a plan that moves it |
 | | Conditions and branches in a plan, retries, automatic failure recovery | **Not started**, on purpose for now: a failed step is reported, not worked around |
@@ -63,17 +65,17 @@ Each item of the stage 1 list, where it lives, and what proves it. Checked again
 |---|---|---|
 | Robotics module | `server/robotics/` (registry and missions, contract, Safety Gateway, commissioning, fleet, packages, routes) | `server/robotics*.test.js` |
 | Robot device registry | `service.js`; table `hannah_robots` | `robotics.test.js`: create, enroll, revoke, remove, one account can't see another's robot |
-| Robot capability registry | `contract.js`: 19 capabilities, each with schemas, preconditions, risk, timeout, cancel behaviour, verification and failure responses | `robotics.contract.test.js` |
+| Robot capability registry | `contract.js`: 19 capabilities (16 implemented), each with schemas, preconditions, risk, timeout, cancel behaviour, verification and failure responses | `robotics.contract.test.js` |
 | Robot device profiles | `robotics/profiles/*.json`, read by `runtime/hannah_robot/profile.py`; stored as `hannah_robots.profile` | `test_adapters.py`, `robotics.sim.test.js` |
 | Robotics task model | Missions: table `hannah_robot_missions`, statuses in NAVIGATION_AND_MISSIONS.md | `robotics.test.js`, `robotics.stage2.test.js` |
 | Robot state model | The adapter's `state()` report; `hannah_robots.state` and `mode`; connection derived, never stored | `test_runtime.py`, `robotics.test.js` |
-| Hardware adapter interface | `runtime/hannah_robot/hal/base.py`: 16 methods, none taking a velocity, PWM, torque or joint value | `test_adapters.py` fails if the method list changes |
+| Hardware adapter interface | `runtime/hannah_robot/hal/base.py`: 17 methods, none taking a velocity, PWM, torque or joint value | `test_adapters.py` fails if the method list changes |
 | ROS 2 adapter interface | `hal/ros2.py`, `hal/ros2_watchdog.py` | **Written, not run.** Checked for syntax only |
 | Robotics Safety Gateway interface | `server/robotics/safety.js` `check()`; runtime `safety.py` `LocalSafety.check()` | `robotics.test.js`, `test_safety.py` |
 | Telemetry data model | Table `hannah_robot_telemetry`: one sample every three seconds, two hours kept | `robotics.sim.test.js`, from a real runtime's reports |
 | Robotics audit events | Table `hannah_robot_events`; every robot action is also an Action Engine record with who asked and who approved | `robotics.test.js` |
-| Database migrations | 18, 19 and 20 in `server/db/migrations.js`, additive | The robotics integration suites run on SQLite and on embedded Postgres (`*.pglite.test.js`) |
-| API contracts | `server/robotics/router.js`: 2 device routes, 32 account routes; `GET /api/robots/contract` returns the capability contract; listed in DEVELOPER_SDK.md | `robotics.test.js`, `e2e/robotics.spec.ts` |
+| Database migrations | 18 to 21 in `server/db/migrations.js`, additive | The robotics integration suites run on SQLite and on embedded Postgres (`*.pglite.test.js`) |
+| API contracts | `server/robotics/router.js`: 2 device routes, 35 account routes; `GET /api/robots/contract` returns the capability contract; listed in DEVELOPER_SDK.md | `robotics.test.js`, `e2e/robotics.spec.ts` |
 | Dashboard integration | The Robots screen, `/robotics`, in the existing shell | `Robotics.test.ts`, `e2e/robotics.spec.ts`, and the screens, interactions and accessibility specs |
 
 Stage 1 asks for no physical hardware control, no arm execution and no fleet deployment. None exists: the arm and fleet work listed under stages 6 and 7 runs only against the built-in simulators, and a physical robot is refused movement until a person has commissioned it.
@@ -83,7 +85,7 @@ Stage 1 asks for no physical hardware control, no arm execution and no fleet dep
 1. Everything runs against one simulator written for this project. It is kinematic: no physics, friction, wheel slip, sensor noise models, or timing of a real machine.
 2. The planner in the simulator is not Nav2. Behaviour in Gazebo will differ.
 3. Position is odometry (drifting) corrected only in the dock. There is no map-based localization in the simulator.
-4. Perception is range-sensor geometry. HANNAH cannot say what an object is. The arm simulator's objects come from its own scene, not from a camera.
+4. Perception is range-sensor geometry and regions of colour in a simulated camera's picture. HANNAH cannot say what an object is. The arm simulator's objects come from its own scene, not from a camera.
 4a. The arm simulator is planar, with no dynamics, payload or grasp physics, and a small fixed set of planning strategies.
 5. One robot per runtime; one account per robot; missions of minutes, not hours.
 6. Commands reach a robot at its next exchange (about a second). HANNAH is not for anything needing a faster reaction; that belongs to the robot's controller.

@@ -38,7 +38,7 @@ A capability is a high-level operation. There is no capability for a wheel speed
 | `cancel_mission` | any (HANNAH's own) | low | 10 s | — | The robot reports it cancelled | Implemented |
 | `pause_mission` | any (HANNAH's own) | low | 10 s | — | The robot reports it paused | Implemented |
 | `resume_mission` | mobile ground robots (HANNAH's own) | moderate | 20 s | can be paused or cancelled again | The robot reports it resumed; the command expires and works once | Implemented |
-| `capture_image` | any | none | 15 s | no image kept | An image with its capture time | Contract only |
+| `capture_image` | any | low | 15 s | a picture is taken at once | A valid image of the size the camera reports, with its frame and capture time, taken after it was asked for | **Implemented** (a simulated camera; camera use must be switched on per robot) |
 | `follow_target` | mobile ground robots | high | 300 s | robot stops and holds | The tracker's record | Contract only |
 | `move_robot_arm` | arms, mobile manipulators | high | 60 s | motion stopped, arm holds | Tool position from measured joint angles within 2 cm, joints still | Implemented (built-in arm simulator) |
 | `grasp_object` | arms, mobile manipulators | high | 30 s | gripper stops; does not open | The gripper reports holding that object | Implemented (built-in arm simulator) |
@@ -55,11 +55,11 @@ A capability is a high-level operation. There is no capability for a wheel speed
 A robot offers capability ids when it enrolls. Each is accepted only if it is in the contract, is meant for that type of robot, and is implemented. The rest are recorded with the reason and shown on the Robots screen.
 
 ```
-offered:  navigate_to, stop_motion, set_motor_pwm, move_robot_arm, capture_image   (a differential-drive robot)
+offered:  navigate_to, stop_motion, set_motor_pwm, move_robot_arm, follow_target   (a differential-drive robot)
 accepted: navigate_to, stop_motion
 refused:  set_motor_pwm    — not in HANNAH's capability contract
           move_robot_arm   — in the contract, but no runtime implements it yet
-          capture_image    — in the contract, but no runtime implements it yet
+          follow_target    — in the contract, but no runtime implements it yet
 ```
 
 Asking a robot for a capability it didn't register is refused by the Safety Gateway before anyone is asked to approve it.

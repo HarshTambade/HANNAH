@@ -17,6 +17,7 @@ The runtime never talks to motors, sensors or ROS directly. It talks to one inte
 | `heartbeat()` | Called every tick while the runtime is healthy, for an adapter-side watchdog |
 | `move_arm(target)`, `arm_status()` | Hand the arm's planner a tool position; never joint values |
 | `grasp(object)`, `release()` | Close the gripper on a named object at the tool; open it |
+| `capture(sensor)` | One frame from a camera, read only when this is called |
 | `set_device(id, on)` | Switch a listed on/off device |
 | `acknowledge_fault()` | A local operator action. No HANNAH command can reach it |
 

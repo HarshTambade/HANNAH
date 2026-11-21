@@ -30,12 +30,14 @@ Robotics, Block 1: the foundation for HANNAH to work with robots. Proven end to 
 - Migration 19. Requests in one robot's name are rate-limited.
 - **Plans.** Several steps on one robot under one approval that lists every step: drive, record what the sensors detect, read a sensor, move an arm, grasp, release. Each step meets the Safety Gateway again when it is sent and is kept with its evidence; the plan stops at the first step that doesn't finish, and nothing is retried. Four templates, offered only when the robot has the hardware. A queue per robot with priorities; a plan that can't start in time is dropped. A physical robot is refused a plan that moves it. Stopping a robot ends its plan and drops what was waiting. Migration 20.
 - **Fleet figures** from stored records: how missions ended, the share verified as succeeded, durations, command and stop latency, busy time, problems recorded. A figure with no records behind it reads "no data".
-- Five more robot tools (26) and a tracker of every requirement's real state, [`robotics/ROBOTICS_PROGRESS.md`](./robotics/ROBOTICS_PROGRESS.md).
+- **A camera, in simulation.** The built-in simulator has a forward camera with depth. `capture_image` takes one picture on request; a colour-region detector reports what it finds, each detection with its sensor, frame, time, detector and confidence. Camera use is off for every robot until a signed-in person switches it on; a physical robot's camera asks every time. Pictures are kept for a limited time, opening one is logged, and an image that isn't what it claims to be is refused. The detector cannot say what an object is and nothing identifies a person. Migration 21.
+- Sensors are registered with their frame, rate, resolution, message type and calibration.
+- Seven more robot tools (28) and a tracker of every requirement's real state, [`robotics/ROBOTICS_PROGRESS.md`](./robotics/ROBOTICS_PROGRESS.md).
 
 ### Not done
 
 - The ROS 2 adapter, its watchdog, the Gazebo robot and the container have never been run: ROS 2 and Gazebo could not be installed on the development machine.
-- No physical robot. No MoveIt 2 and no physical arm or gripper. No camera. No firmware updates (design only). No mission queues or traffic management between robots. No industrial or IoT connectors. No installing of robot packages. State per stage: [`robotics/STAGE_STATUS.md`](./robotics/STAGE_STATUS.md).
+- No physical robot. No MoveIt 2 and no physical arm or gripper. No physical camera and no learned vision model. No firmware updates (design only). No traffic management between robots. No industrial or IoT connectors. No installing of robot packages. State per stage: [`robotics/STAGE_STATUS.md`](./robotics/STAGE_STATUS.md).
 
 ### Changed
 

@@ -70,6 +70,10 @@ All under `/api`. An account session or a developer key unless marked; **(person
 | `POST /robots/:id/plans` | Start a plan (`{ template, inputs }` or `{ steps }`). An action; may answer 202 waiting for approval |
 | `POST /robots/plans/:id/cancel` | Never needs approval |
 | `GET /robots/analytics?days=7` | Fleet figures from stored records |
+| `PATCH /robots/:id` with `{ camera: { enabled, retentionHours } }` **(person)** | Switch camera use on or off for a robot |
+| `GET /robots/:id/images` | Stored pictures, without image data |
+| `GET /robots/:id/images/:image` | One picture with its data. Logged with who opened it |
+| `DELETE /robots/:id/images/:image` **(person)** | Delete a picture |
 | `POST /actions` with `robots.*` | Start anything that moves a robot: goes through permission, the Safety Gateway and approval |
 | `POST /robots/enroll`, `POST /robots/device/sync` | The robot itself: a one-time code, then signed requests |
 
