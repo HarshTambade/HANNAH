@@ -12,6 +12,8 @@ import AppShell, { type AppSection } from "./components/AppShell";
 import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
 import OperatorPage from "./components/OperatorPage";
+import RoboticsPage from "./components/RoboticsPage";
+import { Robotics } from "./services/Robotics";
 import { REMINDER_FIRED_EVENT, startReminderScheduler, type Reminder } from "./services/ReminderService";
 import { startAutomationRunner } from "./services/AutomationService";
 import { Diagnostics } from "./services/Diagnostics";
@@ -33,7 +35,7 @@ import AppWelcome from "./components/AppWelcome";
 import { MarketplaceService } from "./services/MarketplaceService";
 import { IS_WEBSITE } from "./config/site";
 
-const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "settings"]);
+const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "robotics", "settings"]);
 const base = import.meta.env.BASE_URL;
 
 function currentScreen(): Screen {
@@ -95,6 +97,13 @@ export default function App() {
 
   // Reminders fire while the app is open, on any screen.
   useEffect(() => startReminderScheduler(), []);
+  // Which robots the account has decides whether robot tools and the Robot Agent are offered.
+  useEffect(() => {
+    const load = () => { void Robotics.refresh(); };
+    load();
+    window.addEventListener("hannah:account", load);
+    return () => window.removeEventListener("hannah:account", load);
+  }, []);
   useEffect(() => startAutomationRunner(), []);
   // This start finished: the first screen is on. (Settings → Diagnostics reports starts that didn't.)
   useEffect(() => { Diagnostics.markReady(); }, []);
@@ -289,6 +298,14 @@ export default function App() {
     return (
       <AppShell {...shellProps}>
         <OperatorPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "robotics") {
+    return (
+      <AppShell {...shellProps}>
+        <RoboticsPage />
       </AppShell>
     );
   }

@@ -19,7 +19,7 @@ import { join } from "node:path";
  */
 const here = __dirname;
 const serverDir = join(here, "..", "server");
-const SCREENS = ["/chat", "/dashboard", "/agents", "/models", "/memory", "/automations", "/actions", "/settings", "/integrations", "/marketplace", "/"];
+const SCREENS = ["/chat", "/dashboard", "/agents", "/models", "/memory", "/automations", "/actions", "/robotics", "/settings", "/integrations", "/marketplace", "/"];
 // Things a browser reports that aren't HANNAH's bugs: an absent avatar model on a headless GPU, a blocked font, audio autoplay.
 const IGNORED = [/WebGL|THREE\.|GL_INVALID|webgl/i, /fonts\.(googleapis|gstatic)\.com/i, /play\(\) failed|NotAllowedError: play/i, /net::ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|CONNECTION_REFUSED)/i, /api\.open-meteo\.com|hn\.algolia\.com/i, /Download the React DevTools/i];
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, BookOpen, Brain, CheckCircle2, CircleDashed, Code2, Hand, ListChecks, Loader2, MinusCircle, MonitorSmartphone, PauseCircle, Play, ShieldCheck, Square, Trash2, Users, XCircle } from "lucide-react";
+import { AlertTriangle, BookOpen, Bot, Brain, CheckCircle2, CircleDashed, Code2, Hand, ListChecks, Loader2, MinusCircle, MonitorSmartphone, PauseCircle, Play, ShieldCheck, Square, Trash2, Users, XCircle } from "lucide-react";
 import { apiFetch, apiUrl } from "../services/api";
 import { ChatHistory } from "../services/ChatHistory";
 import { resumeTeamRun, TEAM_RUNS_EVENT, TeamRuns, type TeamRun, type TeamStep, type TeamStepStatus } from "../services/Orchestrator";
@@ -9,8 +9,8 @@ import { TaskRecords } from "../services/TaskRecords";
 
 const onDesktop = desktopFilesAvailable();
 
-const agentIcons: Record<SpecialistId, typeof Brain> = { research: BookOpen, coding: Code2, memory: Brain, tasks: ListChecks };
-const agentTones: Record<SpecialistId, string> = { research: "tone-sky", coding: "tone-lavender", memory: "tone-mint", tasks: "tone-butter" };
+const agentIcons: Record<SpecialistId, typeof Brain> = { research: BookOpen, coding: Code2, memory: Brain, tasks: ListChecks, robot: Bot };
+const agentTones: Record<SpecialistId, string> = { research: "tone-sky", coding: "tone-lavender", memory: "tone-mint", tasks: "tone-butter", robot: "tone-sky" };
 
 const stepStatus: Record<TeamStepStatus, { label: string; Icon: typeof Brain; className: string }> = {
   pending: { label: "Waiting", Icon: CircleDashed, className: "text-slate-500" },
@@ -204,6 +204,7 @@ export default function AgentsPage() {
               <button type="button" role="switch" aria-checked={enabled} aria-label={`${enabled ? "Turn off" : "Turn on"} the ${agent.name} agent`} onClick={() => updateSpecialist(agent.id, { enabled: !enabled })} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${enabled ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{enabled ? "On" : "Off"}</button>
             }>
               <p className="flex items-start gap-2 text-sm text-slate-700"><Icon size={16} className="mt-0.5 shrink-0" /> {agent.description}</p>
+              {agent.available && !agent.available() && <p role="status" className="mt-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-700">Not in use yet. {agent.needs}</p>}
               <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Tools it may use</p>
               <div className="mt-1.5 flex flex-wrap gap-1.5">{agent.tools.filter((tool) => onDesktop || !tool.startsWith("desktop_")).map((tool) => <span key={tool} className="rounded-full bg-white/80 px-2 py-0.5 font-mono text-[11px] text-slate-700">{tool}</span>)}{!onDesktop && agent.tools.some((tool) => tool.startsWith("desktop_")) && <span className="px-1 py-0.5 text-[11px] text-slate-600">+ files and terminal in the desktop app</span>}</div>
               <label htmlFor={`model-${agent.id}`} className="mt-3 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Model</label>

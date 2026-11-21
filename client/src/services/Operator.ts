@@ -244,7 +244,7 @@ export const Operator = {
 // ---------- tools for every agent ----------
 
 /** What a model is told about an action: the engine's record, nothing rounder. */
-function toolResult(record: ActionRecord) {
+export function toolResult(record: ActionRecord) {
   if (record.status === "declined") throw new HITLDeniedError(record.outcome);
   const base = { status: record.status, outcome: record.outcome, actionId: record.id };
   if (record.status === "done") return { ...base, result: record.response, confirmed: record.verification?.evidence };

@@ -56,6 +56,8 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   // The Action Engine's tools (services/Operator.ts).
   { match: /repo|github|pull request|\bPRs?\b|\bbugs?\b|codebase|source code|commit|branch|\bCI\b|build (is )?fail|deploy|refactor|stack trace|vulnerab|dependenc|my (code|project)/i, tools: /^code_/ },
   { match: /whats ?app|telegram|slack|\bmessages?\b|\btext\b|\breply to\b|\bdm\b/i, tools: /^message_/ },
+  // Robots enrolled in the account (services/Robotics.ts). The tools exist only when there is one.
+  { match: /\brobots?\b|\brover\b|\bdock\b|\bnavigate\b|\bpatrol\b|\blidar\b|\bAMR\b|\bAGV\b|drive (it|the|to|over)|\bmission\b/i, tools: /^robot_/ },
   { match: /free (time|slot)|availab|reschedul|\bmove my\b|cancel (my|the) (meeting|event|appointment)|invite|recurring|every (day|week|month|morning|monday|tuesday|wednesday|thursday|friday)|\bbook(ing)?\b|reserv|appointment/i, tools: /^calendar_/ },
 ];
 // web_search is always kept, so "can you check…" never finds HANNAH without a way to look.

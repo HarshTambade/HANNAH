@@ -15,6 +15,7 @@ import { getBrowserTools } from "./BrowserTools";
 import { getWebTools } from "./WebTools";
 import { getStudioTools } from "./Studio";
 import { Operator, getOperatorTools } from "./Operator";
+import { getRobotTools } from "./Robotics";
 import { describeAction } from "./SafetyGuard";
 import { checkNumber } from "./PhoneBridge";
 import { getPhoneTools } from "./PhoneTools";
@@ -360,7 +361,8 @@ export function getDeviceTools() {
   const connections = getConnectionTools();
   // Research and Document Studio are platform services: every agent gets the same four tools (services/Studio.ts).
   // The Action Engine's tools (calendar scheduling, messaging, code) for a signed-in account: one execution path for every agent.
-  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...getOperatorTools({ calendar: connections.length > 0 }), ...externalTools];
+  // Robot tools (services/Robotics.ts) are engine tools too, offered only when the account has a robot.
+  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...getOperatorTools({ calendar: connections.length > 0 }), ...getRobotTools(), ...externalTools];
 }
 
 /**

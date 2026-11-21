@@ -3,7 +3,9 @@
  * its own model choice. Every tool call still goes through the Guardian and,
  * for anything that changes data, the user's approval.
  */
-export type SpecialistId = "research" | "coding" | "memory" | "tasks";
+import { Robotics } from "./Robotics";
+
+export type SpecialistId = "research" | "coding" | "memory" | "tasks" | "robot";
 export type RouteHint = "simple" | "standard" | "complex";
 
 export type Specialist = {
@@ -17,6 +19,10 @@ export type Specialist = {
   /** Tier requested from Auto routing when the model is "auto". */
   routeHint: RouteHint;
   maxIterations: number;
+  /** When set, the specialist is offered only while this is true (the Robot Agent needs a robot). */
+  available?: () => boolean;
+  /** Shown on the Agents screen when it isn't available. */
+  needs?: string;
 };
 
 export const SPECIALISTS: Specialist[] = [
@@ -56,6 +62,17 @@ export const SPECIALISTS: Specialist[] = [
     routeHint: "standard",
     maxIterations: 6,
   },
+  {
+    id: "robot",
+    name: "Robot",
+    description: "Robots enrolled in the account, simulated or physical: finds the right robot, checks what it can do and what state it is in, starts missions (drive to a named place or a point, return to dock, visit points and report, switch an onboard device), watches a mission to its verified result, and stops a robot. Movement is approved by the user; stopping never needs approval.",
+    instructions: "Work as HANNAH's robot agent. You ask robots for high-level operations only; the robot's own planner and controller move it, and the Safety Gateway and the robot's own checks can refuse you. You cannot override either, and you never look for a way around a refusal. Always: (1) call robot_list first and use only robots, capabilities and place names it returns; if more than one robot fits, ask which; (2) before moving a robot call robot_state: if it is offline, emergency-stopped, faulted or low on battery, say so and do not try; (3) say plainly whether the robot is a SIMULATION or a PHYSICAL robot; (4) after starting a mission call robot_wait_for_mission and report that result: “arrived” only when the mission status is succeeded, and give the evidence; accepted, unverified, failed, cancelled, rejected, timed-out, expired and lost are reported as they are, with the reason; (5) a state marked stale or offline is the last report, never the present. To stop a robot use robot_stop at once, without asking; it is a software request, not an emergency stop, so if someone may be in danger tell the user to press the robot's own emergency stop. Never invent a position, a sensor reading, a battery level or an arrival.",
+    tools: ["robot_list", "robot_state", "robot_read_sensor", "robot_navigate", "robot_return_to_dock", "robot_inspect", "robot_set_device", "robot_stop", "robot_wait_for_mission"],
+    routeHint: "standard",
+    maxIterations: 8,
+    available: () => Robotics.known().length > 0,
+    needs: "Add a robot under Robots to use this agent.",
+  },
 ];
 
 const SETTINGS_KEY = "hannah.specialists.v1";
@@ -85,5 +102,5 @@ export function updateSpecialist(id: SpecialistId, change: { model?: string; ena
 /** Enabled specialists with the user's model choice ("auto" unless they picked one). */
 export function activeSpecialists() {
   const settings = readSpecialistSettings();
-  return SPECIALISTS.filter((agent) => settings[agent.id]?.enabled !== false).map((agent) => ({ ...agent, model: settings[agent.id]?.model || "auto" }));
+  return SPECIALISTS.filter((agent) => settings[agent.id]?.enabled !== false && (!agent.available || agent.available())).map((agent) => ({ ...agent, model: settings[agent.id]?.model || "auto" }));
 }
