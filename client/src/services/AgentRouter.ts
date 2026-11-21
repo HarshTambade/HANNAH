@@ -61,6 +61,7 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   // pausing and cancelling come with every robot request.
   { match: /\brobots?\b|\brover\b|\bdock\b|\bnavigate\b|\bAMR\b|\bAGV\b|\bfleet\b|drive (it|the|to|over)|\bmissions?\b/i, tools: /^robot_(stop|cancel|pause|resume|list|state|destinations|navigate|return_to_dock|wait_for_mission)$/ },
   { match: /\bfleet\b|\brobots\b|available robot|\bassign\b|(a|any|which|every|all|each) robots?\b/i, tools: /^robot_(fleet|assign)$/ },
+  { match: /\breassign|hand (it|the task|that) (on|over)|give (it|that|this|the)( task| job| mission)? to (another|a different)|another robot (should|can|could) (take|do)|a different robot/i, tools: /^robot_(reassign|fleet|list|stop|wait_for_mission)$/ },
   { match: /(robot|rover).*(battery|health|diagnos|sensor|obstacle|temperature|humidity|surround|detect|maintenance|fault|wrong|blocked|sees?\b)|(battery|health|diagnos|sensor|obstacle|temperature|humidity|surround|detect|maintenance|fault|blocked).*(robot|rover)/i, tools: /^robot_(diagnostics|battery|read_sensor|surroundings)$/ },
   { match: /(robot|rover).*(inspect|patrol|visit|check the (area|room|zone))|(inspect|patrol).*(robot|rover|area|zone|warehouse)/i, tools: /^robot_inspect$/ },
   { match: /(robot|rover).*(beacon|light|horn|switch)|(beacon|horn).*(robot|rover)/i, tools: /^robot_set_device$/ },

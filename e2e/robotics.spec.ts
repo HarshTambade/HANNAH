@@ -152,6 +152,13 @@ test("a trip is asked for, approved on the card, driven by the simulator and sho
   await expect(row).toHaveAttribute("data-status", "accepted", { timeout: 15_000 });
   await expect(page.getByTestId("active-mission")).toContainText("It is not finished.");
   await expect(detail(page).getByTestId("robot-mode")).toHaveText("Driving");
+  // The picture of this screen used on the website and in the README: a real run, taken here.
+  if (process.env.HANNAH_E2E_SHOTS) {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.evaluate(() => { const target = document.querySelector('[data-testid="robot-card"]'); if (target) window.scrollTo(0, target.getBoundingClientRect().top + window.scrollY - 110); });
+    await page.screenshot({ path: join(process.env.HANNAH_E2E_SHOTS, "robotics-screen.png") });
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
   await testInfo.attach("driving", { body: await page.screenshot({ fullPage: true, ...(process.env.HANNAH_E2E_SHOTS ? { path: join(process.env.HANNAH_E2E_SHOTS, "robotics-driving.png") } : {}) }), contentType: "image/png" });
   // Finished and checked against the robot's reported position.
   await expect(row).toHaveAttribute("data-status", "succeeded", { timeout: 30_000 });

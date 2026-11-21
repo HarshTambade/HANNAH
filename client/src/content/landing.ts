@@ -3,7 +3,7 @@
  * The page, the search structured data and /llms.txt all read from here, so
  * they always say the same thing.
  */
-export type IconName = "AudioLines" | "Bot" | "Brain" | "Cable" | "CalendarDays" | "Cpu" | "Ear" | "HardDrive" | "MonitorSmartphone" | "PackageOpen" | "Sparkles" | "Waypoints" | "Workflow";
+export type IconName = "Radar" | "AudioLines" | "Bot" | "Brain" | "Cable" | "CalendarDays" | "Cpu" | "Ear" | "HardDrive" | "MonitorSmartphone" | "PackageOpen" | "Sparkles" | "Waypoints" | "Workflow";
 
 /** Everything here ships in this release. Each line says what it really does. */
 export const CAPABILITIES = [
@@ -86,8 +86,11 @@ export const CAPABILITIES = [
     icon: "MonitorSmartphone",
     title: "Tasks across devices",
     description: "Sign in on each device and start a task on your laptop, follow it on your phone, and approve its next step from whichever device is in your hand.",
-    // An odd card out: on two-column screens it takes the full row.
-    wide: true,
+  },
+  {
+    icon: "Radar",
+    title: "Robots, checked before they move (beta)",
+    description: "Ask a robot to go somewhere, inspect a route or move an arm. A Safety Gateway checks every request, you approve it, and the result is verified from the robot's own state. Tested with HANNAH's built-in simulators; not yet run on a physical robot.",
   },
 ] as const;
 
@@ -178,7 +181,41 @@ export const PLATFORM_MATRIX = {
 } as const;
 
 /** Planned, not in this release. */
+/**
+ * The robotics section. Each capability named here is checked against the
+ * server's contract by src/__tests__/LandingContent.test.ts, so the site can't
+ * name one the robot runtime doesn't implement. The limits are part of the
+ * content on purpose: this is tested with simulators only.
+ */
+export const ROBOTICS = {
+  status: "beta" as Status,
+  rules: [
+    ["The AI never touches a motor", "A model can only pick a named capability, such as “drive to a place”. The robot's own planner and controller do the moving."],
+    ["Checked twice, then approved by you", "A Safety Gateway on the server and another on the robot refuse a goal outside the workspace, a robot that isn't ready, or a speed above its limit, and say why. Then you approve."],
+    ["Stopping is always allowed", "Stop, pause and cancel never wait for approval. If the robot loses its link to HANNAH, it stops by itself."],
+    ["Verified, or not called done", "“Arrived” is said only when the robot's reported position matches the goal. A grasp counts only when the gripper reports it is holding the object."],
+  ],
+  capabilities: [
+    { id: "navigate_to", label: "Drive to a named place" },
+    { id: "return_to_dock", label: "Return to the dock" },
+    { id: "inspect_area", label: "Visit points and report" },
+    { id: "report_surroundings", label: "Say what the range sensor detects" },
+    { id: "capture_image", label: "Take a picture, when you've switched the camera on" },
+    { id: "move_robot_arm", label: "Move an arm" },
+    { id: "grasp_object", label: "Grasp an object" },
+    { id: "release_object", label: "Release it" },
+    { id: "stop_motion", label: "Stop" },
+  ],
+  also: ["Plans: several steps under one approval that lists every step", "Fleet: HANNAH picks the nearest ready robot and says why", "Commissioning: a physical robot can't move until a person completes eleven checks", "Figures from real records: outcomes, durations, command latency"],
+  limits: [
+    "Tested with HANNAH's built-in simulators: a mobile robot and an arm.",
+    "The ROS 2 and Gazebo files are written and have not been run yet. No physical robot has been connected.",
+    "HANNAH is not safety-certified, and Stop is a software request, not an emergency stop.",
+  ],
+} as const;
+
 export const ROADMAP = [
+  ["Robots in Gazebo and on real hardware", "Today robots work with HANNAH's built-in simulators. Running the ROS 2 adapter with Nav2 in Gazebo comes first, then a supervised physical robot, then arms with MoveIt 2."],
   ["Computer use in the desktop app", "Seeing the screen and using the mouse and keyboard, with approval for each action. Today it needs a desktop app you build yourself (see the README)."],
   ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],
   ["Sign in to more services", "One-click sign-in for Slack, GitHub and Notion in workflows (today they use tokens or webhook URLs), and instant email triggers instead of checking every few minutes."],
@@ -186,6 +223,10 @@ export const ROADMAP = [
 ] as const;
 
 export const FAQS = [
+  {
+    q: "Can HANNAH control a robot?",
+    a: "In simulation, yes; on real hardware, not yet. You add a robot under Robots, start HANNAH's robot runtime, and ask it to drive to a place, inspect a route, take a picture or move an arm. Every request is checked by a Safety Gateway, approved by you, and verified from the robot's own state. This is tested with HANNAH's built-in simulators only: the ROS 2 and Gazebo files have not been run, no physical robot has been connected, and HANNAH is not safety-certified. Its Stop button is a software request, not an emergency stop.",
+  },
   {
     q: "What is HANNAH?",
     a: "HANNAH is a personal AI companion: you talk or type, and it answers with voice, remembers what you ask it to, and gets work done with a team of AI agents, with a live 3D avatar. It runs in the browser, as a desktop app for macOS, Windows and Linux, and on Android.",

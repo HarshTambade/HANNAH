@@ -264,6 +264,39 @@ describe("robot tools and the Robot Agent", () => {
     for (const agent of SPECIALISTS.filter((item) => item.id.startsWith("robot"))) expect(agent.tools.length).toBeLessThanOrEqual(20);
   });
 
+  it("what a person would say aloud brings the tool that answers it; a spoken request takes the same road as a typed one", () => {
+    // A voice turn is transcribed and then handled like any typed message, so what is checked here is the
+    // sentence, not the microphone: speech recognition itself is not exercised by this test.
+    const pick = (request: string) => selectToolsForRequest(getDeviceTools(), request).map((item) => item.name);
+    for (const [said, needs] of [
+      ["Send the robot to the kitchen", ["robot_navigate", "robot_destinations", "robot_list"]],
+      ["Return the robot to the charging station", ["robot_return_to_dock"]],
+      ["Inspect the entrance with the robot", ["robot_inspect"]],
+      ["Pause the mission", ["robot_pause"]],
+      ["Show the robot battery", ["robot_battery"]],
+      ["Explain why the robot stopped, is something wrong with it", ["robot_diagnostics", "robot_state"]],
+      ["Check all connected robots", ["robot_fleet"]],
+      ["Give that task to another robot", ["robot_reassign"]],
+    ] as Array<[string, string[]]>) {
+      const got = pick(said);
+      expect(got, said).toEqual(expect.arrayContaining([...needs, "robot_stop"]));
+      expect(got.length, said).toBeLessThanOrEqual(20);
+    }
+  });
+
+  it("handing a failed task to another robot is asked of the engine and approved, never done by itself", async () => {
+    const preview = { title: "Start a mission: Ben drives to door (4.5, 0)", lines: [{ label: "Instead of", value: "Ann, whose mission ended as failed: Blocked." }, { label: "Chosen", value: "Ben: the only robot that can take it now" }], warnings: [] };
+    respond = (call) => (call.path === "/api/actions" ? { record: record("waiting-approval", { action: "robots.reassign", preview }) } : { record: record("done", { action: "robots.reassign", response: { missionId: "ms_2", status: "accepted" } }) });
+    const screen = host(true);
+    const result = await tool("robot_reassign").execute({ missionId: "ms_1" }) as Record<string, unknown>;
+    screen.detach();
+    expect(calls[0]).toMatchObject({ path: "/api/actions", body: { action: "robots.reassign", params: { mission: "ms_1" } } });
+    expect(screen.seen[0]).toContain("Instead of: Ann, whose mission ended as failed: Blocked.");
+    expect(screen.seen[0]).toContain("Chosen: Ben");
+    expect(result).toMatchObject({ status: "done", missionId: "ms_2" });
+    expect(tool("robot_reassign").description).toMatch(/nothing is reassigned by itself/);
+  });
+
   it("the Robots screen has its own address", () => {
     expect(pathForScreen("robotics")).toBe("/robotics");
     expect(screenForLocation({ pathname: "/robotics", hash: "" })).toBe("robotics");

@@ -30,6 +30,12 @@ Each robot also has its own queue of plans, with priorities (NAVIGATION_AND_MISS
 
 A maintenance log per robot (inspection, repair, replacement, calibration, note) is written by a signed-in person.
 
+## Handing a task on
+
+`robots.reassign` (tool `robot_reassign`): a movement task that failed, was cancelled, was refused, expired or was lost can be given to a different robot. It happens only when a person or an agent asks. The first mission has to be over and must not have succeeded; the robot it was on is left out; the other robot is chosen exactly as for a new task, against its state now, and is approved by name with "instead of" and the reason on the card. A named destination is looked up on each robot's own map; bare coordinates are offered only to robots on the same map.
+
+**Nothing is reassigned automatically**, on purpose: whatever stopped the first robot may still be there.
+
 ## Figures
 
 `robots.analytics` (tool `robot_analytics`), `GET /api/robots/analytics?days=7`, and "Figures" on the Robots screen. Computed from stored mission, plan, event and telemetry records each time they are asked for; nothing is estimated and nothing is cached.

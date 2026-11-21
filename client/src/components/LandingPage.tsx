@@ -2,12 +2,12 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import ConnectPanel from "./ConnectPanel";
 import {
   ArrowRight, AudioLines, Bot, Boxes, Brain, Bug, Cable, CalendarDays, Check, ChevronDown, Code2, Cpu, Download, Ear, FileText, HardDrive, History, LifeBuoy, LockKeyhole, Menu,
-  MonitorSmartphone, PackageOpen, ShieldCheck, Sparkles, TerminalSquare, Waypoints, Workflow, X,
+  MonitorSmartphone, PackageOpen, Radar, ShieldCheck, Sparkles, TerminalSquare, Waypoints, Workflow, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
 import {
   AGENTS as agents, AUTOMATION as automation, CAPABILITIES as capabilities, FAQS as faqs, MODEL_PROVIDERS as providers, PLATFORM_MATRIX as matrix,
-  ROADMAP as roadmap, ROUTING_MODES as routingModes, type IconName, type Status,
+  ROADMAP as roadmap, ROBOTICS as robotics, ROUTING_MODES as routingModes, type IconName, type Status,
 } from "../content/landing";
 import AppTour from "./AppTour";
 import { APP_VERSION, PLATFORM_DOWNLOADS, RELEASE_NOTES_URL, RELEASES_URL, REPOSITORY_URL } from "../config/project";
@@ -35,7 +35,7 @@ function followInApp(event: MouseEvent<HTMLAnchorElement>, go: () => void) {
   go();
 }
 
-const capabilityIcons: Record<IconName, typeof Cpu> = { AudioLines, Bot, Brain, Cable, CalendarDays, Cpu, Ear, HardDrive, MonitorSmartphone, PackageOpen, Sparkles, Waypoints, Workflow };
+const capabilityIcons: Record<IconName, typeof Cpu> = { Radar, AudioLines, Bot, Brain, Cable, CalendarDays, Cpu, Ear, HardDrive, MonitorSmartphone, PackageOpen, Sparkles, Waypoints, Workflow };
 
 const STATUS_LABEL: Record<Status, string> = { available: "Available", beta: "Beta", upcoming: "Coming" };
 const STATUS_STYLE: Record<Status, string> = {
@@ -121,7 +121,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
     setKeyDialogOpen(true);
   };
 
-  const sections: Array<[string, string]> = [["Features", "features"], ["Models", "models"], ["Agents", "agents"], ["Automation", "automation"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
+  const sections: Array<[string, string]> = [["Features", "features"], ["Models", "models"], ["Agents", "agents"], ["Automation", "automation"], ["Robots", "robots"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
   const others = capabilities.filter((item) => !PILLAR_TITLES.has(item.title));
 
   return (
@@ -399,6 +399,46 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
                       <StatusChip status={item.status} />
                     </li>
                   ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Robots */}
+        <section id="robots" tabIndex={-1} className="mx-auto max-w-7xl px-5 py-14 outline-none sm:px-8 sm:py-20 lg:px-12 lg:py-24">
+          <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+            <div>
+              <SectionHeading kicker="Robots" title="Ask a robot. It is checked before it moves.">Add a robot, start HANNAH's robot runtime on its computer, and ask in plain words: “drive to the workbench”, “inspect the door and the shelves”, “put the red block in the bin”. HANNAH tells the robot what to do; the robot's own planner decides how.</SectionHeading>
+              <p className="mt-4 flex flex-wrap items-center gap-2 text-[13px] text-slate-600"><StatusChip status={robotics.status} /> Works with HANNAH's built-in simulators today. Not yet run on a physical robot.</p>
+              <ul className="mt-7 space-y-5">
+                {robotics.rules.map(([title, text]) => (
+                  <li key={title} className="flex gap-3">
+                    <ShieldCheck size={18} strokeWidth={1.8} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
+                    <span>
+                      <span className="block text-[15px] font-semibold text-ink">{title}</span>
+                      <span className="mt-1 block text-[14px] leading-6 text-slate-600">{text}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <figure className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
+                <img src="/screens/robotics.webp" width={1280} height={800} loading="lazy" decoding="async" alt="HANNAH's Robots screen during a simulated trip: the robot on its map with the planned route to the workbench, the points its range sensor returns, a legend that includes the simulator's ground truth, and a message that the robot accepted the mission, which confirms the start and not the result." className="block h-auto w-full" />
+                <figcaption className="border-t border-slate-200 px-4 py-3 text-[13px] leading-5 text-slate-600">A real run in HANNAH's built-in simulator, captured by the project's own browser test. The robot is simulated; the checks, the approval and the verification are the real ones.</figcaption>
+              </figure>
+              <p className="mt-6 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-500">What a robot can be asked for</p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {robotics.capabilities.map((item) => <li key={item.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[12px] text-slate-700">{item.label}</li>)}
+              </ul>
+              <ul className="mt-4 space-y-1.5 text-[13px] leading-6 text-slate-600">
+                {robotics.also.map((item) => <li key={item} className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-700" aria-hidden="true" />{item}</li>)}
+              </ul>
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-950"><Radar size={15} aria-hidden="true" /> What this is not, yet</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-6 text-amber-950">
+                  {robotics.limits.map((item) => <li key={item}>{item}</li>)}
                 </ul>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from "react";
-import { Bot, Check, Cpu, MessagesSquare, PlugZap, Workflow } from "lucide-react";
+import { Bot, Check, Cpu, MessagesSquare, PlugZap, Radar, Workflow } from "lucide-react";
 
 /** A tour of real HANNAH screens (captured from this release), one tab per screen. */
 const stops = [
@@ -52,6 +52,16 @@ const stops = [
     alt: "HANNAH's Integrations guide: REST and OpenAI-compatible APIs, MCP, A2A and webhooks.",
     title: "Connect it to everything",
     points: ["OpenAI-compatible API, MCP server and client, A2A", "Signed webhooks for reminders, teams and budgets", "Your own Postgres, Supabase, Neon or SQLite database"],
+  },
+  {
+    id: "robots",
+    label: "Robots",
+    icon: Radar,
+    path: "/robotics",
+    image: "/screens/robotics.webp",
+    alt: "HANNAH's Robots screen during a simulated trip: the robot on its map with the planned route to the workbench, the points its range sensor returns, a legend that includes the simulator's ground truth, and a message that the robot accepted the mission, which confirms the start and not the result.",
+    title: "Robots, in simulation today",
+    points: ["Every request is checked by a Safety Gateway, then approved by you", "“Arrived” only when the robot's reported position matches the goal", "Built-in simulators only: no physical robot has been connected"],
   },
 ] as const;
 

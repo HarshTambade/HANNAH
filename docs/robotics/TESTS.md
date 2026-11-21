@@ -17,9 +17,9 @@ Run on 2026-11-21 on macOS 27 (arm64), Node 25.9, Python 3.14.6 and 3.9.6.
 |---|---|---|---|
 | `server/robotics.contract.test.js` | Unit | 10 | 10 |
 | `server/robotics.packages.test.js` | Unit | 4 | 4 |
-| `server/robotics.fleet.test.js` | Unit (4) and integration (1) | 5 | 5 |
+| `server/robotics.fleet.test.js` | Unit (4) and integration (2) | 6 | 6 |
 | `robotics/runtime/tests/test_protocol.py`, `test_safety.py`, `test_adapters.py`, `test_doctor.py`, `test_progress.py` | Unit | 32 | 32 |
-| `client/src/__tests__/Robotics.test.ts` | Unit (scripted server) | 11 | 11 |
+| `client/src/__tests__/Robotics.test.ts` | Unit (scripted server) | 13 | 13 |
 | `server/robotics.test.js` | Integration | 18 | 18 |
 | `server/robotics.stage2.test.js` (commissioning, destinations, pause and resume) | Integration | 7 | 7 |
 | `server/robotics.plans.test.js` (plans, the queue, templates, fleet figures, webhook events) | Integration | 7 | 7 |
@@ -30,7 +30,7 @@ Run on 2026-11-21 on macOS 27 (arm64), Node 25.9, Python 3.14.6 and 3.9.6.
 | `server/robotics.sim.test.js` | Simulation (server + runtime process) | 15 | 15 |
 | `server/robotics.arm.sim.test.js` | Simulation (server + runtime process, the arm simulator) | 7 | 7 |
 | `e2e/robotics.spec.ts` | Simulation (browser + server + one or two runtime processes) | 11 | 11 |
-| **Robotics total** | | **241** | **241** |
+| **Robotics total** | | **244** | **244** |
 
 Also: 5 of 5 navigation scenarios (`python3 -m hannah_robot.scenarios`), which `test_stage2.py` runs as a test.
 
@@ -96,7 +96,7 @@ Each suite run alone, on the final code.
 | Secret scan | No findings |
 | Licence check | 424 production dependencies, all permissive; none added |
 | Generated Gazebo world and map | Current with the world file (the files themselves have never been loaded by Gazebo) |
-| Version check | All fields 1.7.0 (no version change in this work) |
+| Version check | All fields 1.8.0 |
 
 One older test, `server/vercel-supabase.test.js`, starts a server on a port chosen at random from eighty and fails when another test happens to hold that port. It failed once that way in a full run and passes alone and in the later full runs. It is not a robotics test and was left as it is.
 
@@ -125,6 +125,9 @@ One older test, `server/vercel-supabase.test.js`, starts a server on a port chos
 | The runtime's health check: profile, limits, credential permissions, server, clock; no signed request; the secret never printed | Unit, simulation | `test_doctor.py`, `robotics.sim.test.js` |
 | Webhook and workflow events for missions, plans and alerts | Integration | `robotics.plans.test.js` |
 | The JavaScript client: what a developer key can ask, read and stop, and that it can't approve | Integration | `robotics.sdk.test.js` |
+| Handing an unfinished task to another robot: only when asked, never while it runs, never a succeeded one, the other robot chosen and approved by name | Integration, unit | `robotics.fleet.test.js`, `Robotics.test.ts` |
+| The sentences a person would say aloud bring the tools that answer them (speech recognition itself is not exercised) | Unit | `Robotics.test.ts` |
+| The website names only capabilities the contract implements and keeps saying it is simulation only | Unit | `LandingContent.test.ts` |
 | The tracker's own rules: nothing verified without a test, nothing marked Gazebo or hardware without evidence | Unit | `test_progress.py` |
 | Manipulation: kinematics inside joint limits, joint speed limit, collision-checked motion, refusals, gripper state, cancellation by stop, a simulated pick and place | Unit, simulation, browser | `test_arm.py`, `robotics.arm.sim.test.js`, `e2e` |
 

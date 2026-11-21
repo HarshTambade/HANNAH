@@ -140,7 +140,7 @@ function alive(robot) {
       await sleep(80);
     }
   })();
-  return { received, stop: async () => { on = false; await loop; } };
+  return { received, report: (...items) => reports.push(...items), stop: async () => { on = false; await loop; } };
 }
 
 before(async () => {
@@ -253,4 +253,47 @@ test("assigning a task chooses a robot, shows why, and still goes through approv
   const viaRoute = (await call(users.asha, "GET", `/robots/${far.robotId}/diagnostics`)).body.diagnostics;
   assert.equal(viaRoute.findings.find((item) => item.title === "Software").severity, "info");
   assert.equal((await call(users.asha, "GET", "/robots/fleet")).body.robots.find((row) => row.name === "Far").health, "attention");
+});
+
+test("a task that didn't finish is handed to another robot only when asked, checked afresh and approved by name", async () => {
+  const ann = await enrolled("Ann", { x: 2, y: -1 });
+  const ben = await enrolled("Ben", { x: -3, y: 2 });
+  const lives = [alive(ann), alive(ben)];
+  test.after(() => Promise.all(lives.map((live) => live.stop())));
+  const asked = await act(users.asha, "robots.assign", { task: "navigate_to", place: "door" });
+  assert.equal(asked.body.record.preview.lines[0].value.split(":")[0], "Ann");
+  const started = await call(users.asha, "POST", `/actions/${asked.body.record.id}/decision`, { approve: true });
+  const missionId = started.body.record.response.missionId;
+  // Still running: it can't be handed on.
+  const early = await act(users.key, "robots.reassign", { mission: missionId });
+  assert.equal(early.status, 409);
+  assert.match(early.body.error, /still under way/);
+  // Ann reports that she couldn't get there. Nothing is given to Ben by itself.
+  lives[0].report({ missionId, status: "failed", reason: "Blocked: no way round the pallet." });
+  await sleep(400);
+  assert.equal(lives[1].received.length, 0, "no automatic reassignment");
+  // An agent asks for it. The other robot is chosen as for any new task, and a person approves that robot.
+  const handed = await act(users.key, "robots.reassign", { robot: "Ann" });
+  assert.equal(handed.status, 202, JSON.stringify(handed.body));
+  const record = handed.body.record;
+  assert.equal(record.status, "waiting-approval");
+  assert.equal(record.preview.title, "Start a mission: Ben drives to door (4.5, 0)");
+  assert.deepEqual(record.preview.lines[0], { label: "Instead of", value: "Ann, whose mission ended as failed: Blocked: no way round the pallet." });
+  assert.match(record.preview.lines[1].value, /^Ben: /);
+  assert.deepEqual(record.resource, { type: "robot", id: ben.robotId });
+  // Ann herself is never the answer to "another robot".
+  assert.equal((await act(users.asha, "robots.reassign", { mission: missionId, among: "Ann" })).status, 409);
+  const done = await call(users.asha, "POST", `/actions/${record.id}/decision`, { approve: true });
+  assert.equal(done.body.record.status, "done", JSON.stringify(done.body.record));
+  assert.equal(done.body.record.response.reassignedFrom.mission, missionId);
+  const sent = lives[1].received.find((command) => command.type === "mission");
+  assert.deepEqual([sent.capability, sent.params.x, sent.params.y], ["navigate_to", 4.5, 0]);
+  // Ben arrives; a mission that succeeded has nothing to hand on.
+  ben.state = state({ pose: { x: 4.5, y: 0, yaw: 0, frame: "map", source: "odometry" } });
+  lives[1].report({ missionId: sent.missionId, status: "succeeded" });
+  await sleep(400);
+  const finished = await act(users.asha, "robots.reassign", { mission: sent.missionId });
+  assert.equal(finished.status, 409);
+  assert.match(finished.body.error, /succeeded; there is nothing to hand on/);
+  await Promise.all(lives.map((live) => live.stop()));
 });

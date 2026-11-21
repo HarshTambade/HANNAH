@@ -298,6 +298,17 @@ const tools: HANNAHTool[] = [
   },
   read("robot_analytics", "robots.analytics", "Figures about the robots from stored records for the last days (7 by default, at most 30): missions started and how they ended, the share verified as succeeded, how long missions took, command latency, how busy each robot was, problems recorded, battery change over the last two hours. Each figure says how many records it came from and is empty (null) when there are none: say “no data”, never 0% or 100%. Say which robots are simulations.", { days: { type: "number" } }, (args) => ({ days: num(args.days) })),
   {
+    name: "robot_reassign",
+    description: `Give a movement task that did NOT finish (failed, cancelled, refused, expired or lost) to a different robot. Only when the user asks for it: nothing is reassigned by itself. HANNAH chooses the other robot as for any new task, checked against its state now, and the user approves that robot by name. A mission that is still running or that succeeded can't be reassigned; the tool says so. If no other robot can take it, tell the user each robot's reason.${MOVES}`,
+    inputSchema: { type: "object", properties: { missionId: { type: "string", description: "The mission that didn't finish. Leave out for the robot's latest." }, robot: robotProp, among: { type: "string", description: "Only consider this robot. Optional." } } }, asksUser: true,
+    execute: async (args) => {
+      const record = await Operator.perform("robots.reassign", compact({ mission: str(args.missionId), robot: str(args.robot), among: str(args.among) }), { agent: "Robot agent" });
+      const result = toolResult(record) as Record<string, unknown>;
+      const missionId = (record.response as { missionId?: string } | null)?.missionId;
+      return record.status === "done" || record.status === "unverified" ? { ...result, missionId, next: "The other robot has only been told to start. Call robot_wait_for_mission with this missionId." } : result;
+    },
+  },
+  {
     name: "robot_resume",
     description: `Carry on with a paused mission from where the robot stands.${MOVES}`,
     inputSchema: { type: "object", properties: { robot: robotProp, missionId: { type: "string" } } }, asksUser: true,

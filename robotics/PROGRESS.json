@@ -689,7 +689,10 @@
    "stage": "5",
    "feature": "Voice requests for robots",
    "status": "IMPLEMENTED",
-   "note": "Robot tools are offered on the existing voice path. Never tested with speech."
+   "note": "Robot tools are on the same path a voice turn uses, and a test checks that the sentences a person would say bring the right tools. Speech recognition with a robot request has not been exercised.",
+   "tests": [
+    "client/src/__tests__/Robotics.test.ts"
+   ]
   },
   {
    "id": "5.4",
@@ -922,7 +925,7 @@
   {
    "id": "7.7",
    "stage": "7",
-   "feature": "Resilience: offline robots never commanded; no automatic reassignment",
+   "feature": "Resilience: offline robots never commanded; an unfinished task handed on only when asked, and revalidated",
    "status": "VERIFIED",
    "where": [
     "server"
@@ -931,7 +934,7 @@
     "server/robotics.test.js",
     "server/robotics.fleet.test.js"
    ],
-   "note": "Reassignment is deliberately manual: a new assignment is a new, checked, approved request."
+   "note": "robots.reassign: the first mission must be over and not succeeded; another robot is chosen and checked against its state now and approved by name. Never automatic."
   },
   {
    "id": "7.8",
@@ -986,9 +989,10 @@
     "browser"
    ],
    "tests": [
-    "e2e/robotics.spec.ts"
+    "e2e/robotics.spec.ts",
+    "client/src/__tests__/LandingContent.test.ts"
    ],
-   "note": "Robots screen with registry, live view, commissioning, destinations, surroundings, camera, plans, arm, fleet, figures, condition. No hardware-in-the-loop label: nothing produces such data."
+   "note": "Robots screen with registry, live view, commissioning, destinations, surroundings, camera, plans, arm, fleet, figures, condition. The website and README describe it with a real screenshot of a simulated trip. No hardware-in-the-loop label: nothing produces such data."
   },
   {
    "id": "D2a",

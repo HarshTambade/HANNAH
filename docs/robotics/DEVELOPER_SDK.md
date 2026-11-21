@@ -69,6 +69,7 @@ All under `/api`. An account session or a developer key unless marked; **(person
 | `GET /robots/plans`, `/robots/plans/:id`; `GET /robots/:id/templates` | Plans with every step's outcome; the templates a robot can run |
 | `POST /robots/:id/plans` | Start a plan (`{ template, inputs }` or `{ steps }`). An action; may answer 202 waiting for approval |
 | `POST /robots/plans/:id/cancel` | Never needs approval |
+| `POST /actions` with `robots.reassign` | Hand an unfinished movement task to another robot; chosen, checked and approved as a new task |
 | `GET /robots/analytics?days=7` | Fleet figures from stored records |
 | `PATCH /robots/:id` with `{ camera: { enabled, retentionHours } }` **(person)** | Switch camera use on or off for a robot |
 | `GET /robots/:id/images` | Stored pictures, without image data |

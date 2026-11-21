@@ -96,7 +96,7 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | 5.1 | Robot agent: intent, robot selection, capability and destination resolution, checks, execution, verification | VERIFIED | unit, browser | `Robotics.test.ts`, `robotics.spec.ts` | Tested with a scripted server. No live model run (B6). |
 | 5.2a | Mission lifecycle: create, check, approve, execute, pause, resume, cancel, verify, history | VERIFIED | server, sim | `robotics.test.js`, `robotics.stage2.test.js`, `robotics.sim.test.js` |  |
 | 5.2b | Multi-step plans with checkpoints and sequential steps | VERIFIED | server, sim, browser | `robotics.plans.test.js`, `robotics.plans.pglite.test.js`, `robotics.sim.test.js`, `robotics.arm.sim.test.js`, `robotics.spec.ts` | Simulated robots only: a physical robot is refused a plan that moves it. No conditions, branches or retries. |
-| 5.3 | Voice requests for robots | IMPLEMENTED | — | — | Robot tools are offered on the existing voice path. Never tested with speech. |
+| 5.3 | Voice requests for robots | IMPLEMENTED | — | `Robotics.test.ts` | Robot tools are on the same path a voice turn uses, and a test checks that the sentences a person would say bring the right tools. Speech recognition with a robot request has not been exercised. |
 | 5.4 | Specialist agents: Robot, Fleet, Manipulation, Robot care | VERIFIED | unit | `Robotics.test.ts` | Navigation, Perception and Verification are not separate agents: the server verifies, and the Safety Gateway (code, not a model) decides. |
 | 5.5 | Mission templates, offered only when the robot has the hardware | VERIFIED | server, sim | `robotics.plans.test.js`, `robotics.arm.sim.test.js`, `robotics.sim.test.js` | Four templates: go and return, inspection route, pick and place, status report. |
 | 5.6 | Robotics memory: destinations, configuration, mission and maintenance history | VERIFIED | server | `robotics.stage2.test.js` | Stored in the registry and always read from current records. Nothing is kept in the model's own memory. |
@@ -125,7 +125,7 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | 7.5b | Mission queues | VERIFIED | server | `robotics.plans.test.js` | A queue of plans per robot with priorities. No queue shared between robots. |
 | 7.5c | Traffic coordination between robots in motion | NOT_STARTED | — | — | A destination reservation exists; routes are not coordinated. |
 | 7.6 | Fleet agent | VERIFIED | unit | `Robotics.test.ts` |  |
-| 7.7 | Resilience: offline robots never commanded; no automatic reassignment | VERIFIED | server | `robotics.test.js`, `robotics.fleet.test.js` | Reassignment is deliberately manual: a new assignment is a new, checked, approved request. |
+| 7.7 | Resilience: offline robots never commanded; an unfinished task handed on only when asked, and revalidated | VERIFIED | server | `robotics.test.js`, `robotics.fleet.test.js` | robots.reassign: the first mission must be over and not succeeded; another robot is chosen and checked against its state now and approved by name. Never automatic. |
 | 7.8 | Fleet analytics from real records | VERIFIED | unit, server, browser | `robotics.fleet.test.js`, `robotics.plans.test.js`, `robotics.spec.ts` | A figure with no records behind it is empty, not zero. |
 | 7.9a | Fleet API: registration, status, capabilities, missions, cancel, allocation, telemetry, diagnostics, events | VERIFIED | server | `robotics.test.js`, `robotics.stage2.test.js`, `robotics.fleet.test.js` |  |
 | 7.9b | Webhooks | VERIFIED | server | `robotics.plans.test.js` | Mission finished, plan finished and robot alert go to the account's existing signed webhooks and can start a workflow. Best effort, not retried. |
@@ -134,7 +134,7 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 
 | # | Requirement | Status | Verified at | Tests | Note |
 |---|---|---|---|---|---|
-| D1 | One robotics interface in the existing app, simulation and physical labelled | VERIFIED | browser | `robotics.spec.ts` | Robots screen with registry, live view, commissioning, destinations, surroundings, camera, plans, arm, fleet, figures, condition. No hardware-in-the-loop label: nothing produces such data. |
+| D1 | One robotics interface in the existing app, simulation and physical labelled | VERIFIED | browser | `robotics.spec.ts`, `LandingContent.test.ts` | Robots screen with registry, live view, commissioning, destinations, surroundings, camera, plans, arm, fleet, figures, condition. The website and README describe it with a real screenshot of a simulated trip. No hardware-in-the-loop label: nothing produces such data. |
 | D2a | HTTP API for robots | VERIFIED | server | `robotics.test.js`, `robotics.stage2.test.js`, `robotics.plans.test.js` |  |
 | D2b | Typed SDK for the robot API | VERIFIED | server | `robotics.sdk.test.js` | JavaScript, typed, no dependencies, in the repository (not published). No Python client. |
 | D3a | Signed robot packages: manifest, signature, integrity, permission review | VERIFIED | unit | `robotics.packages.test.js` |  |

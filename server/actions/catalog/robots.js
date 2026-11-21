@@ -177,7 +177,9 @@ function robotActions({ robotics }) {
         const capabilityId = String(raw?.task || raw?.capability || "navigate_to");
         if (!tasks[capabilityId]) throw fail(400, `A robot can be assigned: ${Object.keys(tasks).join(", ")}.`, "bad-request");
         const task = { capability: capabilityId, ...(await inner(capabilityId).normalize(raw || {}, ctx)) };
-        const [robots, active] = await Promise.all([robotics.listRobots(ctx.db, ctx.userId), robotics.listMissions(ctx.db, ctx.userId, { active: true, limit: 100 })]);
+        const [everyRobot, active] = await Promise.all([robotics.listRobots(ctx.db, ctx.userId), robotics.listMissions(ctx.db, ctx.userId, { active: true, limit: 100 })]);
+        // A task handed on from another robot: that robot is left out, and bare coordinates only mean the same place on the same map.
+        const robots = everyRobot.filter((robot) => robot.id !== raw?.exclude && (!raw?.sameMapAs || robot.mapName === raw.sameMapAs));
         const choice = fleet.choose({ robots, task, active, only: clip(raw?.among, 80) });
         if (!choice.chosen) throw fail(409, choice.problem || (choice.considered.length ? `No robot can take that now. ${choice.considered.map((entry) => `${entry.name}: ${entry.reason}`).join("; ")}.` : "You have no robots."), choice.conflict ? "conflict" : "no-robot-available", { candidates: choice.considered });
         const { capability: _capability, robot: _robot, ...rest } = task;
@@ -331,6 +333,50 @@ function robotActions({ robotics }) {
     return { plan, robot };
   }
 
+  /**
+   * Hand a task that didn't finish to another robot. Never automatic: a person
+   * or an agent asks for it, the original mission must be over and must not
+   * have succeeded, another robot is chosen and checked as for any new task
+   * against its state now, and the person approves that robot by name.
+   */
+  function reassignAction() {
+    const NOT_DONE = ["failed", "cancelled", "rejected", "expired", "timed-out", "lost", "unverified"];
+    const bare = ({ from: _from, ...rest }) => rest;
+    return {
+      ...assign,
+      id: "robots.reassign", title: "Give an unfinished task to another robot", needs: "A mission that ended without succeeding, and another robot that can take it",
+      description: "Take a movement mission that failed, was cancelled, was refused, expired or was lost, and give the same task to a different robot. The other robot is chosen and checked exactly as for a new task, against its state now: connected, ready, commissioned if physical, not busy, with that destination on its own map. A mission that is still running or that succeeded can't be reassigned. Nothing is reassigned by itself.",
+      input: { type: "object", properties: { mission: { type: "string", description: "The mission that didn't finish. Leave out for the robot's latest." }, robot: ROBOT, among: { type: "string", description: "Only consider this robot (name or id). Optional." } }, required: [] },
+      async normalize(raw, ctx) {
+        let mission;
+        if (raw?.mission) mission = await robotics.getMission(ctx.db, ctx.userId, clip(raw.mission, 40));
+        else {
+          const from = await robotics.resolveRobot(ctx.db, ctx.userId, clip(raw?.robot, 80));
+          mission = (await robotics.listMissions(ctx.db, ctx.userId, { robotId: from.id, limit: 10 })).find((item) => item.capability !== "stop_motion");
+          if (!mission) throw fail(404, `${from.name} has no mission to hand on.`, "not-found");
+        }
+        if (!mission.final) throw fail(409, "That mission is still under way. Cancel it first, or wait for it to end.", "still-running");
+        if (!NOT_DONE.includes(mission.status)) throw fail(409, "That mission succeeded; there is nothing to hand on.", "already-done");
+        if (!["navigate_to", "return_to_dock", "inspect_area"].includes(mission.capability)) throw fail(400, "Only a driving task can be given to another robot.", "bad-request");
+        const original = await robotics.getRobot(ctx.db, ctx.userId, mission.robotId).catch(() => null);
+        // A named place is looked up on each robot's own map. Bare coordinates only mean the same spot on the same map.
+        const point = ({ place, x, y }) => (place && place !== "dock" ? { place } : { x, y });
+        const named = mission.capability === "inspect_area" ? (mission.params.waypoints || []).every((item) => item.place) : Boolean(mission.params.place);
+        const task = mission.capability === "navigate_to" ? point(mission.params) : mission.capability === "inspect_area" ? { waypoints: (mission.params.waypoints || []).map(point) } : {};
+        const chosen = await assign.normalize({ task: mission.capability, ...task, among: raw?.among, exclude: mission.robotId, ...(named || mission.capability === "return_to_dock" ? {} : { sameMapAs: original?.mapName || "" }) }, ctx);
+        return { ...chosen, from: { mission: mission.id, robot: original?.name || "a removed robot", status: mission.status, reason: clip(mission.error || mission.verification?.evidence || "", 200) } };
+      },
+      assess: (params, ctx) => assign.assess(bare(params), ctx),
+      async preview(params, ctx, assessed) {
+        const base = await assign.preview(bare(params), ctx, assessed);
+        return { ...base, lines: [{ label: "Instead of", value: `${params.from.robot}, whose mission ended as ${params.from.status}${params.from.reason ? `: ${params.from.reason}` : ""}` }, ...base.lines] };
+      },
+      async execute(params, ctx) { return { ...(await assign.execute(bare(params), ctx)), reassignedFrom: params.from }; },
+      verify: (response, params, ctx) => assign.verify(response, bare(params), ctx),
+    };
+  }
+
+  const assign = assignAction();
   const missions = [
     missionAction({ capabilityId: "navigate_to", title: "Drive a robot to a place", describe: (sent) => `drives to ${pointText(sent)}` }),
     missionAction({ capabilityId: "return_to_dock", title: "Send a robot to its dock", describe: (sent) => `returns to its dock at (${round(sent.x)}, ${round(sent.y)})` }),
@@ -487,7 +533,8 @@ function robotActions({ robotics }) {
         return { confirmed: false, evidence: missionText(mission, response.robot.name) };
       },
     },
-    assignAction(),
+    assign,
+    reassignAction(),
     planAction(),
     readAction({
       id: "robots.plan", title: "Check a robot plan", description: "A plan's status and every step's outcome: what was sent, what the robot reported, how it was verified, what an observation recorded, and which steps were not run. Without a plan id, the robot's current or latest plan.", input: { plan: { type: "string", description: "The plan id." }, robot: ROBOT },

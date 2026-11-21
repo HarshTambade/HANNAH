@@ -35,3 +35,22 @@ describe("landing model and agent content", () => {
     expect(AGENTS.computer.find((item) => item.name === "Desktop tasks from workflows")?.status).toBe(REGISTRY.get("device.browser")!.status);
   });
 });
+
+describe("landing robotics content", () => {
+  it("names only capabilities the robot contract has as implemented, and keeps saying it is simulation only", async () => {
+    const { ROBOTICS, FAQS, ROADMAP, CAPABILITIES } = await import("../content/landing");
+    const contract = require("../../../server/robotics/contract.js") as { capability: (id: string) => { status: string } | undefined };
+    for (const item of ROBOTICS.capabilities) expect(contract.capability(item.id)?.status, `${item.label} (${item.id})`).toBe("implemented");
+    // Nothing on the site may read as if a physical robot had been driven.
+    expect(ROBOTICS.status).toBe("beta");
+    expect(ROBOTICS.limits.join(" ")).toMatch(/built-in simulators/);
+    expect(ROBOTICS.limits.join(" ")).toMatch(/No physical robot has been connected/);
+    expect(ROBOTICS.limits.join(" ")).toMatch(/not safety-certified.*not an emergency stop/);
+    expect(FAQS.find((item) => item.q === "Can HANNAH control a robot?")?.a).toMatch(/on real hardware, not yet/);
+    expect(ROADMAP.some(([title]) => /Gazebo and on real hardware/.test(title))).toBe(true);
+    expect(CAPABILITIES.find((item) => /Robots/.test(item.title))?.description).toMatch(/not yet run on a physical robot/);
+    // The steps a commissioning needs, as the site says them.
+    const { ORDER } = require("../../../server/robotics/commissioning.js") as { ORDER: string[] };
+    expect(ROBOTICS.also.join(" ")).toContain(["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][ORDER.length] + " checks");
+  });
+});
