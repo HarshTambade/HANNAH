@@ -78,4 +78,13 @@ Removing a robot deletes its missions, events and telemetry. The Action Engine's
 | `hannah_robot_missions.pause_requested_at`, `resume_requested_at`, `paused_at`, `control_nonce` | Pause and resume. A mission's status can also be `paused` |
 | `hannah_robot_maintenance` | A maintenance log: time, kind, note |
 
+## Added by migration 20
+
+| Where | What |
+|---|---|
+| `hannah_robot_plans` | A plan: robot, title, template, status, the step in hand, priority, the action that approved it, when it must have started by, and its steps as a JSON list. Each step keeps what was asked, what was sent after the Safety Gateway, its mission, its times, what an observation recorded, the evidence and any error |
+| `hannah_robot_missions.plan_id` | The plan a mission is a step of |
+
+Plans are kept until the robot is removed.
+
 Not stored anywhere: maps themselves (the robot holds its map; HANNAH stores an outline for display and the map's name), sensor recordings, camera images, firmware metadata. There is no object storage or time-series database for robots.

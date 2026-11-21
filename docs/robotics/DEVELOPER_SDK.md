@@ -66,6 +66,10 @@ All under `/api`. An account session or a developer key unless marked; **(person
 | `POST /robots/missions/:id/cancel`, `/pause` | Never need approval |
 | `POST /robots/missions/:id/resume` | An action; may answer 202 waiting for approval |
 | `POST /robots/:id/stop` | Never needs approval |
+| `GET /robots/plans`, `/robots/plans/:id`; `GET /robots/:id/templates` | Plans with every step's outcome; the templates a robot can run |
+| `POST /robots/:id/plans` | Start a plan (`{ template, inputs }` or `{ steps }`). An action; may answer 202 waiting for approval |
+| `POST /robots/plans/:id/cancel` | Never needs approval |
+| `GET /robots/analytics?days=7` | Fleet figures from stored records |
 | `POST /actions` with `robots.*` | Start anything that moves a robot: goes through permission, the Safety Gateway and approval |
 | `POST /robots/enroll`, `POST /robots/device/sync` | The robot itself: a one-time code, then signed requests |
 

@@ -1,6 +1,6 @@
 # HANNAH Robotics — where each stage stands
 
-Updated 2026-11-21. One rule for reading this page: **"verified" always says where.** Nothing has run in Gazebo, with ROS 2, or on a physical robot. HANNAH is not safety-certified.
+Updated 2026-11-21. The requirement-by-requirement record is [ROBOTICS_PROGRESS.md](./ROBOTICS_PROGRESS.md). One rule for reading this page: **"verified" always says where.** Nothing has run in Gazebo, with ROS 2, or on a physical robot. HANNAH is not safety-certified.
 
 | State | Meaning |
 |---|---|
@@ -22,7 +22,7 @@ Updated 2026-11-21. One rule for reading this page: **"verified" always says whe
 
 | Stage | What | State |
 |---|---|---|
-| **1. Audit and foundation** | Audit, registry, device model, capability registry, mission and state models, adapter interface, Safety Gateway, telemetry, audit history, migrations 18 and 19 | **Verified (server)** and **(sim)** |
+| **1. Audit and foundation** | Audit, registry, device model, capability registry, mission and state models, adapter interface, Safety Gateway, telemetry, audit history, migrations 18 to 20 | **Verified (server)** and **(sim)** |
 | **2. ROS 2, Gazebo, navigation** | Built-in differential-drive simulation: planning, obstacle avoidance, re-planning, recovery when a blocked route clears, cancel, pose verification; a home world with rooms and doorways; five scenarios | **Verified (sim)** |
 | | Destination management: names bound to a map and frame, validated, approved | **Verified (server)** |
 | | ROS 2 adapter (topics, tf, Nav2 action, feedback, cancel), watchdog node, Gazebo robot model with lidar, world, bridge, launch, container | **Written, not run** |
@@ -34,15 +34,18 @@ Updated 2026-11-21. One rule for reading this page: **"verified" always says whe
 | **4. Physical hardware** | Commissioning: seven steps with server-checked evidence, trial mode, withdrawal on hardware change | **Verified (server)** with a stand-in. No hardware |
 | | Adapter contract for a ROS 2 robot | **Written, not run** |
 | | micro-ROS, embedded controllers, CAN, serial buses, motor controllers, battery systems, hardware-in-the-loop tests | **Not started** |
-| **5. Agents, voice, missions** | Four robot agents (Robot, Fleet, Manipulation, Robot care) with 21 tools; requests routed to robot tools | **Verified** by client tests with a scripted server. No live model run |
+| **5. Agents, voice, missions** | Four robot agents (Robot, Fleet, Manipulation, Robot care) with 26 tools; requests routed to robot tools | **Verified** by client tests with a scripted server. No live model run |
 | | Mission lifecycle: create, check, approve, execute, feedback, pause, resume, cancel, verify, history; durable records | **Verified (sim)** |
-| | Multi-step mission planning, checkpoints, automatic failure recovery, robot memories (maps, preferences) | **Not started**. Multi-step plans come only from the existing Team orchestrator |
+| | Plans: several steps under one approval, each step checked again when sent and kept as a checkpoint with its evidence; templates offered only for hardware the robot has; a queue per robot | **Verified (sim)** and **(server)**. Simulated robots only: a physical robot is refused a plan that moves it |
+| | Conditions and branches in a plan, retries, automatic failure recovery | **Not started**, on purpose for now: a failed step is reported, not worked around |
 | | Voice | Uses the existing voice path into the same tools. **Not tested** for robot requests |
 | | Navigation, Perception, Maintenance and Verification as separate agents | Folded into the agents below and the server's own verification. There are four robot agents: Robot, Fleet, Manipulation, Robot care |
 | **6. Arms and manipulation** | A three-joint planar arm in a built-in simulator: kinematics, joint limits, collision-checked motion, a gripper with feedback; move, grasp and release as approved, verified steps; a pick and place | **Verified (sim)** — the built-in arm simulator, not MoveIt 2 |
 | | MoveIt 2, a planning scene from sensors, trajectory controllers, real grippers, object localization, grasp validation, Gazebo manipulation | **Not started** |
 | **7. Fleet** | Overview, choosing a robot with reasons, one-spot reservation, approval of the chosen robot | **Verified (server)**; browser test with two simulated robots |
-| | Mission queues, priorities, traffic management, shared-resource scheduling | **Not started** |
+| | A queue of plans per robot, with priorities | **Verified (server)** |
+| | Fleet figures from stored records: outcomes, verified success, durations, command and stop latency, busy time, problems | **Verified (server)**, shown in a browser test |
+| | Traffic management, a queue shared between robots, shared-resource scheduling, re-assignment | **Not started** |
 | **8. Industrial and IoT** | Home Assistant, MQTT, Modbus, OPC UA, PLCs, CAN | **Not started.** Any future connector must be an Action Engine action; PLC writes will not be model tools |
 | **9. Digital twin** | One world file for the simulator, the Gazebo world and the Nav2 map; scenario files; reset per run; regression runner; ground truth against the robot's estimate | **Verified (sim)**; the Gazebo side written, not run |
 | | Recorded real runs replayed in simulation; configuration versioning beyond a counter | **Not started** |
@@ -69,8 +72,8 @@ Each item of the stage 1 list, where it lives, and what proves it. Checked again
 | Robotics Safety Gateway interface | `server/robotics/safety.js` `check()`; runtime `safety.py` `LocalSafety.check()` | `robotics.test.js`, `test_safety.py` |
 | Telemetry data model | Table `hannah_robot_telemetry`: one sample every three seconds, two hours kept | `robotics.sim.test.js`, from a real runtime's reports |
 | Robotics audit events | Table `hannah_robot_events`; every robot action is also an Action Engine record with who asked and who approved | `robotics.test.js` |
-| Database migrations | 18 and 19 in `server/db/migrations.js`, additive | The robotics integration suites run on SQLite and on embedded Postgres (`*.pglite.test.js`) |
-| API contracts | `server/robotics/router.js`: 2 device routes, 26 account routes; `GET /api/robots/contract` returns the capability contract; listed in DEVELOPER_SDK.md | `robotics.test.js`, `e2e/robotics.spec.ts` |
+| Database migrations | 18, 19 and 20 in `server/db/migrations.js`, additive | The robotics integration suites run on SQLite and on embedded Postgres (`*.pglite.test.js`) |
+| API contracts | `server/robotics/router.js`: 2 device routes, 32 account routes; `GET /api/robots/contract` returns the capability contract; listed in DEVELOPER_SDK.md | `robotics.test.js`, `e2e/robotics.spec.ts` |
 | Dashboard integration | The Robots screen, `/robotics`, in the existing shell | `Robotics.test.ts`, `e2e/robotics.spec.ts`, and the screens, interactions and accessibility specs |
 
 Stage 1 asks for no physical hardware control, no arm execution and no fleet deployment. None exists: the arm and fleet work listed under stages 6 and 7 runs only against the built-in simulators, and a physical robot is refused movement until a person has commissioned it.

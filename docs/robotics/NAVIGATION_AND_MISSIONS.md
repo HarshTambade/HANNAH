@@ -35,6 +35,42 @@ Missions are rows in the database (`hannah_robot_missions`), so they survive a s
 
 Not built: mission queues, multi-step missions with checkpoints, automatic retry or recovery behaviours beyond re-planning.
 
+## Plans: several steps under one approval
+
+A plan is a list of steps on one robot that a person reads and approves once. `robots.run_plan` (tool `robot_run_plan`), `POST /api/robots/:id/plans`, and "Plans" on the Robots screen. Verified with the built-in simulators (an inspection route, a pick and place); not with ROS 2 or hardware.
+
+| A step is | Examples | What happens when it is reached |
+|---|---|---|
+| A capability that starts a mission | `navigate_to`, `return_to_dock`, `inspect_area`, `set_supported_device_state`, `move_robot_arm`, `grasp_object`, `release_object` | The Safety Gateway checks it against the robot as it is then; a signed command is sent; the mission is verified as any other |
+| An observation | `report_surroundings`, `read_sensor`, `report_battery_state`, `report_robot_state` | Nothing is sent. What the robot reported in that same exchange is recorded, with its time and whether it is a simulation |
+
+Nothing else can be a step. There are no conditions, loops or expressions: a plan is not a program.
+
+**Rules**
+
+- Every step is checked when the plan is asked for, and a plan with a step that can't be valid is refused with the step named. A refusal that an earlier step exists to change (the gripper is empty before the grasp step has run) is left for the moment the step is reached.
+- Every step is checked again when it is sent. A test shows a plan stopping at step 2 because the emergency stop engaged after step 1.
+- The plan stops at the first step that doesn't finish and verify. The steps after it are marked "not run". Nothing is retried.
+- One step at a time. The next step is sent in the same exchange in which the robot reports the one before as finished, so the robot is never idle between two steps of a plan, and it is refused any other movement while the plan runs.
+- **A physical robot is refused any plan that moves it.** Each of its movements is approved by itself. A plan of observations only, which sends it nothing, is allowed. This stays until there is evidence from supervised hardware runs.
+- A plan containing an arm or gripper step always asks, at every permission level.
+- Stopping the robot ends its plan and drops every plan waiting behind it. Cancelling a plan (`robots.cancel_plan`) never needs approval.
+
+**The queue.** A robot runs one plan at a time. A plan asked for while the robot is busy waits, by priority (1–5) and then by age; at most five wait per robot. A waiting plan that hasn't started within its time (15 minutes by default, 120 at most) is dropped, not started late. When a plan fails, the plans waiting behind it are dropped too: whatever stopped it hasn't been looked at.
+
+**Statuses:** queued → running → succeeded | failed | cancelled; expired (never started). A plan whose robot stops reporting ends as failed with "outcome unknown", never as done.
+
+**Templates** expand into explicit steps before anything is checked, so the approval card shows steps, not a template name. `GET /api/robots/:id/templates` says which a robot can run and why not otherwise.
+
+| Template | Steps | Needs |
+|---|---|---|
+| `go_and_return` | Drive to a destination; return to the dock | A mobile robot with a dock |
+| `inspection_route` | At each destination: drive there, record what the range sensor detects, optionally read a sensor; then return to the dock | A mobile robot that reports surroundings |
+| `pick_and_place` | Move the arm to where **the robot reports** the object, grasp, move to a named pose, release, go home | An arm with a gripper |
+| `status_report` | Record state and battery. Sends nothing | Any robot |
+
+**Not built:** conditions and branches, retries, a plan across several robots, plans for physical robots, editing a running plan.
+
 ## What the simulator's navigator does
 
 - Plans with A* on a grid inflated by the robot's radius; follows the path; slows near the goal; turns to a requested heading.

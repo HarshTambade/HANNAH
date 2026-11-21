@@ -22,10 +22,27 @@ The answer lists every robot considered: the one chosen and why, and for each ot
 
 A goal within 0.8 m of where another robot **on the same map** is already heading is refused as a conflict. The same coordinates on different maps are different places.
 
-That is the whole of the coordination. **Not built:** route reservation, right-of-way in corridors and doorways, queues and priorities, re-assignment when a robot fails, charging schedules. Two robots can be sent through the same corridor at the same time, and each will treat the other as an obstacle its range sensor sees. Do not rely on HANNAH to keep robots apart.
+Each robot also has its own queue of plans, with priorities (NAVIGATION_AND_MISSIONS.md). That is the whole of the coordination. **Not built:** route reservation, right-of-way in corridors and doorways, a queue shared between robots, re-assignment when a robot fails, charging schedules. Two robots can be sent through the same corridor at the same time, and each will treat the other as an obstacle its range sensor sees. Do not rely on HANNAH to keep robots apart.
 
 ## Condition and maintenance
 
 `robots.diagnostics` (tool `robot_diagnostics`), `GET /api/robots/:id/diagnostics`, and "Condition" on the screen: findings from what the robot reported and what was recorded — a sensor not reporting, an active fault, battery, link losses in the last day, refused commands, missions that didn't finish, drift of the position estimate (simulator), commissioning, software versions, the last maintenance entry. Each finding states its evidence. A recommendation is a fixed rule attached to a finding. No model is asked to judge a robot's condition, and nothing predicts a failure.
 
 A maintenance log per robot (inspection, repair, replacement, calibration, note) is written by a signed-in person.
+
+## Figures
+
+`robots.analytics` (tool `robot_analytics`), `GET /api/robots/analytics?days=7`, and "Figures" on the Robots screen. Computed from stored mission, plan, event and telemetry records each time they are asked for; nothing is estimated and nothing is cached.
+
+| Figure | From | Note |
+|---|---|---|
+| Missions started, ended, by outcome | Mission records in the period (1 to 30 days) | Stops are left out: a stop is a control, not a task |
+| Verified as succeeded | Missions the server verified from the robot's reported state, over all that ended | Cancelled, failed, refused and lost count as not succeeded |
+| Typical and longest duration | Acceptance to result, succeeded missions | |
+| Command latency, median and 95th percentile | The server issuing a command to the robot's acceptance reaching the server | Includes the exchange interval (about a second) |
+| Stop latency | A stop being asked for to its confirmation by measured speed | |
+| Busy | Time on missions that move the robot, over the period | |
+| Problems recorded | Events: faults, emergency stops, link losses, refused commands, failed plans | |
+| Reporting share, battery change | Telemetry samples | Last two hours only: that is how long telemetry is kept |
+
+Every figure carries the number of records behind it. With none, it is empty and the screen says "no data": an empty history is neither 0% nor 100%. Simulated robots are labelled; their figures say nothing about hardware. There are no targets, scores or predictions.

@@ -28,6 +28,9 @@ Robotics, Block 1: the foundation for HANNAH to work with robots. Proven end to 
 - **Manipulation in simulation.** A built-in planar arm simulator (not MoveIt 2 or Gazebo) with kinematics, joint limits, collision-checked motion and a gripper with feedback; `move_robot_arm`, `grasp_object` and `release_object` with a runtime, both gateways and verification from joint and gripper feedback; an arm view and a Manipulation agent. Arm steps ask every time. A pick and place is verified end to end.
 - **Signed robot packages:** a manifest with every file's hash and an Ed25519 signature, a verifier and a command-line tool. Verifying installs nothing.
 - Migration 19. Requests in one robot's name are rate-limited.
+- **Plans.** Several steps on one robot under one approval that lists every step: drive, record what the sensors detect, read a sensor, move an arm, grasp, release. Each step meets the Safety Gateway again when it is sent and is kept with its evidence; the plan stops at the first step that doesn't finish, and nothing is retried. Four templates, offered only when the robot has the hardware. A queue per robot with priorities; a plan that can't start in time is dropped. A physical robot is refused a plan that moves it. Stopping a robot ends its plan and drops what was waiting. Migration 20.
+- **Fleet figures** from stored records: how missions ended, the share verified as succeeded, durations, command and stop latency, busy time, problems recorded. A figure with no records behind it reads "no data".
+- Five more robot tools (26) and a tracker of every requirement's real state, [`robotics/ROBOTICS_PROGRESS.md`](./robotics/ROBOTICS_PROGRESS.md).
 
 ### Not done
 
