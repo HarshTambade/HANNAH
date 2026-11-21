@@ -196,11 +196,11 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 ## Last full verification
 
 - date: 2026-11-21
-- server: 532 tests: 531 passed, 1 skipped (older), 0 failed; lint clean
+- server: 533 tests: 532 passed, 1 skipped (older), 0 failed; lint clean
 - runtime: 105 passed on Python 3.14.6 and 3.9.6; 5 of 5 scenarios; generated world files current
-- client: 409 passed; typecheck clean; lint 0 errors
+- client: 412 passed; typecheck clean; lint 0 errors
 - browser: 112 of 112, the whole suite on the final build (robotics spec 11 of 11)
-- robotics tests: 241 in all: unit, integration (SQLite and embedded Postgres), simulation and browser
+- robotics tests: 244 in all: unit, integration (SQLite and embedded Postgres), simulation and browser
 
 ## To resume
 

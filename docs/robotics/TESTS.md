@@ -88,9 +88,9 @@ Each suite run alone, on the final code.
 
 | Check | Result |
 |---|---|
-| Server tests (`npm test` in `server`) | 532 tests: 531 passed, 1 skipped (an older skip), 0 failed |
+| Server tests (`npm test` in `server`) | 533 tests: 532 passed, 1 skipped (an older skip), 0 failed |
 | Browser suite (`npm run test:e2e` in `client`), whole, on the final build | 112 passed |
-| Client tests (`npm test` in `client`) | 409 passed, and 43 desktop-tool tests |
+| Client tests (`npm test` in `client`) | 412 passed, and 43 desktop-tool tests |
 | Runtime tests | 105 passed, on Python 3.14.6 and 3.9.6; 5 of 5 scenarios |
 | Client typecheck, client lint, server lint | Clean (3 older lint warnings in the workflow builder) |
 | Secret scan | No findings |
