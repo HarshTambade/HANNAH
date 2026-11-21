@@ -1,0 +1,21 @@
+[project]
+name = "hannah-robot"
+version = "0.1.0"
+description = "HANNAH Robotics Runtime: the program that runs on the robot's own computer."
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+# The ROS 2 adapter uses rclpy, nav2_msgs and the message packages from a
+# sourced ROS 2 installation. They come from ROS, not from PyPI.
+ros2 = []
+
+[project.scripts]
+hannah-robot = "hannah_robot.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["hannah_robot", "hannah_robot.hal"]
