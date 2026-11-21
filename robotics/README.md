@@ -74,4 +74,4 @@ docker run --rm hannah-gazebo
 
 After changing `worlds/workcell.json`, run `python3 tools/build_world.py`.
 
-What works and what doesn't, stage by stage: `docs/robotics/STAGE_STATUS.md`.
+What works and what doesn't, requirement by requirement, with the tests behind each: [`PROGRESS.md`](./PROGRESS.md) (generated from `PROGRESS.json` by `tools/progress.py`).

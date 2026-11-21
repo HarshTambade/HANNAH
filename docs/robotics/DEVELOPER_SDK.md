@@ -79,10 +79,45 @@ All under `/api`. An account session or a developer key unless marked; **(person
 
 Actions: `robots.list`, `state`, `read_sensor`, `battery`, `surroundings`, `destinations`, `mission`, `fleet`, `diagnostics` (reads); `navigate_to`, `return_to_dock`, `inspect_area`, `set_supported_device_state`, `assign`, `resume_mission` (ask); `stop_motion`, `cancel_mission`, `pause_mission` (never ask). Any MCP host or workflow reaches them through the existing `hannah_action` tool and "Do an action" step.
 
-## 6. Running the tests
+## 6. JavaScript client
+
+`robotics/sdk/js` (`index.js`, `index.d.ts`): a small client with no dependencies, for Node 18 or newer and browsers. Tested against the real server with a developer key (`server/robotics.sdk.test.js`). It is not published to a package registry.
+
+```js
+import { HannahRobots } from "./robotics/sdk/js/index.js";
+const robots = new HannahRobots({ baseUrl: "https://your-hannah", apiKey: process.env.HANNAH_KEY });
+
+const record = await robots.navigate("Rover", { place: "workbench" });
+if (record.status === "denied") throw new Error(record.permission.reason);        // refused, with the reason
+const decided = record.status === "waiting-approval" ? await robots.waitForDecision(record.id) : record;   // a person approves in the app
+const mission = await robots.waitForMission(decided.response.missionId, { seconds: 120 });
+if (mission.status !== "succeeded") throw new Error(mission.summary);               // only "succeeded" is a verified arrival
+```
+
+| What a key can do | What it can't |
+|---|---|
+| Read the registry, state, sensors, plans, figures, pictures (opening one is logged) | Approve anything: a movement it asks for waits for a signed-in person |
+| Ask for movements, plans and pictures | Create, enroll, revoke or remove a robot; commission one; switch camera use on; change limits |
+| Stop, pause and cancel, at once | Loosen anything |
+
+A call that moves a robot returns the action's record, never a bare "ok": `done` means the robot accepted the mission. A read that can't be answered throws with the reason.
+
+## 7. Webhooks and workflow triggers
+
+Three events go to the account's webhooks (Settings → Webhooks; signed, https to public addresses only) and can start a workflow (the "HANNAH event" trigger):
+
+| Event | When | Carries |
+|---|---|---|
+| `robot.mission.finished` | A mission ends through the robot's own report. Stops are not announced | Robot, simulation or physical, mission, plan, capability, status, whether it was verified, the evidence, the error |
+| `robot.plan.finished` | A plan ends, however it ends | Robot, plan, status, how many steps there were and succeeded, the step it stopped at, the error |
+| `robot.alert` | The robot itself reports an emergency stop, a fault, a lost link or refused credentials | Robot, type, severity, the robot's message |
+
+Delivery is best effort and is never waited for: a robot's exchange with HANNAH does not depend on someone else's server answering. The record in the database is what counts; a webhook is a notification.
+
+## 8. Running the tests
 
 See TESTS.md. In short: `python3 -m unittest discover -s tests -t .` in `robotics/runtime`; `npm test` in `server`; `npx vitest run` and `npx playwright test robotics.spec.ts` in `client`.
 
-## 7. Not available yet
+## 9. Not available yet
 
-A published Python or JavaScript SDK package; a marketplace section for robot packages; installing or sandboxing packages; a plug-in mechanism for adapters outside the repository (an adapter is added to `hal/` and `profile.py`); webhooks for robot events.
+A published SDK package (the JavaScript client is in the repository, not on a registry; there is no Python client); a marketplace section for robot packages; installing or sandboxing packages; a plug-in mechanism for adapters outside the repository (an adapter is added to `hal/` and `profile.py`); webhooks for robot events.

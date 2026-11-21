@@ -1,6 +1,6 @@
 # Prerequisites for the next stages
 
-> Since this was written, several items listed under "could then build" were built and verified in simulation: destinations managed from the app, pause and resume, perception from the range sensor, fleet assignment, diagnostics and commissioning. STAGE_STATUS.md has the current state. Section 1 below is unchanged and still blocks everything that involves ROS 2, Gazebo or hardware.
+> Since this was written, several items listed under "could then build" were built and verified in simulation: destinations managed from the app, pause and resume, perception from the range sensor, fleet assignment, diagnostics and commissioning. `robotics/PROGRESS.md` has the current state of every requirement. Section 1 below is unchanged and still blocks everything that involves ROS 2, Gazebo or hardware.
 
 ## Original text
 

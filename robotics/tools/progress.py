@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The robotics implementation tracker.
 
-docs/robotics/ROBOTICS_PROGRESS.json is the record: one entry per requirement of
-the master directive, with its real state. This tool checks it and writes the
-page people read, docs/robotics/ROBOTICS_PROGRESS.md.
+robotics/PROGRESS.json is the record: one entry per requirement of the master
+directive, with its real state, plus the milestones and known limitations.
+This tool checks it and writes the page people read, robotics/PROGRESS.md.
 
     python3 tools/progress.py                     write the page
     python3 tools/progress.py --check             exit 1 if the record breaks a rule or the page is out of date
@@ -27,8 +27,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
-RECORD = os.path.join(REPO, "docs", "robotics", "ROBOTICS_PROGRESS.json")
-PAGE = os.path.join(REPO, "docs", "robotics", "ROBOTICS_PROGRESS.md")
+RECORD = os.path.join(REPO, "robotics", "PROGRESS.json")
+PAGE = os.path.join(REPO, "robotics", "PROGRESS.md")
 
 STATUSES = ["NOT_STARTED", "IN_PROGRESS", "IMPLEMENTED", "TESTING", "VERIFIED", "BLOCKED_EXTERNAL_DEPENDENCY"]
 SOFTWARE = {"unit", "server", "sim", "browser"}
@@ -87,7 +87,7 @@ def render(record: dict) -> str:
     lines = [
         "# HANNAH Robotics — implementation tracker",
         "",
-        "Generated from `ROBOTICS_PROGRESS.json` by `robotics/tools/progress.py`. Edit the JSON, not this page.",
+        "Generated from `PROGRESS.json` by `robotics/tools/progress.py`. Edit the JSON, not this page.",
         "",
         f"Updated {record['updated']}. **Nothing here has run in Gazebo, with ROS 2, or on a physical robot.** \"sim\" means HANNAH's own built-in simulators. HANNAH is not safety-certified.",
         "",
@@ -95,6 +95,9 @@ def render(record: dict) -> str:
         "|---|---|---|",
     ]
     lines += [f"| {status} | {count[status]} | {MEANING[status]} |" for status in STATUSES]
+    if record.get("milestones"):
+        lines += ["", "## Milestones", "", "| Milestone | State |", "|---|---|"]
+        lines += [f"| {entry['milestone']} | {entry['state']} |" for entry in record["milestones"]]
     stage = None
     for item in items:
         if item["stage"] != stage:
@@ -107,6 +110,9 @@ def render(record: dict) -> str:
         lines.append(f"| {item['id']} | {item['feature']} | {item['status']} | {', '.join(item.get('where', [])) or '—'} | {tests} | {note} |")
     lines += ["", "## External blockers", "", "| Id | What is missing | What it needs | What it holds up |", "|---|---|---|---|"]
     lines += [f"| {entry['id']} | {entry['what']} | {entry['needs']} | {entry['unblocks']} |" for entry in record["blockers"]]
+    if record.get("limitations"):
+        lines += ["", "## Known limitations", ""]
+        lines += [f"{index}. {text}" for index, text in enumerate(record["limitations"], 1)]
     lines += ["", "## Next unblocked tasks", ""]
     lines += [f"{index}. {task}" for index, task in enumerate(record["next"], 1)] or ["None."]
     lines += ["", "## Last full verification", ""]
@@ -153,7 +159,7 @@ def main() -> int:
     if args.check:
         current = open(PAGE, encoding="utf-8").read() if os.path.exists(PAGE) else ""
         if current != page:
-            print("ROBOTICS_PROGRESS.md is out of date. Run: python3 robotics/tools/progress.py", file=sys.stderr)
+            print("robotics/PROGRESS.md is out of date. Run: python3 robotics/tools/progress.py", file=sys.stderr)
             return 1
         return 0
     with open(PAGE, "w", encoding="utf-8") as handle:

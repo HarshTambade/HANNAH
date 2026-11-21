@@ -18,10 +18,7 @@
    "stage": "1",
    "feature": "Audit of the existing codebase",
    "status": "IMPLEMENTED",
-   "files": [
-    "docs/robotics/BLOCK1_AUDIT.md"
-   ],
-   "note": "A document, so nothing to test."
+   "note": "A document (docs/robotics/BLOCK1_AUDIT.md, in git history). It was deleted from the working tree on 2026-11-21 by something other than this work; whether that was intended is the owner's to say."
   },
   {
    "id": "1.2a",
@@ -545,8 +542,11 @@
    "id": "4.2",
    "stage": "4",
    "feature": "Hardware audit and a bill of materials for a first reference robot",
-   "status": "NOT_STARTED",
-   "note": "There is no robot hardware here."
+   "status": "IMPLEMENTED",
+   "note": "A document: what a first robot must provide, by function. No hardware exists here, so there is nothing to audit and no parts are named.",
+   "files": [
+    "docs/robotics/REFERENCE_ROBOT.md"
+   ]
   },
   {
    "id": "4.3",
@@ -594,9 +594,10 @@
     "server"
    ],
    "tests": [
-    "server/robotics.stage2.test.js"
+    "server/robotics.stage2.test.js",
+    "server/robotics.stage2.pglite.test.js"
    ],
-   "note": "Seven steps, tested with a stand-in robot. No robot has been commissioned."
+   "note": "Eleven steps covering the directive's seventeen checks; where the server can't observe something it records a named person's statement. Tested with a stand-in robot. No robot has been commissioned."
   },
   {
    "id": "4.8a",
@@ -787,7 +788,14 @@
    "id": "6.4b",
    "stage": "6",
    "feature": "Named poses, safe pose, arm state as its own read",
-   "status": "NOT_STARTED"
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "server/robotics.arm.sim.test.js"
+   ],
+   "note": "Named poses are the arm's registered places; its safe pose is the one called home; robots.arm_state reads joints, tool, gripper, poses and objects. No separate open/close-gripper or joint-configuration capability: joint values are never sent."
   },
   {
    "id": "6.5",
@@ -960,7 +968,14 @@
    "id": "7.9b",
    "stage": "7",
    "feature": "Webhooks",
-   "status": "NOT_STARTED"
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/robotics.plans.test.js"
+   ],
+   "note": "Mission finished, plan finished and robot alert go to the account's existing signed webhooks and can start a workflow. Best effort, not retried."
   },
   {
    "id": "D1",
@@ -973,7 +988,7 @@
    "tests": [
     "e2e/robotics.spec.ts"
    ],
-   "note": "No hardware-in-the-loop label yet: nothing produces such data."
+   "note": "Robots screen with registry, live view, commissioning, destinations, surroundings, camera, plans, arm, fleet, figures, condition. No hardware-in-the-loop label: nothing produces such data."
   },
   {
    "id": "D2a",
@@ -993,7 +1008,18 @@
    "id": "D2b",
    "stage": "D",
    "feature": "Typed SDK for the robot API",
-   "status": "NOT_STARTED"
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/robotics.sdk.test.js"
+   ],
+   "files": [
+    "robotics/sdk/js/index.js",
+    "robotics/sdk/js/index.d.ts"
+   ],
+   "note": "JavaScript, typed, no dependencies, in the repository (not published). No Python client."
   },
   {
    "id": "D3a",
@@ -1018,10 +1044,10 @@
    "id": "D4",
    "stage": "D",
    "feature": "Industrial and IoT adapters: Home Assistant, MQTT, Modbus, OPC UA, PLCs, CAN",
-   "status": "NOT_STARTED",
-   "note": "Needs the owner to say which systems exist.",
-   "blockedBy": [
-    "B4"
+   "status": "IMPLEMENTED",
+   "note": "Evaluated in a document; no connector is built. A connector needs a named system and a test instance (B4).",
+   "files": [
+    "docs/robotics/INDUSTRIAL_AND_IOT.md"
    ]
   },
   {
@@ -1088,10 +1114,36 @@
    "note": "Command latency, stop latency, mission duration and verified success, measured from stored records. No ROS, sensor-processing or perception latency: nothing produces them."
   },
   {
-   "id": "F3",
+   "id": "F3a",
    "stage": "F",
-   "feature": "Onboard deployment: install, service, health check, logs",
-   "status": "NOT_STARTED"
+   "feature": "Onboard health check, logs and a deployment guide",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "sim"
+   ],
+   "tests": [
+    "robotics/runtime/tests/test_doctor.py",
+    "server/robotics.sim.test.js"
+   ],
+   "files": [
+    "robotics/runtime/hannah_robot/doctor.py",
+    "docs/robotics/DEPLOYMENT.md"
+   ],
+   "note": "`hannah_robot doctor` checks the computer, moves nothing and makes no signed request."
+  },
+  {
+   "id": "F3b",
+   "stage": "F",
+   "feature": "Running the runtime as a service; installer; updates",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "files": [
+    "robotics/deploy/hannah-robot.service"
+   ],
+   "note": "A systemd unit is written and has never been started. No installer and no automatic updates.",
+   "blockedBy": [
+    "B1"
+   ]
   }
  ],
  "blockers": [
@@ -1133,12 +1185,11 @@
   }
  ],
  "next": [
-  "Named arm poses, a safe pose and an arm-state read (6.4b)",
-  "Commissioning extended to the directive's 17 checks; a reference robot's bill of materials (4.7, 4.2)",
-  "Onboard deployment: a doctor command, a service unit, an install guide (F3)",
-  "A typed SDK for the robot API (D2b)",
-  "An evaluation of industrial and IoT adapters (D4)",
-  "Webhooks, or robot events as workflow triggers (7.9b)"
+  "Run the Gazebo acceptance check (needs B1)",
+  "Nav2 parameters and a ros2_control configuration for the Gazebo robot, once they can be run",
+  "A read-only connector to one named industrial or IoT system (needs B4)",
+  "Conditions and retries in plans, if supervised runs show they are wanted",
+  "A queue shared between robots and route reservation"
  ],
  "lastVerified": {
   "date": "2026-11-21",
@@ -1153,5 +1204,33 @@
   "cd server && npm test",
   "cd robotics/runtime && python3 -m unittest discover -s tests -t .",
   "cd client && npx tsc --noEmit -p . && npm test"
+ ],
+ "milestones": [
+  {
+   "milestone": "1. A sentence → a registered simulated robot → validated destination → permission → goal → **ROS 2 and Nav2 execute it in Gazebo** → real feedback → cancel → independent verification",
+   "state": "Every step except Gazebo and Nav2 is verified with the built-in simulator. The ROS 2 adapter, the Gazebo robot and the container are written and have never been run. **Not met** until the Gazebo acceptance check passes (blocker B1)"
+  },
+  {
+   "milestone": "2. The same on a physical robot, after commissioning",
+   "state": "**Not started.** The commissioning procedure exists and is tested with a stand-in; no robot has been commissioned (blocker B2)"
+  },
+  {
+   "milestone": "3. A second class of hardware (an arm), with a dedicated manipulation integration",
+   "state": "**Partly.** A pick and place, step by step and as one plan, is verified with HANNAH's built-in arm simulator. MoveIt 2 with a real or Gazebo arm is not started (blocker B3)"
+  }
+ ],
+ "limitations": [
+  "Everything runs against simulators written for this project. They are kinematic: no physics, friction, wheel slip, sensor noise models, or the timing of a real machine.",
+  "The planner in the simulator is not Nav2, and the arm simulator is not MoveIt 2. Behaviour in Gazebo and on hardware will differ.",
+  "Position is odometry (drifting) corrected only in the dock. There is no map-based localization in the simulator.",
+  "Perception is range-sensor geometry and regions of colour in a simulated camera's picture. HANNAH cannot say what an object is, and nothing identifies a person.",
+  "The arm simulator is planar, with no dynamics, payload or grasp physics; its objects come from its own scene, not from a camera.",
+  "One robot per runtime; one account per robot; missions of minutes, not hours. HANNAH has no workspaces or organizations.",
+  "Commands reach a robot at its next exchange (about a second). Anything needing a faster reaction belongs to the robot's controller.",
+  "A physical robot's every movement needs approval, and it is refused a plan of several steps. There is no scoped autonomy for hardware.",
+  "The Stop button is a software request. It is not, and cannot be made into, an emergency stop. HANNAH is not safety-certified.",
+  "No live language model has driven the robot agents; their tools and instructions are tested with a scripted server. Voice requests for robots are untested.",
+  "Webhook deliveries for robot events are best effort and are not retried.",
+  "The app's Robots screen is tested in a desktop browser at desktop and phone widths, not on a phone or in the desktop app."
  ]
 }

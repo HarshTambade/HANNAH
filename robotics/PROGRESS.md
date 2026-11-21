@@ -1,23 +1,31 @@
 # HANNAH Robotics — implementation tracker
 
-Generated from `ROBOTICS_PROGRESS.json` by `robotics/tools/progress.py`. Edit the JSON, not this page.
+Generated from `PROGRESS.json` by `robotics/tools/progress.py`. Edit the JSON, not this page.
 
 Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physical robot.** "sim" means HANNAH's own built-in simulators. HANNAH is not safety-certified.
 
 | Status | Count | Meaning |
 |---|---|---|
-| NOT_STARTED | 10 | Nothing exists |
+| NOT_STARTED | 4 | Nothing exists |
 | IN_PROGRESS | 0 | Being built; not usable yet |
-| IMPLEMENTED | 4 | Code exists; it has not been run or has no test that proves it |
+| IMPLEMENTED | 6 | Code exists; it has not been run or has no test that proves it |
 | TESTING | 0 | Tests exist and are not all passing |
-| VERIFIED | 56 | Implemented and its tests pass, at the level named |
-| BLOCKED_EXTERNAL_DEPENDENCY | 17 | Can't go further without something only the owner can provide |
+| VERIFIED | 60 | Implemented and its tests pass, at the level named |
+| BLOCKED_EXTERNAL_DEPENDENCY | 18 | Can't go further without something only the owner can provide |
+
+## Milestones
+
+| Milestone | State |
+|---|---|
+| 1. A sentence → a registered simulated robot → validated destination → permission → goal → **ROS 2 and Nav2 execute it in Gazebo** → real feedback → cancel → independent verification | Every step except Gazebo and Nav2 is verified with the built-in simulator. The ROS 2 adapter, the Gazebo robot and the container are written and have never been run. **Not met** until the Gazebo acceptance check passes (blocker B1) |
+| 2. The same on a physical robot, after commissioning | **Not started.** The commissioning procedure exists and is tested with a stand-in; no robot has been commissioned (blocker B2) |
+| 3. A second class of hardware (an arm), with a dedicated manipulation integration | **Partly.** A pick and place, step by step and as one plan, is verified with HANNAH's built-in arm simulator. MoveIt 2 with a real or Gazebo arm is not started (blocker B3) |
 
 ## Stage 1 — Foundation
 
 | # | Requirement | Status | Verified at | Tests | Note |
 |---|---|---|---|---|---|
-| 1.1 | Audit of the existing codebase | IMPLEMENTED | — | — | A document, so nothing to test. |
+| 1.1 | Audit of the existing codebase | IMPLEMENTED | — | — | A document (docs/robotics/BLOCK1_AUDIT.md, in git history). It was deleted from the working tree on 2026-11-21 by something other than this work; whether that was intended is the owner's to say. |
 | 1.2a | Robot device registry | VERIFIED | server | `robotics.test.js`, `robotics.pglite.test.js` |  |
 | 1.2b | Robot capability registry | VERIFIED | unit, server | `robotics.contract.test.js`, `robotics.test.js` |  |
 | 1.2c | Hardware adapter registry and interface | VERIFIED | unit, sim | `test_adapters.py` | Three adapters chosen by the robot's profile: mobile-robot simulator, arm simulator, ROS 2 (see 2.2a). |
@@ -71,12 +79,12 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 
 | # | Requirement | Status | Verified at | Tests | Note |
 |---|---|---|---|---|---|
-| 4.2 | Hardware audit and a bill of materials for a first reference robot | NOT_STARTED | — | — | There is no robot hardware here. |
+| 4.2 | Hardware audit and a bill of materials for a first reference robot | IMPLEMENTED | — | — | A document: what a first robot must provide, by function. No hardware exists here, so there is nothing to audit and no parts are named. |
 | 4.3 | Edge computer and embedded controller integration | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Blocked by B2. |
 | 4.4 | Physical adapters: USB, UART, SPI, I2C, CAN, micro-ROS | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Nothing written. An adapter for hardware nobody has would be untestable. Blocked by B2. |
 | 4.5 | Motors, encoders, odometry on hardware | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Blocked by B2. |
 | 4.6 | Physical sensors | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Blocked by B2. |
-| 4.7 | Commissioning: a physical robot can't move until a person completes the checks | VERIFIED | server | `robotics.stage2.test.js` | Seven steps, tested with a stand-in robot. No robot has been commissioned. |
+| 4.7 | Commissioning: a physical robot can't move until a person completes the checks | VERIFIED | server | `robotics.stage2.test.js`, `robotics.stage2.pglite.test.js` | Eleven steps covering the directive's seventeen checks; where the server can't observe something it records a named person's statement. Tested with a stand-in robot. No robot has been commissioned. |
 | 4.8a | Software safety behaviour: limits, watchdog, command expiry, link loss, fault handling, never resuming | VERIFIED | sim | `test_runtime.py`, `test_safety.py`, `robotics.sim.test.js` |  |
 | 4.8b | Physical emergency stop and independent motor enable | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Hardware, not HANNAH's. HANNAH's Stop is not an emergency stop. Blocked by B2. |
 | 4.9 | Stage 4 physical acceptance | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Blocked by B2. |
@@ -101,7 +109,7 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | 6.2 | Arm registry: joints, limits, tool, gripper | VERIFIED | sim | `test_arm.py`, `robotics.arm.sim.test.js` |  |
 | 6.3 | MoveIt 2 integration | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Nothing written. Blocked by B3. |
 | 6.4a | Move the arm, grasp, release; cancel | VERIFIED | sim | `test_arm.py`, `robotics.arm.sim.test.js` |  |
-| 6.4b | Named poses, safe pose, arm state as its own read | NOT_STARTED | — | — |  |
+| 6.4b | Named poses, safe pose, arm state as its own read | VERIFIED | sim | `robotics.arm.sim.test.js` | Named poses are the arm's registered places; its safe pose is the one called home; robots.arm_state reads joints, tool, gripper, poses and objects. No separate open/close-gripper or joint-configuration capability: joint values are never sent. |
 | 6.5 | Planning with collision checks, approval, gripper feedback, outcome verification | VERIFIED | sim | `test_arm.py`, `robotics.arm.sim.test.js` | Objects come from the simulator's scene, not from the camera: detections are not yet used to choose what to grasp. |
 | 6.6 | Simulated arm: pick and place | VERIFIED | sim, browser | `robotics.arm.sim.test.js`, `robotics.spec.ts` | HANNAH's built-in planar arm simulator. Not MoveIt 2, not Gazebo. |
 | 6.7 | Physical manipulator | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Blocked by B3. |
@@ -120,18 +128,18 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | 7.7 | Resilience: offline robots never commanded; no automatic reassignment | VERIFIED | server | `robotics.test.js`, `robotics.fleet.test.js` | Reassignment is deliberately manual: a new assignment is a new, checked, approved request. |
 | 7.8 | Fleet analytics from real records | VERIFIED | unit, server, browser | `robotics.fleet.test.js`, `robotics.plans.test.js`, `robotics.spec.ts` | A figure with no records behind it is empty, not zero. |
 | 7.9a | Fleet API: registration, status, capabilities, missions, cancel, allocation, telemetry, diagnostics, events | VERIFIED | server | `robotics.test.js`, `robotics.stage2.test.js`, `robotics.fleet.test.js` |  |
-| 7.9b | Webhooks | NOT_STARTED | — | — |  |
+| 7.9b | Webhooks | VERIFIED | server | `robotics.plans.test.js` | Mission finished, plan finished and robot alert go to the account's existing signed webhooks and can start a workflow. Best effort, not retried. |
 
 ## Part D — Product integration
 
 | # | Requirement | Status | Verified at | Tests | Note |
 |---|---|---|---|---|---|
-| D1 | One robotics interface in the existing app, simulation and physical labelled | VERIFIED | browser | `robotics.spec.ts` | No hardware-in-the-loop label yet: nothing produces such data. |
+| D1 | One robotics interface in the existing app, simulation and physical labelled | VERIFIED | browser | `robotics.spec.ts` | Robots screen with registry, live view, commissioning, destinations, surroundings, camera, plans, arm, fleet, figures, condition. No hardware-in-the-loop label: nothing produces such data. |
 | D2a | HTTP API for robots | VERIFIED | server | `robotics.test.js`, `robotics.stage2.test.js`, `robotics.plans.test.js` |  |
-| D2b | Typed SDK for the robot API | NOT_STARTED | — | — |  |
+| D2b | Typed SDK for the robot API | VERIFIED | server | `robotics.sdk.test.js` | JavaScript, typed, no dependencies, in the repository (not published). No Python client. |
 | D3a | Signed robot packages: manifest, signature, integrity, permission review | VERIFIED | unit | `robotics.packages.test.js` |  |
 | D3b | Installing a package on a robot; marketplace listing; revocation list | NOT_STARTED | — | — | Installing code on a robot needs sandboxing that can't be tested without one. |
-| D4 | Industrial and IoT adapters: Home Assistant, MQTT, Modbus, OPC UA, PLCs, CAN | NOT_STARTED | — | — | Needs the owner to say which systems exist. Blocked by B4. |
+| D4 | Industrial and IoT adapters: Home Assistant, MQTT, Modbus, OPC UA, PLCs, CAN | IMPLEMENTED | — | — | Evaluated in a document; no connector is built. A connector needs a named system and a test instance (B4). |
 
 ## Part E — Security and safety
 
@@ -148,7 +156,8 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 |---|---|---|---|---|---|
 | F1 | Tests kept apart by level: unit, integration, simulation; nothing labelled hardware | IMPLEMENTED | — | — |  |
 | F2 | Measured performance: command latency, mission duration, success | VERIFIED | unit, server | `robotics.fleet.test.js`, `robotics.plans.test.js` | Command latency, stop latency, mission duration and verified success, measured from stored records. No ROS, sensor-processing or perception latency: nothing produces them. |
-| F3 | Onboard deployment: install, service, health check, logs | NOT_STARTED | — | — |  |
+| F3a | Onboard health check, logs and a deployment guide | VERIFIED | unit, sim | `test_doctor.py`, `robotics.sim.test.js` | `hannah_robot doctor` checks the computer, moves nothing and makes no signed request. |
+| F3b | Running the runtime as a service; installer; updates | BLOCKED_EXTERNAL_DEPENDENCY | — | — | A systemd unit is written and has never been started. No installer and no automatic updates. Blocked by B1. |
 
 ## External blockers
 
@@ -161,14 +170,28 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | B5 | No independent reviewer | A security review by someone who didn't write the protocol; a safety engineer for any real robot | Any claim beyond "tested by its author" |
 | B6 | No live model run | A session allowed to use a model provider key | Proof that a real model drives the robot agents correctly |
 
+## Known limitations
+
+1. Everything runs against simulators written for this project. They are kinematic: no physics, friction, wheel slip, sensor noise models, or the timing of a real machine.
+2. The planner in the simulator is not Nav2, and the arm simulator is not MoveIt 2. Behaviour in Gazebo and on hardware will differ.
+3. Position is odometry (drifting) corrected only in the dock. There is no map-based localization in the simulator.
+4. Perception is range-sensor geometry and regions of colour in a simulated camera's picture. HANNAH cannot say what an object is, and nothing identifies a person.
+5. The arm simulator is planar, with no dynamics, payload or grasp physics; its objects come from its own scene, not from a camera.
+6. One robot per runtime; one account per robot; missions of minutes, not hours. HANNAH has no workspaces or organizations.
+7. Commands reach a robot at its next exchange (about a second). Anything needing a faster reaction belongs to the robot's controller.
+8. A physical robot's every movement needs approval, and it is refused a plan of several steps. There is no scoped autonomy for hardware.
+9. The Stop button is a software request. It is not, and cannot be made into, an emergency stop. HANNAH is not safety-certified.
+10. No live language model has driven the robot agents; their tools and instructions are tested with a scripted server. Voice requests for robots are untested.
+11. Webhook deliveries for robot events are best effort and are not retried.
+12. The app's Robots screen is tested in a desktop browser at desktop and phone widths, not on a phone or in the desktop app.
+
 ## Next unblocked tasks
 
-1. Named arm poses, a safe pose and an arm-state read (6.4b)
-2. Commissioning extended to the directive's 17 checks; a reference robot's bill of materials (4.7, 4.2)
-3. Onboard deployment: a doctor command, a service unit, an install guide (F3)
-4. A typed SDK for the robot API (D2b)
-5. An evaluation of industrial and IoT adapters (D4)
-6. Webhooks, or robot events as workflow triggers (7.9b)
+1. Run the Gazebo acceptance check (needs B1)
+2. Nav2 parameters and a ros2_control configuration for the Gazebo robot, once they can be run
+3. A read-only connector to one named industrial or IoT system (needs B4)
+4. Conditions and retries in plans, if supervised runs show they are wanted
+5. A queue shared between robots and route reservation
 
 ## Last full verification
 

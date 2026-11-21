@@ -17,17 +17,20 @@ Run on 2026-11-21 on macOS 27 (arm64), Node 25.9, Python 3.14.6 and 3.9.6.
 |---|---|---|---|
 | `server/robotics.contract.test.js` | Unit | 10 | 10 |
 | `server/robotics.packages.test.js` | Unit | 4 | 4 |
-| `server/robotics.fleet.test.js` | Unit (3) and integration (1) | 4 | 4 |
-| `robotics/runtime/tests/test_protocol.py`, `test_safety.py`, `test_adapters.py` | Unit | 21 | 21 |
-| `client/src/__tests__/Robotics.test.ts` | Unit (scripted server) | 9 | 9 |
+| `server/robotics.fleet.test.js` | Unit (4) and integration (1) | 5 | 5 |
+| `robotics/runtime/tests/test_protocol.py`, `test_safety.py`, `test_adapters.py`, `test_doctor.py`, `test_progress.py` | Unit | 32 | 32 |
+| `client/src/__tests__/Robotics.test.ts` | Unit (scripted server) | 11 | 11 |
 | `server/robotics.test.js` | Integration | 18 | 18 |
 | `server/robotics.stage2.test.js` (commissioning, destinations, pause and resume) | Integration | 7 | 7 |
-| `server/robotics.pglite.test.js`, `robotics.stage2.pglite.test.js` | Integration, the same suites on embedded Postgres | 25 | 25 |
-| `robotics/runtime/tests/test_kinematic.py`, `test_runtime.py`, `test_stage2.py`, `test_arm.py` | Simulation (and a few unit) | 57 | 57 |
-| `server/robotics.sim.test.js` | Simulation (server + runtime process) | 12 | 12 |
-| `server/robotics.arm.sim.test.js` | Simulation (server + runtime process, the arm simulator) | 4 | 4 |
-| `e2e/robotics.spec.ts` | Simulation (browser + server + one or two runtime processes) | 9 | 9 |
-| **Robotics total** | | **180** | **180** |
+| `server/robotics.plans.test.js` (plans, the queue, templates, fleet figures, webhook events) | Integration | 7 | 7 |
+| `server/robotics.camera.test.js` (what is stored of a picture, forged and stale images) | Integration | 3 | 3 |
+| `server/robotics.sdk.test.js` (the JavaScript client with a developer key) | Integration | 3 | 3 |
+| `server/robotics.pglite.test.js`, `robotics.stage2.pglite.test.js`, `robotics.plans.pglite.test.js`, `robotics.camera.pglite.test.js` | Integration, the same suites on embedded Postgres | 35 | 35 |
+| `robotics/runtime/tests/test_kinematic.py`, `test_runtime.py`, `test_stage2.py`, `test_arm.py`, `test_vision.py` | Simulation (and some unit) | 73 | 73 |
+| `server/robotics.sim.test.js` | Simulation (server + runtime process) | 15 | 15 |
+| `server/robotics.arm.sim.test.js` | Simulation (server + runtime process, the arm simulator) | 7 | 7 |
+| `e2e/robotics.spec.ts` | Simulation (browser + server + one or two runtime processes) | 11 | 11 |
+| **Robotics total** | | **241** | **241** |
 
 Also: 5 of 5 navigation scenarios (`python3 -m hannah_robot.scenarios`), which `test_stage2.py` runs as a test.
 
@@ -108,6 +111,16 @@ Things the tests caught in this work, all fixed:
 | Package signature, integrity, permissions, contract rules | Unit | `robotics.packages.test.js` |
 | Flood of requests in a robot's name | Integration | `robotics.stage2.test.js` |
 | Simulation and physical shown separately | Browser | `e2e` (the kind badge, the operating mode) |
+| Plans: one approval listing every step; one step at a time; each step checked again when sent; a failed step stops the plan and drops what was queued; stop ends it; cancel needs no approval; a physical robot is refused; a plan that can't start in time is dropped | Integration, simulation, browser | `robotics.plans.test.js`, `robotics.sim.test.js` (an inspection route), `robotics.arm.sim.test.js` (a pick and place, and a grasp on nothing), `e2e` |
+| Templates offered only for hardware the robot has | Integration, simulation | `robotics.plans.test.js`, `robotics.arm.sim.test.js` |
+| Fleet figures from records; empty rather than zero with no records | Unit, integration, browser | `robotics.fleet.test.js`, `robotics.plans.test.js`, `e2e` |
+| Camera: frames, PNG encoding, the detector's output and provenance, the simulated camera, nothing rendered until asked | Unit, simulation | `test_vision.py` |
+| A picture: refused until switched on, approved, stored, retained for a limited time, opening logged, forged and stale images refused, a physical camera always asks | Integration, simulation, browser | `robotics.camera.test.js`, `robotics.sim.test.js`, `e2e` |
+| Commissioning in eleven steps: versions, frames, the link watchdog seen by the server, a written measurement | Integration (stand-in declared physical) | `robotics.stage2.test.js` |
+| The runtime's health check: profile, limits, credential permissions, server, clock; no signed request; the secret never printed | Unit, simulation | `test_doctor.py`, `robotics.sim.test.js` |
+| Webhook and workflow events for missions, plans and alerts | Integration | `robotics.plans.test.js` |
+| The JavaScript client: what a developer key can ask, read and stop, and that it can't approve | Integration | `robotics.sdk.test.js` |
+| The tracker's own rules: nothing verified without a test, nothing marked Gazebo or hardware without evidence | Unit | `test_progress.py` |
 | Manipulation: kinematics inside joint limits, joint speed limit, collision-checked motion, refusals, gripper state, cancellation by stop, a simulated pick and place | Unit, simulation, browser | `test_arm.py`, `robotics.arm.sim.test.js`, `e2e` |
 
 Still not tested, in addition to the list above: a phone or the desktop app; voice requests for robots; a live model with the robot agents; hardware-in-the-loop; any physical robot; manipulation with MoveIt 2 or a physical arm (the built-in arm simulator is tested); pause and resume of an arm motion; localization failure on a real stack; ROS 2 node, topic, service and action behaviour.

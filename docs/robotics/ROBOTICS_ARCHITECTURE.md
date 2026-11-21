@@ -15,13 +15,16 @@ Read this first; the other documents in this folder go into each part.
 | [ROS2_GAZEBO_INTEGRATION.md](./ROS2_GAZEBO_INTEGRATION.md) | The ROS 2 adapter and the Gazebo robot (written, not yet run) |
 | [TESTS.md](./TESTS.md) | What was tested, at which level, and what was not |
 | [BLOCK2_PREREQUISITES.md](./BLOCK2_PREREQUISITES.md) | What has to be true before work with ROS 2, Gazebo or hardware can go on |
-| [STAGE_STATUS.md](./STAGE_STATUS.md) | **Start here for what works:** every stage and milestone with its state, and known limitations |
-| [ONBOARDING_AND_COMMISSIONING.md](./ONBOARDING_AND_COMMISSIONING.md) | Adding a robot; the seven checks before a physical robot may move |
+| [ONBOARDING_AND_COMMISSIONING.md](./ONBOARDING_AND_COMMISSIONING.md) | Adding a robot; the eleven commissioning steps before a physical robot may move |
 | [NAVIGATION_AND_MISSIONS.md](./NAVIGATION_AND_MISSIONS.md) | Destinations, a mission's life, pause and resume, worlds and scenarios |
 | [SENSORS_AND_PERCEPTION.md](./SENSORS_AND_PERCEPTION.md) | Readings, sensor health, what the range sensor detects |
 | [FLEET.md](./FLEET.md) | Choosing a robot, conflicts, condition and maintenance |
 | [MANIPULATION.md](./MANIPULATION.md) | Arms: a pick and place in the built-in arm simulator; MoveIt 2 not started |
-| [DEVELOPER_SDK.md](./DEVELOPER_SDK.md) | Adding robots, capabilities, worlds and packages; the HTTP API |
+| [DEVELOPER_SDK.md](./DEVELOPER_SDK.md) | Adding robots, capabilities, worlds and packages; the HTTP API; the JavaScript client; webhooks |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Putting the runtime on a robot's computer; the health check; the service unit |
+| [REFERENCE_ROBOT.md](./REFERENCE_ROBOT.md) | What a first physical robot has to provide, by function |
+| [INDUSTRIAL_AND_IOT.md](./INDUSTRIAL_AND_IOT.md) | An evaluation of Home Assistant, MQTT, Modbus, OPC UA, PLCs and CAN. Nothing built |
+| [robotics/PROGRESS.md](../../robotics/PROGRESS.md) | **Start here for what works:** every requirement with its real state, tests and blockers; milestones; known limitations |
 
 ## 1. The one rule
 
