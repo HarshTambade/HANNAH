@@ -25,6 +25,7 @@
  */
 const { capability } = require("../../robotics/contract");
 const fleet = require("../../robotics/fleet");
+const plans = require("../../robotics/plans");
 
 const fail = (status, message, reason, extra = {}) => Object.assign(new Error(message), { status, reason, ...extra });
 const clip = (value, max) => String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
@@ -222,6 +223,96 @@ function robotActions({ robotics }) {
     };
   }
 
+  /**
+   * Several steps under one approval. A template is expanded into explicit
+   * steps before anything is checked, so what the person approves is the list
+   * of steps, not a template name.
+   */
+  function planAction() {
+    const forward = (params) => params.steps.map((step) => ({ capability: step.capability, params: step.params }));
+    return {
+      id: "robots.run_plan", service: "robots", kind: "write", title: "Run a plan of several steps on a robot", needs: "A simulated robot enrolled under Robots, connected",
+      description: "Run several steps in order on one robot under one approval: drive somewhere, record what the sensors detect, read a sensor, move an arm, grasp, release. Give explicit steps, or a template with its inputs. Every step is checked by the Safety Gateway now and again when it is sent. The plan stops at the first step that doesn't finish and verify; later steps are not run. A busy robot queues the plan. Physical robots are refused: each of their movements is approved by itself.",
+      input: {
+        type: "object",
+        properties: {
+          robot: ROBOT,
+          template: { type: "string", enum: plans.TEMPLATES.map((template) => template.id), description: "A template, instead of steps." },
+          inputs: { type: "object", description: "The template's inputs, for example { place } or { places, sensor } or { object, to }." },
+          steps: { type: "array", maxItems: plans.MAX_STEPS, items: { type: "object" }, description: "Explicit steps, each { do: capability, ...its inputs }. For example { do: \"navigate_to\", place: \"kitchen\" }." },
+          title: { type: "string" },
+          priority: { type: "number", description: "1 (low) to 5 (high) among plans waiting for the same robot. Default 3." },
+          startWithinMinutes: { type: "number", description: `Dropped if it hasn't started by then. Default ${plans.START_WITHIN_MIN.default}, at most ${plans.START_WITHIN_MIN.max}.` },
+        },
+        required: [],
+      },
+      async normalize(raw, ctx) {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, clip(raw?.robot, 80));
+        let title = clip(raw?.title, 120);
+        let template = null;
+        let steps;
+        if (raw?.template) {
+          const built = plans.expand(robot, clip(raw.template, 60), raw.inputs && typeof raw.inputs === "object" ? raw.inputs : raw);
+          template = built.template;
+          steps = built.steps;
+          title = title || built.title;
+        } else steps = plans.normalizeSteps(raw?.steps);
+        steps = steps.map((step) => ({ capability: step.capability, params: coerce(capability(step.capability).input, step.params) }));
+        return { robot: robot.id, title: title || `${steps.length} step${steps.length === 1 ? "" : "s"} on ${robot.name}`, template, steps, priority: Math.max(1, Math.min(5, Math.round(Number(raw?.priority) || 3))), startWithinMinutes: Math.max(1, Math.min(plans.START_WITHIN_MIN.max, Number(raw?.startWithinMinutes) || plans.START_WITHIN_MIN.default)) };
+      },
+      async assess(params, ctx) {
+        const verdict = await robotics.assessPlan(ctx.db, ctx.userId, params.robot, forward(params));
+        const flags = verdict.ok ? verdict.flags : [`forbidden:${verdict.violations.map((item) => item.message).join(" ")}`];
+        return { resource: { type: "robot", id: verdict.robot.id }, account: verdict.robot.name, flags, verdict };
+      },
+      preview(params, _ctx, assessed) {
+        const { verdict } = assessed;
+        const robot = verdict.robot;
+        return {
+          title: `Run a plan on ${robot.name}: ${params.title}`,
+          lines: [
+            { label: "Robot", value: `${robot.name} — ${kindLabel(robot)}` },
+            ...verdict.steps.map((step, index) => ({ label: `Step ${index + 1}`, value: `${plans.stepText(step)}${step.kind === "observation" ? " (from its report; nothing is sent)" : ""}` })),
+            { label: "Risk", value: verdict.risk },
+            { label: "If a step fails", value: "The plan stops. Later steps are not run and nothing is retried." },
+            { label: "Starts", value: verdict.waitsFor ? `After “${verdict.waitsFor}”, if that is within ${params.startWithinMinutes} minutes; otherwise it is dropped` : "At the robot's next exchange" },
+            { label: "If the link drops", value: "The robot stops by itself and the plan ends" },
+          ],
+          body: verdict.ok ? "Each step is checked again by the Safety Gateway at the moment it is sent, against the robot as it is then. Stopping the robot ends the plan." : verdict.violations.map((item) => item.message).join("\n"),
+          warnings: verdict.warnings,
+        };
+      },
+      async execute(params, ctx) {
+        const verdict = await robotics.assessPlan(ctx.db, ctx.userId, params.robot, forward(params));
+        if (!verdict.ok) throw fail(409, `Not started. ${verdict.violations.map((item) => item.message).join(" ")}`, "safety-refused");
+        const created = await robotics.createPlan(ctx.db, ctx.userId, { robot: verdict.robot, title: params.title, template: params.template, steps: forward(params), priority: params.priority, startWithinMin: params.startWithinMinutes, actionId: ctx.record?.id });
+        // Wait a moment for the robot to take the first step, so the answer says what happened rather than "queued".
+        const plan = await robotics.waitForPlan(ctx.db, ctx.userId, created.id, (item) => item.status === "running" && (item.cursor > 0 || item.steps[0]?.missionId));
+        if (plan.status === "failed" || plan.status === "expired") throw fail(409, plans.planText(plan, verdict.robot.name), `plan-${plan.status}`);
+        return { planId: plan.id, robot: { id: verdict.robot.id, name: verdict.robot.name, kind: verdict.robot.simulated ? "simulation" : "physical" }, status: plan.status, steps: plan.steps.map((step) => ({ n: step.n, does: step.text, status: step.status })), note: plans.planText(plan, verdict.robot.name) };
+      },
+      async verify(response, _params, ctx) {
+        const plan = await robotics.getPlan(ctx.db, ctx.userId, response.planId);
+        if (plan.status === "succeeded") return { confirmed: true, evidence: plans.planText(plan, response.robot.name) };
+        if (plan.status === "running") return { confirmed: true, evidence: `${plans.planText(plan, response.robot.name)} This confirms the plan started, not that it finished: read the plan for each step's result.` };
+        if (plan.status === "queued") return { confirmed: true, evidence: plans.planText(plan, response.robot.name) };
+        return { confirmed: false, evidence: plans.planText(plan, response.robot.name) };
+      },
+    };
+  }
+  /** The plan a request is about: the one named, or the robot's latest unfinished one, or its latest. */
+  async function planOf(ctx, params, { open = false } = {}) {
+    if (params.plan) {
+      const plan = await robotics.getPlan(ctx.db, ctx.userId, params.plan);
+      return { plan, robot: await robotics.getRobot(ctx.db, ctx.userId, plan.robotId).catch(() => null) };
+    }
+    const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+    const found = await robotics.listPlans(ctx.db, ctx.userId, { robotId: robot.id, limit: 20 });
+    const plan = found.find((item) => item.status === "running") || found.find((item) => !item.final) || (open ? null : found[0]);
+    if (!plan) throw fail(404, `${robot.name} has no ${open ? "unfinished " : ""}plan.`, "no-plan");
+    return { plan, robot };
+  }
+
   const missions = [
     missionAction({ capabilityId: "navigate_to", title: "Drive a robot to a place", describe: (sent) => `drives to ${pointText(sent)}` }),
     missionAction({ capabilityId: "return_to_dock", title: "Send a robot to its dock", describe: (sent) => `returns to its dock at (${round(sent.x)}, ${round(sent.y)})` }),
@@ -272,6 +363,14 @@ function robotActions({ robotics }) {
         return { robots: rows, available: rows.filter((row) => row.available).map((row) => row.name), needAttention: rows.filter((row) => row.health === "attention").map((row) => row.name), note: "A robot that is offline shows no battery or position: its last report is not the present." };
       },
     }),
+    {
+      ...readAction({
+        id: "robots.analytics", title: "Report fleet figures", description: "Figures from stored records for the last days (7 by default, at most 30): missions started and how they ended, the share verified as succeeded, how long missions took, command latency, how busy each robot was, problems recorded, and battery change over the last two hours. Each figure says how many records it came from and is empty when there are none.", input: { days: { type: "number", description: "How many days back. Default 7." } },
+        run: async (params, ctx) => robotics.analytics(ctx.db, ctx.userId, { days: params.days }),
+      }),
+      normalize: (raw) => ({ days: Math.max(1, Math.min(30, Number(raw?.days) || 7)) }),
+      verify: () => ({ confirmed: true, evidence: "Computed from stored mission, plan, event and telemetry records." }),
+    },
     readAction({
       id: "robots.diagnostics", title: "Diagnose a robot", description: "What the evidence says about one robot's condition: sensors not reporting, faults, battery, link losses, refused commands, missions that didn't finish, software versions, the last maintenance entry. Findings come from what the robot reported and what was recorded; nothing is guessed.", input: { robot: ROBOT },
       run: async (params, ctx) => {
@@ -334,6 +433,46 @@ function robotActions({ robotics }) {
       },
     },
     assignAction(),
+    planAction(),
+    readAction({
+      id: "robots.plan", title: "Check a robot plan", description: "A plan's status and every step's outcome: what was sent, what the robot reported, how it was verified, what an observation recorded, and which steps were not run. Without a plan id, the robot's current or latest plan.", input: { plan: { type: "string", description: "The plan id." }, robot: ROBOT },
+      run: async (params, ctx) => {
+        const { plan, robot } = await planOf(ctx, params);
+        return { ...plan, robot: robot ? { id: robot.id, name: robot.name, kind: robot.simulated ? "simulation" : "physical", online: robot.online } : null, summary: plans.planText(plan, robot?.name) };
+      },
+    }),
+    readAction({
+      id: "robots.templates", title: "List plan templates for a robot", description: "The plan templates and whether this robot can run each one. A template that needs hardware the robot doesn't have is listed as unavailable, with the reason.", input: { robot: ROBOT },
+      run: async (params, ctx) => {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        return { robot: robot.name, kind: robot.simulated ? "simulation" : "physical", templates: plans.templatesFor(robot), note: robot.simulated ? "Run one with robots.run_plan and its inputs." : "Plans of several steps run on simulated robots only; a physical robot's movements are approved one at a time." };
+      },
+    }),
+    {
+      id: "robots.cancel_plan", service: "robots", kind: "write", deescalates: true, title: "Cancel a robot's plan", description: "Cancel a plan. One that is waiting is dropped; one that is running has its current step cancelled on the robot, which then holds, and the remaining steps are not run. Never needs approval.", needs: "A plan that isn't finished",
+      input: { type: "object", properties: { robot: ROBOT, plan: { type: "string", description: "The plan id. Leave out for the robot's current plan." } }, required: [] },
+      normalize: (raw) => ({ robot: clip(raw?.robot, 80), plan: clip(raw?.plan, 40) }),
+      async assess(params, ctx) {
+        const { plan, robot } = await planOf(ctx, params, { open: true });
+        return { resource: { type: "robot", id: plan.robotId }, account: robot?.name || "", robot, plan };
+      },
+      preview: (_params, _ctx, assessed) => ({ title: `Cancel the plan “${assessed.plan.title}”`, lines: [{ label: "Robot", value: assessed.robot ? `${assessed.robot.name} — ${kindLabel(assessed.robot)}` : "removed" }, { label: "Approval", value: "Never needed" }] }),
+      async execute(params, ctx) {
+        const { plan, robot } = await planOf(ctx, params, { open: true });
+        const after = await robotics.cancelPlan(ctx.db, ctx.userId, plan.id);
+        const current = plan.steps[plan.cursor];
+        const mission = current?.missionId && robot?.online ? await robotics.waitFor(ctx.db, ctx.userId, current.missionId, (item) => item.final) : null;
+        return { planId: after.id, robot: { id: plan.robotId, name: robot?.name || "", online: Boolean(robot?.online) }, status: after.status, missionId: current?.missionId || null, missionStatus: mission?.status || null, note: `${plans.planText(after, robot?.name)}${mission ? ` ${missionText(mission, robot.name)}` : ""}` };
+      },
+      async verify(response, _params, ctx) {
+        const plan = await robotics.getPlan(ctx.db, ctx.userId, response.planId);
+        if (plan.status !== "cancelled") return { confirmed: false, evidence: plans.planText(plan, response.robot.name) };
+        if (!response.missionId) return { confirmed: true, evidence: "The plan was dropped before any step was sent." };
+        const mission = await robotics.getMission(ctx.db, ctx.userId, response.missionId);
+        if (mission.final) return { confirmed: true, evidence: `The plan is cancelled and its step in hand ended: ${missionText(mission, response.robot.name)}` };
+        return { confirmed: false, evidence: response.robot.online ? `The plan is cancelled; ${response.robot.name} hasn't confirmed that it stopped the step in hand yet.` : `The plan is cancelled. ${response.robot.name} is offline, so the cancel for its step in hand couldn't be delivered; a robot that loses its link to HANNAH stops by itself.` };
+      },
+    },
     control({ id: "robots.cancel_mission", capabilityId: "cancel_mission", title: "Cancel a robot's mission", verb: "Cancel", act: (db, userId, missionId) => robotics.cancelMission(db, userId, missionId), settled: (item) => item.final, good: ["cancelled"] }),
     control({ id: "robots.pause_mission", capabilityId: "pause_mission", title: "Pause a robot's mission", verb: "Pause", act: (db, userId, missionId) => robotics.pauseMission(db, userId, missionId), settled: (item) => item.status === "paused" || item.final, good: ["paused"] }),
     {

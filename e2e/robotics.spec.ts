@@ -253,6 +253,50 @@ test("destinations are added from the map and checked; what the robot senses and
   await expect(page.getByTestId("robot-fingerprint")).toHaveText(/^[0-9A-F]{4}( [0-9A-F]{4}){3}$/);
 });
 
+test("an inspection route runs as one plan: every step is on the approval card, each ends with its own evidence, and the figures come from the records", async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  await signedIn(page);
+  await page.goto("/robotics");
+  await expect(detail(page).getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  const plans = page.getByTestId("plans");
+  const template = plans.getByLabel("Plan template");
+  // A template that needs an arm is not offered for a robot without one, and the reason is given.
+  await expect(template.locator("option", { hasText: "Pick and place" })).toBeDisabled();
+  await expect(plans).toContainText(/Not available on this robot: Pick and place \(Rover doesn't offer “Move the arm”/);
+  await template.selectOption("inspection_route");
+  await plans.getByLabel("workbench").check();
+  await plans.getByLabel("door").check();
+  await plans.getByLabel("Sensor to read at each place").selectOption("environment");
+  await plans.getByTestId("plan-ask").click();
+  const approval = page.getByTestId("robot-approval");
+  await expect(approval).toContainText("Run a plan on Rover: Inspect 2 places");
+  await expect(approval).toContainText("Rover — SIMULATION (hannah-kinematic)");
+  for (const line of ["drive to workbench", "record what the range sensor detects (from its report; nothing is sent)", "read the environment sensor", "drive to door", "return to the dock", "The plan stops. Later steps are not run and nothing is retried."]) await expect(approval).toContainText(line);
+  await expect(plans.getByTestId("plan")).toHaveCount(0);
+  await approval.getByRole("button", { name: "Approve and start" }).click();
+  await expect(page.getByTestId("robot-outcome")).toContainText(/Done and confirmed: Run a plan on Rover.*confirms the plan started, not that it finished/, { timeout: 15_000 });
+  const plan = plans.getByTestId("plan").first();
+  await expect(plan).toHaveAttribute("data-status", "running", { timeout: 15_000 });
+  await expect(plan).toContainText("It is not finished.");
+  await expect(plan.getByTestId("plan-step")).toHaveCount(7);
+  await testInfo.attach("plan-running", { body: await page.screenshot({ fullPage: true, ...(process.env.HANNAH_E2E_SHOTS ? { path: join(process.env.HANNAH_E2E_SHOTS, "robotics-plan.png") } : {}) }), contentType: "image/png" });
+  await expect(plan).toHaveAttribute("data-status", "succeeded", { timeout: 90_000 });
+  await expect(plan).toContainText("all 7 steps finished and verified");
+  const steps = plan.getByTestId("plan-step");
+  await expect(steps.nth(0)).toContainText(/from the goal .*standing still/);
+  await expect(steps.nth(1)).toContainText(/obstacles? detected.*Recorded .* from the robot's own report \(simulation\)\./);
+  await expect(steps.nth(2)).toContainText(/The environment sensor reported .*temperatureC/);
+  await expect(detail(page).getByTestId("robot-mode")).toHaveText("In its dock", { timeout: 15_000 });
+  // Figures: from the mission records of this run, with the count they came from.
+  const figures = page.getByTestId("analytics");
+  await figures.getByLabel("Period for the figures").selectOption("1");
+  const row = figures.getByTestId("analytics-row").filter({ hasText: "Rover" });
+  await expect(row).toContainText("(simulation)");
+  await expect(row).toContainText(/\d+ of \d+ \(\d+%\)/);
+  await expect(row).toContainText(/\d+ ms \(\d+\)/);
+  await expect(figures).toContainText("A figure with no records behind it is empty, not zero.");
+});
+
 test("with two robots the fleet view says which can take a task, chooses one and shows why before asking", async ({ page }) => {
   await signedIn(page);
   await page.goto("/robotics");

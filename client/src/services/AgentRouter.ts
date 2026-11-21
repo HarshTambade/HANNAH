@@ -64,6 +64,8 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /(robot|rover).*(battery|health|diagnos|sensor|obstacle|temperature|humidity|surround|detect|maintenance|fault|wrong|blocked|sees?\b)|(battery|health|diagnos|sensor|obstacle|temperature|humidity|surround|detect|maintenance|fault|blocked).*(robot|rover)/i, tools: /^robot_(diagnostics|battery|read_sensor|surroundings)$/ },
   { match: /(robot|rover).*(inspect|patrol|visit|check the (area|room|zone))|(inspect|patrol).*(robot|rover|area|zone|warehouse)/i, tools: /^robot_inspect$/ },
   { match: /(robot|rover).*(beacon|light|horn|switch)|(beacon|horn).*(robot|rover)/i, tools: /^robot_set_device$/ },
+  { match: /(robot|rover|arm\b).*(\bplan\b|\broute\b|\bround\b|and (then|come back|return)|\bthen\b|template|\bsteps?\b|put the|pick and place)|(\bplan\b|inspection (route|round)|\bpatrol\b).*(robot|rover|arm\b)/i, tools: /^robot_(run_plan|plan|templates|cancel_plan)$/ },
+  { match: /(robots?|rover|fleet).*(statistic|analytic|figures|success rate|utili[sz]ation|how (often|many|long)|performance|latency|report on)|(statistic|analytic|success rate|utili[sz]ation|performance).*(robots?|fleet)/i, tools: /^robot_analytics$/ },
   { match: /\b(robot(ic)? )?arm\b|\bgripper\b|\bgrasp\b|\bpick (it |them |the |up)|pick and place|\bmanipulat/i, tools: /^robot_(stop|cancel|list|state|arm_move|grasp|release|wait_for_mission)$/ },
   { match: /free (time|slot)|availab|reschedul|\bmove my\b|cancel (my|the) (meeting|event|appointment)|invite|recurring|every (day|week|month|morning|monday|tuesday|wednesday|thursday|friday)|\bbook(ing)?\b|reserv|appointment/i, tools: /^calendar_/ },
 ];

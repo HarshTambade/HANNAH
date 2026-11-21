@@ -39,6 +39,7 @@ const { getDatabase } = require("../db");
 const { vaultConfigured } = require("../vault");
 const contract = require("./contract");
 const fleet = require("./fleet");
+const plans = require("./plans");
 const safety = require("./safety");
 const { missionText } = require("../actions/catalog/robots");
 const { outcomeText } = require("../actions/engine");
@@ -129,6 +130,7 @@ function createRobotAccountRouter({ robotics, engine }) {
     const [robots, active] = await Promise.all([robotics.listRobots(db, account.id), robotics.listMissions(db, account.id, { active: true, limit: 100 })]);
     res.json({ robots: fleet.overview(robots, active) });
   }));
+  router.get("/robots/analytics", anyAccount(async (req, res, db, account) => res.json({ analytics: await robotics.analytics(db, account.id, { days: req.query.days }) })));
   router.get("/robots/contract", anyAccount(async (_req, res) => res.json({ capabilities: contract.publicContract(), robotTypes: contract.ROBOT_TYPES, categories: contract.CATEGORIES, risks: contract.RISK, preconditions: contract.PRECONDITIONS, environments: safety.ENVIRONMENTS })));
   router.post("/robots", json, person(async (req, res, db, account) => {
     const created = await robotics.createRobot(db, account.id, { name: req.body?.name, simulated: req.body?.simulated });
@@ -148,6 +150,20 @@ function createRobotAccountRouter({ robotics, engine }) {
   });
   router.post("/robots/missions/:id/pause", controlled("robots.pause_mission"));
   router.post("/robots/missions/:id/resume", controlled("robots.resume_mission"));
+  // Plans: several steps under one approval. Starting one is an action (it may wait for approval); cancelling never does.
+  const planView = async (db, userId, plan) => {
+    const robot = await robotics.getRobot(db, userId, plan.robotId).catch(() => null);
+    return { ...plan, robotName: robot?.name || null, summary: plans.planText(plan, robot?.name) };
+  };
+  router.get("/robots/plans", anyAccount(async (req, res, db, account) => {
+    const found = await robotics.listPlans(db, account.id, { robotId: req.query.robot, active: Boolean(req.query.active), limit: req.query.limit });
+    res.json({ plans: await Promise.all(found.map((plan) => planView(db, account.id, plan))) });
+  }));
+  router.get("/robots/plans/:id", anyAccount(async (req, res, db, account) => res.json({ plan: await planView(db, account.id, await robotics.getPlan(db, account.id, req.params.id)) })));
+  router.post("/robots/plans/:id/cancel", anyAccount(async (req, res, db, account) => {
+    const record = await engine.run(db, account.id, { action: "robots.cancel_plan", params: { plan: req.params.id }, request: "Cancel plan pressed", source: account.via === "session" ? "robots" : "api-key", agent: "" });
+    res.json({ record: { ...record, outcome: outcomeText(record) }, plan: await planView(db, account.id, await robotics.getPlan(db, account.id, req.params.id)) });
+  }));
   router.get("/robots/events", anyAccount(async (req, res, db, account) => res.json({ events: await robotics.events(db, account.id, { robotId: req.query.robot, limit: req.query.limit }) })));
 
   router.get("/robots/:id", anyAccount(async (req, res, db, account) => {
@@ -186,6 +202,13 @@ function createRobotAccountRouter({ robotics, engine }) {
   }));
   router.get("/robots/:id/maintenance", anyAccount(async (req, res, db, account) => res.json({ maintenance: await robotics.maintenance(db, account.id, (await robotics.getRobot(db, account.id, req.params.id)).id) })));
   router.post("/robots/:id/maintenance", json, person(async (req, res, db, account) => res.status(201).json({ maintenance: await robotics.addMaintenance(db, account.id, req.params.id, req.body || {}) })));
+  router.get("/robots/:id/templates", anyAccount(async (req, res, db, account) => res.json({ templates: plans.templatesFor(await robotics.getRobot(db, account.id, req.params.id)) })));
+  router.post("/robots/:id/plans", json, anyAccount(async (req, res, db, account) => {
+    const robot = await robotics.getRobot(db, account.id, req.params.id);
+    const record = await engine.run(db, account.id, { action: "robots.run_plan", params: { ...(req.body || {}), robot: robot.id }, request: "Plan started from the Robots screen", source: account.via === "session" ? "robots" : "api-key", agent: "" });
+    const planId = record.response?.planId;
+    res.status(record.status === "waiting-approval" ? 202 : 200).json({ record: { ...record, outcome: outcomeText(record) }, plan: planId ? await planView(db, account.id, await robotics.getPlan(db, account.id, planId)) : null });
+  }));
   router.get("/robots/:id/telemetry", anyAccount(async (req, res, db, account) => {
     const robot = await robotics.getRobot(db, account.id, req.params.id);
     res.json({ samples: await robotics.telemetry(db, account.id, robot.id, { sinceMs: (Number(req.query.minutes) || 15) * 60_000 }) });

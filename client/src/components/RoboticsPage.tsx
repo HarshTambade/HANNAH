@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, Loader2, MapPin, OctagonX, Plus, Radio, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
-import { ArmPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, SurroundingsPanel } from "./RobotPanels";
+import { AnalyticsPanel, ArmPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -342,6 +342,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
         </section>
       )}
 
+      <PlansPanel robot={robot} busy={Boolean(busy)} onAsk={(plan) => void control("plan", async () => ({ record: await Robotics.runPlan(robot.id, plan) }))} />
       {!isArm && <DestinationsPanel robot={robot} picked={target} />}
       <SurroundingsPanel robot={robot} />
 
@@ -551,6 +552,7 @@ export default function RoboticsPage() {
           {selected && <RobotDetail key={selected} robotId={selected} enrollment={enrollment?.robot.id === selected ? enrollment : null} capabilities={capabilities} onGone={() => { setSelected(null); setEnrollment(null); void refresh(); }} />}
         </div>
       )}
+      {signedIn && robots && robots.length > 0 && <AnalyticsPanel />}
     </main>
   );
 }

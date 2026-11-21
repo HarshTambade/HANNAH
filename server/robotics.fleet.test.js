@@ -159,6 +159,42 @@ after(async () => {
   await require("./db").closeDatabase?.();
 });
 
+test("unit: fleet figures come from records, say how many, and are empty rather than zero when there are none", () => {
+  const now = 1_800_000_000_000;
+  const hour = 3_600_000;
+  const robots = [unit("Ada"), unit("Bo", { simulated: false, online: false })];
+  const m = (robotId, capability, status, createdAgo, acceptAfter, runFor, final = true) => ({ robotId, capability, status, final, createdAt: now - createdAgo, acceptedAt: acceptAfter === null ? null : now - createdAgo + acceptAfter, finishedAt: runFor === null ? null : now - createdAgo + (acceptAfter || 0) + runFor });
+  const missions = [
+    m("rb_Ada", "navigate_to", "succeeded", 5 * hour, 900, 60_000),
+    m("rb_Ada", "navigate_to", "succeeded", 4 * hour, 1100, 120_000),
+    m("rb_Ada", "navigate_to", "failed", 3 * hour, 1300, 30_000),
+    m("rb_Ada", "navigate_to", "expired", 2 * hour, null, 20_000),
+    m("rb_Ada", "navigate_to", "accepted", hour / 2, 1000, null, false),
+    m("rb_Ada", "stop_motion", "succeeded", 3 * hour, 400, 500),
+  ];
+  const figures = fleet.analytics({ robots, missions, plans: [{ robotId: "rb_Ada", status: "succeeded", final: true }, { robotId: "rb_Ada", status: "failed", final: true }, { robotId: "rb_Ada", status: "running", final: false }], events: [{ robotId: "rb_Ada", type: "fault", count: 2 }, { robotId: "rb_Ada", type: "enrolled", count: 1 }], telemetry: { rb_Ada: { samples: 1200, everyMs: 3000, first: { at: now - 2 * hour, battery: 90 }, last: { at: now, battery: 70 } } }, now, windowMs: 24 * hour });
+  const ada = figures.robots[0];
+  // The stop is a control, not a task: it isn't in the mission figures, and it has its own latency.
+  assert.deepEqual(ada.missions, { started: 5, ended: 4, open: 1, byOutcome: { succeeded: 2, failed: 1, expired: 1 }, succeededVerified: 2, successRate: 0.5 });
+  assert.deepEqual(ada.durationS, { samples: 2, median: 90, longest: 120 });
+  assert.deepEqual(ada.commandLatencyMs, { samples: 4, median: 1050, p95: 1300 });
+  assert.deepEqual(ada.stopLatencyMs, { samples: 1, median: 900, longest: 900 });
+  assert.deepEqual(ada.plans, { ended: 2, succeeded: 1 });
+  assert.deepEqual(ada.problems, { fault: 2 });
+  // Busy: 60 s + 120 s + 30 s finished, plus the open one from its acceptance until now.
+  assert.equal(ada.utilization, Number(((60_000 + 120_000 + 30_000 + (hour / 2 - 1000)) / (24 * hour)).toFixed(4)));
+  assert.deepEqual(ada.battery, { fromPercent: 90, toPercent: 70, overMinutes: 120, changePerHour: -10 });
+  assert.deepEqual(ada.reporting, { samples: 1200, shareOfLastTwoHours: 0.5 });
+  // A robot with no records has no figures. Not zero, not a hundred per cent.
+  const bo = figures.robots[1];
+  assert.equal(bo.kind, "physical");
+  assert.deepEqual([bo.missions.successRate, bo.durationS.median, bo.commandLatencyMs.median, bo.utilization, bo.battery], [null, null, null, null, null]);
+  assert.deepEqual(bo.reporting, { samples: 0, shareOfLastTwoHours: 0 });
+  assert.deepEqual([figures.fleet.robots, figures.fleet.simulated, figures.fleet.physical, figures.fleet.onlineNow, figures.fleet.missions.ended], [2, 1, 1, 1, 4]);
+  assert.ok(figures.notes.some((note) => /Simulated robots are included and labelled/.test(note)));
+  assert.deepEqual(fleet.analytics({ robots: [], now, windowMs: hour }).fleet.missions, { started: 0, ended: 0, open: 0, byOutcome: {}, succeededVerified: 0, successRate: null });
+});
+
 test("assigning a task chooses a robot, shows why, and still goes through approval; a busy robot isn't chosen and a clash is refused", async () => {
   assert.equal((await act(users.asha, "robots.assign", { task: "navigate_to", place: "workbench" })).status, 409, "no robots yet");
   const near = await enrolled("Near", { x: 2, y: 1.5 });

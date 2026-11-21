@@ -160,4 +160,68 @@ function diagnose(robot, { events = [], missions = [], maintenance = [], now = D
   return { robot: robot.name, kind: robot.simulated ? "simulation" : "physical", online: robot.online, stale: !robot.online, summary: worst, findings, basis: "Only what the robot reported and what HANNAH recorded. No model was asked to judge its condition." };
 }
 
-module.exports = { RESERVE_M, choose, diagnose, goalFor, overview, unavailable };
+const median = (values) => { if (!values.length) return null; const sorted = [...values].sort((a, b) => a - b); const middle = Math.floor(sorted.length / 2); return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2; };
+const percentile = (values, share) => { if (!values.length) return null; const sorted = [...values].sort((a, b) => a - b); return sorted[Math.min(sorted.length - 1, Math.ceil(share * sorted.length) - 1)]; };
+const CONTROL = new Set(["stop_motion"]);
+const PROBLEM_EVENTS = ["fault", "estop-engaged", "link-lost", "command-rejected", "plan-failed", "commissioning-reset"];
+
+/**
+ * Figures about the fleet, computed from stored records and nothing else.
+ *
+ * Every figure carries the number of records it came from, and is null when
+ * there are none: an empty history is "no data", not 100% or 0%. Stops are
+ * left out of mission figures (a stop is a control, not a task). Times are the
+ * server's own: when it issued a command and when the robot's acceptance or
+ * result reached it, so "command latency" includes the exchange interval.
+ *
+ *   missions   finished or open missions created inside the window
+ *   events     [{ robotId, type, count }] inside the window
+ *   telemetry  { [robotId]: { samples, everyMs, first, last } } for the telemetry that is kept (two hours)
+ */
+function analytics({ robots, missions = [], plans = [], events = [], telemetry = {}, now = Date.now(), windowMs }) {
+  const one = (robot, mine, minePlans) => {
+    const tasks = mine.filter((mission) => !CONTROL.has(mission.capability));
+    const ended = tasks.filter((mission) => mission.final);
+    const by = {};
+    for (const mission of ended) by[mission.status] = (by[mission.status] || 0) + 1;
+    const done = ended.filter((mission) => mission.status === "succeeded" && mission.acceptedAt && mission.finishedAt);
+    const durations = done.map((mission) => (mission.finishedAt - mission.acceptedAt) / 1000);
+    const latencies = tasks.filter((mission) => mission.acceptedAt).map((mission) => mission.acceptedAt - mission.createdAt);
+    const stopLatencies = mine.filter((mission) => CONTROL.has(mission.capability) && mission.finishedAt && mission.status === "succeeded").map((mission) => mission.finishedAt - mission.createdAt);
+    const moving = tasks.filter((mission) => mission.acceptedAt && contract.capability(mission.capability)?.motion);
+    const busyMs = moving.reduce((sum, mission) => sum + Math.max(0, Math.min(mission.finishedAt || now, now) - Math.max(mission.acceptedAt, now - windowMs)), 0);
+    const sample = robot ? telemetry[robot.id] : null;
+    const problems = Object.fromEntries(PROBLEM_EVENTS.map((type) => [type, events.filter((event) => (!robot || event.robotId === robot.id) && event.type === type).reduce((sum, event) => sum + event.count, 0)]).filter(([, count]) => count > 0));
+    const endedPlans = minePlans.filter((plan) => plan.final);
+    let battery = null;
+    if (sample?.first && sample?.last && finite(sample.first.battery) && finite(sample.last.battery)) {
+      const hours = (sample.last.at - sample.first.at) / 3_600_000;
+      battery = { fromPercent: round(sample.first.battery, 1), toPercent: round(sample.last.battery, 1), overMinutes: round(hours * 60, 1), changePerHour: hours >= 0.05 ? round((sample.last.battery - sample.first.battery) / hours, 1) : null };
+    }
+    return {
+      missions: { started: tasks.length, ended: ended.length, open: tasks.length - ended.length, byOutcome: by, succeededVerified: by.succeeded || 0, successRate: ended.length ? round((by.succeeded || 0) / ended.length, 3) : null },
+      plans: { ended: endedPlans.length, succeeded: endedPlans.filter((plan) => plan.status === "succeeded").length },
+      durationS: { samples: durations.length, median: durations.length ? round(median(durations), 1) : null, longest: durations.length ? round(Math.max(...durations), 1) : null },
+      commandLatencyMs: { samples: latencies.length, median: latencies.length ? Math.round(median(latencies)) : null, p95: latencies.length ? Math.round(percentile(latencies, 0.95)) : null },
+      stopLatencyMs: { samples: stopLatencies.length, median: stopLatencies.length ? Math.round(median(stopLatencies)) : null, longest: stopLatencies.length ? Math.round(Math.max(...stopLatencies)) : null },
+      utilization: moving.length ? round(busyMs / windowMs, 4) : tasks.length ? 0 : null,
+      problems,
+      ...(robot ? { reporting: sample ? { samples: sample.samples, shareOfLastTwoHours: round(Math.min(1, (sample.samples * sample.everyMs) / (2 * 3_600_000)), 3) } : { samples: 0, shareOfLastTwoHours: 0 }, battery } : {}),
+    };
+  };
+  return {
+    window: { days: round(windowMs / 86_400_000, 2), from: now - windowMs, to: now },
+    fleet: { robots: robots.length, simulated: robots.filter((robot) => robot.simulated).length, physical: robots.filter((robot) => !robot.simulated).length, onlineNow: robots.filter((robot) => robot.online).length, ...one(null, missions, plans) },
+    robots: robots.map((robot) => ({ id: robot.id, name: robot.name, kind: robot.simulated ? "simulation" : "physical", ...one(robot, missions.filter((mission) => mission.robotId === robot.id), plans.filter((plan) => plan.robotId === robot.id)) })),
+    notes: [
+      "Computed from stored mission, plan, event and telemetry records. Nothing is estimated.",
+      "A figure with no records behind it is empty, not zero.",
+      "Success means the server verified the result from the robot's reported state. Cancelled, failed, refused and lost missions count as not succeeded.",
+      "Command latency is from the server issuing a command to the robot's acceptance reaching the server; it includes the exchange interval.",
+      "Reporting share and battery change cover the last two hours only, which is as long as telemetry is kept.",
+      ...(robots.some((robot) => robot.simulated) ? ["Simulated robots are included and labelled. Their figures say nothing about physical hardware."] : []),
+    ],
+  };
+}
+
+module.exports = { RESERVE_M, analytics, choose, diagnose, goalFor, overview, unavailable };

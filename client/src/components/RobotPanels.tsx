@@ -5,8 +5,8 @@
  * button is a real request; nothing here holds invented robot data.
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Circle, Loader2, MapPin, Trash2, XCircle } from "lucide-react";
-import { Robotics, type Commissioning, type Destinations, type Diagnostics, type FleetRow, type MaintenanceEntry, type Robot } from "../services/Robotics";
+import { AlertTriangle, CheckCircle2, Circle, Loader2, MapPin, MinusCircle, Trash2, XCircle } from "lucide-react";
+import { Robotics, type Analytics, type Commissioning, type Destinations, type Diagnostics, type FleetRow, type MaintenanceEntry, type Plan, type PlanTemplate, type Robot } from "../services/Robotics";
 import type { ActionRecord } from "../services/Operator";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -275,6 +275,172 @@ export function ArmPanel({ robot, busy, onAsk }: { robot: Robot; busy: boolean; 
         <button type="button" className={button} data-testid="arm-release" disabled={busy || !holding || !can("release_object")} onClick={() => onAsk("robots.release_object", {})}>Ask to release</button>
       </div>
       <p className="text-xs text-slate-600">An arm is high risk: every step asks you, whatever your permission level. The arm's own planner chooses the joint motion; HANNAH sends a target, never joint values. This is HANNAH's built-in planar arm simulator when the badge says so: not MoveIt 2, not Gazebo.</p>
+    </section>
+  );
+}
+
+const PLAN_STATUS: Record<Plan["status"], { label: string; tone: string }> = {
+  queued: { label: "Waiting", tone: "bg-slate-100 text-slate-800" }, running: { label: "Running", tone: "bg-sky-100 text-sky-900" }, succeeded: { label: "Finished, verified", tone: "bg-emerald-100 text-emerald-900" },
+  failed: { label: "Stopped at a step", tone: "bg-rose-100 text-rose-900" }, cancelled: { label: "Cancelled", tone: "bg-amber-100 text-amber-900" }, expired: { label: "Never started", tone: "bg-amber-100 text-amber-900" },
+};
+/** What an observation step recorded, in a line. Always the robot's own report. */
+function recorded(output: Record<string, unknown> | null): string {
+  if (!output) return "";
+  const kind = output.kind === "physical" ? "physical robot" : "simulation";
+  const at = typeof output.at === "number" ? new Date(output.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  return `Recorded ${at} from the robot's own report (${kind}).`;
+}
+
+/**
+ * Plans: several steps on one robot under one approval. The launcher offers
+ * only the templates this robot has the hardware for; the list shows each
+ * plan with every step's real outcome.
+ */
+export function PlansPanel({ robot, busy, onAsk }: { robot: Robot; busy: boolean; onAsk: (plan: { template: string; inputs: Record<string, unknown> }) => void }) {
+  const [templates, setTemplates] = useState<PlanTemplate[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [chosen, setChosen] = useState("");
+  const [place, setPlace] = useState("");
+  const [route, setRoute] = useState<string[]>([]);
+  const [sensor, setSensor] = useState("");
+  const [object, setObject] = useState("");
+  const [cancelling, setCancelling] = useState("");
+  const [error, setError] = useState("");
+  const capabilities = robot.capabilities.join(",");
+  useEffect(() => { void Robotics.templates(robot.id).then(setTemplates).catch(() => setTemplates([])); }, [robot.id, capabilities]);
+  useEffect(() => {
+    const load = () => { void Robotics.plans(robot.id, 6).then(setPlans).catch(() => undefined); };
+    load();
+    const timer = window.setInterval(() => { if (!document.hidden) load(); }, 2000);
+    return () => window.clearInterval(timer);
+  }, [robot.id]);
+  if (robot.status !== "enrolled") return null;
+  const template = templates.find((item) => item.id === chosen) || null;
+  const places = Object.keys(robot.places || {});
+  const objects = robot.state?.scene?.objects || [];
+  const inputs: Record<string, unknown> | null = !template ? null
+    : template.id === "go_and_return" ? (place ? { place } : null)
+    : template.id === "inspection_route" ? (route.length ? { places: route, ...(sensor ? { sensor } : {}) } : null)
+    : template.id === "pick_and_place" ? (object && place ? { object, to: place } : null)
+    : {};
+  const cancel = async (plan: Plan) => {
+    setCancelling(plan.id); setError("");
+    try { const answer = await Robotics.cancelPlan(plan.id); setPlans((current) => current.map((item) => (item.id === plan.id ? answer.plan : item))); } catch (reason) { setError(message(reason)); } finally { setCancelling(""); }
+  };
+  return (
+    <section className={`${card} space-y-3`} data-testid="plans">
+      <div>
+        <h2 className="font-semibold text-slate-900">Plans</h2>
+        <p className="text-sm text-slate-600">Several steps under one approval. You see every step before you approve; each is checked again when it is sent; the plan stops at the first step that doesn't finish, and nothing is retried.</p>
+      </div>
+      {!robot.simulated && <Notice tone="amber">This is a physical robot. Each of its movements is approved by itself, so a plan that moves it is refused. A status report, which sends it nothing, is allowed.</Notice>}
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-sm text-slate-700">Template
+          <select className={`${input} mt-1 block w-56`} value={chosen} onChange={(event) => { setChosen(event.target.value); setPlace(""); setRoute([]); setObject(""); setSensor(""); }} aria-label="Plan template">
+            <option value="">Choose…</option>
+            {templates.map((item) => <option key={item.id} value={item.id} disabled={!item.available}>{item.title}{item.available ? "" : " (not available)"}</option>)}
+          </select>
+        </label>
+        {template?.id === "pick_and_place" && (
+          <label className="text-sm text-slate-700">Object
+            <select className={`${input} mt-1 block w-40`} value={object} onChange={(event) => setObject(event.target.value)} aria-label="Object to pick"><option value="">Choose…</option>{objects.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}</select>
+          </label>
+        )}
+        {(template?.id === "go_and_return" || template?.id === "pick_and_place") && (
+          <label className="text-sm text-slate-700">{template.id === "pick_and_place" ? "Put it at" : "Destination"}
+            <select className={`${input} mt-1 block w-40`} value={place} onChange={(event) => setPlace(event.target.value)} aria-label={template.id === "pick_and_place" ? "Pose to place at" : "Plan destination"}><option value="">Choose…</option>{places.filter((name) => name !== "dock").map((name) => <option key={name} value={name}>{name}</option>)}</select>
+          </label>
+        )}
+        {template?.id === "inspection_route" && (
+          <>
+            <fieldset className="text-sm text-slate-700"><legend>Visit, in the order you tick them</legend>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">{places.filter((name) => name !== "dock").map((name) => (
+                <label key={name} className="inline-flex items-center gap-1.5 text-slate-800"><input type="checkbox" checked={route.includes(name)} onChange={() => setRoute((current) => (current.includes(name) ? current.filter((item) => item !== name) : [...current, name]))} />{name}{route.includes(name) ? ` (${route.indexOf(name) + 1})` : ""}</label>
+              ))}</div>
+            </fieldset>
+            <label className="text-sm text-slate-700">Read a sensor at each
+              <select className={`${input} mt-1 block w-40`} value={sensor} onChange={(event) => setSensor(event.target.value)} aria-label="Sensor to read at each place"><option value="">None</option>{robot.sensors.map((item) => <option key={item.id} value={item.id}>{item.id}</option>)}</select>
+            </label>
+          </>
+        )}
+        <button type="button" className={primary} disabled={busy || !template || !inputs || !robot.online} onClick={() => template && inputs && onAsk({ template: template.id, inputs })} data-testid="plan-ask">{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}Check and ask</button>
+      </div>
+      {template && <p className="text-xs text-slate-600">{template.description}</p>}
+      {templates.some((item) => !item.available) && <p className="text-xs text-slate-600">Not available on this robot: {templates.filter((item) => !item.available).map((item) => `${item.title} (${item.reason})`).join(" ")}</p>}
+      {error && <Notice tone="rose">{error}</Notice>}
+      {plans.length > 0 && (
+        <ul className="space-y-2">
+          {plans.map((plan) => (
+            <li key={plan.id} className="rounded-xl border border-slate-200 p-3" data-testid="plan" data-status={plan.status}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2"><span className="font-medium text-slate-900">{plan.title}</span><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PLAN_STATUS[plan.status].tone}`}>{PLAN_STATUS[plan.status].label}</span><span className="text-xs text-slate-600">{day(plan.createdAt)}</span></div>
+                {!plan.final && <button type="button" className={button} disabled={cancelling === plan.id} onClick={() => void cancel(plan)} data-testid="plan-cancel">{cancelling === plan.id ? "Cancelling…" : "Cancel plan"}</button>}
+              </div>
+              <p className="mt-1 text-sm text-slate-700">{plan.summary}</p>
+              <ol className="mt-2 space-y-1">
+                {plan.steps.map((step) => (
+                  <li key={step.n} className="flex items-start gap-2 text-sm" data-testid="plan-step" data-status={step.status}>
+                    {step.status === "succeeded" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" /> : step.status === "failed" ? <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-700" aria-hidden="true" /> : step.status === "running" ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-sky-700" aria-hidden="true" /> : step.status === "pending" ? <Circle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" /> : <MinusCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />}
+                    <span className="text-slate-800">
+                      <span className="font-medium">{step.n}. {step.text}</span>
+                      <span className="text-slate-600"> — {step.status === "skipped" ? "not run" : step.status}</span>
+                      {step.evidence && <span className="block text-xs text-slate-600">{step.evidence} {step.kind === "observation" ? recorded(step.output) : ""}</span>}
+                      {step.error && <span className="block text-xs text-rose-800">{step.error}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const share = (value: number | null) => (value === null ? "no data" : `${Math.round(value * 100)}%`);
+const seconds = (value: number | null) => (value === null ? "no data" : value >= 90 ? `${(value / 60).toFixed(1)} min` : `${value.toFixed(0)} s`);
+
+/** Fleet figures from stored records. A figure with no records behind it reads "no data". */
+export function AnalyticsPanel() {
+  const [days, setDays] = useState(7);
+  const [figures, setFigures] = useState<Analytics | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    const load = () => { void Robotics.analytics(days).then((answer) => { if (live) { setFigures(answer); setError(""); } }).catch((reason) => { if (live) setError(message(reason)); }); };
+    load();
+    const timer = window.setInterval(() => { if (!document.hidden) load(); }, 15_000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [days]);
+  if (error) return <section className={card}><Notice tone="rose">{error}</Notice></section>;
+  if (!figures || !figures.robots.length) return null;
+  const problems = (list: Record<string, number>) => Object.entries(list).map(([type, count]) => `${count} ${type.replace(/-/g, " ")}`).join(", ") || "none recorded";
+  return (
+    <section className={`${card} space-y-3`} data-testid="analytics">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold text-slate-900">Figures</h2>
+        <label className="text-sm text-slate-700">Period <select className={`${input} ml-1`} value={days} onChange={(event) => setDays(Number(event.target.value))} aria-label="Period for the figures"><option value={1}>Last day</option><option value={7}>Last 7 days</option><option value={30}>Last 30 days</option></select></label>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs text-slate-600"><tr><th className="py-1 pr-3 font-medium">Robot</th><th className="py-1 pr-3 font-medium">Missions ended</th><th className="py-1 pr-3 font-medium">Verified as succeeded</th><th className="py-1 pr-3 font-medium">Typical duration</th><th className="py-1 pr-3 font-medium">Command latency</th><th className="py-1 pr-3 font-medium">Busy</th><th className="py-1 font-medium">Problems recorded</th></tr></thead>
+          <tbody>
+            {figures.robots.map((row) => (
+              <tr key={row.id} className="border-t border-slate-100" data-testid="analytics-row">
+                <td className="py-1.5 pr-3 font-medium text-slate-900">{row.name} <span className="font-normal text-slate-600">({row.kind === "simulation" ? "simulation" : "physical"})</span></td>
+                <td className="py-1.5 pr-3 text-slate-700">{row.missions.ended}{row.missions.open ? ` (+${row.missions.open} open)` : ""}</td>
+                <td className="py-1.5 pr-3 text-slate-700">{row.missions.successRate === null ? "no data" : `${row.missions.succeededVerified} of ${row.missions.ended} (${share(row.missions.successRate)})`}</td>
+                <td className="py-1.5 pr-3 text-slate-700">{seconds(row.durationS.median)}{row.durationS.samples ? ` (${row.durationS.samples})` : ""}</td>
+                <td className="py-1.5 pr-3 text-slate-700">{row.commandLatencyMs.median === null ? "no data" : `${row.commandLatencyMs.median} ms (${row.commandLatencyMs.samples})`}</td>
+                <td className="py-1.5 pr-3 text-slate-700">{share(row.utilization)}</td>
+                <td className="py-1.5 text-slate-700">{problems(row.problems)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-slate-600">{figures.notes.join(" ")} Numbers in brackets are how many records a figure came from.</p>
     </section>
   );
 }

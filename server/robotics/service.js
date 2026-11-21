@@ -39,6 +39,8 @@ const { decryptSecret, encryptSecret, vaultConfigured } = require("../vault");
 const contract = require("./contract");
 const safety = require("./safety");
 const commissioning = require("./commissioning");
+const plans = require("./plans");
+const fleet = require("./fleet");
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_TTL_MS = 15 * 60_000;
@@ -52,6 +54,7 @@ const MISSIONS_KEEP_MS = 180 * 24 * 60 * 60_000;
 const MAX_STATE = 24_000;
 const MAX_ROBOTS = 20;
 const FINAL = new Set(["succeeded", "unverified", "failed", "cancelled", "rejected", "expired", "timed-out", "lost"]);
+const PLAN_OPEN = "('queued', 'running')";
 const MODES = new Set(["idle", "navigating", "manipulating", "paused", "holding", "stopping", "docked", "estopped", "fault", "starting"]);
 const MAX_DESTINATIONS = 60;
 const RESUME_TTL_MS = 20_000;
@@ -166,7 +169,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const status = effectiveMissionStatus(row, at);
     return {
       id: row.id, robotId: row.robot_id, capability: row.capability, title: contract.capability(row.capability)?.title || row.capability, params: parse(row.params, {}), status, final: FINAL.has(status),
-      actionId: row.action_id || null, requestedBy: row.requested_by || "", createdAt: Number(row.created_at), expiresAt: Number(row.expires_at), deadlineAt: Number(row.deadline_at),
+      actionId: row.action_id || null, planId: row.plan_id || null, requestedBy: row.requested_by || "", createdAt: Number(row.created_at), expiresAt: Number(row.expires_at), deadlineAt: Number(row.deadline_at),
       sentAt: row.sent_at ? Number(row.sent_at) : null, acceptedAt: row.accepted_at ? Number(row.accepted_at) : null, finishedAt: row.finished_at ? Number(row.finished_at) : null,
       cancelRequestedAt: row.cancel_requested_at ? Number(row.cancel_requested_at) : null, pauseRequestedAt: row.pause_requested_at ? Number(row.pause_requested_at) : null, resumeRequestedAt: row.resume_requested_at ? Number(row.resume_requested_at) : null, pausedAt: row.paused_at ? Number(row.paused_at) : null,
       progress: parse(row.progress), result: parse(row.result), verification: parse(row.verification),
@@ -322,7 +325,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const row = await robotRow(db, userId, id);
     if (!row) return false;
     if (row.status === "enrolled") await revokeRobot(db, userId, row.id);
-    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_destinations", "hannah_robot_maintenance"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
+    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_plans", "hannah_robot_destinations", "hannah_robot_maintenance"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
     return (await db.query("DELETE FROM hannah_robots WHERE user_id = $1 AND id = $2", [userId, row.id])).rowCount > 0;
   }
 
@@ -520,6 +523,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     }
 
     // What the robot should hear: missions not yet accepted and still valid, and cancellations.
+    await advancePlans(db, row.user_id, row.id, at).catch((error) => addEvent(db, row.user_id, row.id, { type: "plan-error", severity: "warning", message: `A plan could not be advanced: ${clean(error?.message, 200)}` }).catch(() => {}));
     await db.query("UPDATE hannah_robot_missions SET status = 'expired', finished_at = $1, updated_at = $1 WHERE robot_id = $2 AND status IN ('queued', 'sent') AND expires_at <= $1", [at, row.id]);
     const open = (await db.query("SELECT * FROM hannah_robot_missions WHERE robot_id = $1 AND status IN ('queued', 'sent', 'accepted', 'paused') ORDER BY seq", [row.id])).rows;
     const commands = [];
@@ -562,21 +566,31 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return live[0] ? publicMission(live[0], at) : null;
   }
   /** The Safety Gateway's answer for this robot and command, with the robot's current state. */
-  async function assess(db, userId, robotRef, capabilityId, params) {
+  async function assess(db, userId, robotRef, capabilityId, params, { planId = null } = {}) {
     const robot = typeof robotRef === "object" && robotRef ? robotRef : await resolveRobot(db, userId, robotRef);
-    const active = contract.capability(capabilityId)?.motion ? await activeMotion(db, userId, robot.id) : null;
-    return { robot, ...safety.check({ robot, capabilityId, params, now: now(), active }) };
+    const moves = Boolean(contract.capability(capabilityId)?.motion);
+    const active = moves ? await activeMotion(db, userId, robot.id) : null;
+    const verdict = { robot, ...safety.check({ robot, capabilityId, params, now: now(), active }) };
+    // A robot working through a plan is busy for anything else that would move it, also between two steps.
+    if (moves && !planId && robot?.id) {
+      const running = (await db.query("SELECT id, title FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status = 'running'", [userId, robot.id])).rows[0];
+      if (running && !verdict.violations.some((item) => item.code === "precondition:no-active-motion")) {
+        verdict.violations.push({ code: "busy-plan", message: `${robot.name} is working through the plan “${running.title}”. Cancel the plan or wait for it to finish.` });
+        verdict.ok = false;
+      }
+    }
+    return verdict;
   }
-  async function dispatch(db, userId, { robot, capabilityId, params, actionId = null, requestedBy = "" }) {
+  async function dispatch(db, userId, { robot, capabilityId, params, actionId = null, requestedBy = "", planId = null, id: givenId = null }) {
     const definition = contract.capability(capabilityId);
     const at = now();
     const ttl = Math.round((definition.deescalates ? 15 : robot.limits.commandTtlS) * 1000);
     const timeoutS = Math.min(definition.timeoutS.max, definition.timeoutS.default);
-    const id = `ms_${crypto.randomBytes(9).toString("hex")}`;
+    const id = givenId || `ms_${crypto.randomBytes(9).toString("hex")}`;
     await db.query(
-      `INSERT INTO hannah_robot_missions (user_id, id, robot_id, capability, params, status, action_id, requested_by, seq, nonce, issued_at, expires_at, deadline_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11, $12, $10, $10)`,
-      [userId, id, robot.id, definition.id, JSON.stringify(params), actionId, clean(requestedBy, 80), nextSeq(), crypto.randomBytes(16).toString("hex"), at, at + ttl, at + ttl + timeoutS * 1000],
+      `INSERT INTO hannah_robot_missions (user_id, id, robot_id, capability, params, status, action_id, requested_by, seq, nonce, issued_at, expires_at, deadline_at, created_at, updated_at, plan_id)
+       VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11, $12, $10, $10, $13)`,
+      [userId, id, robot.id, definition.id, JSON.stringify(params), actionId, clean(requestedBy, 80), nextSeq(), crypto.randomBytes(16).toString("hex"), at, at + ttl, at + ttl + timeoutS * 1000, planId],
     );
     return getMission(db, userId, id);
   }
@@ -617,6 +631,10 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
   async function stop(db, userId, robotRef, { reason = "", actionId = null, requestedBy = "" } = {}) {
     const robot = typeof robotRef === "object" && robotRef ? robotRef : await resolveRobot(db, userId, robotRef);
     if (robot.status !== "enrolled") throw fail(409, `${robot.name} isn't enrolled, so there is nothing to stop.`, "not-enrolled");
+    // A stop ends the robot's plan and drops every plan waiting behind it, so nothing starts again by itself.
+    for (const row of (await db.query(`SELECT * FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status IN ${PLAN_OPEN}`, [userId, robot.id])).rows) {
+      await endPlan(db, row, "cancelled", row.status === "running" ? "The robot was stopped." : "The robot was stopped before this plan started.", now());
+    }
     for (const mission of await listMissions(db, userId, { robotId: robot.id, active: true, limit: 100 })) {
       if (mission.capability !== "stop_motion") await cancelMission(db, userId, mission.id);
     }
@@ -651,6 +669,196 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     if (mission.status !== "paused") throw fail(409, mission.final ? "That mission is already over." : "That mission isn't paused.", "not-paused");
     await db.query("UPDATE hannah_robot_missions SET resume_requested_at = $1, control_nonce = $2, error = NULL, updated_at = $1 WHERE user_id = $3 AND id = $4 AND status = 'paused'", [now(), crypto.randomBytes(16).toString("hex"), userId, mission.id]);
     return getMission(db, userId, mission.id);
+  }
+
+  // ---------- plans: several steps under one approval ----------
+  function publicPlan(row) {
+    const steps = parse(row.steps, []);
+    const plan = {
+      id: row.id, robotId: row.robot_id, title: row.title, template: row.template || null, status: row.status, final: plans.FINAL.has(row.status), cursor: Number(row.cursor), priority: Number(row.priority),
+      actionId: row.action_id || null, requestedBy: row.requested_by || "", error: row.error || null, startBy: Number(row.start_by), createdAt: Number(row.created_at),
+      startedAt: row.started_at ? Number(row.started_at) : null, finishedAt: row.finished_at ? Number(row.finished_at) : null,
+      steps: steps.map((step, index) => ({ n: index + 1, capability: step.capability, title: contract.capability(step.capability)?.title || step.capability, text: plans.stepText(step), kind: step.kind, status: step.status, params: step.sent || step.params, missionId: step.missionId || null, startedAt: step.startedAt || null, finishedAt: step.finishedAt || null, output: step.output ?? null, evidence: step.evidence || null, error: step.error || null })),
+    };
+    return plan;
+  }
+  /** Close a plan: the step in hand takes the outcome, the steps after it are marked as not run. */
+  async function endPlan(db, row, status, error, at, { stepStatus = status === "succeeded" ? "succeeded" : status === "expired" ? "skipped" : status } = {}) {
+    const steps = parse(row.steps, []);
+    const cursor = Number(row.cursor);
+    steps.forEach((step, index) => {
+      if (index === cursor && (step.status === "running" || step.status === "pending") && status !== "succeeded") Object.assign(step, { status: step.status === "pending" && status !== "failed" ? "skipped" : stepStatus, error: step.error || error, finishedAt: at });
+      else if (index > cursor && step.status === "pending") step.status = "skipped";
+    });
+    const done = await db.query(`UPDATE hannah_robot_plans SET status = $1, error = $2, steps = $3, finished_at = $4, updated_at = $4 WHERE user_id = $5 AND id = $6 AND status IN ${PLAN_OPEN}`, [status, error ? clean(error, 500) : null, JSON.stringify(steps), at, row.user_id, row.id]);
+    if (!done.rowCount) return false;
+    if (status !== "succeeded") {
+      await addEvent(db, row.user_id, row.robot_id, { type: `plan-${status}`, severity: status === "failed" ? "warning" : "info", message: `Plan “${clean(row.title, 80)}” ${status === "expired" ? "never started" : status}: ${clean(error, 300) || "no reason recorded"}`, at }).catch(() => {});
+      // Work queued behind a plan that didn't finish is not started: whatever stopped this one hasn't been looked at.
+      if (row.status === "running" && status === "failed") {
+        for (const queued of (await db.query("SELECT * FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status = 'queued'", [row.user_id, row.robot_id])).rows) {
+          await endPlan(db, queued, "cancelled", `The plan before it (“${clean(row.title, 60)}”) failed, so this one was not started.`, at);
+        }
+      }
+    }
+    return true;
+  }
+  /**
+   * Move a robot's plans along. Called in every exchange with that robot, after
+   * its reports were applied, so the state used here is seconds old at most.
+   * With `mayDispatch` false (a person reading a plan while the robot is away)
+   * it only records what is already over; it never starts anything.
+   */
+  async function advancePlans(db, userId, robotId, at, { mayDispatch = true } = {}) {
+    const open = (await db.query(`SELECT * FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status IN ${PLAN_OPEN} ORDER BY priority DESC, created_at`, [userId, robotId])).rows;
+    if (!open.length) return;
+    for (const row of open.filter((item) => item.status === "queued" && Number(item.start_by) <= at)) {
+      await endPlan(db, row, "expired", "The robot wasn't free in time, so the plan was dropped. Nothing was run.", at);
+    }
+    let row = open.find((item) => item.status === "running") || null;
+    if (!row) {
+      if (!mayDispatch) return;
+      row = open.find((item) => item.status === "queued" && Number(item.start_by) > at) || null;
+      if (!row) return;
+      // A queued plan starts only when the robot has nothing else that moves it.
+      if (await activeMotion(db, userId, robotId)) return;
+      if (!(await db.query("UPDATE hannah_robot_plans SET status = 'running', started_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3 AND status = 'queued'", [at, userId, row.id])).rowCount) return;
+      row = { ...row, status: "running", started_at: at };
+    }
+    const steps = parse(row.steps, []);
+    let cursor = Number(row.cursor);
+    const save = () => db.query("UPDATE hannah_robot_plans SET steps = $1, cursor = $2, updated_at = $3 WHERE user_id = $4 AND id = $5 AND status = 'running'", [JSON.stringify(steps), cursor, at, userId, row.id]);
+    for (let guard = 0; guard <= steps.length; guard += 1) {
+      const step = steps[cursor];
+      if (!step) {
+        await save();
+        await endPlan(db, { ...row, steps: JSON.stringify(steps), cursor }, "succeeded", null, at);
+        return advancePlans(db, userId, robotId, at, { mayDispatch }); // the next one in the queue, if any
+      }
+      if (step.status === "running" && step.missionId) {
+        const mission = await getMission(db, userId, step.missionId).catch(() => null);
+        if (mission && !mission.final) return;
+        if (mission?.status === "succeeded") {
+          Object.assign(step, { status: "succeeded", finishedAt: mission.finishedAt || at, evidence: mission.verification?.evidence || "Verified from the robot's reported state.", output: mission.result ?? null });
+          cursor += 1;
+          continue;
+        }
+        const reason = !mission ? "Its mission record is gone." : mission.status === "unverified" ? `The robot reported success, but its state doesn't confirm it. ${mission.verification?.evidence || ""}`.trim() : mission.error || `The step ended as ${mission.status}.`;
+        Object.assign(step, { status: mission?.status === "cancelled" ? "cancelled" : "failed", error: reason, finishedAt: at });
+        await endPlan(db, { ...row, steps: JSON.stringify(steps), cursor }, mission?.status === "cancelled" ? "cancelled" : "failed", reason, at);
+        return;
+      }
+      if (!mayDispatch) return;
+      const robot = await getRobot(db, userId, robotId);
+      if (step.kind === "observation") {
+        const seen = plans.observe(step, robot, at);
+        if (!seen.ok) {
+          Object.assign(step, { status: "failed", error: seen.error, finishedAt: at });
+          await endPlan(db, { ...row, steps: JSON.stringify(steps), cursor }, "failed", seen.error, at);
+          return;
+        }
+        Object.assign(step, { status: "succeeded", startedAt: at, finishedAt: at, output: tidy(seen.output), evidence: seen.evidence });
+        cursor += 1;
+        continue;
+      }
+      // A step that moves the robot: the Safety Gateway again, against the robot as it is now.
+      const verdict = await assess(db, userId, robot, step.capability, step.params, { planId: row.id });
+      if (!verdict.ok) {
+        const reason = `Not sent. ${verdict.violations.map((item) => item.message).join(" ")}`;
+        Object.assign(step, { status: "failed", error: reason, finishedAt: at });
+        await endPlan(db, { ...row, steps: JSON.stringify(steps), cursor }, "failed", reason, at);
+        return;
+      }
+      const missionId = `ms_${crypto.randomBytes(9).toString("hex")}`;
+      Object.assign(step, { status: "running", missionId, startedAt: at, sent: verdict.params });
+      // The plan records the step first; only the exchange that wins this write sends the command.
+      if (!(await save()).rowCount) return;
+      await dispatch(db, userId, { robot, capabilityId: step.capability, params: verdict.params, actionId: row.action_id, requestedBy: row.requested_by || "", planId: row.id, id: missionId });
+      return;
+    }
+  }
+  /** Check every step of a plan against the robot as it is now. The first step must be ready; later ones may depend on earlier ones. */
+  async function assessPlan(db, userId, robotRef, steps) {
+    const robot = typeof robotRef === "object" && robotRef ? robotRef : await resolveRobot(db, userId, robotRef);
+    const violations = [];
+    const warnings = new Set();
+    const flags = new Set();
+    const checked = [];
+    let risk = "none";
+    const order = ["none", "low", "moderate", "high", "critical"];
+    // Plans are for simulated robots until there is evidence from supervised hardware runs: a physical robot's every movement is approved by itself.
+    const moving = steps.filter((step) => contract.capability(step.capability)?.motion);
+    if (!robot.simulated && moving.length) violations.push({ code: "physical-plan", message: `${robot.name} is a physical robot. Each of its movements has to be approved by itself; plans of several steps run on simulated robots only.` });
+    for (const [index, step] of steps.entries()) {
+      // A busy robot doesn't refuse a plan: the plan waits its turn. Everything else is checked now.
+      const verdict = safety.check({ robot, capabilityId: step.capability, params: step.params, now: now(), active: null });
+      for (const item of verdict.violations) {
+        if (index > 0 && plans.DEPENDS_ON_EARLIER.has(item.code)) continue;
+        violations.push({ code: item.code, message: `Step ${index + 1} (${plans.stepText(step)}): ${item.message}` });
+      }
+      verdict.warnings.forEach((item) => warnings.add(item));
+      verdict.flags.forEach((item) => flags.add(item));
+      if (order.indexOf(verdict.risk) > order.indexOf(risk)) risk = verdict.risk;
+      checked.push({ ...step, kind: plans.stepKind(step.capability), sent: verdict.params, risk: verdict.risk });
+    }
+    // An arm or a gripper always asks, in simulation too; a plan that contains one asks as a whole.
+    if (risk === "high" || risk === "critical") flags.add("this plan moves an arm or a gripper");
+    const waiting = (await db.query("SELECT COUNT(*) AS n FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status = 'queued'", [userId, robot.id])).rows[0];
+    if (Number(waiting?.n || 0) >= plans.MAX_QUEUED) violations.push({ code: "queue-full", message: `${robot.name} already has ${plans.MAX_QUEUED} plans waiting. Cancel one or wait.` });
+    const busyWith = moving.length ? (await activeMotion(db, userId, robot.id))?.title || (await db.query("SELECT title FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status = 'running'", [userId, robot.id])).rows[0]?.title || null : null;
+    return { robot, ok: violations.length === 0, violations, warnings: [...warnings], flags: [...flags], risk, steps: checked, waitsFor: busyWith };
+  }
+  async function createPlan(db, userId, { robot, title, template = null, steps, priority = 3, startWithinMin = plans.START_WITHIN_MIN.default, actionId = null, requestedBy = "" }) {
+    const at = now();
+    const id = `pl_${crypto.randomBytes(9).toString("hex")}`;
+    const within = Math.max(1, Math.min(plans.START_WITHIN_MIN.max, Number(startWithinMin) || plans.START_WITHIN_MIN.default));
+    const stored = steps.map((step) => ({ capability: step.capability, params: step.params, kind: plans.stepKind(step.capability), status: "pending" }));
+    await db.query(
+      `INSERT INTO hannah_robot_plans (user_id, id, robot_id, title, template, steps, status, cursor, priority, action_id, requested_by, start_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 'queued', 0, $7, $8, $9, $10, $11, $11)`,
+      [userId, id, robot.id, clean(title, 120) || "Plan", template, JSON.stringify(stored), Math.max(1, Math.min(5, Math.round(Number(priority) || 3))), actionId, clean(requestedBy, 80), at + within * 60_000, at],
+    );
+    return getPlan(db, userId, id);
+  }
+  async function getPlan(db, userId, id) {
+    let row = (await db.query("SELECT * FROM hannah_robot_plans WHERE user_id = $1 AND id = $2", [userId, String(id || "")])).rows[0];
+    if (!row) throw fail(404, "That plan isn't in your history.", "not-found");
+    if (!plans.FINAL.has(row.status)) {
+      // Record what is already over (a step whose robot went away, a start that came too late). Starts nothing.
+      await advancePlans(db, userId, row.robot_id, now(), { mayDispatch: false });
+      row = (await db.query("SELECT * FROM hannah_robot_plans WHERE user_id = $1 AND id = $2", [userId, row.id])).rows[0];
+    }
+    return publicPlan(row);
+  }
+  async function listPlans(db, userId, { robotId, active = false, limit = 20 } = {}) {
+    const values = [userId];
+    let where = "user_id = $1";
+    if (robotId) { values.push(String(robotId)); where += ` AND robot_id = $${values.length}`; }
+    if (active) where += ` AND status IN ${PLAN_OPEN}`;
+    values.push(Math.max(1, Math.min(100, Number(limit) || 20)));
+    const { rows } = await db.query(`SELECT * FROM hannah_robot_plans WHERE ${where} ORDER BY created_at DESC LIMIT $${values.length}`, values);
+    const stale = new Set(rows.filter((row) => !plans.FINAL.has(row.status)).map((row) => row.robot_id));
+    if (!stale.size) return rows.map(publicPlan);
+    for (const id of stale) await advancePlans(db, userId, id, now(), { mayDispatch: false });
+    return (await db.query(`SELECT * FROM hannah_robot_plans WHERE ${where} ORDER BY created_at DESC LIMIT $${values.length}`, values)).rows.map(publicPlan);
+  }
+  /** Cancel a plan: one that is waiting is dropped; one that is running has its current step cancelled on the robot. Never needs approval. */
+  async function cancelPlan(db, userId, id) {
+    const plan = await getPlan(db, userId, id);
+    if (plan.final) return plan;
+    const row = (await db.query("SELECT * FROM hannah_robot_plans WHERE user_id = $1 AND id = $2", [userId, plan.id])).rows[0];
+    const current = plan.steps[plan.cursor];
+    await endPlan(db, row, "cancelled", plan.status === "queued" ? "Cancelled before it started." : "Cancelled.", now());
+    if (current?.missionId) await cancelMission(db, userId, current.missionId);
+    return getPlan(db, userId, plan.id);
+  }
+  async function waitForPlan(db, userId, id, until, ms = ackWaitMs) {
+    const end = Date.now() + ms;
+    for (;;) {
+      const plan = await getPlan(db, userId, id);
+      if (until(plan) || plan.final || Date.now() >= end) return plan;
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
   }
 
   // ---------- commissioning (physical robots) ----------
@@ -752,7 +960,27 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return rows.map((row) => ({ id: row.id, robotId: row.robot_id, at: Number(row.at), type: row.type, severity: row.severity, message: row.message, source: row.source }));
   }
 
-  return { activeMotion, addDestination, addMaintenance, assess, authenticate, cancelMission, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
+  /** Fleet figures from stored records. See fleet.analytics for what each one means. */
+  async function analytics(db, userId, { days = 7 } = {}) {
+    const at = now();
+    const windowMs = Math.max(1, Math.min(30, Number(days) || 7)) * 86_400_000;
+    const since = at - windowMs;
+    const robots = await listRobots(db, userId);
+    const missions = (await db.query("SELECT * FROM hannah_robot_missions WHERE user_id = $1 AND created_at >= $2 ORDER BY created_at DESC LIMIT 5000", [userId, since])).rows.map((row) => publicMission(row, at));
+    const planRows = (await db.query("SELECT * FROM hannah_robot_plans WHERE user_id = $1 AND created_at >= $2 ORDER BY created_at DESC LIMIT 2000", [userId, since])).rows.map(publicPlan);
+    const events = (await db.query("SELECT robot_id, type, COUNT(*) AS n FROM hannah_robot_events WHERE user_id = $1 AND at >= $2 GROUP BY robot_id, type", [userId, since])).rows.map((row) => ({ robotId: row.robot_id, type: row.type, count: Number(row.n) }));
+    const telemetryOf = {};
+    for (const robot of robots) {
+      const from = at - TELEMETRY_KEEP_MS;
+      const count = Number((await db.query("SELECT COUNT(*) AS n FROM hannah_robot_telemetry WHERE user_id = $1 AND robot_id = $2 AND at >= $3", [userId, robot.id, from])).rows[0]?.n || 0);
+      if (!count) continue;
+      const edge = async (order) => { const row = (await db.query(`SELECT at, sample FROM hannah_robot_telemetry WHERE user_id = $1 AND robot_id = $2 AND at >= $3 ORDER BY at ${order} LIMIT 1`, [userId, robot.id, from])).rows[0]; return row ? { at: Number(row.at), battery: parse(row.sample, {}).battery ?? null } : null; };
+      telemetryOf[robot.id] = { samples: count, everyMs: TELEMETRY_EVERY_MS, first: await edge("ASC"), last: await edge("DESC") };
+    }
+    return fleet.analytics({ robots, missions, plans: planRows, events, telemetry: telemetryOf, now: at, windowMs });
+  }
+
+  return { activeMotion, addDestination, analytics, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
 }
 
 module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, fingerprintOf, normalizeDescriptor, requestMessage, signCommand, signRequest };

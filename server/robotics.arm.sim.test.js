@@ -175,3 +175,57 @@ test("stop freezes a moving arm without approval and is confirmed from the joint
   // Stopped part-way, or it had already arrived: either is reported as what happened.
   assert.ok(moving.mode === "idle" ? ended.status === "succeeded" : ["cancelled", "succeeded"].includes(ended.status), ended.status);
 });
+
+test("pick and place as one plan: every step is listed for one approval, checked again when it is sent, and verified from the arm's feedback", { skip }, async () => {
+  await until(robot, (value) => value.mode === "idle" && value.state.velocity.angular === 0, "the arm to be idle");
+  const templates = (await call("GET", `/robots/${robotId}/templates`)).body.templates;
+  assert.deepEqual(templates.filter((item) => item.available).map((item) => item.id), ["pick_and_place", "status_report"]);
+  assert.match(templates.find((item) => item.id === "go_and_return").reason, /Arm doesn't offer “Drive to a place”/);
+  // An object the arm doesn't report, or a pose it doesn't have, is refused before anything is checked or asked.
+  assert.match((await act("robots.run_plan", { robot: "Arm", template: "pick_and_place", inputs: { object: "green block", to: "bin" } })).body.error, /doesn't report an object called “green block” \(it reports: red block, blue block\)/);
+  assert.match((await act("robots.run_plan", { robot: "Arm", template: "pick_and_place", inputs: { object: "blue block", to: "shelf" } })).body.error, /no pose called “shelf”/);
+
+  // The widest level and a standing permission for everything: a plan with an arm in it still asks.
+  await call("PUT", "/account/permissions", { levels: { robots: 5 } });
+  const grant = await call("POST", "/account/permissions/grants", { service: "robots", actions: ["*"], expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
+  const asked = await act("robots.run_plan", { robot: "Arm", template: "pick_and_place", inputs: { object: "blue block", to: "inspection" } });
+  assert.equal(asked.body.record.status, "waiting-approval", JSON.stringify(asked.body));
+  assert.match(asked.body.record.permission.reason, /this plan moves an arm or a gripper/);
+  const lines = asked.body.record.preview.lines.filter((line) => line.label.startsWith("Step")).map((line) => line.value);
+  // Where the block is comes from the arm's own scene report, not from its name.
+  assert.deepEqual(lines, ["move the arm to (0.3, 0.45)", "grasp the blue block", "move the arm to inspection (0.6, 0)", "open the gripper", `move the arm to home (${lines[4].match(/\(([^)]+)\)/)[1]})`]);
+  assert.equal(asked.body.record.preview.lines.find((line) => line.label === "Risk").value, "high");
+  const started = await call("POST", `/actions/${asked.body.record.id}/decision`, { approve: true });
+  assert.equal(started.body.record.status, "done", JSON.stringify(started.body.record));
+  const planId = started.body.record.response.planId;
+  // While it runs, the arm takes nothing else.
+  const busy = await act("robots.move_robot_arm", { robot: "Arm", place: "bin" });
+  assert.match(busy.body.record.permission.reason, /already on a mission|working through the plan/);
+
+  const done = await until(async () => (await call("GET", `/robots/plans/${planId}`)).body.plan, (value) => value.final, "the plan to finish", 60_000);
+  assert.equal(done.status, "succeeded", JSON.stringify(done));
+  assert.deepEqual(done.steps.map((step) => step.status), ["succeeded", "succeeded", "succeeded", "succeeded", "succeeded"]);
+  assert.match(done.steps[0].evidence, /The tool position from the measured joint angles .* is \(0\.3, 0\.45\), 0 cm from the target/);
+  assert.equal(done.steps[1].evidence, "The gripper reports it is holding blue block.");
+  assert.equal(done.steps[3].evidence, "The gripper reports open and holding nothing.");
+  assert.match(done.summary, /all 5 steps finished and verified/);
+  const after = await robot();
+  const block = after.state.scene.objects.find((item) => item.id === "blue block");
+  assert.ok(Math.hypot(block.x - 0.6, block.y) < 0.01, `the blue block is at the inspection pose: ${JSON.stringify(block)}`);
+  assert.deepEqual(after.state.gripper, { open: true, holding: null });
+  assert.equal(after.state.faults.length, 0);
+  await call("DELETE", `/account/permissions/grants/${grant.body.grant.id}`);
+  await call("PUT", "/account/permissions", { levels: { robots: 3 } });
+});
+
+test("a plan stops where the arm's feedback says a step didn't happen: a grasp on nothing ends it and the gripper is not opened by the plan", { skip }, async () => {
+  await until(robot, (value) => value.mode === "idle", "the arm to be idle");
+  // Go to the bin's pose, then try to grasp a block that is somewhere else.
+  const asked = await act("robots.run_plan", { robot: "Arm", steps: [{ do: "move_robot_arm", place: "bin" }, { do: "grasp_object", object: "blue block" }, { do: "move_robot_arm", place: "home" }] });
+  const started = await call("POST", `/actions/${asked.body.record.id}/decision`, { approve: true });
+  const planId = started.body.record.response.planId;
+  const done = await until(async () => (await call("GET", `/robots/plans/${planId}`)).body.plan, (value) => value.final, "the plan to end", 60_000);
+  assert.equal(done.status, "failed", JSON.stringify(done));
+  assert.deepEqual(done.steps.map((step) => step.status), ["succeeded", "failed", "skipped"]);
+  assert.match(done.summary, /stopped at step 2 of 3 \(grasp the blue block\)\. .*The gripper closed on nothing.*The last step was not run/);
+});

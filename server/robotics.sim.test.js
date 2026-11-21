@@ -361,6 +361,34 @@ test("what the robot senses is reported as measurements: an object that isn't on
   assert.ok(battery.percent > 0 && battery.percent <= 100);
 });
 
+test("an inspection route as one plan: drive, record what the sensors detect and a reading at each place, return to the dock", { skip: skip || (GAZEBO ? "the ROS 2 adapter doesn't report perception yet" : false) }, async () => {
+  await idle();
+  const asked = await act("robots.run_plan", { robot: "Rover", template: "inspection_route", inputs: { places: ["workbench", "door"], sensor: "environment" } });
+  assert.equal(asked.body.record.status, "waiting-approval", JSON.stringify(asked.body));
+  const steps = asked.body.record.preview.lines.filter((line) => line.label.startsWith("Step")).map((line) => line.value.replace(/ \(.*$/, ""));
+  assert.deepEqual(steps, ["drive to workbench", "record what the range sensor detects", "read the environment sensor", "drive to door", "record what the range sensor detects", "read the environment sensor", "return to the dock"]);
+  const started = await call("POST", `/actions/${asked.body.record.id}/decision`, { approve: true });
+  assert.equal(started.body.record.status, "done", JSON.stringify(started.body.record));
+  const planId = started.body.record.response.planId;
+  const done = await until(async () => (await call("GET", `/robots/plans/${planId}`)).body.plan, (value) => value.final, { ms: 60_000, what: "the route to finish" });
+  assert.equal(done.status, "succeeded", JSON.stringify(done).slice(0, 1500));
+  assert.match(done.steps[0].evidence, /from the goal .*standing still/);
+  // Each observation is the robot's own report, taken where it stood after the drive before it.
+  const [seenAtBench, readAtBench, seenAtDoor] = [done.steps[1], done.steps[2], done.steps[4]];
+  const places = (await robot()).places;
+  assert.ok(Math.hypot(seenAtBench.output.position.x - places.workbench.x, seenAtBench.output.position.y - places.workbench.y) < 0.4, JSON.stringify(seenAtBench.output.position));
+  assert.ok(Math.hypot(seenAtDoor.output.position.x - places.door.x, seenAtDoor.output.position.y - places.door.y) < 0.4, JSON.stringify(seenAtDoor.output.position));
+  assert.equal(seenAtBench.output.kind, "simulation");
+  assert.ok(Array.isArray(seenAtBench.output.obstacles));
+  assert.match(seenAtBench.evidence, /obstacles? detected/);
+  assert.equal(typeof readAtBench.output.reading.temperatureC, "number");
+  assert.equal(readAtBench.output.reading.source, "simulated");
+  assert.equal((await robot()).mode, "docked");
+  // The agent's read of the finished plan.
+  const read = (await act("robots.plan", { robot: "Rover" })).body.record.response;
+  assert.match(read.summary, /all 7 steps finished and verified/);
+});
+
 test("revoking the robot ends its access; the runtime holds and reports it locally", { skip }, async () => {
   await idle();
   await call("POST", `/robots/${robotId}/revoke`);

@@ -761,6 +761,37 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_robot_maintenance_robot ON hannah_robot_maintenance (robot_id, at)",
     ],
   },
+  {
+    version: 20,
+    name: "robot plans",
+    // A plan is several robot steps under one approval, run one at a time, with
+    // each step's outcome kept as a checkpoint. A mission started by a plan
+    // points back at it. Additive.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_robot_plans (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        template TEXT,
+        steps TEXT NOT NULL,
+        status TEXT NOT NULL,
+        cursor INTEGER NOT NULL DEFAULT 0,
+        priority INTEGER NOT NULL DEFAULT 3,
+        action_id TEXT,
+        requested_by TEXT,
+        error TEXT,
+        start_by BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        started_at BIGINT,
+        finished_at BIGINT,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robot_plans_robot ON hannah_robot_plans (robot_id, status)",
+      "ALTER TABLE hannah_robot_missions ADD COLUMN plan_id TEXT",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

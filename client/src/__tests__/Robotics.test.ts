@@ -194,6 +194,44 @@ describe("robot tools and the Robot Agent", () => {
     expect(picked.length).toBeLessThanOrEqual(20);
   });
 
+  it("a plan of several steps is asked of the engine as one action, approved on the card, and reported as started; watching it reports each step as it ended", async () => {
+    const preview = { title: "Run a plan on Rover: Go to workbench and come back", lines: [{ label: "Robot", value: "Rover — SIMULATION (hannah-kinematic)" }, { label: "Step 1", value: "drive to workbench (3, 2)" }, { label: "Step 2", value: "return to the dock" }], warnings: [] };
+    respond = (call) => (call.path === "/api/actions" ? { record: record("waiting-approval", { action: "robots.run_plan", preview }) } : { record: record("done", { action: "robots.run_plan", response: { planId: "pl_1", status: "running" }, verification: { confirmed: true, evidence: "Plan started." } }) });
+    const screen = host(true);
+    const started = await tool("robot_run_plan").execute({ robot: "Rover", template: "go_and_return", inputs: { place: "workbench" } }) as Record<string, unknown>;
+    screen.detach();
+    expect(calls[0]).toMatchObject({ path: "/api/actions", body: { action: "robots.run_plan", params: { robot: "Rover", template: "go_and_return", inputs: { place: "workbench" } } } });
+    // The person approving sees every step.
+    expect(screen.seen[0]).toContain("Step 1: drive to workbench (3, 2)");
+    expect(screen.seen[0]).toContain("Step 2: return to the dock");
+    expect(started).toMatchObject({ status: "done", planId: "pl_1" });
+    expect(started.next).toMatch(/only started\. Call robot_plan/);
+
+    const step = (n: number, status: string, extra: Record<string, unknown> = {}) => ({ n, capability: "navigate_to", title: "Drive", text: n === 1 ? "drive to workbench (3, 2)" : n === 2 ? "read the environment sensor" : "return to the dock", kind: n === 2 ? "observation" : "mission", status, params: {}, missionId: null, startedAt: null, finishedAt: null, output: null, evidence: null, error: null, ...extra });
+    respond = () => ({ plan: { id: "pl_1", robotId: "rb_1", robotName: "Rover", title: "Round", template: null, status: "failed", final: true, cursor: 2, priority: 3, error: "No path.", startBy: 0, createdAt: 0, startedAt: 0, finishedAt: 1, summary: "Plan “Round”: stopped at step 3 of 3 (return to the dock). No path.", steps: [step(1, "succeeded", { evidence: "0.02 m from the goal, standing still." }), step(2, "succeeded", { evidence: "The environment sensor reported temperatureC 21.4.", output: { kind: "simulation", at: 5, reading: { temperatureC: 21.4 } } }), step(3, "failed", { error: "No path." })] } });
+    const watched = await tool("robot_plan").execute({ planId: "pl_1", seconds: 5 }) as { status: string; finished: boolean; note: string; steps: Array<Record<string, unknown>> };
+    expect(watched).toMatchObject({ status: "failed", finished: true });
+    expect(watched.note).toMatch(/did NOT finish/);
+    expect(watched.steps[1]).toMatchObject({ status: "succeeded", recorded: { kind: "simulation", reading: { temperatureC: 21.4 } } });
+    expect(watched.steps[2]).toMatchObject({ status: "failed", reason: "No path." });
+    expect(watched.steps[0].recorded).toBeUndefined();
+
+    // Cancelling a plan is asked at once, like stopping.
+    calls.length = 0;
+    respond = () => ({ record: record("done", { action: "robots.cancel_plan", permission: { outcome: "allow", code: "deescalates", reason: "Stopping is always allowed." }, response: { planId: "pl_1", status: "cancelled" } }) });
+    await tool("robot_cancel_plan").execute({ robot: "Rover" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ path: "/api/actions", body: { action: "robots.cancel_plan", params: { robot: "Rover" } } });
+    // The tools for it arrive with a request that sounds like a plan, with stop still there and the limit kept.
+    const pick = (request: string) => selectToolsForRequest(getDeviceTools(), request).map((item) => item.name);
+    expect(pick("Send the robot to the workbench and then come back")).toEqual(expect.arrayContaining(["robot_run_plan", "robot_plan", "robot_templates", "robot_cancel_plan", "robot_stop"]));
+    expect(pick("How has the robot fleet been doing? Show the success rate")).toEqual(expect.arrayContaining(["robot_analytics", "robot_stop"]));
+    for (const request of ["Send the robot to the workbench and then come back", "robot plan inspection route fleet battery obstacle statistics arm gripper beacon"]) {
+      expect(pick(request).length).toBeLessThanOrEqual(20);
+      expect(pick(request)).toEqual(expect.arrayContaining(["robot_stop", "robot_cancel", "robot_pause"]));
+    }
+  });
+
   it("the Robots screen has its own address", () => {
     expect(pathForScreen("robotics")).toBe("/robotics");
     expect(screenForLocation({ pathname: "/robotics", hash: "" })).toBe("robotics");
