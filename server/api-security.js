@@ -39,10 +39,12 @@ const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/accou
 // the cron tick checks CRON_SECRET. Nothing else under these paths is public.
 // A robot's own endpoints: enrollment is proven by a one-time code, every sync
 // by the robot's signature (server/robotics/service.js). No account session.
-const PUBLIC_PREFIXES = ["/hooks/", "/robots/device/"];
+// A device hub's endpoints work the same way (server/devices/service.js).
+const PUBLIC_PREFIXES = ["/hooks/", "/robots/device/", "/hubs/device/"];
 const ROBOT_ENROLL_PATH = "/robots/enroll";
+const HUB_ENROLL_PATH = "/hubs/enroll";
 function isPublic(path) {
-  return PUBLIC_PATHS.has(path) || path === ROBOT_ENROLL_PATH || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
+  return PUBLIC_PATHS.has(path) || path === ROBOT_ENROLL_PATH || path === HUB_ENROLL_PATH || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 // A signed-in account (session or developer API key) may use the model routes
 // plus its own account and sync routes. Operator-only routes stay closed.
@@ -53,7 +55,9 @@ function accountMayUse(path) {
     // The Action Engine and the coding service: an account's own actions, permissions, repositories and tasks.
     || path === "/actions" || path.startsWith("/actions/") || path.startsWith("/coding/")
     // An account's own robots, their missions and telemetry.
-    || path === "/robots" || path.startsWith("/robots/");
+    || path === "/robots" || path.startsWith("/robots/")
+    // An account's own hubs, the devices behind them and their automations.
+    || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 

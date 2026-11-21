@@ -1,0 +1,141 @@
+{
+  "format": 1,
+  "id": "org.hannah.sim.power-meter",
+  "version": "1.0.0",
+  "name": "Simulated power meter with relay",
+  "author": "HANNAH",
+  "manufacturer": "HANNAH (simulated)",
+  "model": "SIM-METER",
+  "revisions": [
+    "sim-1"
+  ],
+  "category": "energy-meter",
+  "domain": "industrial",
+  "simulated": true,
+  "protocol": {
+    "adapter": "modbus-tcp",
+    "version": "1.1b3"
+  },
+  "connection": {
+    "instructions": [
+      "Start the simulator on the hub's computer: python3 -m hannah_edge simulate",
+      "Use the address and port it prints."
+    ],
+    "fields": [
+      {
+        "id": "host",
+        "label": "Device address",
+        "type": "text",
+        "required": true,
+        "help": "The device's address on your network."
+      },
+      {
+        "id": "port",
+        "label": "Port",
+        "type": "number",
+        "default": 502,
+        "min": 1,
+        "max": 65535
+      },
+      {
+        "id": "unit",
+        "label": "Unit number",
+        "type": "number",
+        "default": 1,
+        "min": 0,
+        "max": 255,
+        "help": "Printed in the device's manual as unit id or slave address."
+      }
+    ]
+  },
+  "points": [
+    {
+      "id": "voltage",
+      "name": "Voltage",
+      "kind": "sensor",
+      "type": "number",
+      "unit": "V",
+      "range": [
+        0,
+        300
+      ],
+      "access": "read",
+      "binding": {
+        "register": {
+          "table": "input",
+          "address": 0,
+          "type": "uint16",
+          "scale": 0.1
+        }
+      }
+    },
+    {
+      "id": "power",
+      "name": "Power",
+      "kind": "sensor",
+      "type": "number",
+      "unit": "W",
+      "range": [
+        0,
+        10000
+      ],
+      "access": "read",
+      "binding": {
+        "register": {
+          "table": "input",
+          "address": 1,
+          "type": "uint32"
+        }
+      }
+    },
+    {
+      "id": "limit",
+      "name": "Power limit",
+      "kind": "actuator",
+      "type": "number",
+      "unit": "W",
+      "range": [
+        100,
+        3000
+      ],
+      "step": 100,
+      "access": "read-write",
+      "risk": "elevated",
+      "binding": {
+        "register": {
+          "table": "holding",
+          "address": 0,
+          "type": "uint16"
+        }
+      }
+    },
+    {
+      "id": "relay",
+      "name": "Load relay",
+      "kind": "actuator",
+      "type": "boolean",
+      "access": "read-write",
+      "risk": "elevated",
+      "binding": {
+        "register": {
+          "table": "coil",
+          "address": 0
+        }
+      }
+    }
+  ],
+  "constraints": [
+    "Modbus has no sign-in or encryption: anything on the same network can write to this device."
+  ],
+  "permissions": [
+    "network-local"
+  ],
+  "dependencies": [],
+  "tests": {
+    "level": "simulation",
+    "passed": 0,
+    "total": 0,
+    "evidence": "hannah-os/runtime/tests/test_hub.py"
+  },
+  "documentation": "A simulated device for trying HANNAH without hardware. It is not a model of any product."
+}

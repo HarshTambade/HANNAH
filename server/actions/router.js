@@ -47,6 +47,8 @@ const { communicationActions, CAN_START, REPLY_ONLY } = require("./catalog/commu
 const { codeActions } = require("./catalog/code");
 const { deviceActions } = require("./catalog/device");
 const { robotActions } = require("./catalog/robots");
+const { hardwareActions } = require("./catalog/hardware");
+const { createDeviceService } = require("../devices/service");
 const { createRoboticsService } = require("../robotics/service");
 const { emitUserEvent } = require("../webhooks");
 const { createCodingService } = require("../coding/service");
@@ -63,8 +65,9 @@ const fail = (status, message, reason) => Object.assign(new Error(message), { st
 function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs } = {}) {
   const coding = createCodingService({ fetchImpl, now, ...(request ? { request } : {}), ...(roots ? { roots } : {}) });
   const robotics = createRoboticsService({ now, emit: emitUserEvent, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
-  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics })] });
-  return { coding, engine, robotics };
+  const devices = createDeviceService({ now, emit: emitUserEvent });
+  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics }), ...hardwareActions({ devices })] });
+  return { coding, devices, engine, robotics };
 }
 
 /** Every connection an account has, in one shape. */
@@ -126,7 +129,7 @@ async function integrationsHub(db, userId, { coding, engine, robotics = null, no
 }
 
 function createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs = 90_000 }) {
-  const { engine, coding, robotics } = operator;
+  const { engine, coding, robotics, devices } = operator;
   const router = express.Router();
   const json = express.json({ limit: "600kb" });
   const guard = ({ session = false } = {}) => (handler) => async (req, res) => {
@@ -162,7 +165,9 @@ function createOperatorRouter({ operator, getRequestProvider, preferredProviderI
     const paused = await coding.pauseAll(db, account.id);
     // A software stop goes to every robot that could be moving. It is a request to each robot's controller, not an emergency stop.
     const robots = robotics ? await robotics.stopAll(db, account.id).catch(() => 0) : 0;
-    res.json({ stoppedAt: stopped.policy.stoppedAt, cancelled: stopped.cancelled, pausedTasks: paused, stoppedRobots: robots });
+    // Automations on hubs are paused too: they are HANNAH acting. Devices stay as they are; a person resumes them under Devices.
+    const hubs = devices ? await devices.suspendRules(db, account.id, true).catch(() => 0) : 0;
+    res.json({ stoppedAt: stopped.policy.stoppedAt, cancelled: stopped.cancelled, pausedTasks: paused, stoppedRobots: robots, pausedAutomationHubs: hubs });
   }));
   router.post("/actions/resume", person(async (_req, res, db, account) => res.json({ stoppedAt: (await engine.resume(db, account.id)).stoppedAt })));
   router.get("/actions", anyAccount(async (req, res, db, account) => {

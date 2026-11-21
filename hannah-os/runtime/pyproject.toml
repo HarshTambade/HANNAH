@@ -1,0 +1,9 @@
+[project]
+name = "hannah-edge"
+version = "0.1.0"
+description = "HANNAH Edge: the hub that runs next to your devices"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+hannah-edge = "hannah_edge.__main__:main"

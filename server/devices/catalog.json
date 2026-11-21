@@ -1,0 +1,495 @@
+[
+ {
+  "format": 1,
+  "id": "org.hannah.sim.fan",
+  "version": "1.0.0",
+  "name": "Simulated fan",
+  "author": "HANNAH",
+  "manufacturer": "HANNAH (simulated)",
+  "model": "SIM-FAN",
+  "revisions": [
+   "sim-1"
+  ],
+  "category": "switch",
+  "domain": "iot",
+  "simulated": true,
+  "protocol": {
+   "adapter": "mqtt",
+   "version": "3.1.1"
+  },
+  "connection": {
+   "instructions": [
+    "Start the simulator on the hub's computer: python3 -m hannah_edge simulate",
+    "Use the address and port it prints."
+   ],
+   "fields": [
+    {
+     "id": "host",
+     "label": "Broker address",
+     "type": "text",
+     "required": true,
+     "help": "The computer on your network that runs the MQTT broker, for example 192.168.1.10."
+    },
+    {
+     "id": "port",
+     "label": "Port",
+     "type": "number",
+     "default": 1883,
+     "min": 1,
+     "max": 65535
+    },
+    {
+     "id": "username",
+     "label": "User name",
+     "type": "text",
+     "help": "Leave empty when the broker has none."
+    },
+    {
+     "id": "password",
+     "label": "Password",
+     "type": "secret"
+    },
+    {
+     "id": "tls",
+     "label": "Encrypted (TLS)",
+     "type": "toggle",
+     "default": false
+    }
+   ]
+  },
+  "points": [
+   {
+    "id": "power",
+    "name": "Power",
+    "kind": "actuator",
+    "type": "boolean",
+    "access": "read-write",
+    "risk": "low",
+    "binding": {
+     "state": {
+      "topic": "sim/fan/state",
+      "on": "ON",
+      "off": "OFF"
+     },
+     "command": {
+      "topic": "sim/fan/set",
+      "on": "ON",
+      "off": "OFF"
+     }
+    }
+   }
+  ],
+  "constraints": [],
+  "permissions": [
+   "network-local"
+  ],
+  "dependencies": [],
+  "tests": {
+   "level": "simulation",
+   "passed": 0,
+   "total": 0,
+   "evidence": "hannah-os/runtime/tests/test_hub.py"
+  },
+  "documentation": "A simulated device for trying HANNAH without hardware. It is not a model of any product.",
+  "availability": {
+   "topic": "sim/fan/status",
+   "online": "online",
+   "offline": "offline"
+  }
+ },
+ {
+  "format": 1,
+  "id": "org.hannah.sim.lamp",
+  "version": "1.0.0",
+  "name": "Simulated dimmable lamp",
+  "author": "HANNAH",
+  "manufacturer": "HANNAH (simulated)",
+  "model": "SIM-LAMP",
+  "revisions": [
+   "sim-1"
+  ],
+  "category": "light",
+  "domain": "iot",
+  "simulated": true,
+  "protocol": {
+   "adapter": "mqtt",
+   "version": "3.1.1"
+  },
+  "connection": {
+   "instructions": [
+    "Start the simulator on the hub's computer: python3 -m hannah_edge simulate",
+    "Use the address and port it prints."
+   ],
+   "fields": [
+    {
+     "id": "host",
+     "label": "Broker address",
+     "type": "text",
+     "required": true,
+     "help": "The computer on your network that runs the MQTT broker, for example 192.168.1.10."
+    },
+    {
+     "id": "port",
+     "label": "Port",
+     "type": "number",
+     "default": 1883,
+     "min": 1,
+     "max": 65535
+    },
+    {
+     "id": "username",
+     "label": "User name",
+     "type": "text",
+     "help": "Leave empty when the broker has none."
+    },
+    {
+     "id": "password",
+     "label": "Password",
+     "type": "secret"
+    },
+    {
+     "id": "tls",
+     "label": "Encrypted (TLS)",
+     "type": "toggle",
+     "default": false
+    }
+   ]
+  },
+  "points": [
+   {
+    "id": "power",
+    "name": "Power",
+    "kind": "actuator",
+    "type": "boolean",
+    "access": "read-write",
+    "risk": "low",
+    "binding": {
+     "state": {
+      "topic": "sim/lamp/state",
+      "json": "state",
+      "on": "ON",
+      "off": "OFF"
+     },
+     "command": {
+      "topic": "sim/lamp/set",
+      "on": "ON",
+      "off": "OFF"
+     }
+    }
+   },
+   {
+    "id": "brightness",
+    "name": "Brightness",
+    "kind": "actuator",
+    "type": "number",
+    "unit": "%",
+    "range": [
+     0,
+     100
+    ],
+    "step": 1,
+    "access": "read-write",
+    "risk": "low",
+    "binding": {
+     "state": {
+      "topic": "sim/lamp/state",
+      "json": "brightness"
+     },
+     "command": {
+      "topic": "sim/lamp/brightness/set"
+     }
+    }
+   }
+  ],
+  "constraints": [],
+  "permissions": [
+   "network-local"
+  ],
+  "dependencies": [],
+  "tests": {
+   "level": "simulation",
+   "passed": 0,
+   "total": 0,
+   "evidence": "hannah-os/runtime/tests/test_hub.py"
+  },
+  "documentation": "A simulated device for trying HANNAH without hardware. It is not a model of any product.",
+  "availability": {
+   "topic": "sim/lamp/status",
+   "online": "online",
+   "offline": "offline"
+  }
+ },
+ {
+  "format": 1,
+  "id": "org.hannah.sim.power-meter",
+  "version": "1.0.0",
+  "name": "Simulated power meter with relay",
+  "author": "HANNAH",
+  "manufacturer": "HANNAH (simulated)",
+  "model": "SIM-METER",
+  "revisions": [
+   "sim-1"
+  ],
+  "category": "energy-meter",
+  "domain": "industrial",
+  "simulated": true,
+  "protocol": {
+   "adapter": "modbus-tcp",
+   "version": "1.1b3"
+  },
+  "connection": {
+   "instructions": [
+    "Start the simulator on the hub's computer: python3 -m hannah_edge simulate",
+    "Use the address and port it prints."
+   ],
+   "fields": [
+    {
+     "id": "host",
+     "label": "Device address",
+     "type": "text",
+     "required": true,
+     "help": "The device's address on your network."
+    },
+    {
+     "id": "port",
+     "label": "Port",
+     "type": "number",
+     "default": 502,
+     "min": 1,
+     "max": 65535
+    },
+    {
+     "id": "unit",
+     "label": "Unit number",
+     "type": "number",
+     "default": 1,
+     "min": 0,
+     "max": 255,
+     "help": "Printed in the device's manual as unit id or slave address."
+    }
+   ]
+  },
+  "points": [
+   {
+    "id": "voltage",
+    "name": "Voltage",
+    "kind": "sensor",
+    "type": "number",
+    "unit": "V",
+    "range": [
+     0,
+     300
+    ],
+    "access": "read",
+    "binding": {
+     "register": {
+      "table": "input",
+      "address": 0,
+      "type": "uint16",
+      "scale": 0.1
+     }
+    }
+   },
+   {
+    "id": "power",
+    "name": "Power",
+    "kind": "sensor",
+    "type": "number",
+    "unit": "W",
+    "range": [
+     0,
+     10000
+    ],
+    "access": "read",
+    "binding": {
+     "register": {
+      "table": "input",
+      "address": 1,
+      "type": "uint32"
+     }
+    }
+   },
+   {
+    "id": "limit",
+    "name": "Power limit",
+    "kind": "actuator",
+    "type": "number",
+    "unit": "W",
+    "range": [
+     100,
+     3000
+    ],
+    "step": 100,
+    "access": "read-write",
+    "risk": "elevated",
+    "binding": {
+     "register": {
+      "table": "holding",
+      "address": 0,
+      "type": "uint16"
+     }
+    }
+   },
+   {
+    "id": "relay",
+    "name": "Load relay",
+    "kind": "actuator",
+    "type": "boolean",
+    "access": "read-write",
+    "risk": "elevated",
+    "binding": {
+     "register": {
+      "table": "coil",
+      "address": 0
+     }
+    }
+   }
+  ],
+  "constraints": [
+   "Modbus has no sign-in or encryption: anything on the same network can write to this device."
+  ],
+  "permissions": [
+   "network-local"
+  ],
+  "dependencies": [],
+  "tests": {
+   "level": "simulation",
+   "passed": 0,
+   "total": 0,
+   "evidence": "hannah-os/runtime/tests/test_hub.py"
+  },
+  "documentation": "A simulated device for trying HANNAH without hardware. It is not a model of any product."
+ },
+ {
+  "format": 1,
+  "id": "org.hannah.sim.thermometer",
+  "version": "1.0.0",
+  "name": "Simulated room sensor",
+  "author": "HANNAH",
+  "manufacturer": "HANNAH (simulated)",
+  "model": "SIM-THERMO",
+  "revisions": [
+   "sim-1"
+  ],
+  "category": "sensor",
+  "domain": "iot",
+  "simulated": true,
+  "protocol": {
+   "adapter": "mqtt",
+   "version": "3.1.1"
+  },
+  "connection": {
+   "instructions": [
+    "Start the simulator on the hub's computer: python3 -m hannah_edge simulate",
+    "Use the address and port it prints."
+   ],
+   "fields": [
+    {
+     "id": "host",
+     "label": "Broker address",
+     "type": "text",
+     "required": true,
+     "help": "The computer on your network that runs the MQTT broker, for example 192.168.1.10."
+    },
+    {
+     "id": "port",
+     "label": "Port",
+     "type": "number",
+     "default": 1883,
+     "min": 1,
+     "max": 65535
+    },
+    {
+     "id": "username",
+     "label": "User name",
+     "type": "text",
+     "help": "Leave empty when the broker has none."
+    },
+    {
+     "id": "password",
+     "label": "Password",
+     "type": "secret"
+    },
+    {
+     "id": "tls",
+     "label": "Encrypted (TLS)",
+     "type": "toggle",
+     "default": false
+    }
+   ]
+  },
+  "points": [
+   {
+    "id": "temperature",
+    "name": "Temperature",
+    "kind": "sensor",
+    "type": "number",
+    "unit": "°C",
+    "range": [
+     -20,
+     60
+    ],
+    "access": "read",
+    "binding": {
+     "state": {
+      "topic": "sim/thermo/reading",
+      "json": "temperature"
+     }
+    }
+   },
+   {
+    "id": "humidity",
+    "name": "Humidity",
+    "kind": "sensor",
+    "type": "number",
+    "unit": "%",
+    "range": [
+     0,
+     100
+    ],
+    "access": "read",
+    "binding": {
+     "state": {
+      "topic": "sim/thermo/reading",
+      "json": "humidity"
+     }
+    }
+   },
+   {
+    "id": "light",
+    "name": "Light level",
+    "kind": "sensor",
+    "type": "number",
+    "unit": "lx",
+    "range": [
+     0,
+     100000
+    ],
+    "access": "read",
+    "binding": {
+     "state": {
+      "topic": "sim/thermo/reading",
+      "json": "lux"
+     }
+    }
+   }
+  ],
+  "constraints": [],
+  "permissions": [
+   "network-local"
+  ],
+  "dependencies": [],
+  "tests": {
+   "level": "simulation",
+   "passed": 0,
+   "total": 0,
+   "evidence": "hannah-os/runtime/tests/test_hub.py"
+  },
+  "documentation": "A simulated device for trying HANNAH without hardware. It is not a model of any product.",
+  "availability": {
+   "topic": "sim/thermo/status",
+   "online": "online",
+   "offline": "offline"
+  }
+ }
+]

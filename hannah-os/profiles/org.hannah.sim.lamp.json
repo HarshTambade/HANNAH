@@ -1,0 +1,122 @@
+{
+  "format": 1,
+  "id": "org.hannah.sim.lamp",
+  "version": "1.0.0",
+  "name": "Simulated dimmable lamp",
+  "author": "HANNAH",
+  "manufacturer": "HANNAH (simulated)",
+  "model": "SIM-LAMP",
+  "revisions": [
+    "sim-1"
+  ],
+  "category": "light",
+  "domain": "iot",
+  "simulated": true,
+  "protocol": {
+    "adapter": "mqtt",
+    "version": "3.1.1"
+  },
+  "connection": {
+    "instructions": [
+      "Start the simulator on the hub's computer: python3 -m hannah_edge simulate",
+      "Use the address and port it prints."
+    ],
+    "fields": [
+      {
+        "id": "host",
+        "label": "Broker address",
+        "type": "text",
+        "required": true,
+        "help": "The computer on your network that runs the MQTT broker, for example 192.168.1.10."
+      },
+      {
+        "id": "port",
+        "label": "Port",
+        "type": "number",
+        "default": 1883,
+        "min": 1,
+        "max": 65535
+      },
+      {
+        "id": "username",
+        "label": "User name",
+        "type": "text",
+        "help": "Leave empty when the broker has none."
+      },
+      {
+        "id": "password",
+        "label": "Password",
+        "type": "secret"
+      },
+      {
+        "id": "tls",
+        "label": "Encrypted (TLS)",
+        "type": "toggle",
+        "default": false
+      }
+    ]
+  },
+  "points": [
+    {
+      "id": "power",
+      "name": "Power",
+      "kind": "actuator",
+      "type": "boolean",
+      "access": "read-write",
+      "risk": "low",
+      "binding": {
+        "state": {
+          "topic": "sim/lamp/state",
+          "json": "state",
+          "on": "ON",
+          "off": "OFF"
+        },
+        "command": {
+          "topic": "sim/lamp/set",
+          "on": "ON",
+          "off": "OFF"
+        }
+      }
+    },
+    {
+      "id": "brightness",
+      "name": "Brightness",
+      "kind": "actuator",
+      "type": "number",
+      "unit": "%",
+      "range": [
+        0,
+        100
+      ],
+      "step": 1,
+      "access": "read-write",
+      "risk": "low",
+      "binding": {
+        "state": {
+          "topic": "sim/lamp/state",
+          "json": "brightness"
+        },
+        "command": {
+          "topic": "sim/lamp/brightness/set"
+        }
+      }
+    }
+  ],
+  "constraints": [],
+  "permissions": [
+    "network-local"
+  ],
+  "dependencies": [],
+  "tests": {
+    "level": "simulation",
+    "passed": 0,
+    "total": 0,
+    "evidence": "hannah-os/runtime/tests/test_hub.py"
+  },
+  "documentation": "A simulated device for trying HANNAH without hardware. It is not a model of any product.",
+  "availability": {
+    "topic": "sim/lamp/status",
+    "online": "online",
+    "offline": "offline"
+  }
+}

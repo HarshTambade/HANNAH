@@ -6,7 +6,8 @@
  *
  * Events: reminder.fired, team.completed (reported by the user's own app),
  * budget.exceeded and approval.requested (from the server), robot.mission.finished,
- * robot.plan.finished and robot.alert (from the robot registry), and webhook.test.
+ * robot.plan.finished and robot.alert (from the robot registry), device.alert and
+ * device.rule.fired (from the device registry), and webhook.test.
  *
  * Each delivery carries
  *   X-HANNAH-Event, X-HANNAH-Delivery, X-HANNAH-Timestamp and
@@ -24,7 +25,7 @@ const net = require("node:net");
 const { createHmac, randomBytes, randomUUID } = require("node:crypto");
 const { getDatabase } = require("./db");
 
-const EVENTS = new Set(["reminder.fired", "team.completed", "budget.exceeded", "approval.requested", "workflow.completed", "workflow.failed", "workflow.notification", "robot.mission.finished", "robot.plan.finished", "robot.alert", "webhook.test"]);
+const EVENTS = new Set(["reminder.fired", "team.completed", "budget.exceeded", "approval.requested", "workflow.completed", "workflow.failed", "workflow.notification", "robot.mission.finished", "robot.plan.finished", "robot.alert", "device.alert", "device.rule.fired", "webhook.test"]);
 // In-process listeners (the workflow engine's event triggers) hear every event too.
 const listeners = new Set();
 function onUserEvent(listener) {

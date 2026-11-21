@@ -45,6 +45,7 @@ const SERVICES = {
   files: { label: "Files", description: "Read and write files in folders you shared and files HANNAH made." },
   device: { label: "This device", description: "Run commands, open apps, control the desktop, change settings." },
   robots: { label: "Robots", description: "Read a robot's state and sensors, start and cancel missions on robots you enrolled. Stopping a robot is always allowed." },
+  hardware: { label: "Devices and smart hardware", description: "Read sensors, switch and set devices you connected through a hub, and create automations the hub runs by itself." },
 };
 
 const LEVELS = [
