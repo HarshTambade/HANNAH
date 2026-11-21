@@ -96,7 +96,9 @@ The directive says to keep the desktop and Capacitor architectures intact. None 
 | Item | Found |
 |---|---|
 | OS, CPU | macOS 27.0.1, arm64, 16 GB RAM, 17 GB free disk |
-| Python, Node | 3.14.6, 25.9.0 |
+| Python, Node | 3.14.6 (and the system's 3.9.6), 25.9.0 |
+| Rust, Go, CMake | Not installed. Nothing in robotics needs Rust or Go |
+| Java | OpenJDK 21 (used by the Android build only) |
 | Docker, Podman | Not installed |
 | ROS 2, Gazebo, colcon, CMake | Not installed |
 

@@ -28,6 +28,7 @@ The runtime never talks to motors, sensors or ROS directly. It talks to one inte
 runtime.py            missions, watchdog, reports
    │  RobotAdapter
    ├── hal/kinematic.py       built-in simulator: navigator + base controller + world
+   ├── hal/arm.py             built-in arm simulator: kinematics, planner, gripper
    └── hal/ros2.py            ROS 2: Nav2 action client, tf, topics
             │
             ├── Nav2                    planner, controller, costmaps, collision monitor
@@ -45,7 +46,7 @@ HANNAH's layer ends at the ROS 2 boundary. Below it, the established frameworks 
 | A ROS 2 mobile robot with Nav2 | A profile file: identity, limits, topic names, places, dock. No code |
 | A ROS 2 robot with a different navigation action | A subclass of `Ros2Adapter` overriding `navigate` and `navigation_status` |
 | A robot with a vendor SDK and no ROS | A new adapter implementing the interface against that SDK |
-| A robot arm | New capabilities need runtime executors first (Block 2); then an adapter method per operation, backed by MoveIt 2 |
+| A robot arm | The runtime and the adapter methods exist (`move_arm`, `arm_status`, `grasp`, `release`) and are tested with the built-in arm simulator. A real arm needs an adapter that backs them with MoveIt 2; that adapter is not started |
 
 ## The profile file
 
@@ -67,7 +68,7 @@ For the ROS 2 adapter a `ros` section names topics, frames, the navigation actio
 
 Block 1 has no network discovery. A robot becomes known when a person creates its record and its runtime enrolls with the one-time code; the adapter's `describe()` is the hardware inventory. Scanning a network for robots and adding them automatically is not planned: a robot should join an account because someone decided it should.
 
-## The two adapters
+## The mobile-robot adapters
 
 | | Kinematic (`hal/kinematic.py`) | ROS 2 (`hal/ros2.py`) |
 |---|---|---|

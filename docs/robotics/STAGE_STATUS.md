@@ -52,6 +52,29 @@ Updated 2026-11-21. One rule for reading this page: **"verified" always says whe
 | **12. Security, validation, production** | Signed requests and commands, replay protection, flood limits, roles, audit | **Verified (server)** |
 | | Independent security review, SROS2/DDS security, hardware validation, load testing, production deployment with a robot | **Not started** |
 
+## Stage 1, item by item
+
+Each item of the stage 1 list, where it lives, and what proves it. Checked against the source on 2026-11-21.
+
+| Item | Where | Proof |
+|---|---|---|
+| Robotics module | `server/robotics/` (registry and missions, contract, Safety Gateway, commissioning, fleet, packages, routes) | `server/robotics*.test.js` |
+| Robot device registry | `service.js`; table `hannah_robots` | `robotics.test.js`: create, enroll, revoke, remove, one account can't see another's robot |
+| Robot capability registry | `contract.js`: 19 capabilities, each with schemas, preconditions, risk, timeout, cancel behaviour, verification and failure responses | `robotics.contract.test.js` |
+| Robot device profiles | `robotics/profiles/*.json`, read by `runtime/hannah_robot/profile.py`; stored as `hannah_robots.profile` | `test_adapters.py`, `robotics.sim.test.js` |
+| Robotics task model | Missions: table `hannah_robot_missions`, statuses in NAVIGATION_AND_MISSIONS.md | `robotics.test.js`, `robotics.stage2.test.js` |
+| Robot state model | The adapter's `state()` report; `hannah_robots.state` and `mode`; connection derived, never stored | `test_runtime.py`, `robotics.test.js` |
+| Hardware adapter interface | `runtime/hannah_robot/hal/base.py`: 16 methods, none taking a velocity, PWM, torque or joint value | `test_adapters.py` fails if the method list changes |
+| ROS 2 adapter interface | `hal/ros2.py`, `hal/ros2_watchdog.py` | **Written, not run.** Checked for syntax only |
+| Robotics Safety Gateway interface | `server/robotics/safety.js` `check()`; runtime `safety.py` `LocalSafety.check()` | `robotics.test.js`, `test_safety.py` |
+| Telemetry data model | Table `hannah_robot_telemetry`: one sample every three seconds, two hours kept | `robotics.sim.test.js`, from a real runtime's reports |
+| Robotics audit events | Table `hannah_robot_events`; every robot action is also an Action Engine record with who asked and who approved | `robotics.test.js` |
+| Database migrations | 18 and 19 in `server/db/migrations.js`, additive | The robotics integration suites run on SQLite and on embedded Postgres (`*.pglite.test.js`) |
+| API contracts | `server/robotics/router.js`: 2 device routes, 26 account routes; `GET /api/robots/contract` returns the capability contract; listed in DEVELOPER_SDK.md | `robotics.test.js`, `e2e/robotics.spec.ts` |
+| Dashboard integration | The Robots screen, `/robotics`, in the existing shell | `Robotics.test.ts`, `e2e/robotics.spec.ts`, and the screens, interactions and accessibility specs |
+
+Stage 1 asks for no physical hardware control, no arm execution and no fleet deployment. None exists: the arm and fleet work listed under stages 6 and 7 runs only against the built-in simulators, and a physical robot is refused movement until a person has commissioned it.
+
 ## Known limitations
 
 1. Everything runs against one simulator written for this project. It is kinematic: no physics, friction, wheel slip, sensor noise models, or timing of a real machine.

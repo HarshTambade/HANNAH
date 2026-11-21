@@ -20,7 +20,7 @@ Read this first; the other documents in this folder go into each part.
 | [NAVIGATION_AND_MISSIONS.md](./NAVIGATION_AND_MISSIONS.md) | Destinations, a mission's life, pause and resume, worlds and scenarios |
 | [SENSORS_AND_PERCEPTION.md](./SENSORS_AND_PERCEPTION.md) | Readings, sensor health, what the range sensor detects |
 | [FLEET.md](./FLEET.md) | Choosing a robot, conflicts, condition and maintenance |
-| [MANIPULATION.md](./MANIPULATION.md) | Arms: design only, not started |
+| [MANIPULATION.md](./MANIPULATION.md) | Arms: a pick and place in the built-in arm simulator; MoveIt 2 not started |
 | [DEVELOPER_SDK.md](./DEVELOPER_SDK.md) | Adding robots, capabilities, worlds and packages; the HTTP API |
 
 ## 1. The one rule
@@ -52,13 +52,13 @@ The directive names seven. Here is where each lives and how far Block 1 took it.
 
 | Module | Where | State after Block 1 |
 |---|---|---|
-| **A. Robotics intelligence** (language understanding, task interpretation, model routing, planning, orchestration, memory) | Existing HANNAH: the model gateway, `Orchestrator.ts`, `AgentRouter.ts`, memory. New: the Robot Agent in `SpecialistAgents.ts` and nine robot tools in `client/src/services/Robotics.ts` | Working. Mission planning is single-step (one capability per request, or a list of points); multi-step plans come from the existing Team orchestrator |
+| **A. Robotics intelligence** (language understanding, task interpretation, model routing, planning, orchestration, memory) | Existing HANNAH: the model gateway, `Orchestrator.ts`, `AgentRouter.ts`, memory. New: four robot agents in `SpecialistAgents.ts` and 21 robot tools in `client/src/services/Robotics.ts` | Working with a scripted server; no live model has driven them. Mission planning is single-step (one capability per request, or a list of points); multi-step plans come from the existing Team orchestrator |
 | **B. Robotics runtime** (lifecycle, state, capability registration, task execution, monitoring, local operation) | `robotics/runtime/hannah_robot/` (Python, standard library only) | Working, tested with the built-in simulator |
-| **C. Hardware abstraction layer** (drivers, sensor and actuator adapters, discovery, capability descriptions) | `robotics/runtime/hannah_robot/hal/` | Interface and two adapters. Discovery is the adapter describing itself at enrollment; there is no network scan |
+| **C. Hardware abstraction layer** (drivers, sensor and actuator adapters, discovery, capability descriptions) | `robotics/runtime/hannah_robot/hal/` | Interface and three adapters (mobile-robot simulator, arm simulator, ROS 2). Discovery is the adapter describing itself at enrollment; there is no network scan |
 | **D. ROS 2 integration** (nodes, topics, services, actions, state, lifecycle, health) | `hal/ros2.py`, `hal/ros2_watchdog.py`, `robotics/ros2_ws/src/hannah_sim` | **Written, never run.** Lifecycle management is limited to checking that Nav2's action server is available |
 | **E. Safety and permission gateway** | `server/robotics/safety.js`, `server/actions/permissions.js`, runtime `safety.py` and `runtime.py` | Working, both sides |
 | **F. Simulation and digital twin** (simulation, robot models, simulated sensors, environment, task simulation, state comparison) | `hal/kinematic.py`, `robotics/worlds/workcell.json`, `tools/build_world.py` | Built-in simulator working. Gazebo robot written, never run. State comparison: the built-in simulator reports ground truth beside the robot's own estimate, and the server refuses to confirm an arrival the ground truth contradicts |
-| **G. Fleet management** (identity, enrollment, health, connectivity, task allocation, telemetry, firmware and configuration) | `server/robotics/service.js`, the Robots screen | Identity, enrollment, health, connectivity, telemetry and owner-side limits: working. Task allocation across robots and firmware updates: design only |
+| **G. Fleet management** (identity, enrollment, health, connectivity, task allocation, telemetry, firmware and configuration) | `server/robotics/service.js`, `server/robotics/fleet.js`, the Robots screen | Identity, enrollment, health, connectivity, telemetry, owner-side limits and choosing a robot for a task: working. Mission queues and traffic management: not started. Firmware updates: design only |
 
 ## 3. Three programs
 
@@ -100,7 +100,7 @@ Why: one permission system, one approval flow, one history, and every existing c
 The engine's action is "start this mission". Arrival is the mission's own record, verified from the robot's reported state. Every text the model and the person see says "started, not finished" until then.
 
 **5. Stopping is always allowed.**
-A new, narrow rule in the permission evaluator: an action defined as `deescalates` is allowed at every permission level and while the account's emergency stop is on. Only `stop_motion` uses it. Without this, the emergency stop would have blocked stopping a robot.
+A new, narrow rule in the permission evaluator: an action defined as `deescalates` is allowed at every permission level and while the account's emergency stop is on. Stopping, pausing and cancelling use it (`stop_motion`, `pause_mission`, `cancel_mission`); nothing that starts or resumes motion can. Without this, the emergency stop would have blocked stopping a robot.
 
 **6. Limits flow one way.**
 The robot reports its limits from a file on the robot. A person can tighten them on the server. Nothing on the server can loosen what the robot enforces, and a command can lower a speed but never raise it.
@@ -120,7 +120,9 @@ ROS 2 and Gazebo could not be installed on the development machine. Rather than 
 **11. HMAC, not public-key signatures, for robots.**
 Why: the runtime should need nothing beyond the Python standard library, which has HMAC-SHA256 and no elliptic curves. The cost is that the server holds each robot's secret (sealed in the vault). See the security document for the trade-off and the upgrade path.
 
-## 5. What Block 1 does not include
+## 5. What Block 1 did not include
+
+As Block 1 ended. Section 6 lists what was added afterwards.
 
 - Any run on physical hardware.
 - Any run of Gazebo, Nav2 or the ROS 2 adapter.
@@ -131,4 +133,4 @@ Why: the runtime should need nothing beyond the Python standard library, which h
 
 ## 6. Added after Block 1
 
-Commissioning for physical robots, destinations bound to a map, pause and resume, more sensors with fault injection, perception from the range sensor, a second world and scenarios, fleet assignment, diagnostics and a maintenance log, signed robot packages, and two more agents. All verified with the built-in simulator or on the server; none with ROS 2, Gazebo or hardware. Section 5 otherwise still holds: no physical robot, no Gazebo run, no arms, no cameras, no firmware updates, no certification.
+Commissioning for physical robots, destinations bound to a map, pause and resume, more sensors with fault injection, perception from the range sensor, a second world and scenarios, fleet assignment, diagnostics and a maintenance log, signed robot packages, three more agents, and an arm with a gripper in a second built-in simulator (move, grasp, release). All verified with the built-in simulators or on the server; none with ROS 2, Gazebo, MoveIt 2 or hardware. The rest of section 5 still holds: no physical robot, no Gazebo run, no cameras, no following a target, no firmware updates, no certification.

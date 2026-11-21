@@ -36,7 +36,7 @@ Robotics, Block 1: the foundation for HANNAH to work with robots. Proven end to 
 
 ### Changed
 
-- The permission evaluator allows an action defined as de-escalating at every level and during the emergency stop. Only stopping a robot uses it.
+- The permission evaluator allows an action defined as de-escalating at every level and during the emergency stop. Only stopping, pausing and cancelling a robot's mission use it.
 - The account's emergency stop also sends a stop to every robot that could be moving.
 
 ## 1.7.0 — 2026-11-20
