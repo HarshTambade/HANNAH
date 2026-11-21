@@ -22,8 +22,9 @@ def world() -> dict:
         return json.load(handle)
 
 
-def simulator(**simulation) -> KinematicSimAdapter:
-    return KinematicSimAdapter(world(), dict(LIMITS), {"radius": 0.18}, {"seed": 7, "odometryDrift": 0.004, **simulation})
+def simulator(world_name: str = "workcell", **simulation) -> KinematicSimAdapter:
+    with open(os.path.join(os.path.dirname(WORLD_PATH), f"{world_name}.json"), "r", encoding="utf-8") as handle:
+        return KinematicSimAdapter(json.load(handle), dict(LIMITS), {"radius": 0.18}, {"seed": 7, "odometryDrift": 0.004, **simulation})
 
 
 class Bench:
@@ -46,6 +47,15 @@ class Bench:
 
     def cancel(self, mission: str) -> dict:
         payload = json.dumps({"v": 1, "type": "cancel", "robotId": ROBOT_ID, "missionId": mission, "issuedAt": int(self.now * 1000)})
+        return {"payload": payload, "sig": sign_command(SECRET, payload)}
+
+    def pause(self, mission: str) -> dict:
+        payload = json.dumps({"v": 1, "type": "pause", "robotId": ROBOT_ID, "missionId": mission, "issuedAt": int(self.now * 1000)})
+        return {"payload": payload, "sig": sign_command(SECRET, payload)}
+
+    def resume(self, mission: str, nonce: str = "", ttl: float = 20.0) -> dict:
+        self.seq += 1
+        payload = json.dumps({"v": 1, "type": "resume", "robotId": ROBOT_ID, "missionId": mission, "nonce": nonce or f"resume-{self.seq}", "issuedAt": int(self.now * 1000), "expiresAt": int((self.now + ttl) * 1000)})
         return {"payload": payload, "sig": sign_command(SECRET, payload)}
 
     def exchange(self, *commands: dict) -> dict:

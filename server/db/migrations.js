@@ -719,6 +719,48 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_robot_events_recent ON hannah_robot_events (robot_id, at)",
     ],
   },
+  {
+    version: 19,
+    name: "robot commissioning, destinations, pause and resume, maintenance",
+    // A physical robot's commissioning record, a configuration version that
+    // goes up with every change a person makes, destinations a person defined
+    // or approved (bound to the map they were made for), a mission's pause and
+    // resume requests, and a maintenance log. Additive: existing rows keep
+    // working, and existing robots are simply "not yet commissioned".
+    statements: [
+      "ALTER TABLE hannah_robots ADD COLUMN commissioning TEXT",
+      "ALTER TABLE hannah_robots ADD COLUMN config_version INTEGER NOT NULL DEFAULT 1",
+      "ALTER TABLE hannah_robot_missions ADD COLUMN pause_requested_at BIGINT",
+      "ALTER TABLE hannah_robot_missions ADD COLUMN resume_requested_at BIGINT",
+      "ALTER TABLE hannah_robot_missions ADD COLUMN paused_at BIGINT",
+      "ALTER TABLE hannah_robot_missions ADD COLUMN control_nonce TEXT",
+      `CREATE TABLE IF NOT EXISTS hannah_robot_destinations (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        map TEXT NOT NULL,
+        frame TEXT NOT NULL,
+        x DOUBLE PRECISION NOT NULL,
+        y DOUBLE PRECISION NOT NULL,
+        yaw DOUBLE PRECISION,
+        source TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robot_destinations_robot ON hannah_robot_destinations (robot_id)",
+      `CREATE TABLE IF NOT EXISTS hannah_robot_maintenance (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        at BIGINT NOT NULL,
+        kind TEXT NOT NULL,
+        note TEXT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robot_maintenance_robot ON hannah_robot_maintenance (robot_id, at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

@@ -1,0 +1,11 @@
+{
+  "name": "sensor-loss",
+  "description": "The range sensor stops reporting during a trip. The robot stops and the trip fails; it does not drive blind. With the sensor back, the next trip succeeds.",
+  "world": "../worlds/home.json",
+  "steps": [
+    { "navigate": "bedroom", "expect": "failed", "reason": "range sensor stopped reporting", "during": [{ "after": 4.0, "sensorFaults": ["lidar"] }] },
+    { "sensorFaults": [] },
+    { "navigate": "bedroom", "expect": "succeeded" }
+  ],
+  "expect": { "faults": 0 }
+}

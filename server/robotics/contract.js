@@ -47,6 +47,23 @@ const RISK = {
   low: { label: "Low: reduces or doesn't cause motion", rank: 1 },
   moderate: { label: "Moderate: the robot moves by itself", rank: 2 },
   high: { label: "High: moves an arm or grips near people or objects", rank: 3 },
+  critical: { label: "Critical: hazardous machinery, something that can't be undone, or a change to a safety system", rank: 4 },
+};
+
+/**
+ * What each risk class requires before HANNAH sends anything.
+ *   none      nothing: it reads the registry's last report
+ *   low       nothing for stopping, pausing and cancelling; a switchable device follows the account's level
+ *   moderate  the account's permission level; a physical robot always asks, and must be commissioned
+ *   high      always a person's approval, a commissioned robot, and the robot's own interlocks; no standing permission
+ *   critical  not offered: HANNAH has no capability in this class, and adding one needs a safety review first
+ */
+const APPROVAL = {
+  none: "No approval: it only reads.",
+  low: "No approval for stopping, pausing or cancelling. Other low-risk operations follow your permission level.",
+  moderate: "Follows your permission level. A physical robot always asks, and must be commissioned first.",
+  high: "Always asks, on a commissioned robot, with the robot's own interlocks. No standing permission can cover it.",
+  critical: "Not offered by HANNAH.",
 };
 
 /** Conditions the Safety Gateway checks before a capability may be sent. */
@@ -66,6 +83,27 @@ const number = (minimum, maximum, description) => ({ type: "number", minimum, ma
 const POSE_OUT = { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, yaw: { type: "number" }, frame: { type: "string" } } };
 const MOTION_PRE = ["enrolled", "online", "estop-released", "motors-enabled", "no-fault", "localized", "battery-ok", "no-active-motion"];
 const MOTION_LIMITS = ["workspace", "keep-out", "max-speed", "command-expiry", "link-loss-stop"];
+
+/** What happens when it goes wrong, and what the person is told. */
+const READ_FAILURES = [
+  { when: "The robot is offline", response: "Its last report is returned, marked as old. Never presented as current." },
+  { when: "The robot never reported it", response: "An error naming what is missing. Never an empty or invented value." },
+];
+const MOTION_FAILURES = [
+  { when: "The Safety Gateway refuses it", response: "Nothing is sent. The refusal and its reason are recorded and shown; no approval is asked." },
+  { when: "The robot's own checks refuse it", response: "The mission is “rejected” with the robot's reason." },
+  { when: "The robot doesn't accept it in time", response: "The command expires and is never run later." },
+  { when: "The planner finds no path or is blocked", response: "The robot stops; the mission is “failed” with the planner's reason." },
+  { when: "The emergency stop engages or a fault occurs", response: "The robot stops at once; the mission is “failed”. Nothing resumes by itself." },
+  { when: "The link to HANNAH is lost", response: "The robot stops by itself after its link timeout; the mission is “cancelled” with that reason when the link returns." },
+  { when: "The time limit passes", response: "The robot stops; the mission is “timed-out”." },
+  { when: "The robot reports success its state doesn't support", response: "The mission is “unverified”, never “succeeded”." },
+  { when: "The robot stops reporting", response: "After the deadline the mission is “lost: outcome unknown”." },
+];
+const CONTROL_FAILURES = [
+  { when: "The robot is offline", response: "The request is recorded and reported as not delivered. A robot without its link has already stopped by itself." },
+  { when: "The mission is already over", response: "Nothing changes; the mission's real ending is returned." },
+];
 
 const CAPABILITIES = [
   {
@@ -147,6 +185,51 @@ const CAPABILITIES = [
     timeoutS: { default: 10, max: 30 }, cancel: { supported: false, behaviour: "A switch finishes at once." },
     verification: { method: "state-readback", description: "Confirmed when the robot's next state report shows the device in the requested state." },
   },
+  {
+    id: "report_battery_state", title: "Report the battery", status: "implemented", kind: "read", implicit: true, motion: false, risk: "none",
+    description: "The battery's charge, whether it is charging, and the minimum the robot needs to start a mission. Only what the robot's battery sensor reported.",
+    robotTypes: ANY, preconditions: ["enrolled"], constraints: [],
+    input: { type: "object", properties: {}, additionalProperties: false },
+    output: { type: "object", properties: { percent: { type: "number" }, charging: { type: "boolean" }, ageS: { type: "number" } } },
+    timeoutS: { default: 5, max: 5 }, cancel: { supported: false, behaviour: "Nothing to cancel." },
+    verification: { method: "freshness", description: "The answer carries the report's age; a robot with no battery sensor says so." },
+  },
+  {
+    id: "report_surroundings", title: "Report what is around the robot", status: "implemented", kind: "read", motion: false, risk: "none",
+    description: "What the robot's range sensor detects around it: obstacles with position and size, whether its route is blocked, what it has seen that isn't on its map, and which sensors are not working. Measurements with their sensor and time; nothing is guessed by a model.",
+    robotTypes: ANY, preconditions: ["enrolled"], constraints: [],
+    input: { type: "object", properties: {}, additionalProperties: false },
+    output: { type: "object", properties: { obstacles: { type: "array" }, routeBlocked: { type: "boolean" }, changes: { type: "array" }, sensors: { type: "array" } } },
+    timeoutS: { default: 5, max: 5 }, cancel: { supported: false, behaviour: "Nothing to cancel." },
+    verification: { method: "provenance", description: "Every item names the sensor it came from, when it was measured and a confidence; an old report is marked old." },
+  },
+  {
+    id: "cancel_mission", title: "Cancel a mission", status: "implemented", kind: "write", deescalates: true, implicit: true, motion: false, risk: "low",
+    description: "Cancel a robot's current mission. The robot stops where it is and holds.",
+    robotTypes: ANY, preconditions: ["enrolled"], constraints: [],
+    input: { type: "object", properties: { mission: { type: "string", maxLength: 40 } }, additionalProperties: false },
+    output: { type: "object", properties: { status: { type: "string" } } },
+    timeoutS: { default: 10, max: 10 }, cancel: { supported: false, behaviour: "A cancellation is not cancelled." },
+    verification: { method: "robot-confirms", description: "Confirmed when the robot reports the mission cancelled; a mission that was never delivered is cancelled at once." },
+  },
+  {
+    id: "pause_mission", title: "Pause a mission", status: "implemented", kind: "write", deescalates: true, implicit: true, motion: false, risk: "low",
+    description: "Pause a robot's running mission. The robot holds where it is and keeps the mission; the paused time doesn't count against its time limit.",
+    robotTypes: ANY, preconditions: ["enrolled"], constraints: [],
+    input: { type: "object", properties: { mission: { type: "string", maxLength: 40 } }, additionalProperties: false },
+    output: { type: "object", properties: { status: { type: "string" } } },
+    timeoutS: { default: 10, max: 10 }, cancel: { supported: false, behaviour: "A pause is ended by resuming or cancelling." },
+    verification: { method: "robot-confirms", description: "Confirmed when the robot reports the mission paused." },
+  },
+  {
+    id: "resume_mission", title: "Resume a paused mission", status: "implemented", kind: "write", implicit: true, motion: true, risk: "moderate",
+    description: "Carry on with a paused mission from where the robot stands. It moves the robot, so it is checked and approved like starting a mission.",
+    robotTypes: MOBILE_GROUND, preconditions: MOTION_PRE.filter((item) => item !== "no-active-motion"), constraints: MOTION_LIMITS,
+    input: { type: "object", properties: { mission: { type: "string", maxLength: 40 } }, additionalProperties: false },
+    output: { type: "object", properties: { status: { type: "string" } } },
+    timeoutS: { default: 20, max: 20 }, cancel: { supported: true, behaviour: "The mission can be paused or cancelled again." },
+    verification: { method: "robot-confirms", description: "Confirmed when the robot reports it resumed. The resume command expires in 20 seconds and works once." },
+  },
   // ---- In the contract, with no runtime behind them yet. A robot can't register these in Block 1. ----
   {
     id: "capture_image", title: "Take a picture", status: "contract-only", kind: "read", motion: false, risk: "none",
@@ -188,7 +271,27 @@ const CAPABILITIES = [
     timeoutS: { default: 15, max: 60 }, cancel: { supported: false, behaviour: "A release finishes at once." },
     verification: { method: "gripper-feedback", description: "Confirmed from the gripper's position feedback." },
   },
-].map((capability) => Object.freeze({ permissions: { service: "robots", minimumLevel: capability.kind === "read" ? 1 : capability.deescalates ? 1 : 3 }, ...capability }));
+  {
+    id: "inspect_machine", title: "Inspect a machine", status: "contract-only", kind: "write", motion: true, risk: "high",
+    description: "Approach a registered machine and record readings or images of it.", robotTypes: [...MOBILE_GROUND, "manipulator-arm"], preconditions: MOTION_PRE, constraints: [...MOTION_LIMITS, "machine-exclusion-zone", "site-authorization"],
+    input: { type: "object", properties: { machine: { type: "string", maxLength: 80 } }, required: ["machine"], additionalProperties: false },
+    output: { type: "object", properties: { readings: { type: "array" } } },
+    timeoutS: { default: 600, max: 1800 }, cancel: { supported: true, behaviour: "The robot stops and holds." },
+    verification: { method: "recorded-evidence", description: "Confirmed from the readings and images recorded at the machine." },
+  },
+  {
+    id: "execute_approved_workflow", title: "Run an approved mission template", status: "contract-only", kind: "write", motion: true, risk: "moderate",
+    description: "Run a sequence of capabilities that a person approved in advance as a template.", robotTypes: ANY, preconditions: MOTION_PRE, constraints: MOTION_LIMITS,
+    input: { type: "object", properties: { template: { type: "string", maxLength: 80 } }, required: ["template"], additionalProperties: false },
+    output: { type: "object", properties: { steps: { type: "array" } } },
+    timeoutS: { default: 900, max: 3600 }, cancel: { supported: true, behaviour: "The current step is cancelled; later steps don't run." },
+    verification: { method: "per-step", description: "Each step is verified by its own capability's rule." },
+  },
+].map((capability) => Object.freeze({
+  permissions: { service: "robots", minimumLevel: capability.kind === "read" ? 1 : capability.deescalates ? 1 : 3 },
+  failures: capability.kind === "read" ? READ_FAILURES : capability.deescalates ? CONTROL_FAILURES : MOTION_FAILURES,
+  ...capability,
+}));
 
 const BY_ID = new Map(CAPABILITIES.map((capability) => [capability.id, capability]));
 const capability = (id) => BY_ID.get(String(id || "")) || null;
@@ -246,6 +349,7 @@ function registerCapabilities(robotType, requested) {
     const definition = BY_ID.get(id);
     if (!definition) { refused.push({ id, reason: "Not in HANNAH's capability contract." }); continue; }
     if (definition.status !== "implemented") { refused.push({ id, reason: "In the contract, but no runtime implements it yet." }); continue; }
+    if (definition.implicit) continue; // HANNAH provides these for every robot; a robot doesn't register them
     if (!definition.robotTypes.includes(robotType)) { refused.push({ id, reason: `Not a capability of a ${ROBOT_TYPES[robotType]?.label || robotType}.` }); continue; }
     accepted.push(id);
   }
@@ -253,6 +357,6 @@ function registerCapabilities(robotType, requested) {
 }
 
 /** The contract as documentation and for the app: everything but nothing executable. */
-const publicContract = () => CAPABILITIES.map((item) => ({ ...item, riskLabel: RISK[item.risk].label, preconditionText: item.preconditions.map((id) => PRECONDITIONS[id]) }));
+const publicContract = () => CAPABILITIES.map((item) => ({ ...item, riskLabel: RISK[item.risk].label, approval: APPROVAL[item.risk], preconditionText: item.preconditions.map((id) => PRECONDITIONS[id]) }));
 
-module.exports = { CAPABILITIES, CATEGORIES, PRECONDITIONS, RISK, ROBOT_TYPES, capability, publicContract, registerCapabilities, validate };
+module.exports = { APPROVAL, CAPABILITIES, CATEGORIES, PRECONDITIONS, RISK, ROBOT_TYPES, capability, publicContract, registerCapabilities, validate };

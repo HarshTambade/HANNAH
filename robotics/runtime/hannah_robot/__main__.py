@@ -19,7 +19,7 @@ import sys
 from . import __version__
 from .link import Link, LinkError, check_server_url, enroll
 from .profile import DEFAULT_PROFILE, ProfileError, build_adapter, descriptor, load_profile, local_safety
-from .protocol import CommandGuard
+from .protocol import CommandGuard, fingerprint
 from .runtime import Runtime, json_logger, run
 
 
@@ -66,7 +66,8 @@ def main(argv=None) -> int:
             guard_path = os.path.join(state_dir, "guard.json")
             if os.path.exists(guard_path):
                 os.remove(guard_path)
-            log("enrolled", robot=answer["robotId"], name=answer.get("name", ""), capabilities=answer.get("capabilities"), refused=answer.get("refused") or None)
+            # Computed here from the secret, not taken from the server's answer: compare it with the one HANNAH shows.
+            log("enrolled", robot=answer["robotId"], name=answer.get("name", ""), fingerprint=fingerprint(answer["secret"]), capabilities=answer.get("capabilities"), refused=answer.get("refused") or None)
             return 0
         # run
         try:

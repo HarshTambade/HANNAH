@@ -1,0 +1,10 @@
+{
+  "name": "unexpected-object",
+  "description": "Something is left in the middle of the corridor, with room to pass. The robot goes around it and arrives.",
+  "world": "../worlds/home.json",
+  "steps": [
+    { "obstacle": { "name": "bag in the corridor", "x": -0.9, "y": -1.2, "w": 0.7, "h": 0.5 } },
+    { "navigate": "bedroom", "expect": "succeeded", "timeout": 240 }
+  ],
+  "expect": { "faults": 0, "discovered": true }
+}

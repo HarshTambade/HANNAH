@@ -1,0 +1,12 @@
+{
+  "name": "valid-navigation",
+  "description": "From the charging station to the kitchen, the bedroom and the study, through the doorways, and home again.",
+  "world": "../worlds/home.json",
+  "steps": [
+    { "navigate": "kitchen", "expect": "succeeded" },
+    { "navigate": "bedroom", "expect": "succeeded" },
+    { "navigate": "study", "expect": "succeeded" },
+    { "navigate": "charging station", "expect": "succeeded" }
+  ],
+  "expect": { "faults": 0, "maxOdometryError": 0.3 }
+}

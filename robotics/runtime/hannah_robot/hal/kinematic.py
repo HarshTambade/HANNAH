@@ -29,6 +29,7 @@ import json
 import math
 import os
 import random
+import time
 
 from ..geometry import clamp, distance_to_rect, path_length, ray_bounds, ray_rect, wrap
 from .base import NavigationStatus, RobotAdapter
@@ -60,6 +61,8 @@ class OccupancyGrid:
                 wall = min(x - bounds["minX"], bounds["maxX"] - x, y - bounds["minY"], bounds["maxY"] - y)
                 if wall < inflation or any(distance_to_rect(x, y, rect) < inflation for rect in obstacles):
                     self.blocked[row * self.width + col] = 1
+        self.static = bytes(self.blocked)   # the map as surveyed; what the sensor finds is added on top
+        self.dirty = False
 
     def centre(self, col: int, row: int) -> tuple[float, float]:
         return self.bounds["minX"] + (col + 0.5) * GRID, self.bounds["minY"] + (row + 0.5) * GRID
@@ -91,6 +94,21 @@ class OccupancyGrid:
                 if self.inside(c, r) and math.hypot(d_col, d_row) * GRID <= self.inflation + GRID * 0.5:
                     self.blocked[r * self.width + c] = 1
         return True
+
+    def clear_point(self, x: float, y: float) -> None:
+        """The sensor now sees through a cell it once found occupied: the thing that was there has gone."""
+        cell = self.cell(x, y)
+        if cell in self.discovered:
+            self.discovered.discard(cell)
+            self.dirty = True
+
+    def rebuild(self) -> None:
+        """Recompute the blocked cells from the surveyed map and what is still discovered."""
+        self.blocked = bytearray(self.static)
+        remaining, self.discovered = self.discovered, set()
+        for col, row in remaining:
+            self.add_obstacle_point(*self.centre(col, row))
+        self.dirty = False
 
     def coverage(self) -> float:
         return 100.0 * sum(self.seen) / max(1, len(self.seen))
@@ -199,6 +217,10 @@ class KinematicSimAdapter(RobotAdapter):
         self._command_at = -1.0
         self._accumulator = 0.0
         self._frozen = False       # test hook: the navigator stops issuing commands
+        self.sensor_faults: set[str] = set()   # sensors that have stopped reporting (set through the simulated inputs)
+        self.ambient = dict(world.get("ambient") or {"temperatureC": 21.0, "humidityPercent": 45.0})
+        self._scan_at = time.time()
+        self._clusters: list[dict] = []
         # Navigation
         self._goal: dict | None = None
         self._path: list[tuple[float, float]] = []
@@ -220,12 +242,14 @@ class KinematicSimAdapter(RobotAdapter):
             "sensors": [
                 {"id": "lidar", "type": "2d-range", "description": f"{LIDAR_BEAMS} beams, {LIDAR_RANGE:.0f} m, simulated by ray casting"},
                 {"id": "odometry", "type": "wheel-odometry", "description": "Integrated wheel motion with simulated drift"},
+                {"id": "imu", "type": "imu", "description": "Simulated gyroscope; fused with the wheels for heading"},
+                {"id": "environment", "type": "temperature-humidity", "description": "Simulated ambient temperature and humidity"},
                 {"id": "bumper", "type": "contact", "description": "Latches a fault on collision"},
                 {"id": "battery", "type": "battery", "description": "Simulated charge"},
             ],
             "actuators": [{"id": "drive", "type": "differential-drive", "description": "Two driven wheels, simulated base controller"}],
             "devices": sorted(self.devices),
-            "capabilities": ["report_robot_state", "read_sensor", "stop_motion", "navigate_to", "return_to_dock", "inspect_area", "set_supported_device_state"],
+            "capabilities": ["report_robot_state", "read_sensor", "report_surroundings", "stop_motion", "navigate_to", "return_to_dock", "inspect_area", "set_supported_device_state"],
             "places": self.world.get("places", {}),
             "dock": self.world.get("dock"),
             "world": {"name": self.world.get("name", "world"), "bounds": bounds, "obstacles": [{"name": r.get("name", "obstacle"), "x": r["x"], "y": r["y"], "w": r["w"], "h": r["h"]} for r in self.static]},
@@ -245,6 +269,9 @@ class KinematicSimAdapter(RobotAdapter):
         return self.static + self.dynamic
 
     def _scan(self) -> None:
+        if "lidar" in self.sensor_faults:
+            return  # no new measurement: the last one goes stale and is reported as such
+        self._scan_at = time.time()
         bounds = self.world["bounds"]
         obstacles = self._obstacles()
         for beam in range(LIDAR_BEAMS):
@@ -270,6 +297,85 @@ class KinematicSimAdapter(RobotAdapter):
                 if not on_wall and not any(distance_to_rect(hx, hy, rect) < 0.05 for rect in self.static):
                     if self.grid.add_obstacle_point(self.odom_x + ox * best, self.odom_y + oy * best):
                         self._replan_due = 0.0
+        # Clearing: something found earlier is taken off the map again when the beam that points at it,
+        # and the beams on either side, now all see well past where it was.
+        for col, row in list(self.grid.discovered):
+            cx, cy = self.grid.centre(col, row)
+            away = math.hypot(cx - self.odom_x, cy - self.odom_y)
+            beam = int(round(wrap(math.atan2(cy - self.odom_y, cx - self.odom_x) - self.odom_yaw) / (2 * math.pi) * LIDAR_BEAMS)) % LIDAR_BEAMS
+            if away < LIDAR_RANGE - 0.5 and all(self.ranges[(beam + offset) % LIDAR_BEAMS] > away + 0.3 for offset in (-1, 0, 1)):
+                self.grid.clear_point(cx, cy)
+        if self.grid.dirty:
+            self.grid.rebuild()
+            self._replan_due = 0.0
+
+    def _detect(self) -> list[dict]:
+        """Group the range sensor's returns into objects. A measurement, not an interpretation:
+        each object is the returns that lie together, placed with the pose the robot believes."""
+        bounds = self.world["bounds"]
+        points = []
+        for beam, distance in enumerate(self.ranges):
+            if distance >= LIDAR_RANGE - 1e-6:
+                points.append(None)
+                continue
+            angle = self.odom_yaw + (2 * math.pi * beam / LIDAR_BEAMS)
+            px, py = self.odom_x + math.cos(angle) * distance, self.odom_y + math.sin(angle) * distance
+            if min(px - bounds["minX"], bounds["maxX"] - px, py - bounds["minY"], bounds["maxY"] - py) < 0.15:
+                kind = "wall"
+            elif any(distance_to_rect(px, py, rect) < 0.15 for rect in self.static):
+                kind = "mapped obstacle"
+            else:
+                kind = "object not on the map"
+            points.append((beam, distance, px, py, kind))
+        # Start at a gap, so an object straight ahead (around beam 0) isn't cut in two by the end of the list.
+        gaps = [index for index, point in enumerate(points) if point is None or point[4] == "wall"]
+        if gaps:
+            points = points[gaps[0]:] + points[:gaps[0]]
+        groups, current = [], []
+        for point in points:
+            if point is None or point[4] == "wall" or (current and (point[4] != current[-1][4] or math.hypot(point[2] - current[-1][2], point[3] - current[-1][3]) > 0.45)):
+                if current:
+                    groups.append(current)
+                current = []
+            if point is not None and point[4] != "wall":
+                current.append(point)
+        if current:
+            groups.append(current)
+        found = []
+        for group in groups:
+            nearest = min(group, key=lambda item: item[1])
+            xs, ys = [item[2] for item in group], [item[3] for item in group]
+            bearing = 360.0 * nearest[0] / LIDAR_BEAMS
+            found.append({
+                "kind": group[0][4], "x": round(sum(xs) / len(xs), 2), "y": round(sum(ys) / len(ys), 2),
+                "widthM": round(math.hypot(max(xs) - min(xs), max(ys) - min(ys)), 2), "distanceM": round(nearest[1], 2),
+                "bearingDeg": round(bearing if bearing <= 180 else bearing - 360, 1), "returns": len(group),
+                # More returns on an object, more certainty that it is one. Never 1.
+                "confidence": round(min(0.97, 0.45 + 0.13 * len(group)), 2), "sensor": "lidar",
+            })
+        found.sort(key=lambda item: item["distanceM"])
+        unmapped = [item for item in found if item["kind"] == "object not on the map"][:8]
+        return unmapped + [item for item in found if item["kind"] == "mapped obstacle"][:6]
+
+    def _changes(self) -> list[dict]:
+        """Places where the range sensor found something the map doesn't have, as boxes."""
+        cells, boxes = set(self.grid.discovered), []
+        while cells and len(boxes) < 10:
+            stack, group = [cells.pop()], []
+            while stack:
+                col, row = stack.pop()
+                group.append((col, row))
+                # Beams are a few cells apart at range, so cells two apart belong to the same thing.
+                for d_col in (-2, -1, 0, 1, 2):
+                    for d_row in (-2, -1, 0, 1, 2):
+                        neighbour = (col + d_col, row + d_row)
+                        if neighbour in cells:
+                            cells.remove(neighbour)
+                            stack.append(neighbour)
+            low_x, low_y = self.grid.centre(min(c for c, _ in group), min(r for _, r in group))
+            high_x, high_y = self.grid.centre(max(c for c, _ in group), max(r for _, r in group))
+            boxes.append({"x": round(low_x - GRID / 2, 2), "y": round(low_y - GRID / 2, 2), "w": round(high_x - low_x + GRID, 2), "h": round(high_y - low_y + GRID, 2), "cells": len(group), "sensor": "lidar"})
+        return sorted(boxes, key=lambda box: -box["cells"])
 
     def _clear_ahead(self) -> float:
         """The nearest return in a cone in front of the robot."""
@@ -323,7 +429,15 @@ class KinematicSimAdapter(RobotAdapter):
         # Odometry: what the wheels say, with a systematic scale error and a little noise.
         scale = 1.0 + self.drift
         noise = self.random.gauss(0.0, 0.002) if step else 0.0
-        self.odom_yaw = wrap(self.odom_yaw + self.w * DT * (1.0 + self.drift * 0.5))
+        # Heading: the wheels alone over- or under-read a turn; the gyroscope has no such scale error.
+        # With the IMU working the two are fused, mostly the gyroscope. Without it, wheels only, and it drifts.
+        wheel_rate = self.w * (1.0 + self.drift * 2.0)
+        if "imu" in self.sensor_faults:
+            rate = wheel_rate
+        else:
+            self._gyro = self.w + (self.random.gauss(0.0, 0.002) if self.w else 0.0)
+            rate = 0.98 * self._gyro + 0.02 * wheel_rate
+        self.odom_yaw = wrap(self.odom_yaw + rate * DT)
         self.odom_x += (self.v * scale + noise) * math.cos(self.odom_yaw) * DT
         self.odom_y += (self.v * scale + noise) * math.sin(self.odom_yaw) * DT
         self.battery = max(0.0, self.battery - 0.15 * step)
@@ -359,6 +473,8 @@ class KinematicSimAdapter(RobotAdapter):
             return self._fail(f"The robot faulted: {self.faults[0]['message']}")
         if self.battery <= 0.0:
             return self._fail("The battery is empty.")
+        if "lidar" in self.sensor_faults:
+            return self._fail("The range sensor stopped reporting. The robot doesn't drive without it.")
         gx, gy = self._goal["x"], self._goal["y"]
         distance = math.hypot(gx - self.odom_x, gy - self.odom_y)
         arrive = max(0.05, self._nav_tolerance * 0.5)
@@ -405,6 +521,7 @@ class KinematicSimAdapter(RobotAdapter):
         self._nav_speed = min(float(max_speed), float(self.limits.get("maxLinearSpeed", max_speed)))
         self._nav_tolerance = float(tolerance)
         self._path, self._replan_due, self._blocked_for = [], 0.0, 0.0
+        self._lidar_due = self.sim_time   # plan with what the sensor sees now, not with the last scan
         self._goal_start_travel = self.travelled
         self._nav = NavigationStatus("active", "", math.hypot(self._goal["x"] - self.odom_x, self._goal["y"] - self.odom_y))
 
@@ -438,6 +555,9 @@ class KinematicSimAdapter(RobotAdapter):
     def place_obstacle(self, rect: dict) -> None:
         self.dynamic.append({"name": rect.get("name", "unexpected object"), "x": float(rect["x"]), "y": float(rect["y"]), "w": float(rect["w"]), "h": float(rect["h"])})
 
+    def clear_obstacles(self) -> None:
+        self.dynamic = []
+
     def _read_inputs(self) -> None:
         """A file next to the robot's state stands in for the buttons on a real machine."""
         if not self.inputs_path:
@@ -467,6 +587,8 @@ class KinematicSimAdapter(RobotAdapter):
             self.acknowledge_fault()
         if isinstance(inputs.get("freezeNavigator"), bool):
             self._frozen = inputs["freezeNavigator"]
+        if isinstance(inputs.get("sensorFaults"), list):
+            self.sensor_faults = {str(item) for item in inputs["sensorFaults"]} & {"lidar", "imu", "environment", "battery"}
 
     # ---------------- time ----------------
     def advance(self, sim_seconds: float) -> None:
@@ -478,6 +600,7 @@ class KinematicSimAdapter(RobotAdapter):
             if self.sim_time >= self._lidar_due:
                 self._lidar_due = self.sim_time + LIDAR_PERIOD
                 self._scan()
+                self._clusters = self._detect() if "lidar" not in self.sensor_faults else self._clusters
             self._navigate_step()
             self._physics()
             self._battery_and_dock()
@@ -490,25 +613,50 @@ class KinematicSimAdapter(RobotAdapter):
         self.advance(min(wall_dt, 0.25) * self.time_factor)
 
     # ---------------- state ----------------
+    def _sensor_readings(self, nearest: int) -> dict:
+        """Each reading says when it was measured and that it is simulated. A sensor that stopped reporting says so and carries no value."""
+        now_ms = int(time.time() * 1000)
+        down = lambda sensor: {"ok": False, "problem": "not reporting", "source": "simulated"}  # noqa: E731
+        scan_ms = int(self._scan_at * 1000)
+        return {
+            "lidar": down("lidar") if "lidar" in self.sensor_faults else {"ok": True, "source": "simulated", "measuredAt": scan_ms, "beams": LIDAR_BEAMS, "maxRange": LIDAR_RANGE, "minRange": round(self.ranges[nearest], 3), "minBearingDeg": round(360.0 * nearest / LIDAR_BEAMS, 1), "ranges": [round(value, 2) for value in self.ranges]},
+            "odometry": {"ok": True, "source": "simulated", "measuredAt": now_ms, "travelled": round(self.travelled, 2)},
+            "imu": down("imu") if "imu" in self.sensor_faults else {"ok": True, "source": "simulated", "measuredAt": now_ms, "yawRate": round(getattr(self, "_gyro", 0.0), 4), "unit": "rad/s"},
+            "environment": down("environment") if "environment" in self.sensor_faults else {"ok": True, "source": "simulated", "measuredAt": now_ms, "temperatureC": round(float(self.ambient.get("temperatureC", 21.0)), 1), "humidityPercent": round(float(self.ambient.get("humidityPercent", 45.0)), 1)},
+            "bumper": {"ok": True, "source": "simulated", "measuredAt": now_ms, "pressed": any(item["code"] == "collision" for item in self.faults)},
+            "battery": down("battery") if "battery" in self.sensor_faults else {"ok": True, "source": "simulated", "measuredAt": now_ms, "percent": round(self.battery, 1)},
+        }
+
+    def _perception(self) -> dict:
+        """What the sensors detect, with where each item came from. No model is involved."""
+        lidar_ok = "lidar" not in self.sensor_faults
+        waiting = self._goal is not None and self._blocked_for > 0.1
+        gave_up = self._goal is None and self._nav.state == "failed" and self._nav.reason.startswith(("No path", "Blocked"))
+        blocked = waiting or gave_up
+        return {
+            "measuredAt": int(self._scan_at * 1000), "sensor": "lidar", "source": "simulated range sensor",
+            "obstacles": list(self._clusters) if lidar_ok else [],
+            "obstaclesKnown": lidar_ok,
+            "route": {"blocked": blocked, "reason": f"The last goal was given up: {self._nav.reason}" if gave_up else "Something the range sensor sees is in the robot's path." if blocked else ("No route is being followed." if self._goal is None else "Clear ahead.")} if lidar_ok else {"blocked": None, "reason": "Unknown: the range sensor isn't reporting."},
+            "changes": self._changes(),
+            "sensorHealth": [{"id": name, "ok": name not in self.sensor_faults, **({"problem": "not reporting"} if name in self.sensor_faults else {})} for name in ("lidar", "odometry", "imu", "environment", "bumper", "battery")],
+        }
+
     def state(self) -> dict:
         nearest = min(range(LIDAR_BEAMS), key=lambda index: self.ranges[index])
         path = [(self.odom_x, self.odom_y), *self._path] if self._goal else []
         stride = max(1, len(path) // 40)
         return {
-            "pose": {"x": round(self.odom_x, 3), "y": round(self.odom_y, 3), "yaw": round(self.odom_yaw, 4), "frame": "map", "source": "odometry"},
+            "pose": {"x": round(self.odom_x, 3), "y": round(self.odom_y, 3), "yaw": round(self.odom_yaw, 4), "frame": "map", "source": "odometry", "heading": "wheels only (IMU not reporting)" if "imu" in self.sensor_faults else "wheels fused with the IMU"},
             "velocity": {"linear": round(self.v, 3), "angular": round(self.w, 3)},
-            "battery": {"percent": round(self.battery, 1), "charging": bool(getattr(self, "_docked", False))},
+            "battery": None if "battery" in self.sensor_faults else {"percent": round(self.battery, 1), "charging": bool(getattr(self, "_docked", False))},
             "estop": {"engaged": self.estop, "source": "simulated-hardware"},
             "motorsEnabled": not self.estop and not self.faults and self.battery > 0.0,
             "localized": True,
             "docked": bool(getattr(self, "_docked", False)),
             "faults": list(self.faults),
-            "sensors": {
-                "lidar": {"ok": True, "beams": LIDAR_BEAMS, "maxRange": LIDAR_RANGE, "minRange": round(self.ranges[nearest], 3), "minBearingDeg": round(360.0 * nearest / LIDAR_BEAMS, 1), "ranges": [round(value, 2) for value in self.ranges]},
-                "odometry": {"ok": True, "travelled": round(self.travelled, 2)},
-                "bumper": {"ok": True, "pressed": any(item["code"] == "collision" for item in self.faults)},
-                "battery": {"ok": True, "percent": round(self.battery, 1)},
-            },
+            "sensors": self._sensor_readings(nearest),
+            "perception": self._perception(),
             "devices": dict(self.devices),
             "nav": {"goal": self._goal, "path": [[round(p[0], 2), round(p[1], 2)] for p in path[::stride]], "status": self._nav.state},
             "map": {"coveragePercent": round(self.grid.coverage(), 1), "discovered": [[round(v, 2) for v in self.grid.centre(*cell)] for cell in sorted(self.grid.discovered)[:120]]},

@@ -84,6 +84,9 @@ class LocalSafety:
             return Decision(False, f"the robot has an active fault ({state['faults'][0].get('code', 'fault')})")
         if state.get("localized") is False:
             return Decision(False, "the robot isn't localized")
+        for sensor in ("lidar", "odometry"):
+            if ((state.get("sensors") or {}).get(sensor) or {}).get("ok") is False:
+                return Decision(False, f"the {sensor} sensor isn't reporting")
         if busy:
             return Decision(False, "another motion mission is running")
         local_max = self.limits.get("maxLinearSpeed")

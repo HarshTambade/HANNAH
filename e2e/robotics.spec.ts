@@ -32,7 +32,7 @@ test.beforeAll(async () => {
   stateDir = join(dataDir, "robot");
   server = spawn(process.execPath, ["index.js"], {
     cwd: serverDir,
-    env: { ...process.env, NODE_ENV: "development", PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: `sqlite:${join(dataDir, "hannah.db")}`, HANNAH_VAULT_KEY: "a".repeat(64), VERCEL: "" },
+    env: { ...process.env, NODE_ENV: "development", PORT: String(port), HOST: "127.0.0.1", DATABASE_URL: `sqlite:${join(dataDir, "hannah.db")}`, HANNAH_VAULT_KEY: "a".repeat(64), HANNAH_RATE_LIMIT_ROBOT_SYNC_PER_5S: "100000", VERCEL: "" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout?.on("data", (chunk) => { serverLog += chunk; });
@@ -128,7 +128,7 @@ test("a robot is added with a one-time code, its runtime enrolls, and it shows a
   await expect(page.getByTestId("robot-pose")).toContainText("The simulator's ground truth differs by 0.00 m.");
   await expect(detail(page).getByText("HANNAH's built-in 2-D kinematic simulator", { exact: false })).toHaveCount(0);
   // What it registered, and the rules that can't be changed.
-  await expect(page.getByTestId("capability")).toHaveCount(7);
+  await expect(page.getByTestId("capability")).toHaveCount(8);
   await expect(page.locator('[data-capability="stop_motion"]')).toContainText("Never needs approval and can't be switched off.");
   await expect(page.locator('[data-capability="navigate_to"]')).toContainText("Confirmed when the robot's reported position is within the tolerance of the goal");
   await expect(detail(page).getByText("Simulated emergency-stop input. Not a safety device.")).toBeVisible();

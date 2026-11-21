@@ -27,6 +27,7 @@ process.env.NODE_ENV = "test";
 process.env.HANNAH_API_TOKEN = "robot-sim-test-token-0123456789-abcdefghijklmnop";
 process.env.DATABASE_URL = "sqlite::memory:";
 process.env.HANNAH_VAULT_KEY = "e".repeat(64);
+process.env.HANNAH_RATE_LIMIT_ROBOT_SYNC_PER_5S = "100000"; // the stand-in robot exchanges far faster than a real one
 process.env.HANNAH_ROBOT_ACK_WAIT_MS = "4000";
 delete process.env.VERCEL;
 
@@ -145,7 +146,7 @@ test("the runtime enrolls as a simulation and keeps its secret to itself", { ski
   assert.equal(value.simulator, GAZEBO ? "gazebo-harmonic" : "hannah-kinematic");
   assert.equal(value.robotType, "differential-drive");
   assert.equal(value.adapter, GAZEBO ? "ros2" : "kinematic");
-  assert.deepEqual(value.capabilities, ["report_robot_state", "read_sensor", "stop_motion", "navigate_to", "return_to_dock", "inspect_area", ...(GAZEBO ? [] : ["set_supported_device_state"])]);
+  assert.deepEqual(value.capabilities, ["report_robot_state", "read_sensor", ...(GAZEBO ? [] : ["report_surroundings"]), "stop_motion", "navigate_to", "return_to_dock", "inspect_area", ...(GAZEBO ? [] : ["set_supported_device_state"])]);
   assert.deepEqual(Object.keys(value.places), ["dock", "workbench", "shelves", "door", "loading bay"]);
   assert.equal(value.limits.maxLinearSpeed, 0.5);
   assert.equal(value.limits.environment, "simulation");
@@ -281,6 +282,83 @@ test("when the network goes away the robot stops by itself, and says so when it 
   await until(async () => (await call("GET", `/robots/events?robot=${robotId}`)).body.events.map((event) => event.type), (types) => types.includes("link-lost") && types.includes("link-restored"), { what: "the robot's link events" });
   await sleep(800);
   assert.equal((await robot()).state.velocity.linear, 0, "and it doesn't resume by itself");
+});
+
+test("the fingerprint the runtime printed is the one HANNAH shows", { skip }, async () => {
+  const printed = log.find((line) => line.event === "enrolled")?.fingerprint;
+  assert.match(printed, /^[0-9A-F]{4}( [0-9A-F]{4}){3}$/);
+  assert.equal((await robot()).fingerprint, printed);
+});
+
+test("a mission is paused where the robot stands and resumed to its goal, after approval", { skip: skip || (GAZEBO ? "pause and resume are not implemented in the ROS 2 adapter path yet" : false) }, async () => {
+  await idle();
+  const home = await start("robots.return_to_dock", { robot: "Rover" });
+  await until(() => mission(home.missionId), (value) => value.final, { what: "the trip to the dock" });
+  await idle();
+  const started = await start("robots.navigate_to", { robot: "Rover", place: "workbench", maxSpeed: 0.3 });
+  await until(robot, (value) => value.state.velocity.linear > 0.2, { what: "the robot to move" });
+  const paused = await call("POST", `/robots/missions/${started.missionId}/pause`);
+  assert.equal(paused.body.record.status, "done", JSON.stringify(paused.body.record));
+  assert.equal(paused.body.mission.status, "paused");
+  const held = await until(robot, (value) => value.mode === "paused" && value.state.velocity.linear === 0, { what: "the robot to hold" });
+  const where = held.state.pose;
+  assert.ok(distance(where, { x: 3.1, y: 1.9 }) > 1, "it is not there yet");
+  await sleep(800);
+  assert.ok(distance((await robot()).state.pose, where) < 0.02, "it stays where it paused");
+  // Resume is a movement: it asks.
+  const resume = await call("POST", `/robots/missions/${started.missionId}/resume`);
+  assert.equal(resume.status, 202);
+  assert.equal(resume.body.record.status, "waiting-approval");
+  const approved = await call("POST", `/actions/${resume.body.record.id}/decision`, { approve: true });
+  assert.equal(approved.body.record.status, "done", JSON.stringify(approved.body.record));
+  const done = await until(() => mission(started.missionId), (value) => value.final, { what: "the resumed mission to finish" });
+  assert.equal(done.status, "succeeded", JSON.stringify(done));
+  assert.equal(done.verification.confirmed, true);
+});
+
+test("what the robot senses is reported as measurements: an object that isn't on its map, and a sensor that stops", { skip: skip || (GAZEBO ? "the ROS 2 adapter doesn't report surroundings yet" : false) }, async () => {
+  await idle();
+  const before = (await act("robots.surroundings", { robot: "Rover" })).body.record.response;
+  assert.equal(before.obstaclesKnown, true);
+  assert.equal(before.sensor, "lidar");
+  assert.equal(before.obstacles.some((item) => item.kind === "object not on the map"), false);
+  // Something is put down a metre from the robot, in the most open direction its range sensor shows (to its map, nothing is there).
+  const now = (await robot()).state;
+  const ranges = now.sensors.lidar.ranges;
+  const beam = ranges.indexOf(Math.max(...ranges));
+  assert.ok(ranges[beam] > 2.5, "there is open floor to put it on");
+  const direction = now.pose.yaw + (2 * Math.PI * beam) / ranges.length;
+  const expectedBearing = ((360 * beam) / ranges.length + 180) % 360 - 180;
+  inputs({ obstacles: [{ name: "crate", x: now.pose.x + Math.cos(direction) * 1.2 - 0.2, y: now.pose.y + Math.sin(direction) * 1.2 - 0.2, w: 0.4, h: 0.4 }] });
+  // Wait on the robot's own report (the action endpoint is rate-limited), then ask through the action once.
+  await until(robot, (value) => value.state.perception.obstacles.some((item) => item.kind === "object not on the map"), { what: "the range sensor to find the crate" });
+  const seen = (await act("robots.surroundings", { robot: "Rover" })).body.record.response;
+  const crate = seen.obstacles.find((item) => item.kind === "object not on the map");
+  assert.ok(crate.distanceM > 0.7 && crate.distanceM < 1.3, JSON.stringify(crate));
+  assert.ok(Math.abs(((crate.bearingDeg - expectedBearing + 540) % 360) - 180) <= 25, `bearing ${crate.bearingDeg}, expected about ${expectedBearing}`);
+  assert.equal(crate.sensor, "lidar");
+  assert.ok(crate.confidence > 0.5 && crate.confidence < 1);
+  assert.ok(seen.changes.length >= 1, "it is recorded as a change from the map");
+  assert.match(seen.note, /Nothing here was inferred by a language model/);
+  inputs({ obstacles: [] });
+  await until(robot, (value) => !value.state.perception.obstacles.some((item) => item.kind === "object not on the map") && value.state.perception.changes.length === 0, { what: "the map to be cleared once the crate is gone" });
+
+  // The range sensor stops reporting: the robot says so, isn't moved, and says "unknown", not "clear".
+  inputs({ obstacles: [], sensorFaults: ["lidar"] });
+  await until(robot, (value) => value.state.perception.obstaclesKnown === false, { what: "the sensor fault to show" });
+  const blind = (await act("robots.surroundings", { robot: "Rover" })).body.record.response;
+  assert.equal(blind.route.blocked, null);
+  assert.deepEqual(blind.sensorHealth.find((item) => item.id === "lidar"), { id: "lidar", ok: false, problem: "not reporting" });
+  const refused = await act("robots.navigate_to", { robot: "Rover", place: "door" });
+  assert.equal(refused.body.record.status, "denied");
+  assert.match(refused.body.record.permission.reason, /Rover's lidar sensor isn't reporting, so it won't be moved/);
+  assert.equal((await act("robots.read_sensor", { robot: "Rover", sensor: "lidar" })).body.record.response.reading.ok, false);
+  inputs({ obstacles: [], sensorFaults: [] });
+  await until(robot, (value) => value.state.sensors.lidar.ok === true, { what: "the sensor to return" });
+  const climate = (await act("robots.read_sensor", { robot: "Rover", sensor: "environment" })).body.record.response.reading;
+  assert.deepEqual([climate.ok, climate.source, typeof climate.temperatureC, typeof climate.humidityPercent], [true, "simulated", "number", "number"]);
+  const battery = (await act("robots.battery", { robot: "Rover" })).body.record.response;
+  assert.ok(battery.percent > 0 && battery.percent <= 100);
 });
 
 test("revoking the robot ends its access; the runtime holds and reports it locally", { skip }, async () => {

@@ -1,0 +1,10 @@
+{
+  "name": "blocked-route",
+  "description": "The kitchen's only doorway is blocked by a box that isn't on the map. The robot must stop short of it, never touch it, and say there is no way through.",
+  "world": "../worlds/home.json",
+  "steps": [
+    { "obstacle": { "name": "box in the kitchen doorway", "x": -1.5, "y": 1.3, "w": 1.0, "h": 1.2 } },
+    { "navigate": "kitchen", "expect": "failed", "reason": "No path to the goal|Blocked", "timeout": 240 }
+  ],
+  "expect": { "faults": 0 }
+}

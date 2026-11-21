@@ -19,7 +19,7 @@ function robot(overrides = {}) {
 const codes = (verdict) => verdict.violations.map((item) => item.code);
 
 test("every capability carries the whole contract", () => {
-  const wanted = ["navigate_to", "stop_motion", "return_to_dock", "follow_target", "inspect_area", "capture_image", "report_robot_state", "read_sensor", "set_supported_device_state", "move_robot_arm", "grasp_object", "release_object"];
+  const wanted = ["navigate_to", "stop_motion", "cancel_mission", "pause_mission", "resume_mission", "return_to_dock", "follow_target", "inspect_area", "capture_image", "read_sensor", "report_robot_state", "report_battery_state", "report_surroundings", "set_supported_device_state", "move_robot_arm", "grasp_object", "release_object", "inspect_machine", "execute_approved_workflow"];
   assert.deepEqual(contract.CAPABILITIES.map((item) => item.id).sort(), [...wanted].sort());
   for (const item of contract.CAPABILITIES) {
     assert.ok(item.description && item.title, item.id);
@@ -33,7 +33,13 @@ test("every capability carries the whole contract", () => {
     assert.equal(typeof item.cancel.supported, "boolean");
     assert.ok(item.cancel.behaviour && item.verification.method && item.verification.description, `${item.id} cancel and verification`);
     assert.ok(Array.isArray(item.constraints));
+    assert.ok(item.failures.length >= 2 && item.failures.every((failure) => failure.when && failure.response), `${item.id} failure responses`);
   }
+  // Nothing HANNAH offers is in the critical class, and every class says what it requires.
+  assert.equal(contract.CAPABILITIES.some((item) => item.risk === "critical"), false);
+  assert.deepEqual(Object.keys(contract.APPROVAL), Object.keys(contract.RISK));
+  // What moves an arm or works near machinery is high risk and has no runtime.
+  for (const id of ["move_robot_arm", "grasp_object", "release_object", "follow_target", "inspect_machine"]) assert.deepEqual([contract.capability(id).risk, contract.capability(id).status], ["high", "contract-only"], id);
 });
 
 test("no capability takes a raw actuator value", () => {
@@ -47,6 +53,8 @@ test("no capability takes a raw actuator value", () => {
 test("a robot registers only what the contract has, for its type, with a runtime behind it", () => {
   const result = contract.registerCapabilities("differential-drive", ["navigate_to", "stop_motion", "navigate_to", "set_motor_pwm", "move_robot_arm", "capture_image", { id: "read_sensor" }]);
   assert.deepEqual(result.accepted, ["navigate_to", "stop_motion", "read_sensor"]);
+  // Cancel, pause, resume and the battery report are HANNAH's own for every robot: a robot neither registers nor is refused them.
+  assert.deepEqual(contract.registerCapabilities("differential-drive", ["cancel_mission", "pause_mission", "resume_mission", "report_battery_state", "report_surroundings"]), { accepted: ["report_surroundings"], refused: [] });
   assert.deepEqual(result.refused.map((item) => item.id), ["set_motor_pwm", "move_robot_arm", "capture_image"]);
   assert.match(result.refused[0].reason, /Not in HANNAH's capability contract/);
   assert.match(result.refused[1].reason, /no runtime implements it yet/);

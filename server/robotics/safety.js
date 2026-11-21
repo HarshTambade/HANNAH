@@ -108,7 +108,7 @@ function resolvePoint(input, places, label) {
     if (finite(input.x) || finite(input.y)) return { problem: `${label}: give a place or x and y, not both` };
     const wanted = String(input.place).trim().toLowerCase();
     const match = Object.entries(places || {}).find(([name]) => name.toLowerCase() === wanted);
-    if (!match) return { problem: `${label}: the robot has no place called “${String(input.place).slice(0, 60)}”${Object.keys(places || {}).length ? ` (it has: ${Object.keys(places).slice(0, 12).join(", ")})` : ""}` };
+    if (!match) return { problem: `${label}: the robot has no place called “${String(input.place).slice(0, 60)}”${Object.keys(places || {}).length ? ` (it has: ${Object.keys(places).slice(0, 12).join(", ")})` : " (no destination has been defined or approved for it yet)"}` };
     return { point: { x: match[1].x, y: match[1].y, ...(finite(match[1].yaw) ? { yaw: match[1].yaw } : {}), place: match[0] } };
   }
   if (!finite(input?.x) || !finite(input?.y)) return { problem: `${label}: give a place name, or x and y in metres` };
@@ -147,7 +147,7 @@ function check({ robot, capabilityId, params = {}, now = Date.now(), active = nu
   // 1. Is it a valid command for this robot?
   if (robot.status === "revoked") refuse("revoked", `${robot.name}'s credentials were revoked. Enroll it again to use it.`);
   else if (robot.status !== "enrolled") refuse("not-enrolled", `${robot.name} hasn't finished enrolling.`);
-  if (!robot.capabilities.includes(definition.id)) refuse("unsupported", `${robot.name} doesn't offer “${definition.title}”.`);
+  if (!definition.implicit && !robot.capabilities.includes(definition.id)) refuse("unsupported", `${robot.name} doesn't offer “${definition.title}”.`);
   else if ((robot.disabled || []).includes(definition.id)) refuse("disabled", `“${definition.title}” is switched off for ${robot.name}.`);
   for (const problem of validate(definition.input, params)) refuse("invalid-input", problem.replace(/^input\.?/, "") || problem);
 
@@ -201,6 +201,9 @@ function check({ robot, capabilityId, params = {}, now = Date.now(), active = nu
       if (needs("motors-enabled") && state.motorsEnabled === false) unmet("motors-enabled", `${robot.name}'s motors are disabled.`);
       if (needs("no-fault") && Array.isArray(state.faults) && state.faults.length) unmet("no-fault", `${robot.name} reports a fault: ${String(state.faults[0]?.message || state.faults[0]?.code || "unknown").slice(0, 120)}.`);
       if (needs("localized") && state.localized === false) unmet("localized", `${robot.name} doesn't know where it is on its map.`);
+      // It doesn't drive blind: a range or odometry sensor that stopped reporting refuses movement.
+      const blind = definition.motion ? ["lidar", "odometry"].filter((id) => state.sensors?.[id]?.ok === false) : [];
+      if (blind.length) refuse("sensor-down", `${robot.name}'s ${blind.join(" and ")} sensor isn't reporting, so it won't be moved.`);
       if (needs("battery-ok") && finite(limits.minBatteryPercent) && finite(state.battery?.percent) && state.battery.percent < limits.minBatteryPercent && definition.id !== "return_to_dock") unmet("battery-ok", `${robot.name}'s battery is at ${Math.round(state.battery.percent)}%, below its ${limits.minBatteryPercent}% minimum for starting a mission.`);
     } else if (needs("online") && !state) unmet("online", `${robot.name} hasn't reported its state yet.`);
     if (needs("no-active-motion") && active) unmet("no-active-motion", `${robot.name} is already on a mission (${active.capability}). Stop it or wait for it to finish.`);
@@ -208,6 +211,16 @@ function check({ robot, capabilityId, params = {}, now = Date.now(), active = nu
 
   // 3. Risk, and whether a person has to approve.
   if (definition.motion) {
+    // A physical robot that hasn't been commissioned doesn't move; one in its trial moves slowly.
+    const commissioned = robot.commissioning;
+    if (!robot.simulated && commissioned?.required && commissioned.status !== "approved") {
+      if (commissioned.status !== "trial") refuse("not-commissioned", `${robot.name} hasn't been commissioned: ${commissioned.done} of ${commissioned.total} checks are done${commissioned.resetReason ? ` (${commissioned.resetReason})` : ""}. Finish them under Robots → Commissioning before it may move.`);
+      else {
+        if (finite(sent.maxSpeed)) sent.maxSpeed = Math.min(sent.maxSpeed, commissioned.trialSpeed);
+        flags.push(`commissioning trial: supervised, limited to ${commissioned.trialSpeed} m/s`);
+        warnings.push("This is the commissioning trial. A person must be at the robot with its emergency stop in reach, and the space must be clear.");
+      }
+    }
     if (!robot.simulated) {
       out.risk = limits.environment === "shared-with-people" || !limits.environment ? "high" : "moderate";
       flags.push("this is a physical robot and it will move");
@@ -221,4 +234,4 @@ function check({ robot, capabilityId, params = {}, now = Date.now(), active = nu
   return { ok: violations.length === 0, violations, warnings, flags, params: sent, ...out };
 }
 
-module.exports = { ENVIRONMENTS, ONLINE_MS, check, effectiveLimits, normalizeLimits, pointInPolygon };
+module.exports = { ENVIRONMENTS, ONLINE_MS, check, effectiveLimits, normalizeLimits, pointInPolygon, pointProblems, safetyCheck: check };

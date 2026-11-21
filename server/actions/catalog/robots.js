@@ -51,6 +51,7 @@ function missionText(mission, robotName = "The robot") {
   switch (mission.status) {
     case "queued": return `${what}: waiting to be delivered to ${robotName}. Nothing has moved.`;
     case "sent": return `${what}: delivered; ${robotName} hasn't accepted it yet. Nothing has moved.`;
+    case "paused": return `${what}: paused. ${robotName} is holding where it is and keeps the mission${mission.resumeRequestedAt ? "; a resume has been sent" : ""}.${mission.error ? ` ${mission.error}` : ""}`;
     case "accepted": return `${what}: ${robotName} accepted it and is carrying it out${mission.progress?.distanceRemaining !== undefined ? ` (${round(mission.progress.distanceRemaining)} m to go)` : ""}. It is not finished.`;
     case "succeeded": return `${what}: finished and verified. ${mission.verification?.evidence || ""}`.trim();
     case "unverified": return `${what}: ${robotName} reported success, but its state doesn't confirm it. ${mission.verification?.evidence || ""}`.trim();
@@ -137,6 +138,52 @@ function robotActions({ robotics }) {
     localized: robot.state?.localized ?? null, faults: robot.state?.faults ?? [], mission: robot.state?.mission ?? null, devices: robot.state?.devices ?? null,
   });
 
+  /** The mission a control action is about: the one named, or the robot's unfinished one. */
+  async function target(ctx, params, wanted, word) {
+    if (params.mission) {
+      const mission = await robotics.getMission(ctx.db, ctx.userId, params.mission);
+      return { mission, robot: await robotics.getRobot(ctx.db, ctx.userId, mission.robotId) };
+    }
+    const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+    const missions = (await robotics.listMissions(ctx.db, ctx.userId, { robotId: robot.id, active: true, limit: 20 })).filter((item) => item.capability !== "stop_motion");
+    const mission = missions.find(wanted) || missions[0];
+    if (!mission) throw fail(404, `${robot.name} has no ${word} mission.`, "no-mission");
+    return { mission, robot };
+  }
+  /** A resume moves the robot again, so it gets the same checks as the mission did, against the robot as it is now. */
+  async function resumeCheck(ctx, robot, mission) {
+    if (mission.status !== "paused") return { ok: false, violations: [{ code: "not-paused", message: mission.final ? "That mission is already over." : "That mission isn't paused." }], flags: [], warnings: [] };
+    const strip = ({ place: _place, ...point }) => point;
+    const params = mission.capability === "inspect_area" ? { waypoints: (mission.params.waypoints || []).map(strip), tolerance: mission.params.tolerance } : mission.capability === "return_to_dock" ? {} : { x: mission.params.x, y: mission.params.y, ...(mission.params.yaw === undefined ? {} : { yaw: mission.params.yaw }), tolerance: mission.params.tolerance };
+    const { safetyCheck } = require("../../robotics/safety");
+    return safetyCheck({ robot, capabilityId: mission.capability, params, now: ctx.now(), active: null });
+  }
+  /** Cancel or pause: reduces what is happening, so it never needs approval. */
+  function control({ id, capabilityId, title, verb, act, settled, good }) {
+    return {
+      id, service: "robots", kind: "write", deescalates: true, title, description: capability(capabilityId).description, needs: "A mission that isn't finished",
+      input: { type: "object", properties: { robot: ROBOT, mission: { type: "string", description: "The mission id. Leave out for the robot's current mission." } }, required: [] },
+      normalize: (raw) => ({ robot: clip(raw?.robot, 80), mission: clip(raw?.mission, 40) }),
+      async assess(params, ctx) {
+        const { robot, mission } = await target(ctx, params, (item) => item.status === "accepted", "running");
+        return { resource: { type: "robot", id: robot.id }, account: robot.name, robot, mission };
+      },
+      preview: (_params, _ctx, assessed) => ({ title: `${verb} ${assessed.robot.name}'s mission “${assessed.mission.title}”`, lines: [{ label: "Robot", value: `${assessed.robot.name} — ${kindLabel(assessed.robot)}` }, { label: "Approval", value: "Never needed" }] }),
+      async execute(params, ctx) {
+        const { robot, mission } = await target(ctx, params, (item) => item.status === "accepted", "running");
+        await act(ctx.db, ctx.userId, mission.id);
+        const after = robot.online ? await robotics.waitFor(ctx.db, ctx.userId, mission.id, settled) : await robotics.getMission(ctx.db, ctx.userId, mission.id);
+        return { missionId: mission.id, robot: { id: robot.id, name: robot.name, online: robot.online }, status: after.status, note: missionText(after, robot.name) };
+      },
+      async verify(response, _params, ctx) {
+        const mission = await robotics.getMission(ctx.db, ctx.userId, response.missionId);
+        if (good.includes(mission.status)) return { confirmed: true, evidence: missionText(mission, response.robot.name) };
+        if (!response.robot.online) return { confirmed: false, evidence: `${response.robot.name} is offline, so this couldn't be delivered. A robot that loses its link to HANNAH has already stopped by itself.` };
+        return { confirmed: false, evidence: missionText(mission, response.robot.name) };
+      },
+    };
+  }
+
   return [
     readAction({
       id: "robots.list", title: "List robots", description: "Every robot enrolled in the account: whether it is a simulation or physical, whether it is connected, what it can do and the places it knows.", input: {},
@@ -170,6 +217,32 @@ function robotActions({ robotics }) {
         return { ...mission, robot: robot ? { id: robot.id, name: robot.name, kind: robot.simulated ? "simulation" : "physical", online: robot.online } : null, summary: missionText(mission, robot?.name) };
       },
     }),
+    readAction({
+      id: "robots.battery", title: "Report a robot's battery", description: capability("report_battery_state").description, input: { robot: ROBOT },
+      run: async (params, ctx) => {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        const battery = robot.state?.battery;
+        if (!battery || typeof battery.percent !== "number") throw fail(409, `${robot.name} hasn't reported a battery reading${(robot.sensors || []).some((sensor) => sensor.id === "battery") ? " yet" : ": it has no battery sensor registered"}.`, "no-reading");
+        return { robot: robot.name, online: robot.online, stale: !robot.online, ageS: robot.stateAgeS, percent: battery.percent, charging: Boolean(battery.charging), minimumToStartPercent: robot.limits.minBatteryPercent ?? null, source: "the robot's battery sensor" };
+      },
+    }),
+    readAction({
+      id: "robots.surroundings", title: "Report what is around a robot", description: capability("report_surroundings").description, input: { robot: ROBOT },
+      run: async (params, ctx) => {
+        const verdict = await robotics.assess(ctx.db, ctx.userId, params.robot, "report_surroundings", {});
+        if (!verdict.ok) throw fail(400, verdict.violations.map((item) => item.message).join(" "), "safety-refused");
+        const perception = verdict.robot.state?.perception;
+        if (!perception) throw fail(409, `${verdict.robot.name} hasn't reported what its sensors detect yet.`, "no-reading");
+        return { robot: verdict.robot.name, kind: verdict.robot.simulated ? "simulation" : "physical", online: verdict.robot.online, stale: !verdict.robot.online, ageS: verdict.robot.stateAgeS, position: verdict.robot.state.pose ?? null, ...perception, note: "These are sensor measurements with their source. Nothing here was inferred by a language model." };
+      },
+    }),
+    readAction({
+      id: "robots.destinations", title: "List a robot's destinations", description: "The named destinations a robot can be sent to, each with its map, coordinate frame, position and who defined it. A name is usable only when it is on this list.", input: { robot: ROBOT },
+      run: async (params, ctx) => {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        return { robot: robot.name, ...(await robotics.listDestinations(ctx.db, ctx.userId, robot.id)) };
+      },
+    }),
     missionAction({ capabilityId: "navigate_to", title: "Drive a robot to a place", describe: (sent) => `drives to ${pointText(sent)}` }),
     missionAction({ capabilityId: "return_to_dock", title: "Send a robot to its dock", describe: (sent) => `returns to its dock at (${round(sent.x)}, ${round(sent.y)})` }),
     missionAction({ capabilityId: "inspect_area", title: "Have a robot visit points and report", describe: (sent) => `visits ${sent.waypoints.length} point${sent.waypoints.length === 1 ? "" : "s"}: ${sent.waypoints.map(pointText).join(", ")}` }),
@@ -197,6 +270,38 @@ function robotActions({ robotics }) {
         const mission = await robotics.getMission(ctx.db, ctx.userId, response.missionId);
         if (mission.status === "succeeded") return { confirmed: true, evidence: mission.verification?.evidence || "The robot reported it stopped." };
         if (!response.robot.online) return { confirmed: false, evidence: `${response.robot.name} is offline, so the stop couldn't be delivered. A robot that loses its link to HANNAH stops by itself${response.robot.linkTimeoutS ? ` within ${response.robot.linkTimeoutS} seconds` : ""}; HANNAH can't see whether it has.` };
+        return { confirmed: false, evidence: missionText(mission, response.robot.name) };
+      },
+    },
+    control({ id: "robots.cancel_mission", capabilityId: "cancel_mission", title: "Cancel a robot's mission", verb: "Cancel", act: (db, userId, missionId) => robotics.cancelMission(db, userId, missionId), settled: (item) => item.final, good: ["cancelled"] }),
+    control({ id: "robots.pause_mission", capabilityId: "pause_mission", title: "Pause a robot's mission", verb: "Pause", act: (db, userId, missionId) => robotics.pauseMission(db, userId, missionId), settled: (item) => item.status === "paused" || item.final, good: ["paused"] }),
+    {
+      id: "robots.resume_mission", service: "robots", kind: "write", title: "Resume a robot's paused mission", description: capability("resume_mission").description, needs: "A paused mission",
+      input: { type: "object", properties: { robot: ROBOT, mission: { type: "string", description: "The mission id. Leave out for the robot's paused mission." } }, required: [] },
+      normalize: (raw) => ({ robot: clip(raw?.robot, 80), mission: clip(raw?.mission, 40) }),
+      async assess(params, ctx) {
+        const { robot, mission } = await target(ctx, params, (item) => item.status === "paused", "paused");
+        const verdict = await resumeCheck(ctx, robot, mission);
+        return { resource: { type: "robot", id: robot.id }, account: robot.name, flags: verdict.ok ? verdict.flags : [`forbidden:${verdict.violations.map((item) => item.message).join(" ")}`], verdict, mission, robot };
+      },
+      preview: (_params, _ctx, assessed) => ({
+        title: `Resume: ${assessed.robot.name} carries on with “${assessed.mission.title}”`,
+        lines: [{ label: "Robot", value: `${assessed.robot.name} — ${kindLabel(assessed.robot)}` }, { label: "Mission", value: `${assessed.mission.title}, paused` }, { label: "Checked", value: assessed.verdict.ok ? "Robot ready, goal still inside its limits" : "Refused by the Safety Gateway" }],
+        body: assessed.verdict.ok ? "The robot starts moving again from where it stands. The resume is valid for 20 seconds and works once." : assessed.verdict.violations.map((item) => item.message).join("\n"),
+        warnings: assessed.verdict.warnings,
+      }),
+      async execute(params, ctx) {
+        const { robot, mission } = await target(ctx, params, (item) => item.status === "paused", "paused");
+        const verdict = await resumeCheck(ctx, robot, mission);
+        if (!verdict.ok) throw fail(409, `Not sent. ${verdict.violations.map((item) => item.message).join(" ")}`, "safety-refused");
+        await robotics.resumeMission(ctx.db, ctx.userId, mission.id);
+        const after = await robotics.waitFor(ctx.db, ctx.userId, mission.id, (item) => item.status !== "paused" || !item.resumeRequestedAt);
+        if (after.status === "paused" && after.error) throw fail(409, `${robot.name} didn't resume. ${after.error}`, "resume-refused");
+        return { missionId: mission.id, robot: { id: robot.id, name: robot.name }, status: after.status, note: missionText(after, robot.name) };
+      },
+      async verify(response, _params, ctx) {
+        const mission = await robotics.getMission(ctx.db, ctx.userId, response.missionId);
+        if (mission.status === "accepted" || mission.status === "succeeded") return { confirmed: true, evidence: `${response.robot.name} reported that it resumed mission ${mission.id}. This confirms it is moving again, not that it arrived.` };
         return { confirmed: false, evidence: missionText(mission, response.robot.name) };
       },
     },

@@ -70,7 +70,20 @@ function createRobotDeviceRouter({ robotics, enrollLimiter = null }) {
     }
   });
 
+  // A robot exchanges about once a second. Far more than that from one robot id is a fault or an attack; it is refused before any work is done.
+  const floodLimit = Math.max(10, Number(process.env.HANNAH_RATE_LIMIT_ROBOT_SYNC_PER_5S) || 100);
+  const recent = new Map();
+  const flooding = (robotId) => {
+    const at = Date.now();
+    const entry = recent.get(robotId) || { from: at, count: 0 };
+    if (at - entry.from > 5000) { entry.from = at; entry.count = 0; }
+    entry.count += 1;
+    recent.set(robotId, entry);
+    if (recent.size > 5000) for (const [key, value] of recent) { if (at - value.from > 5000) recent.delete(key); }
+    return entry.count > floodLimit;
+  };
   router.post("/robots/device/sync", json, async (req, res) => {
+    if (flooding(String(req.get("x-hannah-robot") || "").slice(0, 40))) return res.status(429).json({ error: "Too many requests from this robot.", reason: "rate-limited" });
     const db = await database(res);
     if (!db) return undefined;
     try {
@@ -109,7 +122,8 @@ function createRobotAccountRouter({ robotics, engine }) {
   };
   const command = (req) => `python3 -m hannah_robot enroll --server ${req.protocol}://${req.get("host")} --code `;
 
-  router.get("/robots", anyAccount(async (_req, res, db, account) => res.json({ robots: await robotics.listRobots(db, account.id), canEnroll: vaultConfigured(), onlineWithinS: safety.ONLINE_MS / 1000 })));
+  const shown = ({ commissioningRecord: _record, ...robot }) => robot;
+  router.get("/robots", anyAccount(async (_req, res, db, account) => res.json({ robots: (await robotics.listRobots(db, account.id)).map(shown), canEnroll: vaultConfigured(), onlineWithinS: safety.ONLINE_MS / 1000 })));
   router.get("/robots/contract", anyAccount(async (_req, res) => res.json({ capabilities: contract.publicContract(), robotTypes: contract.ROBOT_TYPES, categories: contract.CATEGORIES, risks: contract.RISK, preconditions: contract.PRECONDITIONS, environments: safety.ENVIRONMENTS })));
   router.post("/robots", json, person(async (req, res, db, account) => {
     const created = await robotics.createRobot(db, account.id, { name: req.body?.name, simulated: req.body?.simulated });
@@ -122,12 +136,19 @@ function createRobotAccountRouter({ robotics, engine }) {
   }));
   router.get("/robots/missions/:id", anyAccount(async (req, res, db, account) => res.json({ mission: await withText(db, account.id, await robotics.getMission(db, account.id, req.params.id)) })));
   router.post("/robots/missions/:id/cancel", anyAccount(async (req, res, db, account) => res.json({ mission: await withText(db, account.id, await robotics.cancelMission(db, account.id, req.params.id)) })));
+  // Pause never needs approval. Resume moves the robot again, so it is an action that may wait for one.
+  const controlled = (action) => anyAccount(async (req, res, db, account) => {
+    const record = await engine.run(db, account.id, { action, params: { mission: req.params.id }, request: action === "robots.resume_mission" ? "Resume pressed" : "Pause pressed", source: account.via === "session" ? "robots" : "api-key", agent: "" });
+    res.status(record.status === "waiting-approval" ? 202 : 200).json({ record: { ...record, outcome: outcomeText(record) }, mission: await withText(db, account.id, await robotics.getMission(db, account.id, req.params.id)) });
+  });
+  router.post("/robots/missions/:id/pause", controlled("robots.pause_mission"));
+  router.post("/robots/missions/:id/resume", controlled("robots.resume_mission"));
   router.get("/robots/events", anyAccount(async (req, res, db, account) => res.json({ events: await robotics.events(db, account.id, { robotId: req.query.robot, limit: req.query.limit }) })));
 
   router.get("/robots/:id", anyAccount(async (req, res, db, account) => {
     const robot = await robotics.getRobot(db, account.id, req.params.id);
     const [missions, events] = await Promise.all([robotics.listMissions(db, account.id, { robotId: robot.id, limit: 25 }), robotics.events(db, account.id, { robotId: robot.id, limit: 40 })]);
-    res.json({ robot, missions: missions.map((mission) => ({ ...mission, robotName: robot.name, summary: missionText(mission, robot.name) })), events });
+    res.json({ robot: shown(robot), missions: missions.map((mission) => ({ ...mission, robotName: robot.name, summary: missionText(mission, robot.name) })), events });
   }));
   router.patch("/robots/:id", json, person(async (req, res, db, account) => res.json({ robot: await robotics.updateRobot(db, account.id, req.params.id, { name: req.body?.name, limits: req.body?.limits, disabled: req.body?.disabled, alwaysAsk: req.body?.alwaysAsk }) })));
   router.post("/robots/:id/enrollment", person(async (req, res, db, account) => {
@@ -145,6 +166,16 @@ function createRobotAccountRouter({ robotics, engine }) {
     const missionId = record.response?.missionId;
     res.json({ record: { ...record, outcome: outcomeText(record) }, mission: missionId ? await withText(db, account.id, await robotics.getMission(db, account.id, missionId)) : null });
   }));
+  // Commissioning: the checks a physical robot passes before it may move. Only a signed-in person confirms a step.
+  router.get("/robots/:id/commissioning", anyAccount(async (req, res, db, account) => res.json({ commissioning: await robotics.commissioningView(db, account.id, req.params.id) })));
+  router.post("/robots/:id/commissioning/reset", json, person(async (req, res, db, account) => res.json({ commissioning: await robotics.resetCommissioning(db, account.id, req.params.id, req.body?.reason) })));
+  router.post("/robots/:id/commissioning/:step", json, person(async (req, res, db, account) => res.json({ commissioning: await robotics.confirmCommissioning(db, account.id, req.params.id, req.params.step, { note: req.body?.note, attest: req.body?.attest }) })));
+  // Destinations: a name is a place only once someone has defined or approved it for the robot's map.
+  router.get("/robots/:id/destinations", anyAccount(async (req, res, db, account) => res.json(await robotics.listDestinations(db, account.id, req.params.id))));
+  router.post("/robots/:id/destinations", json, person(async (req, res, db, account) => res.status(201).json(await robotics.addDestination(db, account.id, req.params.id, req.body || {}))));
+  router.delete("/robots/:id/destinations/:destination", person(async (req, res, db, account) => res.json(await robotics.removeDestination(db, account.id, req.params.id, req.params.destination))));
+  router.get("/robots/:id/maintenance", anyAccount(async (req, res, db, account) => res.json({ maintenance: await robotics.maintenance(db, account.id, (await robotics.getRobot(db, account.id, req.params.id)).id) })));
+  router.post("/robots/:id/maintenance", json, person(async (req, res, db, account) => res.status(201).json({ maintenance: await robotics.addMaintenance(db, account.id, req.params.id, req.body || {}) })));
   router.get("/robots/:id/telemetry", anyAccount(async (req, res, db, account) => {
     const robot = await robotics.getRobot(db, account.id, req.params.id);
     res.json({ samples: await robotics.telemetry(db, account.id, robot.id, { sinceMs: (Number(req.query.minutes) || 15) * 60_000 }) });

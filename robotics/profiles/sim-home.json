@@ -1,0 +1,8 @@
+{
+  "adapter": "kinematic",
+  "identity": { "manufacturer": "HANNAH", "model": "Simulated differential-drive base", "robotType": "differential-drive", "os": "host operating system", "compute": "host computer", "softwareVersion": "0.2.0", "firmwareVersion": "none (simulated)", "serialNumber": "SIM-HOME-0001" },
+  "world": "../worlds/home.json",
+  "robot": { "radius": 0.18, "wheelSeparation": 0.3, "wheelRadius": 0.05 },
+  "limits": { "maxLinearSpeed": 0.5, "maxAngularSpeed": 1.6, "maxLinearAccel": 0.8, "maxAngularAccel": 3.0, "minBatteryPercent": 15, "linkTimeoutS": 5, "commandTtlS": 20, "environment": "simulation" },
+  "simulation": { "odometryDrift": 0.004, "startBatteryPercent": 85, "seed": 11 }
+}

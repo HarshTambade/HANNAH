@@ -38,6 +38,7 @@ const crypto = require("node:crypto");
 const { decryptSecret, encryptSecret, vaultConfigured } = require("../vault");
 const contract = require("./contract");
 const safety = require("./safety");
+const commissioning = require("./commissioning");
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_TTL_MS = 15 * 60_000;
@@ -51,7 +52,9 @@ const MISSIONS_KEEP_MS = 180 * 24 * 60 * 60_000;
 const MAX_STATE = 24_000;
 const MAX_ROBOTS = 20;
 const FINAL = new Set(["succeeded", "unverified", "failed", "cancelled", "rejected", "expired", "timed-out", "lost"]);
-const MODES = new Set(["idle", "navigating", "holding", "stopping", "docked", "estopped", "fault", "starting"]);
+const MODES = new Set(["idle", "navigating", "paused", "holding", "stopping", "docked", "estopped", "fault", "starting"]);
+const MAX_DESTINATIONS = 60;
+const RESUME_TTL_MS = 20_000;
 const AUTH_LABEL = "hannah-robot-auth-v1";
 const COMMAND_LABEL = "hannah-robot-command-v1";
 
@@ -80,6 +83,8 @@ function newCode() {
   const text = [...bytes].map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
   return `${text.slice(0, 5)}-${text.slice(5)}`;
 }
+/** A short fingerprint of a robot's secret, shown on both sides so a person can check which device enrolled. */
+const fingerprintOf = (secret) => sha256(`hannah-robot-fingerprint-v1:${secret}`).slice(0, 16).toUpperCase().replace(/(.{4})(?=.)/g, "$1 ");
 const codeHash = (code) => sha256(`hannah-robot-enroll:${String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "")}`);
 
 /** Keep what a robot sent to a safe shape and size: plain data, bounded depth, lists and text. */
@@ -133,7 +138,7 @@ function normalizeDescriptor(input) {
     profile: {
       manufacturer: clean(input.manufacturer, 80), model: clean(input.model, 80), robotType: input.robotType, category: contract.ROBOT_TYPES[input.robotType].category,
       os: clean(input.os, 80), compute: clean(input.compute, 80), rosDistro: clean(input.rosDistro, 30), protocols: (Array.isArray(input.protocols) ? input.protocols : []).slice(0, 10).map((item) => clean(item, 40)).filter(Boolean),
-      softwareVersion: clean(input.softwareVersion, 40), firmwareVersion: clean(input.firmwareVersion, 40), runtimeVersion: clean(input.runtimeVersion, 40), adapter: clean(input.adapter, 40), hostname: clean(input.hostname, 80),
+      serialNumber: clean(input.serialNumber, 60), softwareVersion: clean(input.softwareVersion, 40), firmwareVersion: clean(input.firmwareVersion, 40), runtimeVersion: clean(input.runtimeVersion, 40), adapter: clean(input.adapter, 40), hostname: clean(input.hostname, 80),
       sensors: partList(input.sensors), actuators: partList(input.actuators),
       devices: (Array.isArray(input.devices) ? input.devices : []).slice(0, 12).map((item) => slug(item)).filter(Boolean),
       places, dock: pointOf(input.dock), world,
@@ -163,25 +168,41 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       id: row.id, robotId: row.robot_id, capability: row.capability, title: contract.capability(row.capability)?.title || row.capability, params: parse(row.params, {}), status, final: FINAL.has(status),
       actionId: row.action_id || null, requestedBy: row.requested_by || "", createdAt: Number(row.created_at), expiresAt: Number(row.expires_at), deadlineAt: Number(row.deadline_at),
       sentAt: row.sent_at ? Number(row.sent_at) : null, acceptedAt: row.accepted_at ? Number(row.accepted_at) : null, finishedAt: row.finished_at ? Number(row.finished_at) : null,
-      cancelRequestedAt: row.cancel_requested_at ? Number(row.cancel_requested_at) : null,
+      cancelRequestedAt: row.cancel_requested_at ? Number(row.cancel_requested_at) : null, pauseRequestedAt: row.pause_requested_at ? Number(row.pause_requested_at) : null, resumeRequestedAt: row.resume_requested_at ? Number(row.resume_requested_at) : null, pausedAt: row.paused_at ? Number(row.paused_at) : null,
       progress: parse(row.progress), result: parse(row.result), verification: parse(row.verification),
       error: row.error || (status === "expired" ? "The robot didn't accept the command before it expired. Nothing was run." : status === "lost" ? "The robot accepted the mission and then stopped reporting. Its outcome is unknown; a robot that loses its link to HANNAH stops by itself." : null),
     };
   }
   /** The registry's working view of a robot: what the Safety Gateway and the app need. Never the secret. */
-  function view(row, at = now()) {
+  function view(row, at = now(), destinations = []) {
     if (!row) return null;
     const profile = parse(row.profile, {});
+    const simulated = Boolean(Number(row.simulated));
+    const mapName = profile.world?.name || "";
+    const frame = parse(row.safety, {}).reported?.workspace?.frame || "map";
+    // Names HANNAH may navigate to. A simulation may use the places its runtime reported; a physical
+    // robot only the destinations a person defined or approved. Either way a destination made for
+    // another map is not used: a name is not a coordinate until someone has said so for this map.
+    const places = {};
+    if (simulated) for (const [name, point] of Object.entries(profile.places || {})) places[name] = { ...point, source: "robot", map: mapName, frame };
+    const staleDestinations = [];
+    for (const item of destinations.filter((entry) => entry.robot_id === row.id)) {
+      const destination = { id: item.id, name: item.name, x: Number(item.x), y: Number(item.y), ...(item.yaw === null || item.yaw === undefined ? {} : { yaw: Number(item.yaw) }), source: item.source, map: item.map, frame: item.frame };
+      if (mapName && item.map !== mapName) staleDestinations.push(destination);
+      else places[item.name] = destination;
+    }
+    const record = parse(row.commissioning);
     const access = parse(row.permissions, {});
     const lastSeenAt = row.last_seen_at ? Number(row.last_seen_at) : null;
     const online = row.status === "enrolled" && lastSeenAt !== null && at - lastSeenAt <= safety.ONLINE_MS;
     const state = parse(row.state);
     const robotSafety = parse(row.safety, {});
     return {
-      id: row.id, name: row.name, status: row.status, simulated: Boolean(Number(row.simulated)), simulator: row.simulator || null,
+      id: row.id, name: row.name, status: row.status, simulated, simulator: row.simulator || null,
       connection: row.status === "pending" ? "awaiting-enrollment" : row.status === "revoked" ? "revoked" : online ? "online" : lastSeenAt ? "offline" : "never-connected",
       online, lastSeenAt, mode: online ? (row.mode || "unknown") : "offline",
-      ...profile, devices: Object.fromEntries((profile.devices || []).map((id) => [id, true])), places: profile.places || {}, sensors: profile.sensors || [], actuators: profile.actuators || [],
+      ...profile, devices: Object.fromEntries((profile.devices || []).map((id) => [id, true])), places, reportedPlaces: profile.places || {}, staleDestinations, mapName, sensors: profile.sensors || [], actuators: profile.actuators || [],
+      configVersion: Number(row.config_version) || 1, commissioning: commissioning.summary({ simulated }, record), commissioningRecord: record,
       capabilities: parse(row.capabilities, []), disabled: access.disabled || [], alwaysAsk: access.alwaysAsk || [],
       safety: robotSafety, limits: safety.effectiveLimits(robotSafety),
       state, stateAgeS: state?.receivedAt ? Math.max(0, Math.round((at - state.receivedAt) / 100) / 10) : null,
@@ -192,14 +213,16 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
   async function robotRow(db, userId, id) {
     return (await db.query("SELECT * FROM hannah_robots WHERE user_id = $1 AND id = $2", [userId, String(id || "")])).rows[0] || null;
   }
+  const destinationRows = async (db, userId) => (await db.query("SELECT * FROM hannah_robot_destinations WHERE user_id = $1 ORDER BY created_at", [userId])).rows;
   async function getRobot(db, userId, id) {
     const row = await robotRow(db, userId, id);
     if (!row) throw fail(404, "That robot isn't enrolled in your account.", "not-found");
-    return view(row);
+    return view(row, now(), await destinationRows(db, userId));
   }
   async function listRobots(db, userId) {
     const { rows } = await db.query("SELECT * FROM hannah_robots WHERE user_id = $1 ORDER BY created_at", [userId]);
-    return rows.map((row) => view(row));
+    const destinations = rows.length ? await destinationRows(db, userId) : [];
+    return rows.map((row) => view(row, now(), destinations));
   }
   /** Find a robot by id or by name (exact, any case). An ambiguous or unknown name is an error that lists the choices. */
   async function resolveRobot(db, userId, reference) {
@@ -279,7 +302,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     }
     const names = Object.keys(fields);
     if (names.length) {
-      await db.query(`UPDATE hannah_robots SET ${names.map((name, index) => `${name} = $${index + 1}`).join(", ")}, updated_at = $${names.length + 1} WHERE user_id = $${names.length + 2} AND id = $${names.length + 3}`, [...names.map((name) => fields[name]), now(), userId, row.id]);
+      await db.query(`UPDATE hannah_robots SET ${names.map((name, index) => `${name} = $${index + 1}`).join(", ")}, config_version = config_version + 1, updated_at = $${names.length + 1} WHERE user_id = $${names.length + 2} AND id = $${names.length + 3}`, [...names.map((name) => fields[name]), now(), userId, row.id]);
       await addEvent(db, userId, row.id, { type: "configured", message: `Changed: ${names.map((name) => (name === "safety" ? "limits" : name)).join(", ")}.` });
     }
     return getRobot(db, userId, row.id);
@@ -291,7 +314,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const at = now();
     await db.query("UPDATE hannah_robots SET status = 'revoked', key_id = NULL, wrapped_key = NULL, ciphertext = NULL, enroll_hash = NULL, enroll_expires_at = NULL, revoked_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, userId, row.id]);
     await db.query("UPDATE hannah_robot_missions SET status = 'cancelled', error = $1, finished_at = $2, updated_at = $2 WHERE user_id = $3 AND robot_id = $4 AND status = 'queued'", ["Cancelled: the robot's credentials were revoked before the command was delivered.", at, userId, row.id]);
-    await db.query("UPDATE hannah_robot_missions SET status = 'lost', error = $1, finished_at = $2, updated_at = $2 WHERE user_id = $3 AND robot_id = $4 AND status IN ('sent', 'accepted')", ["The robot's credentials were revoked while this was running. It can no longer report; a robot that loses its link to HANNAH stops by itself.", at, userId, row.id]);
+    await db.query("UPDATE hannah_robot_missions SET status = 'lost', error = $1, finished_at = $2, updated_at = $2 WHERE user_id = $3 AND robot_id = $4 AND status IN ('sent', 'accepted', 'paused')", ["The robot's credentials were revoked while this was running. It can no longer report; a robot that loses its link to HANNAH stops by itself.", at, userId, row.id]);
     await addEvent(db, userId, row.id, { type: "revoked", severity: "warning", message: "Credentials revoked. The robot can no longer connect." });
     return getRobot(db, userId, row.id);
   }
@@ -299,7 +322,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const row = await robotRow(db, userId, id);
     if (!row) return false;
     if (row.status === "enrolled") await revokeRobot(db, userId, row.id);
-    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
+    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_destinations", "hannah_robot_maintenance"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
     return (await db.query("DELETE FROM hannah_robots WHERE user_id = $1 AND id = $2", [userId, row.id])).rowCount > 0;
   }
 
@@ -320,15 +343,16 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     if (!described.capabilities.length) throw fail(400, "The robot offered no capability HANNAH can use.", "no-capabilities");
     const secret = crypto.randomBytes(32).toString("base64url");
     const sealed = encryptSecret(secret, { userId: row.user_id, providerId: `robot:${row.id}` });
+    described.profile.fingerprint = fingerprintOf(secret);
     const won = await db.query(
       `UPDATE hannah_robots SET status = 'enrolled', profile = $1, capabilities = $2, safety = $3, simulator = $4, key_id = $5, wrapped_key = $6, ciphertext = $7,
-         enroll_hash = NULL, enroll_expires_at = NULL, counter = 0, enrolled_at = $8, updated_at = $8, revoked_at = NULL, state = NULL, mode = NULL, last_seen_at = NULL
+         enroll_hash = NULL, enroll_expires_at = NULL, counter = 0, enrolled_at = $8, updated_at = $8, revoked_at = NULL, state = NULL, mode = NULL, last_seen_at = NULL, commissioning = NULL
        WHERE id = $9 AND enroll_hash = $10`,
       [JSON.stringify(described.profile), JSON.stringify(described.capabilities), JSON.stringify({ ...parse(row.safety, {}), reported: described.reported, reportedAt: at }), described.simulation?.kind || null, sealed.keyId, sealed.wrappedKey, sealed.ciphertext, at, row.id, hash],
     );
     if (!won.rowCount) throw fail(403, "That enrollment code was just used.", "bad-code");
     await addEvent(db, row.user_id, row.id, { type: "enrolled", message: `Enrolled: ${described.profile.manufacturer || "unknown maker"} ${described.profile.model || ""} (${described.simulation ? `simulation: ${described.simulation.kind}` : "physical"}), ${described.capabilities.length} capabilities${described.profile.refusedCapabilities.length ? `, ${described.profile.refusedCapabilities.length} refused` : ""}.` });
-    return { robotId: row.id, name: row.name, secret, serverTime: at, intervalMs: SYNC_INTERVAL_MS, capabilities: described.capabilities, refused: described.profile.refusedCapabilities };
+    return { robotId: row.id, name: row.name, secret, fingerprint: described.profile.fingerprint, serverTime: at, intervalMs: SYNC_INTERVAL_MS, capabilities: described.capabilities, refused: described.profile.refusedCapabilities };
   }
 
   /** Is this request really from that robot, now, and not a copy of an earlier one? Returns its row. */
@@ -418,13 +442,23 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       case "progress":
         if (report.progress && typeof report.progress === "object") await set({ progress: JSON.stringify(tidy(report.progress)).slice(0, 4000) }, ["accepted"]);
         break;
+      case "paused":
+        await set({ status: "paused", paused_at: at, pause_requested_at: null }, ["accepted"]);
+        break;
+      case "resumed":
+        // The time it stood paused doesn't count against the mission's time limit.
+        await set({ status: "accepted", resume_requested_at: null, control_nonce: null, paused_at: null, deadline_at: Number(row.deadline_at) + Math.max(0, at - Number(row.paused_at || at)) }, ["paused"]);
+        break;
+      case "resume-refused":
+        if (await set({ resume_requested_at: null, control_nonce: null, error: reason || "The robot refused to resume." }, ["paused"])) await addEvent(db, robot.userId, robot.id, { type: "resume-refused", severity: "warning", message: `The robot refused to resume ${row.capability}: ${reason || "no reason given"}.`, source: "robot", at });
+        break;
       case "succeeded": {
         const verification = verifyMission(row, report, state, robot);
         await set({ status: verification.confirmed ? "succeeded" : "unverified", accepted_at: row.accepted_at || at, result, verification: JSON.stringify({ ...verification, checkedAt: at }), finished_at: at }, ["queued", "sent", "accepted"]);
         break;
       }
       case "failed": case "cancelled": case "timed-out":
-        await set({ status: report.status, error: reason || (report.status === "cancelled" ? "Cancelled." : report.status === "timed-out" ? "The mission ran out of time; the robot stopped." : "The robot reported a failure."), result, finished_at: at }, ["queued", "sent", "accepted"]);
+        await set({ status: report.status, error: reason || (report.status === "cancelled" ? "Cancelled." : report.status === "timed-out" ? "The mission ran out of time; the robot stopped." : "The robot reported a failure."), result, finished_at: at }, ["queued", "sent", "accepted", "paused"]);
         break;
       default:
     }
@@ -438,10 +472,17 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     if (body.descriptor) {
       const described = normalizeDescriptor(body.descriptor);
       if (Boolean(described.simulation) !== robot.simulated) throw fail(409, "A robot can't change between simulated and physical. Enroll it again as a new robot.", "kind-mismatch");
+      const before = parse(row.profile, {});
+      described.profile.fingerprint = before.fingerprint;
       fields.profile = JSON.stringify(described.profile);
       fields.capabilities = JSON.stringify(described.capabilities);
       fields.safety = JSON.stringify({ ...robot.safety, reported: described.reported, reportedAt: at });
       fields.simulator = described.simulation?.kind || null;
+      // What it was commissioned as has changed: the checks were made against something else.
+      if (!robot.simulated && row.commissioning && commissioning.signature(before, robot.safety.reported || {}, robot.capabilities) !== commissioning.signature(described.profile, described.reported, described.capabilities)) {
+        fields.commissioning = JSON.stringify({ steps: {}, resetReason: "The robot now reports different sensors, actuators, capabilities or limits than it was commissioned with." });
+        await addEvent(db, row.user_id, row.id, { type: "commissioning-reset", severity: "warning", message: "The robot's reported hardware or limits changed. It has to be commissioned again before it may move." });
+      }
     }
     const state = cleanState(body.state, at);
     if (state) { fields.state = JSON.stringify(state); fields.mode = state.mode; }
@@ -465,12 +506,20 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
 
     // What the robot should hear: missions not yet accepted and still valid, and cancellations.
     await db.query("UPDATE hannah_robot_missions SET status = 'expired', finished_at = $1, updated_at = $1 WHERE robot_id = $2 AND status IN ('queued', 'sent') AND expires_at <= $1", [at, row.id]);
-    const open = (await db.query("SELECT * FROM hannah_robot_missions WHERE robot_id = $1 AND status IN ('queued', 'sent', 'accepted') ORDER BY seq", [row.id])).rows;
+    const open = (await db.query("SELECT * FROM hannah_robot_missions WHERE robot_id = $1 AND status IN ('queued', 'sent', 'accepted', 'paused') ORDER BY seq", [row.id])).rows;
     const commands = [];
+    const signed = (command) => { const payload = JSON.stringify({ v: 1, robotId: row.id, ...command }); commands.push({ payload, sig: signCommand(secret, payload) }); };
     for (const mission of open) {
       if (mission.cancel_requested_at && mission.status !== "queued") {
-        const payload = JSON.stringify({ v: 1, type: "cancel", robotId: row.id, missionId: mission.id, issuedAt: Number(mission.cancel_requested_at) });
-        commands.push({ payload, sig: signCommand(secret, payload) });
+        signed({ type: "cancel", missionId: mission.id, issuedAt: Number(mission.cancel_requested_at) });
+        continue;
+      }
+      if (mission.status === "accepted" && mission.pause_requested_at) { signed({ type: "pause", missionId: mission.id, issuedAt: Number(mission.pause_requested_at) }); continue; }
+      if (mission.status === "paused") {
+        const asked = mission.resume_requested_at ? Number(mission.resume_requested_at) : null;
+        // A resume starts motion again, so unlike a pause it expires and can be used once.
+        if (asked && at - asked < RESUME_TTL_MS) signed({ type: "resume", missionId: mission.id, nonce: mission.control_nonce, issuedAt: asked, expiresAt: asked + RESUME_TTL_MS });
+        else if (asked) await db.query("UPDATE hannah_robot_missions SET resume_requested_at = NULL, control_nonce = NULL, error = $1, updated_at = $2 WHERE robot_id = $3 AND id = $4 AND status = 'paused'", ["The robot didn't take the resume in time. It is still paused.", at, row.id, mission.id]);
         continue;
       }
       if (mission.status === "accepted") continue;
@@ -493,7 +542,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
   }
   async function activeMotion(db, userId, robotId) {
     const at = now();
-    const { rows } = await db.query("SELECT * FROM hannah_robot_missions WHERE user_id = $1 AND robot_id = $2 AND status IN ('queued', 'sent', 'accepted') ORDER BY seq", [userId, robotId]);
+    const { rows } = await db.query("SELECT * FROM hannah_robot_missions WHERE user_id = $1 AND robot_id = $2 AND status IN ('queued', 'sent', 'accepted', 'paused') ORDER BY seq", [userId, robotId]);
     const live = rows.filter((row) => !FINAL.has(effectiveMissionStatus(row, at)) && contract.capability(row.capability)?.motion);
     return live[0] ? publicMission(live[0], at) : null;
   }
@@ -525,7 +574,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const values = [userId];
     let where = "user_id = $1";
     if (robotId) { values.push(String(robotId)); where += ` AND robot_id = $${values.length}`; }
-    if (active) where += " AND status IN ('queued', 'sent', 'accepted')";
+    if (active) where += " AND status IN ('queued', 'sent', 'accepted', 'paused')";
     values.push(Math.max(1, Math.min(100, Number(limit) || 30)));
     const { rows } = await db.query(`SELECT * FROM hannah_robot_missions WHERE ${where} ORDER BY created_at DESC LIMIT $${values.length}`, values);
     const at = now();
@@ -546,7 +595,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     if (mission.final) return mission;
     const at = now();
     const dropped = await db.query("UPDATE hannah_robot_missions SET status = 'cancelled', error = $1, finished_at = $2, updated_at = $2 WHERE user_id = $3 AND id = $4 AND status = 'queued'", ["Cancelled before it was sent to the robot.", at, userId, mission.id]);
-    if (!dropped.rowCount) await db.query("UPDATE hannah_robot_missions SET cancel_requested_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3 AND status IN ('sent', 'accepted') AND cancel_requested_at IS NULL", [at, userId, mission.id]);
+    if (!dropped.rowCount) await db.query("UPDATE hannah_robot_missions SET cancel_requested_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3 AND status IN ('sent', 'accepted', 'paused') AND cancel_requested_at IS NULL", [at, userId, mission.id]);
     return getMission(db, userId, mission.id);
   }
   /** Stop a robot: cancel everything it has and send a stop. Never needs approval. */
@@ -573,6 +622,108 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return stopped;
   }
 
+  /** Ask the robot to pause a running mission: it holds where it is and keeps the mission. Never needs approval. */
+  async function pauseMission(db, userId, id) {
+    const mission = await getMission(db, userId, id);
+    if (mission.status === "paused") return mission;
+    if (mission.status !== "accepted") throw fail(409, mission.final ? "That mission is already over." : "That mission hasn't started yet; cancel it instead.", "not-running");
+    await db.query("UPDATE hannah_robot_missions SET pause_requested_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3 AND status = 'accepted' AND pause_requested_at IS NULL", [now(), userId, mission.id]);
+    return getMission(db, userId, mission.id);
+  }
+  /** Ask the robot to carry on with a paused mission. This starts motion, so the caller has been through permission and the Safety Gateway. */
+  async function resumeMission(db, userId, id) {
+    const mission = await getMission(db, userId, id);
+    if (mission.status !== "paused") throw fail(409, mission.final ? "That mission is already over." : "That mission isn't paused.", "not-paused");
+    await db.query("UPDATE hannah_robot_missions SET resume_requested_at = $1, control_nonce = $2, error = NULL, updated_at = $1 WHERE user_id = $3 AND id = $4 AND status = 'paused'", [now(), crypto.randomBytes(16).toString("hex"), userId, mission.id]);
+    return getMission(db, userId, mission.id);
+  }
+
+  // ---------- commissioning (physical robots) ----------
+  async function commissioningContext(db, userId, robot) {
+    return { events: await events(db, userId, { robotId: robot.id, limit: 200 }), missions: await listMissions(db, userId, { robotId: robot.id, limit: 50 }) };
+  }
+  async function commissioningView(db, userId, id) {
+    const robot = await getRobot(db, userId, id);
+    return commissioning.view(robot, robot.commissioningRecord, await commissioningContext(db, userId, robot));
+  }
+  async function confirmCommissioning(db, userId, id, stepId, { note, attest } = {}) {
+    const robot = await getRobot(db, userId, id);
+    if (robot.status !== "enrolled") throw fail(409, `${robot.name} isn't enrolled.`, "not-enrolled");
+    const record = commissioning.confirm(robot, robot.commissioningRecord, stepId, { note, attest, now: now(), ...(await commissioningContext(db, userId, robot)) });
+    await db.query("UPDATE hannah_robots SET commissioning = $1, updated_at = $2 WHERE user_id = $3 AND id = $4", [JSON.stringify(record), now(), userId, robot.id]);
+    const step = commissioning.STEPS.find((item) => item.id === stepId);
+    await addEvent(db, userId, robot.id, { type: stepId === "approval" ? "commissioned" : "commissioning-step", message: stepId === "approval" ? "Approved for operation. Each movement still needs approval." : `Commissioning: “${step.title}” confirmed.` });
+    return commissioningView(db, userId, robot.id);
+  }
+  async function resetCommissioning(db, userId, id, reason = "") {
+    const robot = await getRobot(db, userId, id);
+    await db.query("UPDATE hannah_robots SET commissioning = $1, updated_at = $2 WHERE user_id = $3 AND id = $4", [JSON.stringify({ steps: {}, resetReason: clean(reason, 200) || "Withdrawn by you." }), now(), userId, robot.id]);
+    await addEvent(db, userId, robot.id, { type: "commissioning-reset", severity: "warning", message: `Commissioning withdrawn${reason ? `: ${clean(reason, 160)}` : ""}. The robot may not move until it is commissioned again.` });
+    return commissioningView(db, userId, robot.id);
+  }
+
+  // ---------- destinations ----------
+  /** The destinations a robot can be sent to by name, what its runtime reported, and any made for another map. */
+  async function listDestinations(db, userId, id) {
+    const robot = await getRobot(db, userId, id);
+    return {
+      map: robot.mapName || null,
+      destinations: Object.entries(robot.places).map(([name, point]) => ({ name, ...point })),
+      reported: Object.entries(robot.reportedPlaces).map(([name, point]) => ({ name, ...point, usable: Boolean(robot.places[name]) })),
+      stale: robot.staleDestinations,
+      rule: robot.simulated ? "A simulated robot may use the places its runtime reported, and any you add." : "A physical robot goes by name only to destinations you defined or approved.",
+    };
+  }
+  /** Define a destination, or approve one of the places the robot reported. It is checked against the robot's limits and bound to its current map. */
+  async function addDestination(db, userId, id, input = {}) {
+    const robot = await getRobot(db, userId, id);
+    if (robot.status !== "enrolled") throw fail(409, `${robot.name} isn't enrolled.`, "not-enrolled");
+    if (!robot.mapName) throw fail(409, `${robot.name} didn't say which map it uses, so a destination can't be tied to one.`, "no-map");
+    const reported = input.fromPlace ? robot.reportedPlaces[String(input.fromPlace)] : null;
+    if (input.fromPlace && !reported) throw fail(404, `${robot.name} didn't report a place called “${clean(input.fromPlace, 60)}”.`, "not-found");
+    const name = clean(input.name || input.fromPlace, 60);
+    const point = reported || { x: Number(input.x), y: Number(input.y), ...(input.yaw === undefined || input.yaw === null || input.yaw === "" ? {} : { yaw: Number(input.yaw) }) };
+    if (!name) throw fail(400, "Give the destination a name.", "bad-request");
+    if (!finite(point.x) || !finite(point.y) || (point.yaw !== undefined && !finite(point.yaw))) throw fail(400, "A destination needs x and y in metres on the robot's map.", "bad-request");
+    const owned = (await destinationRows(db, userId)).filter((row) => row.robot_id === robot.id);
+    if (owned.some((row) => row.name.toLowerCase() === name.toLowerCase() && row.map === robot.mapName)) throw fail(409, `${robot.name} already has a destination called “${name}”.`, "duplicate-name");
+    if (owned.length >= MAX_DESTINATIONS) throw fail(400, `A robot can have ${MAX_DESTINATIONS} destinations.`, "too-many");
+    const problems = safety.pointProblems(point, robot.limits, "That point");
+    for (const rect of robot.world?.obstacles || []) {
+      const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.w));
+      const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.h));
+      if (Math.hypot(dx, dy) < (robot.limits.robotRadius || 0.2)) problems.push({ code: "in-obstacle", message: `That point is inside or touching an obstacle on the robot's map${rect.name ? ` (${rect.name})` : ""}.` });
+    }
+    if (problems.length) throw fail(400, problems.map((item) => item.message).join(" "), "invalid-destination");
+    const destinationId = `ds_${crypto.randomBytes(8).toString("hex")}`;
+    const frame = robot.limits.workspaces[0]?.frame || "map";
+    await db.query("INSERT INTO hannah_robot_destinations (user_id, id, robot_id, name, map, frame, x, y, yaw, source, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+      [userId, destinationId, robot.id, name, robot.mapName, frame, round(point.x, 3), round(point.y, 3), point.yaw === undefined ? null : round(point.yaw, 4), reported ? "robot-profile" : "owner", now()]);
+    await db.query("UPDATE hannah_robots SET config_version = config_version + 1 WHERE user_id = $1 AND id = $2", [userId, robot.id]);
+    await addEvent(db, userId, robot.id, { type: "destination-added", message: `Destination “${name}” at (${round(point.x)}, ${round(point.y)}) on map ${robot.mapName}${reported ? ", approved from the robot's own list" : ""}.` });
+    return listDestinations(db, userId, robot.id);
+  }
+  async function removeDestination(db, userId, id, destinationId) {
+    const robot = await getRobot(db, userId, id);
+    const removed = await db.query("DELETE FROM hannah_robot_destinations WHERE user_id = $1 AND robot_id = $2 AND id = $3", [userId, robot.id, String(destinationId)]);
+    if (!removed.rowCount) throw fail(404, "That destination doesn't exist.", "not-found");
+    await db.query("UPDATE hannah_robots SET config_version = config_version + 1 WHERE user_id = $1 AND id = $2", [userId, robot.id]);
+    return listDestinations(db, userId, robot.id);
+  }
+
+  // ---------- maintenance ----------
+  async function addMaintenance(db, userId, id, { kind, note } = {}) {
+    const robot = await getRobot(db, userId, id);
+    const text = clean(note, 500);
+    if (!text) throw fail(400, "Say what was done or found.", "bad-request");
+    await db.query("INSERT INTO hannah_robot_maintenance (user_id, id, robot_id, at, kind, note) VALUES ($1, $2, $3, $4, $5, $6)", [userId, crypto.randomUUID(), robot.id, now(), ["inspection", "repair", "replacement", "calibration", "note"].includes(kind) ? kind : "note", text]);
+    return maintenance(db, userId, robot.id);
+  }
+  async function maintenance(db, userId, robotId, limit = 50) {
+    const { rows } = await db.query("SELECT * FROM hannah_robot_maintenance WHERE user_id = $1 AND robot_id = $2 ORDER BY at DESC LIMIT $3", [userId, String(robotId), Math.max(1, Math.min(200, Number(limit) || 50))]);
+    return rows.map((row) => ({ id: row.id, at: Number(row.at), kind: row.kind, note: row.note }));
+  }
+
   async function telemetry(db, userId, robotId, { sinceMs = 15 * 60_000, limit = 400 } = {}) {
     const { rows } = await db.query("SELECT at, sample FROM hannah_robot_telemetry WHERE user_id = $1 AND robot_id = $2 AND at >= $3 ORDER BY at DESC LIMIT $4", [userId, String(robotId), now() - Math.min(TELEMETRY_KEEP_MS, Math.max(10_000, Number(sinceMs) || 0)), Math.max(1, Math.min(1000, Number(limit) || 400))]);
     return rows.reverse().map((row) => ({ at: Number(row.at), ...parse(row.sample, {}) }));
@@ -586,7 +737,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return rows.map((row) => ({ id: row.id, robotId: row.robot_id, at: Number(row.at), type: row.type, severity: row.severity, message: row.message, source: row.source }));
   }
 
-  return { activeMotion, assess, authenticate, cancelMission, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listMissions, listRobots, removeRobot, resolveRobot, revokeRobot, stop, stopAll, sync, telemetry, updateRobot, waitFor };
+  return { activeMotion, addDestination, addMaintenance, assess, authenticate, cancelMission, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
 }
 
-module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, normalizeDescriptor, requestMessage, signCommand, signRequest };
+module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, fingerprintOf, normalizeDescriptor, requestMessage, signCommand, signRequest };

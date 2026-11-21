@@ -49,6 +49,7 @@ class Mission:
     visited: list = field(default_factory=list)
     started: float = 0.0
     last_progress: float = 0.0
+    paused_at: float = 0.0
     final_report: dict | None = None
 
 
@@ -163,6 +164,37 @@ class Runtime:
             elif mission is not None and mission.final_report:
                 self._reports.append(mission.final_report)
             return
+        if command["type"] == "pause":
+            mission = self._missions.get(mission_id)
+            if mission is self._active and mission is not None:
+                if mission.status != "paused":
+                    self.adapter.hold()
+                    mission.status, mission.paused_at, mission.phase = "paused", now, "paused"
+                    self._event("mission-paused", "info", f"{mission.capability} paused; holding position.")
+                self._report(mission_id, "paused")
+            elif mission is not None and mission.final_report:
+                self._reports.append(mission.final_report)
+            return
+        if command["type"] == "resume":
+            mission = self._missions.get(mission_id)
+            if mission is None or mission is not self._active:
+                if mission is not None and mission.final_report:
+                    self._reports.append(mission.final_report)
+                return
+            if mission.status != "paused" or verdict.duplicate:
+                self._report(mission_id, "resumed" if mission.status == "accepted" else "paused")
+                return
+            # Moving again gets the same checks as starting: the robot may not be fit to move any more.
+            decision = self.safety.check("navigate_to", {**mission.waypoints[mission.index], "tolerance": mission.params.get("tolerance", 0.25)}, self.adapter.state(), {"maxLinearSpeed": mission.max_speed}, busy=False)
+            if self._revoked or self._link_lost or not decision.ok:
+                reason = "the link to HANNAH is down" if self._link_lost else "this robot's credentials were refused" if self._revoked else decision.reason
+                self._report(mission_id, "resume-refused", reason=f"Refused by the robot's own safety checks: {reason}.")
+                return
+            mission.deadline += now - mission.paused_at
+            mission.status, mission.paused_at = "accepted", 0.0
+            self._report(mission_id, "resumed")
+            self._start_leg(mission)
+            return
         if verdict.duplicate:
             known = self._missions.get(mission_id)
             if known is not None:
@@ -172,6 +204,9 @@ class Runtime:
         state = self.adapter.state()
         if self._revoked:
             self._report(mission_id, "rejected", reason="This robot's credentials were refused by the server; it is holding.")
+            return
+        if capability in ("report_surroundings", "report_robot_state", "read_sensor", "report_battery_state"):
+            self._report(mission_id, "rejected", reason="Reading is answered from the robot's reports; it is not a command.")
             return
         decision = self.safety.check(capability, params, state, command.get("limits"), busy=self._active is not None and capability in MOTION)
         if not decision.ok:
@@ -221,6 +256,8 @@ class Runtime:
             mode = "fault"
         elif self._stopping is not None:
             mode = "stopping"
+        elif mission is not None and mission.status == "paused":
+            mode = "paused"
         elif mission is not None:
             mode = "navigating"
         elif raw.get("docked"):
@@ -264,8 +301,11 @@ class Runtime:
             if silent > self.link_timeout and not self._link_lost:
                 self._link_lost = True
                 self._event("link-lost", "warning", f"No contact with HANNAH for {silent:.0f} s. Holding position.")
-                self._abort(f"The link to HANNAH was lost for more than {self.link_timeout:.0f} s; the robot stopped by itself.", "cancelled")
-                self.adapter.hold()
+                if self._active is not None and self._active.status == "paused":
+                    self.adapter.hold()  # already standing still; the paused mission is kept, and only a signed resume restarts it
+                else:
+                    self._abort(f"The link to HANNAH was lost for more than {self.link_timeout:.0f} s; the robot stopped by itself.", "cancelled")
+                    self.adapter.hold()
             elif silent <= self.link_timeout and self._link_lost:
                 self._link_lost = False
                 self._event("link-restored", "info", "Contact with HANNAH is back. The robot stays still until it gets a new command.")
@@ -295,8 +335,8 @@ class Runtime:
                 self._stopping = None
                 self._finish(stopping, "failed", f"The robot is still moving at {speed:.2f} m/s six seconds after the stop.")
         mission = self._active
-        if mission is None:
-            return
+        if mission is None or mission.status == "paused":
+            return  # a paused mission holds; its time limit doesn't run
         if now > mission.deadline:
             return self._abort("The mission ran out of time; the robot stopped.", "timed-out")
         status = self.adapter.navigation_status()

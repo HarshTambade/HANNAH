@@ -1,0 +1,12 @@
+{
+  "name": "blocked-then-cleared",
+  "description": "Recovery: the doorway is blocked, the first attempt fails, the box is taken away, and the next attempt succeeds because the robot's range sensor sees that the doorway is clear again.",
+  "world": "../worlds/home.json",
+  "steps": [
+    { "obstacle": { "name": "box in the kitchen doorway", "x": -1.5, "y": 1.3, "w": 1.0, "h": 1.2 } },
+    { "navigate": "kitchen", "expect": "failed", "timeout": 240 },
+    { "clearObstacles": true },
+    { "navigate": "kitchen", "expect": "succeeded", "timeout": 240 }
+  ],
+  "expect": { "faults": 0 }
+}

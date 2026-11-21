@@ -13,8 +13,9 @@ CommandGuard decides whether a signed command may be acted on:
   - its sequence number is higher than any accepted before (kept on disk, so a
     restart doesn't reopen the window) and its nonce is new.
 A command that was already accepted is recognised as a repeat delivery, not as
-a new order. A cancellation only needs a valid signature for a mission this
-robot knows: repeating one can only stop something.
+a new order. A cancellation or a pause only needs a valid signature for a
+mission this robot knows: repeating one can only stop something. A resume
+starts motion again, so it expires in seconds and its nonce works once.
 """
 from __future__ import annotations
 
@@ -48,6 +49,12 @@ def request_message(robot_id: str, time_ms: int | str, counter: int | str, metho
 def sign_request(secret: str, robot_id: str, time_ms: int | str, counter: int | str, method: str, path: str, body: str) -> str:
     message = request_message(robot_id, time_ms, counter, method, path, body)
     return hmac.new(derive_key(secret, AUTH_LABEL), message.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def fingerprint(secret: str) -> str:
+    """A short fingerprint of this robot's secret. HANNAH shows the same one, so a person can check which device enrolled."""
+    digest = hashlib.sha256(f"hannah-robot-fingerprint-v1:{secret}".encode("utf-8")).hexdigest()[:16].upper()
+    return " ".join(digest[index:index + 4] for index in range(0, 16, 4))
 
 
 def sign_command(secret: str, payload: str) -> str:
@@ -113,9 +120,24 @@ class CommandGuard:
         if not isinstance(mission_id, str) or not mission_id:
             return Verdict(False, command, "malformed")
         kind = command.get("type")
-        if kind == "cancel":
+        if kind in ("cancel", "pause"):
+            # Both only reduce what is happening: a valid signature for a mission this robot knows is enough.
             if mission_id not in self._missions:
                 return Verdict(False, command, "unknown-mission")
+            return Verdict(True, command)
+        if kind == "resume":
+            # A resume starts motion again, so it expires and works once.
+            if mission_id not in self._missions:
+                return Verdict(False, command, "unknown-mission")
+            nonce, expires = command.get("nonce"), command.get("expiresAt")
+            if not isinstance(nonce, str) or not nonce or not isinstance(expires, (int, float)):
+                return Verdict(False, command, "malformed")
+            if expires <= now_ms:
+                return Verdict(False, command, "expired")
+            if nonce in self._nonces:
+                return Verdict(True, command, duplicate=True)
+            self._nonces.append(nonce)
+            self._save()
             return Verdict(True, command)
         if kind != "mission":
             return Verdict(False, command, "unknown-type")
