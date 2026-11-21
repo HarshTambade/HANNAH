@@ -46,6 +46,8 @@ const { calendarActions } = require("./catalog/calendar");
 const { communicationActions, CAN_START, REPLY_ONLY } = require("./catalog/communications");
 const { codeActions } = require("./catalog/code");
 const { deviceActions } = require("./catalog/device");
+const { robotActions } = require("./catalog/robots");
+const { createRoboticsService } = require("../robotics/service");
 const { createCodingService } = require("../coding/service");
 const { DRIVERS } = require("../channel-drivers");
 const connections = require("../connections");
@@ -56,15 +58,16 @@ const { vaultConfigured } = require("../vault");
 
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 
-/** One engine and one coding service for the whole server: routes, workflows and MCP all use these. */
-function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots } = {}) {
+/** One engine, one coding service and one robot registry for the whole server: routes, workflows and MCP all use these. */
+function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs } = {}) {
   const coding = createCodingService({ fetchImpl, now, ...(request ? { request } : {}), ...(roots ? { roots } : {}) });
-  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions()] });
-  return { coding, engine };
+  const robotics = createRoboticsService({ now, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
+  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics })] });
+  return { coding, engine, robotics };
 }
 
 /** Every connection an account has, in one shape. */
-async function integrationsHub(db, userId, { coding, engine, now = () => Date.now() }) {
+async function integrationsHub(db, userId, { coding, engine, robotics = null, now = () => Date.now() }) {
   const out = [];
   const last = await engine.lastUsed(db, userId);
   const github = await coding.githubStatus(db, userId);
@@ -107,11 +110,22 @@ async function integrationsHub(db, userId, { coding, engine, now = () => Date.no
   out.push({ id: "research", category: "Research", name: "Web search and research", connected: true, account: null, permissions: [], supported: ["Search (Tavily, Brave or SearXNG when the operator set one; otherwise Groq's browser search with your key; Wikipedia, OpenAlex and arXiv always)", "Open and read public pages, obeying robots.txt"], unsupported: ["Pages behind a sign-in or paywall", "Submitting forms (that is the desktop app's browser)"], setup: null, lastOkAt: null, lastError: null, disconnect: null });
   out.push({ id: "bookings", category: "Bookings", name: "Restaurants, travel, appointments", connected: false, account: null, permissions: [], supported: ["Finding and comparing options through web research, with sources", "Preparing a booking request as an email or message for you to approve", "Adding the appointment to your calendar"], unsupported: ["Checking live availability or prices with a provider", "Making, paying for or confirming a reservation: no booking provider's API is connected. HANNAH never reports a booking as made"], setup: "Needs a provider that offers an API and an account with it (partner approval for restaurant and travel networks). None is connected.", lastOkAt: null, lastError: null, disconnect: null });
   out.push({ id: "device", category: "Device control", name: "This computer or phone", connected: null, account: null, permissions: [], supported: ["Desktop app: files in folders you share, commands you approve, a browser window, app and window control, screen reading", "Android and iOS: reminders, notifications, the dialer and message drafts"], unsupported: ["Anything on a device where the HANNAH app isn't open and signed in", "Sending texts or placing calls without the phone's own confirmation"], setup: "Shown per device in Settings → Desktop access and Settings → Phone.", lastOkAt: null, lastError: null, disconnect: null, lastAction: last.device || last.files });
+  if (robotics) {
+    const robots = await robotics.listRobots(db, userId).catch(() => []);
+    const enrolled = robots.filter((robot) => robot.status === "enrolled");
+    out.push({
+      id: "robots", category: "Robots", name: "Robots", connected: enrolled.length > 0, account: enrolled.length ? enrolled.map((robot) => `${robot.name} (${robot.simulated ? "simulation" : "physical"}, ${robot.connection})`).join(", ") : null, permissions: [],
+      supported: ["A simulated differential-drive robot (HANNAH's built-in simulator): drive to a place, stop, return to dock, visit points, read state and sensors", "Enrollment with a one-time code, signed commands that expire, a software stop that never needs approval"],
+      unsupported: ["Physical robots: the ROS 2 adapter is written and has not been run on hardware", "Gazebo and Nav2: the integration is written and has not been run", "Arms, grippers, cameras and following a target: in the capability contract, with no runtime yet", "An emergency stop: HANNAH's stop is a software request; an emergency stop is hardware on the robot"],
+      setup: vaultConfigured() ? "Add a robot under Robots and run HANNAH's robot runtime with the one-time code." : "This server can't enroll robots yet (no key vault).",
+      lastOkAt: enrolled.reduce((latest, robot) => Math.max(latest, robot.lastSeenAt || 0), 0) || null, lastError: null, disconnect: null, lastAction: last.robots,
+    });
+  }
   return { integrations: out, checkedAt: now() };
 }
 
 function createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs = 90_000 }) {
-  const { engine, coding } = operator;
+  const { engine, coding, robotics } = operator;
   const router = express.Router();
   const json = express.json({ limit: "600kb" });
   const guard = ({ session = false } = {}) => (handler) => async (req, res) => {
@@ -145,7 +159,9 @@ function createOperatorRouter({ operator, getRequestProvider, preferredProviderI
   router.post("/actions/stop", anyAccount(async (_req, res, db, account) => {
     const stopped = await engine.stop(db, account.id);
     const paused = await coding.pauseAll(db, account.id);
-    res.json({ stoppedAt: stopped.policy.stoppedAt, cancelled: stopped.cancelled, pausedTasks: paused });
+    // A software stop goes to every robot that could be moving. It is a request to each robot's controller, not an emergency stop.
+    const robots = robotics ? await robotics.stopAll(db, account.id).catch(() => 0) : 0;
+    res.json({ stoppedAt: stopped.policy.stoppedAt, cancelled: stopped.cancelled, pausedTasks: paused, stoppedRobots: robots });
   }));
   router.post("/actions/resume", person(async (_req, res, db, account) => res.json({ stoppedAt: (await engine.resume(db, account.id)).stoppedAt })));
   router.get("/actions", anyAccount(async (req, res, db, account) => {
@@ -167,7 +183,7 @@ function createOperatorRouter({ operator, getRequestProvider, preferredProviderI
       levels: permissions.LEVELS, stoppedAt: policy.stoppedAt,
       services: Object.entries(permissions.SERVICES).map(([id, service]) => ({ id, ...service, level: policy.levels[id], lastUsed: lastUsed[id], actions: engine.catalog().filter((action) => action.service === id).map(({ id: actionId, title, kind, standing, executor }) => ({ id: actionId, title, kind, standing, executor })) })),
       grants, kinds: permissions.KINDS,
-      always: ["Paying and purchasing", "Deleting (events, files) and merging", "Committing to a repository's default branch", "Anything an action's own checks flag: an ambiguous recipient, an attachment, a conflict, a password-like text"],
+      always: ["Paying and purchasing", "Deleting (events, files) and merging", "Committing to a repository's default branch", "Anything an action's own checks flag: an ambiguous recipient, an attachment, a conflict, a password-like text", "Any movement of a physical robot"],
     };
   }
   router.get("/account/permissions", anyAccount(async (_req, res, db, account) => res.json(await permissionView(db, account.id))));
@@ -187,7 +203,7 @@ function createOperatorRouter({ operator, getRequestProvider, preferredProviderI
   }));
 
   // ---------- integrations ----------
-  router.get("/account/integrations", anyAccount(async (_req, res, db, account) => res.json(await integrationsHub(db, account.id, { coding, engine }))));
+  router.get("/account/integrations", anyAccount(async (_req, res, db, account) => res.json(await integrationsHub(db, account.id, { coding, engine, robotics }))));
   router.put("/account/integrations/github", json, person(async (req, res, db, account) => res.json({ github: await coding.connectGithub(db, account.id, req.body?.token) })));
   router.delete("/account/integrations/github", person(async (_req, res, db, account) => res.json({ disconnected: await coding.disconnectGithub(db, account.id) })));
 

@@ -36,6 +36,7 @@ const { createMcpClientRouter } = require("./mcp-client");
 const { createConnectorsRouter } = require("./connectors");
 const { createStudioRouter } = require("./studio");
 const { createOperator, createOperatorRouter } = require("./actions/router");
+const { createRobotAccountRouter, createRobotDeviceRouter } = require("./robotics/router");
 const { createWebRouter } = require("./web");
 const { createHostingSetupRouter } = require("./hosting-setup");
 const { createChannelHookRouter, createChannelsRouter } = require("./channels");
@@ -369,6 +370,8 @@ app.post("/api/coding/tasks/:id/continue", createRateLimiter(rateLimits.agent));
 app.post("/api/coding/tasks/:id/publish", createRateLimiter(rateLimits.chat));
 app.post("/api/coding/repos/check", createRateLimiter(rateLimits.chat));
 app.put("/api/account/integrations/github", createRateLimiter(rateLimits.chat));
+app.post("/api/robots", createRateLimiter(rateLimits.chat));
+app.post("/api/robots/:id/enrollment", createRateLimiter(rateLimits.chat));
 app.post("/api/route/preview", createRateLimiter(rateLimits.events));
 app.post("/api/a2a", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
@@ -412,6 +415,8 @@ const phoneWorkflowHooks = {
   },
 };
 app.use("/api", createPhoneBridgeRouter({ hooks: phoneWorkflowHooks }));
+// A robot's own requests (enrollment, signed sync). Before the JSON parser: the signature covers the exact body.
+app.use("/api", createRobotDeviceRouter({ robotics: () => operator.robotics, enrollLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "robot-enroll" }) }));
 app.use(express.json({ limit: "12mb" }));
 // HANNAH as an MCP server (streamable HTTP) at /mcp, for callers with their own
 // credential: a developer key, the operator token, or a Groq key, checked by
@@ -479,6 +484,7 @@ const operator = createOperator();
 // Workflows reach the same engine ("Do an action", "Check a repository").
 workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
+app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
 app.use("/api", createWebRouter({ getRequestProvider }));
 // "Set up HANNAH": connect this deployment to Vercel and Supabase with the person's own tokens.

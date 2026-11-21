@@ -633,6 +633,92 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_coding_tasks_recent ON hannah_coding_tasks (user_id, updated_at)",
     ],
   },
+  {
+    version: 18,
+    name: "robots, missions, telemetry and device events",
+    // Robots a person enrolled (the registry), the missions HANNAH started on
+    // them, a short telemetry history and the events a robot reported. A robot
+    // authenticates as itself: its secret is sealed with the vault, and
+    // `counter` is the last request number accepted from it (replay
+    // protection). Every row is per user; a robot belongs to one account.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_robots (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        profile TEXT NOT NULL,
+        capabilities TEXT NOT NULL,
+        safety TEXT NOT NULL,
+        permissions TEXT NOT NULL,
+        simulated INTEGER NOT NULL DEFAULT 0,
+        simulator TEXT,
+        state TEXT,
+        mode TEXT,
+        enroll_hash TEXT,
+        enroll_expires_at BIGINT,
+        key_id TEXT,
+        wrapped_key TEXT,
+        ciphertext TEXT,
+        counter BIGINT NOT NULL DEFAULT 0,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        enrolled_at BIGINT,
+        last_seen_at BIGINT,
+        revoked_at BIGINT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS hannah_robots_id ON hannah_robots (id)",
+      "CREATE INDEX IF NOT EXISTS hannah_robots_enroll ON hannah_robots (enroll_hash)",
+      `CREATE TABLE IF NOT EXISTS hannah_robot_missions (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        capability TEXT NOT NULL,
+        params TEXT NOT NULL,
+        status TEXT NOT NULL,
+        action_id TEXT,
+        requested_by TEXT,
+        seq BIGINT NOT NULL,
+        nonce TEXT NOT NULL,
+        issued_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        deadline_at BIGINT NOT NULL,
+        sent_at BIGINT,
+        accepted_at BIGINT,
+        finished_at BIGINT,
+        cancel_requested_at BIGINT,
+        progress TEXT,
+        result TEXT,
+        verification TEXT,
+        error TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robot_missions_robot ON hannah_robot_missions (robot_id, status, created_at)",
+      "CREATE INDEX IF NOT EXISTS hannah_robot_missions_recent ON hannah_robot_missions (user_id, created_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_robot_telemetry (
+        robot_id TEXT NOT NULL,
+        at BIGINT NOT NULL,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        sample TEXT NOT NULL,
+        PRIMARY KEY (robot_id, at)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_robot_events (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        at BIGINT NOT NULL,
+        type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        message TEXT NOT NULL,
+        source TEXT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robot_events_recent ON hannah_robot_events (robot_id, at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

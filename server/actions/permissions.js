@@ -24,7 +24,10 @@
  *   - An action flagged by its own checks (an ambiguous recipient, a private
  *     file leaving the account, a push to the default branch) asks even when a
  *     grant matches.
- *   - While the emergency stop is on, nothing but reading runs.
+ *   - While the emergency stop is on, nothing but reading runs, except an
+ *     action that only reduces what is happening (stopping a robot): an action
+ *     defined with `deescalates: true` is allowed at every level and during a
+ *     stop, because refusing it could never be the safer choice.
  *
  * evaluate() is pure: it takes the policy, the grants and the action, and
  * returns { outcome: "allow" | "ask" | "suggest" | "deny", reason, ... }.
@@ -41,6 +44,7 @@ const SERVICES = {
   bookings: { label: "Bookings", description: "Find options, prepare and make reservations." },
   files: { label: "Files", description: "Read and write files in folders you shared and files HANNAH made." },
   device: { label: "This device", description: "Run commands, open apps, control the desktop, change settings." },
+  robots: { label: "Robots", description: "Read a robot's state and sensors, start and cancel missions on robots you enrolled. Stopping a robot is always allowed." },
 };
 
 const LEVELS = [
@@ -144,6 +148,7 @@ function evaluate({ policy, grants = [], action, call = {}, now = Date.now(), us
   const level = policy?.levels?.[action.service] ?? DEFAULT_LEVEL;
   const levelName = LEVELS[level - 1].name;
   const base = { level, levelName };
+  if (action.deescalates === true) return { ...base, outcome: "allow", code: "deescalates", reason: "Stopping is always allowed." };
   if (policy?.stoppedAt && action.kind !== "read") {
     return { ...base, outcome: "deny", code: "stopped", reason: "The emergency stop is on. Nothing but reading runs until you turn it off in Permissions." };
   }

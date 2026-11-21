@@ -37,9 +37,12 @@ const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/accou
 // Workflow webhooks are called by other services. Each one authenticates
 // itself (a secret token or an HMAC signature) in server/workflows/router.js;
 // the cron tick checks CRON_SECRET. Nothing else under these paths is public.
-const PUBLIC_PREFIXES = ["/hooks/"];
+// A robot's own endpoints: enrollment is proven by a one-time code, every sync
+// by the robot's signature (server/robotics/service.js). No account session.
+const PUBLIC_PREFIXES = ["/hooks/", "/robots/device/"];
+const ROBOT_ENROLL_PATH = "/robots/enroll";
 function isPublic(path) {
-  return PUBLIC_PATHS.has(path) || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
+  return PUBLIC_PATHS.has(path) || path === ROBOT_ENROLL_PATH || PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 // A signed-in account (session or developer API key) may use the model routes
 // plus its own account and sync routes. Operator-only routes stay closed.
@@ -48,7 +51,9 @@ function accountMayUse(path) {
     || path === "/workflows" || path.startsWith("/workflows/") || path === "/notifications" || path.startsWith("/notifications/")
     || path.startsWith("/phone/") || path.startsWith("/connectors/") || path.startsWith("/web/") || path.startsWith("/setup/hosting/") || path === "/channels" || path.startsWith("/channels/")
     // The Action Engine and the coding service: an account's own actions, permissions, repositories and tasks.
-    || path === "/actions" || path.startsWith("/actions/") || path.startsWith("/coding/");
+    || path === "/actions" || path.startsWith("/actions/") || path.startsWith("/coding/")
+    // An account's own robots, their missions and telemetry.
+    || path === "/robots" || path.startsWith("/robots/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 
@@ -282,6 +287,8 @@ function rateLimitSettings() {
     feedbackPerAddress: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_FEEDBACK_PER_ADDRESS, 20, 100_000), windowMs: 15 * 60_000 },
     contentReportPerAddress: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_CONTENT_REPORT_PER_ADDRESS, 30, 100_000), windowMs: 15 * 60_000 },
     eventsPerAddress: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_EVENTS_PER_ADDRESS, 300, 100_000), windowMs: 15 * 60_000 },
+    // Guesses at a robot's one-time enrollment code, per network address.
+    robotEnrollPerAddress: { limit: positiveInteger(process.env.HANNAH_RATE_LIMIT_ROBOT_ENROLL_PER_ADDRESS, 10, 100_000), windowMs: 15 * 60_000 },
   };
 }
 
