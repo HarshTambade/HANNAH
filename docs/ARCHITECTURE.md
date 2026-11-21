@@ -150,6 +150,19 @@ Decision: anything HANNAH does outside this server for an account (a calendar ev
 
 Details: [`architecture/AUTONOMOUS_OPERATOR_ARCHITECTURE.md`](./architecture/AUTONOMOUS_OPERATOR_ARCHITECTURE.md), [`security/PERMISSION_AND_TRUST_MODEL.md`](./security/PERMISSION_AND_TRUST_MODEL.md), [`engineering/CODING_AGENT_CAPABILITIES.md`](./engineering/CODING_AGENT_CAPABILITIES.md).
 
+
+### Robots: an onboard runtime, and capabilities as actions (Robotics Block 1)
+
+Decision: HANNAH tells a robot what to do in named, high-level capabilities; the robot's own planner and controller decide how to move. A language model never controls an actuator. Three programs: the app (never in the control path), the server (`server/robotics`: registry, Safety Gateway, missions) and a runtime on the robot's own computer (`robotics/runtime`).
+
+- **Why a runtime on the robot:** the robot has to hold its limits and stop itself with the internet, the server, the model provider and the app all gone. The existing browser-to-device `HardwareAdapter` can't offer that and is left as it is.
+- **The robot opens the connection** (HTTPS, each request signed), so nothing listens on the robot and it works behind NAT and on the serverless deployment.
+- **Capabilities are Action Engine actions** under a Robots service: one permission system, one approval flow, one history. "Done" for a movement means the robot accepted the mission; arrival is the mission's own verified result.
+- **Stopping is always allowed:** a de-escalating action passes at every level and during the emergency stop.
+- **Limits flow one way:** the robot reports them, a person can tighten them, nothing on the server can loosen what the robot enforces.
+- **Rule for new robot capabilities:** contract → both gateways → runtime executor → verification → action → tool. A capability whose result can't be verified isn't finished.
+
+Details: [`robotics/ROBOTICS_ARCHITECTURE.md`](./robotics/ROBOTICS_ARCHITECTURE.md). State: tested with a built-in simulator only; the ROS 2 and Gazebo files are written and unrun.
 ## 3. Roadmap
 
 Each milestone ends with the tests from brief §18 passing, docs updated, and the README's status section changed. Nothing is presented as working before its end-to-end path runs.

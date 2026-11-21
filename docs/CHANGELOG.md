@@ -2,6 +2,32 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
+## Unreleased
+
+Robotics, Block 1: the foundation for HANNAH to work with robots. Proven end to end with a built-in simulator; **not run with Gazebo, ROS 2 or any physical robot.** HANNAH is not safety-certified. Documents: [`docs/robotics`](./robotics/ROBOTICS_ARCHITECTURE.md).
+
+### Added
+
+- **Robot registry** (`server/robotics`). A signed-in person creates a robot record and gets a one-time code; the robot's runtime enrolls with it and from then on authenticates as itself. Stored per robot: identity, type, sensors, actuators, capabilities, limits, software and firmware versions, state. Migration 18.
+- **Capability contract.** Twelve named operations with input and output schemas, preconditions, risk, timeout, cancel behaviour and how the result is verified. Seven have a runtime: report state, read a sensor, stop, drive to a place, return to dock, visit points, switch an onboard device. Five (camera, follow, arm, grasp, release) are defined only. No capability reaches an actuator.
+- **Robotics Safety Gateway**, on the server and again on the robot: a goal outside the workspace or in a keep-out zone, a capability the robot doesn't offer, a speed above its limit, an engaged emergency stop, a fault, a low battery or an offline robot is refused with the reason, before anyone is asked to approve.
+- **Robots as an Action Engine service.** Movement goes through the same permission levels, approval and history as everything else. A physical robot's movement always asks. Stopping never needs approval and works during the account's emergency stop.
+- **HANNAH Robotics Runtime** (`robotics/runtime`, Python, standard library only), for the robot's own computer: verifies each command's signature, robot id, expiry and sequence; applies the robot's own limits; stops the robot when its link to HANNAH is silent for five seconds, on an emergency stop, a fault or a mission timeout; never resumes by itself.
+- **Hardware abstraction layer** with two adapters: a built-in kinematic simulator of a differential-drive robot (speed and acceleration limits, collisions, drifting odometry, a ray-cast range sensor, path planning around obstacles that aren't on its map), and a ROS 2 adapter for Nav2 robots.
+- **Robots screen** (`/robotics`): the registry, enrollment, each robot on its map, missions and how each was verified, telemetry, warnings, capabilities and limits. Every robot is labelled SIMULATION or PHYSICAL; an offline robot's state is marked as old.
+- **Robot Agent** and nine robot tools, offered only to an account that has a robot.
+- **Gazebo Harmonic and Nav2 package** for ROS 2 Jazzy (`robotics/ros2_ws`), its world and map generated from the same file the built-in simulator reads, a container and a manual CI job to run it.
+
+### Not done
+
+- The ROS 2 adapter, its watchdog, the Gazebo robot and the container have never been run: ROS 2 and Gazebo could not be installed on the development machine.
+- No physical robot. No arm, gripper or camera. No firmware updates (design only). No fleet task allocation.
+
+### Changed
+
+- The permission evaluator allows an action defined as de-escalating at every level and during the emergency stop. Only stopping a robot uses it.
+- The account's emergency stop also sends a stop to every robot that could be moving.
+
 ## 1.7.0 — 2026-11-20
 
 HANNAH can act, not only answer: one engine that asks permission, waits for approval, does the thing once, checks it happened and keeps the record; and a coding service on top of it.
