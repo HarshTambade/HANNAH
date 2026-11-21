@@ -35,6 +35,7 @@ export type RobotState = {
   devices?: Record<string, string>;
   mission?: { id: string; capability: string; phase?: string; distanceRemaining?: number | null; secondsLeft?: number } | null;
   nav?: { goal?: Point | null; path?: number[][]; status?: string };
+  perception?: Perception;
   map?: { coveragePercent?: number; discovered?: number[][] };
   link?: { ok: boolean; silentS: number; timeoutS: number };
   sim?: { kind: string; timeFactor?: number; truth?: Point; odometryError?: number };
@@ -48,13 +49,23 @@ export type Robot = {
   devices: Record<string, boolean>; places: Record<string, Point>; dock?: Point | null;
   world?: { name: string; bounds: { minX: number; minY: number; maxX: number; maxY: number } | null; obstacles: Array<{ x: number; y: number; w: number; h: number }> } | null;
   network?: { transport: string; syncIntervalMs: number }; refusedCapabilities?: Array<{ id: string; reason: string }>;
+  fingerprint?: string; serialNumber?: string; configVersion: number; mapName: string; commissioning: Commissioning; reportedPlaces: Record<string, Point>; staleDestinations: Destination[];
   capabilities: string[]; disabled: string[]; alwaysAsk: string[]; limits: RobotLimits; safety: { reported?: Record<string, unknown>; owner?: Record<string, unknown> };
   state: RobotState | null; stateAgeS: number | null; createdAt: number; enrolledAt: number | null; revokedAt: number | null; enrollmentExpiresAt: number | null;
 };
-export type MissionStatus = "queued" | "sent" | "accepted" | "succeeded" | "unverified" | "failed" | "cancelled" | "rejected" | "expired" | "timed-out" | "lost";
+export type Destination = Point & { name: string; source: "robot" | "robot-profile" | "owner"; map: string; frame: string; id?: string };
+export type Destinations = { map: string | null; destinations: Destination[]; reported: Array<Point & { name: string; usable: boolean }>; stale: Destination[]; rule: string };
+export type CommissioningStep = { id: string; title: string; detail: string; done: boolean; confirmedAt: number | null; note: string; available: boolean; check: { ok: boolean; problems: string[]; facts: string[] } };
+export type Commissioning = { required: boolean; status: "not-required" | "required" | "in-progress" | "trial" | "approved"; done: number; total: number; trialSpeed: number | null; resetReason?: string | null; next?: string | null; steps?: CommissioningStep[] };
+export type Detected = { kind: string; x: number; y: number; widthM: number; distanceM: number; bearingDeg: number; returns: number; confidence: number; sensor: string };
+export type Perception = { measuredAt: number; sensor: string; source: string; obstaclesKnown: boolean; obstacles: Detected[]; route: { blocked: boolean | null; reason: string }; changes: Array<{ x: number; y: number; w: number; h: number; cells: number }>; sensorHealth: Array<{ id: string; ok: boolean; problem?: string }> };
+export type Diagnostics = { robot: string; kind: string; online: boolean; stale: boolean; summary: string; basis: string; findings: Array<{ severity: "info" | "warning" | "error"; title: string; evidence: string; recommendation?: string }> };
+export type FleetRow = { id: string; name: string; kind: string; type: string | null; connection: string; mode: string; map: string | null; position: Point | null; batteryPercent: number | null; charging: boolean | null; mission: { id: string; what: string; status: string } | null; available: boolean; health: "ok" | "attention" | "unknown"; problems: string[]; destinations: string[] };
+export type MaintenanceEntry = { id: string; at: number; kind: string; note: string };
+export type MissionStatus = "paused" | "queued" | "sent" | "accepted" | "succeeded" | "unverified" | "failed" | "cancelled" | "rejected" | "expired" | "timed-out" | "lost";
 export type Mission = {
   id: string; robotId: string; robotName: string | null; capability: string; title: string; params: Record<string, unknown>; status: MissionStatus; final: boolean; summary: string;
-  actionId: string | null; createdAt: number; expiresAt: number; acceptedAt: number | null; finishedAt: number | null; cancelRequestedAt: number | null;
+  actionId: string | null; createdAt: number; expiresAt: number; acceptedAt: number | null; finishedAt: number | null; cancelRequestedAt: number | null; pauseRequestedAt: number | null; resumeRequestedAt: number | null; pausedAt: number | null;
   progress: { phase?: string; distanceRemaining?: number | null; travelled?: number } | null; result: Record<string, unknown> | null;
   verification: { confirmed: boolean; evidence: string } | null; error: string | null;
 };
@@ -107,10 +118,25 @@ export const Robotics = {
   missions: async (robotId?: string, limit = 25) => (await accountRequest<{ missions: Mission[] }>(`/api/robots/missions?limit=${limit}${robotId ? `&robot=${id(robotId)}` : ""}`)).missions,
   mission: async (missionId: string) => (await accountRequest<{ mission: Mission }>(`/api/robots/missions/${id(missionId)}`)).mission,
   cancel: async (missionId: string) => (await accountRequest<{ mission: Mission }>(`/api/robots/missions/${id(missionId)}/cancel`, { method: "POST" })).mission,
+  /** Pause never needs approval. Resume moves the robot again: its record may come back waiting for one. */
+  pause: (missionId: string) => accountRequest<{ record: ActionRecord; mission: Mission }>(`/api/robots/missions/${id(missionId)}/pause`, { method: "POST", signal: AbortSignal.timeout(30_000) }),
+  resume: (missionId: string) => accountRequest<{ record: ActionRecord; mission: Mission }>(`/api/robots/missions/${id(missionId)}/resume`, { method: "POST", signal: AbortSignal.timeout(30_000) }),
+  commissioning: async (robotId: string) => (await accountRequest<{ commissioning: Commissioning }>(`/api/robots/${id(robotId)}/commissioning`)).commissioning,
+  confirmStep: async (robotId: string, step: string, note: string) => (await accountRequest<{ commissioning: Commissioning }>(`/api/robots/${id(robotId)}/commissioning/${id(step)}`, { method: "POST", body: json({ attest: true, note }) })).commissioning,
+  withdrawCommissioning: async (robotId: string, reason: string) => (await accountRequest<{ commissioning: Commissioning }>(`/api/robots/${id(robotId)}/commissioning/reset`, { method: "POST", body: json({ reason }) })).commissioning,
+  destinations: (robotId: string) => accountRequest<Destinations>(`/api/robots/${id(robotId)}/destinations`),
+  addDestination: (robotId: string, destination: { name?: string; x?: number; y?: number; yaw?: number; fromPlace?: string }) => accountRequest<Destinations>(`/api/robots/${id(robotId)}/destinations`, { method: "POST", body: json(destination) }),
+  removeDestination: (robotId: string, destinationId: string) => accountRequest<Destinations>(`/api/robots/${id(robotId)}/destinations/${id(destinationId)}`, { method: "DELETE" }),
+  diagnostics: async (robotId: string) => (await accountRequest<{ diagnostics: Diagnostics }>(`/api/robots/${id(robotId)}/diagnostics`)).diagnostics,
+  maintenance: async (robotId: string) => (await accountRequest<{ maintenance: MaintenanceEntry[] }>(`/api/robots/${id(robotId)}/maintenance`)).maintenance,
+  addMaintenance: async (robotId: string, kind: string, note: string) => (await accountRequest<{ maintenance: MaintenanceEntry[] }>(`/api/robots/${id(robotId)}/maintenance`, { method: "POST", body: json({ kind, note }) })).maintenance,
+  fleet: async () => (await accountRequest<{ robots: FleetRow[] }>("/api/robots/fleet")).robots,
+  /** Ask HANNAH to choose a robot for a task. Throws with the reasons when none can take it. */
+  assign: (task: "navigate_to" | "return_to_dock" | "inspect_area", params: Record<string, unknown>) => Operator.run("robots.assign", { task, ...params }, { request: "Assigned on the Robots screen", agent: "You", intent: "robots" }),
   telemetry: async (robotId: string, minutes = 15) => (await accountRequest<{ samples: TelemetrySample[] }>(`/api/robots/${id(robotId)}/telemetry?minutes=${minutes}`)).samples,
   events: async (robotId?: string) => (await accountRequest<{ events: RobotEvent[] }>(`/api/robots/events${robotId ? `?robot=${id(robotId)}` : ""}`)).events,
   /** Ask for a mission. The record says whether it started, waits for approval, or was refused and why. */
-  ask: (action: "robots.navigate_to" | "robots.return_to_dock" | "robots.inspect_area" | "robots.set_supported_device_state", params: Record<string, unknown>, request = "Asked on the Robots screen") =>
+  ask: (action: "robots.navigate_to" | "robots.return_to_dock" | "robots.inspect_area" | "robots.set_supported_device_state" | "robots.resume_mission", params: Record<string, unknown>, request = "Asked on the Robots screen") =>
     Operator.run(action, params, { request, agent: "You", intent: "robots" }),
   /** Watch a mission until it ends or the time is up. Returns it as it is then. */
   async waitFor(missionId: string, seconds: number, signal?: AbortSignal) {
@@ -145,7 +171,24 @@ const read = (name: string, action: string, description: string, properties: Pro
   name, description, inputSchema: { type: "object", properties }, execute: async (args) => toolResult(await Operator.perform(action, compact(params(args)), { agent: "Robot agent" })),
 });
 
+function control(name: string, action: string, description: string): HANNAHTool {
+  return {
+    name, description: `${description} Report whether the robot confirmed it; if the robot is offline it could not be delivered, and you must say that.`,
+    inputSchema: { type: "object", properties: { robot: robotProp, missionId: { type: "string", description: "Leave out for the robot's current mission." } } },
+    execute: async (args) => toolResult(await Operator.perform(action, compact({ robot: str(args.robot), mission: str(args.missionId) }), { agent: "Robot agent" })),
+  };
+}
+
 const tools: HANNAHTool[] = [
+  // First on purpose: if a request ever carries more tools than the model may be given, the ones cut are at the end.
+  {
+    name: "robot_stop",
+    description: "Stop a robot now: cancel its mission and hold position. Never needs approval. It is a software request to the robot's controller, NOT an emergency stop: if a person is in danger, tell the user to press the robot's own emergency stop. Report whether the stop was confirmed by the robot's measured speed; if the robot is offline the stop could not be delivered, and you must say that.",
+    inputSchema: { type: "object", properties: { robot: robotProp, reason: { type: "string" } } },
+    execute: async (args) => toolResult(await Operator.perform("robots.stop_motion", compact({ robot: str(args.robot), reason: str(args.reason) }), { agent: "Robot agent" })),
+  },
+  control("robot_pause", "robots.pause_mission", "Pause a robot's running mission: it holds where it is and keeps the mission. Never needs approval."),
+  control("robot_cancel", "robots.cancel_mission", "Cancel a robot's mission: it stops where it is and the mission ends. Never needs approval. Use this for “cancel the mission”; use robot_stop for “stop the robot”."),
   read("robot_list", "robots.list", "List the robots enrolled in the user's account: each one's name, whether it is a SIMULATION or a PHYSICAL robot, whether it is connected, what it can do (its capabilities), and the named places it knows. Call this first; never assume a robot or a capability exists.", {}, () => ({})),
   read("robot_state", "robots.state", "A robot's latest reported state: position, speed, mode, battery, emergency stop, faults, current mission. The answer says how old it is; if the robot is offline it is the last report, and you must say so rather than present it as current.", { robot: robotProp }, (args) => ({ robot: str(args.robot) })),
   read("robot_read_sensor", "robots.read_sensor", "The latest reading of one of a robot's registered sensors (ids from robot_list, for example lidar, odometry, bumper, battery).", { robot: robotProp, sensor: { type: "string" } }, (args) => ({ robot: str(args.robot), sensor: str(args.sensor) })),
@@ -158,11 +201,19 @@ const tools: HANNAHTool[] = [
     (args) => ({ waypoints: [...(Array.isArray(args.places) ? args.places.map((place) => ({ place: str(place) })) : []), ...(Array.isArray(args.points) ? (args.points as Array<Record<string, unknown>>).map((point) => compact({ x: num(point.x), y: num(point.y) })) : [])] })),
   mission("robot_set_device", "robots.set_supported_device_state", "Switch one of a robot's listed on/off devices (for example its beacon). Only devices from robot_list; never motors or brakes.",
     { device: { type: "string" }, state: { type: "string", enum: ["on", "off"] } }, ["device", "state"], (args) => ({ device: str(args.device), state: str(args.state) })),
+  read("robot_destinations", "robots.destinations", "The named destinations a robot can be sent to, each with its map, coordinate frame, position and who defined it. A room name is a place only if it is on this list for that robot: never assume a name has coordinates.", { robot: robotProp }, (args) => ({ robot: str(args.robot) })),
+  read("robot_battery", "robots.battery", "A robot's battery: charge, whether it is charging, and the minimum it needs to start a mission. From its battery sensor only; if there is no reading, say so.", { robot: robotProp }, (args) => ({ robot: str(args.robot) })),
+  read("robot_surroundings", "robots.surroundings", "What a robot's range sensor detects around it right now: obstacles with distance, bearing, size and a confidence, whether its route is blocked, what it has seen that isn't on its map, and which sensors are not reporting. These are sensor measurements; report them as measurements with their confidence, and when the answer says “unknown” (a sensor is down) say unknown, never “clear”. It cannot tell you what an object is.", { robot: robotProp }, (args) => ({ robot: str(args.robot) })),
+  read("robot_fleet", "robots.fleet", "Every robot at once: connection, health, battery, position, current mission and whether it can take a task now, with the reason when it can't. Use for “show me my robots” and before assigning work.", {}, () => ({})),
+  read("robot_diagnostics", "robots.diagnostics", "What the evidence says about one robot's condition: sensors not reporting, faults, battery, link losses, refused commands, missions that didn't finish, software versions, the last maintenance entry. Each finding carries its evidence. Report the findings and their evidence; do not add causes or predictions that aren't there.", { robot: robotProp }, (args) => ({ robot: str(args.robot) })),
+  mission("robot_assign", "robots.assign", "Give a movement task to whichever robot can best take it: HANNAH picks the nearest robot that is connected, ready, commissioned if physical, not busy and has that destination on its own map. Use when the user doesn't name a robot (“assign the available robot to…”, “send a robot to…”). The answer names the robot chosen and why, and why each other robot wasn't. If none can take it, the tool fails with each robot's reason: tell the user those reasons.",
+    { task: { type: "string", enum: ["navigate_to", "return_to_dock", "inspect_area"] }, place: { type: "string", description: "A destination name." }, x: { type: "number" }, y: { type: "number" }, places: { type: "array", items: { type: "string" }, description: "For inspect_area: destinations to visit, in order." } }, ["task"],
+    (args) => ({ task: str(args.task) || "navigate_to", place: str(args.place), x: num(args.x), y: num(args.y), waypoints: Array.isArray(args.places) && args.places.length ? args.places.map((place) => ({ place: str(place) })) : undefined, robot: undefined })),
   {
-    name: "robot_stop",
-    description: "Stop a robot now: cancel its mission and hold position. Never needs approval. It is a software request to the robot's controller, NOT an emergency stop: if a person is in danger, tell the user to press the robot's own emergency stop. Report whether the stop was confirmed by the robot's measured speed; if the robot is offline the stop could not be delivered, and you must say that.",
-    inputSchema: { type: "object", properties: { robot: robotProp, reason: { type: "string" } } },
-    execute: async (args) => toolResult(await Operator.perform("robots.stop_motion", compact({ robot: str(args.robot), reason: str(args.reason) }), { agent: "Robot agent" })),
+    name: "robot_resume",
+    description: `Carry on with a paused mission from where the robot stands.${MOVES}`,
+    inputSchema: { type: "object", properties: { robot: robotProp, missionId: { type: "string" } } }, asksUser: true,
+    execute: async (args) => toolResult(await Operator.perform("robots.resume_mission", compact({ robot: str(args.robot), mission: str(args.missionId) }), { agent: "Robot agent" })),
   },
   {
     name: "robot_wait_for_mission",

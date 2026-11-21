@@ -9,8 +9,8 @@ import { TaskRecords } from "../services/TaskRecords";
 
 const onDesktop = desktopFilesAvailable();
 
-const agentIcons: Record<SpecialistId, typeof Brain> = { research: BookOpen, coding: Code2, memory: Brain, tasks: ListChecks, robot: Bot };
-const agentTones: Record<SpecialistId, string> = { research: "tone-sky", coding: "tone-lavender", memory: "tone-mint", tasks: "tone-butter", robot: "tone-sky" };
+const agentIcons: Record<SpecialistId, typeof Brain> = { research: BookOpen, coding: Code2, memory: Brain, tasks: ListChecks, robot: Bot, robot_fleet: Bot, robot_care: Bot };
+const agentTones: Record<SpecialistId, string> = { research: "tone-sky", coding: "tone-lavender", memory: "tone-mint", tasks: "tone-butter", robot: "tone-sky", robot_fleet: "tone-lavender", robot_care: "tone-mint" };
 
 const stepStatus: Record<TeamStepStatus, { label: string; Icon: typeof Brain; className: string }> = {
   pending: { label: "Waiting", Icon: CircleDashed, className: "text-slate-500" },

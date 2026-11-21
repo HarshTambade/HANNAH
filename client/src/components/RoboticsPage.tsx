@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, Loader2, MapPin, OctagonX, Plus, Radio, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
+import { CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, SurroundingsPanel } from "./RobotPanels";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -35,11 +36,12 @@ const CONNECTION: Record<Robot["connection"], { label: string; tone: string }> =
   "awaiting-enrollment": { label: "Waiting for its runtime to enroll", tone: "bg-sky-50 text-sky-900 border-sky-200" },
   revoked: { label: "Access revoked", tone: "bg-rose-50 text-rose-800 border-rose-200" },
 };
-const MODE: Record<string, string> = { idle: "Idle", navigating: "Driving", holding: "Holding position", stopping: "Stopping", docked: "In its dock", estopped: "Emergency stop engaged", fault: "Fault", offline: "Offline", starting: "Starting", unknown: "Unknown" };
+const MODE: Record<string, string> = { paused: "Paused", idle: "Idle", navigating: "Driving", holding: "Holding position", stopping: "Stopping", docked: "In its dock", estopped: "Emergency stop engaged", fault: "Fault", offline: "Offline", starting: "Starting", unknown: "Unknown" };
 const MISSION: Record<string, { label: string; tone: string; Icon: typeof Clock }> = {
   queued: { label: "Waiting to be delivered", tone: "bg-sky-50 text-sky-900 border-sky-200", Icon: Clock },
   sent: { label: "Delivered, not accepted yet", tone: "bg-sky-50 text-sky-900 border-sky-200", Icon: Clock },
   accepted: { label: "Running", tone: "bg-sky-50 text-sky-900 border-sky-200", Icon: Loader2 },
+  paused: { label: "Paused", tone: "bg-amber-50 text-amber-900 border-amber-200", Icon: Clock },
   succeeded: { label: "Finished, verified", tone: "bg-emerald-50 text-emerald-800 border-emerald-200", Icon: CheckCircle2 },
   unverified: { label: "Reported done, not confirmed", tone: "bg-amber-50 text-amber-900 border-amber-200", Icon: AlertTriangle },
   failed: { label: "Failed", tone: "bg-rose-50 text-rose-800 border-rose-200", Icon: XCircle },
@@ -120,6 +122,7 @@ function MapView({ robot, target, onPick }: { robot: Robot; target: { x: number;
           </g>
         ))}
         {robot.online && hits.map(([x, y], index) => <circle key={`h${index}`} cx={x} cy={-y} r="0.035" fill="#dc2626" />)}
+        {robot.online && (state?.perception?.obstacles || []).filter((item) => item.kind !== "mapped obstacle").map((item, index) => <circle key={`o${index}`} cx={item.x} cy={-item.y} r={Math.max(0.15, item.widthM / 2)} fill="none" stroke="#b45309" strokeWidth="0.05"><title>An object that isn't on the map, detected by the {item.sensor} (confidence {item.confidence})</title></circle>)}
         {robot.online && state?.nav?.path && state.nav.path.length > 1 && <polyline points={polygon(state.nav.path)} fill="none" stroke="#2563eb" strokeWidth="0.05" strokeDasharray="0.15 0.1" />}
         {robot.online && state?.nav?.goal && <g><circle cx={state.nav.goal.x} cy={-state.nav.goal.y} r="0.16" fill="none" stroke="#2563eb" strokeWidth="0.05" /><title>The goal the robot is driving to</title></g>}
         {target && <g><path d={`M ${target.x - 0.15} ${-target.y} h 0.3 M ${target.x} ${-target.y - 0.15} v 0.3`} stroke="#7c3aed" strokeWidth="0.05" /><title>The point you picked</title></g>}
@@ -256,6 +259,10 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
     setBusy("stop"); setOutcome(null);
     try { show((await Robotics.stop(robot.id)).record); } catch (reason) { setOutcome({ text: message(reason), tone: "rose" }); } finally { setBusy(""); void refresh(); }
   };
+  const control = async (label: string, run: () => Promise<{ record: ActionRecord }>) => {
+    setBusy(label); setOutcome(null);
+    try { show((await run()).record); } catch (reason) { setOutcome({ text: message(reason), tone: "rose" }); } finally { setBusy(""); void refresh(); }
+  };
   const act = async (label: string, run: () => Promise<unknown>) => {
     setBusy(label); setError("");
     try { await run(); } catch (reason) { setError(message(reason)); } finally { setBusy(""); void refresh(); }
@@ -275,6 +282,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
               <KindBadge robot={robot} />
               <Chip testId="robot-connection" tone={CONNECTION[robot.connection].tone}>{robot.connection === "offline" && <WifiOff className="h-3.5 w-3.5" aria-hidden="true" />}{CONNECTION[robot.connection].label}</Chip>
               {robot.status === "enrolled" && <Chip testId="robot-mode" tone="border-slate-200 bg-slate-100 text-slate-800">{MODE[robot.mode] || robot.mode}</Chip>}
+              {robot.status === "enrolled" && robot.commissioning.required && <Chip testId="robot-commissioning" tone={robot.commissioning.status === "approved" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}>{robot.commissioning.status === "approved" ? "Commissioned" : robot.commissioning.status === "trial" ? "Commissioning trial" : `Not commissioned (${robot.commissioning.done} of ${robot.commissioning.total})`}</Chip>}
             </div>
           </div>
           {robot.status === "enrolled" && (
@@ -291,6 +299,8 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
         {outcome && <div data-testid="robot-outcome"><Notice tone={outcome.tone}>{outcome.text}</Notice></div>}
         {waiting.map((record) => <Approval key={record.id} record={record} onChanged={(decided) => { if (decided) show(decided); void refresh(); }} />)}
       </section>
+
+      {robot.status === "enrolled" && <CommissioningPanel robot={robot} onChanged={() => void refresh()} />}
 
       {robot.status === "enrolled" && (
         <section className={`${card} space-y-3`}>
@@ -313,11 +323,18 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
           {active && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950" data-testid="active-mission">
               <span>{active.summary}</span>
-              <button type="button" className={button} onClick={() => void act("cancel", () => Robotics.cancel(active.id))} disabled={busy === "cancel" || Boolean(active.cancelRequestedAt)}>{active.cancelRequestedAt ? "Cancelling…" : "Cancel mission"}</button>
+              <span className="flex flex-wrap gap-2">
+                {active.status === "accepted" && <button type="button" className={button} data-testid="pause-mission" disabled={Boolean(busy) || Boolean(active.pauseRequestedAt)} onClick={() => void control("pause", () => Robotics.pause(active.id))}>{active.pauseRequestedAt ? "Pausing…" : "Pause"}</button>}
+                {active.status === "paused" && <button type="button" className={primary} data-testid="resume-mission" disabled={Boolean(busy) || Boolean(active.resumeRequestedAt)} onClick={() => void control("resume", () => Robotics.resume(active.id))}>Ask to resume</button>}
+                <button type="button" className={button} onClick={() => void act("cancel", () => Robotics.cancel(active.id))} disabled={busy === "cancel" || Boolean(active.cancelRequestedAt)}>{active.cancelRequestedAt ? "Cancelling…" : "Cancel mission"}</button>
+              </span>
             </div>
           )}
         </section>
       )}
+
+      <DestinationsPanel robot={robot} picked={target} />
+      <SurroundingsPanel robot={robot} />
 
       {robot.status === "enrolled" && state && (
         <section className={`${card} space-y-3`}>
@@ -418,10 +435,16 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
         </section>
       )}
 
+      <DiagnosticsPanel robot={robot} />
+
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Device</h3>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-sm text-slate-800">
           <dt className="text-slate-600">Device id</dt><dd className="font-mono text-xs">{robot.id}</dd>
+          <dt className="text-slate-600">Fingerprint</dt><dd className="font-mono text-xs" data-testid="robot-fingerprint">{robot.fingerprint || "–"}</dd>
+          <dt className="text-slate-600">Serial number</dt><dd>{robot.serialNumber || "not reported"}</dd>
+          <dt className="text-slate-600">Configuration version</dt><dd>{robot.configVersion}</dd>
+          <dt className="text-slate-600">Operating mode</dt><dd>{robot.simulated ? "Simulation" : "Physical hardware"}</dd>
           <dt className="text-slate-600">Type</dt><dd>{robot.robotType || "–"}{robot.category ? ` (${robot.category})` : ""}</dd>
           <dt className="text-slate-600">Computer</dt><dd>{[robot.compute, robot.os].filter(Boolean).join(", ") || "–"}</dd>
           <dt className="text-slate-600">ROS distribution</dt><dd>{robot.rosDistro || "none"}</dd>
@@ -453,6 +476,7 @@ export default function RoboticsPage() {
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
+  const [fleetOutcome, setFleetOutcome] = useState<{ text: string; tone: "slate" | "rose" } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!isAccountSession()) return;
@@ -497,6 +521,8 @@ export default function RoboticsPage() {
           <p className="mt-1 text-sm text-slate-700">Add one to get a one-time code, then start HANNAH's robot runtime with it. With no robot of your own, the runtime starts a built-in simulated differential-drive robot in a small room, so you can try a whole mission on this computer.</p>
         </div>
       )}
+      {signedIn && robots && robots.length > 1 && <FleetPanel onSelect={setSelected} onAsked={(record, problem) => setFleetOutcome(record ? { text: record.outcome, tone: "slate" } : { text: problem || "That didn't work.", tone: "rose" })} />}
+      {fleetOutcome && <div data-testid="fleet-outcome"><Notice tone={fleetOutcome.tone}>{fleetOutcome.text}</Notice></div>}
       {signedIn && robots && robots.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
           <ul className="space-y-2" aria-label="Registered robots">

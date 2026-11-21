@@ -72,19 +72,43 @@ describe("robot tools and the Robot Agent", () => {
     expect(getRobotTools()).toEqual([]);
   });
 
-  it("the Robot Agent has exactly the robot tools, and none that could bypass the engine", () => {
-    const agent = SPECIALISTS.find((item) => item.id === "robot")!;
-    expect([...agent.tools].sort()).toEqual([...ROBOT_TOOL_NAMES].sort());
-    expect(agent.tools.some((name) => /desktop_|write_|run_command|external/.test(name))).toBe(false);
-    expect(agent.instructions).toMatch(/cannot override either/);
-    expect(agent.instructions).toMatch(/not an emergency stop/);
+  it("three robot agents share the robot tools between them, and none has a tool that could bypass the engine", async () => {
+    const agents = SPECIALISTS.filter((item) => item.id.startsWith("robot"));
+    expect(agents.map((item) => item.id)).toEqual(["robot", "robot_fleet", "robot_care"]);
+    expect([...new Set(agents.flatMap((item) => item.tools))].sort()).toEqual([...ROBOT_TOOL_NAMES].sort());
+    for (const agent of agents) {
+      expect(agent.tools.some((name) => /desktop_|write_|run_command|external/.test(name))).toBe(false);
+      expect(agent.tools.every((name) => name.startsWith("robot_"))).toBe(true);
+    }
+    const mission = agents[0];
+    expect(mission.instructions).toMatch(/cannot override either/);
+    expect(mission.instructions).toMatch(/not an emergency stop/);
+    expect(mission.instructions).toMatch(/a room name the robot doesn't have is not a place/);
+    // The care agent reads; it has nothing that moves a robot.
+    expect(agents[2].tools.some((name) => /navigate|dock|inspect|assign|resume|set_device/.test(name))).toBe(false);
+    expect(agents[2].instructions).toMatch(/never what the object is/);
     for (const item of getRobotTools()) expect(JSON.stringify(item.inputSchema)).not.toMatch(/pwm|velocity|torque|wheel|motor/i);
+    // The fleet agent needs more than one robot.
+    expect(activeSpecialists().map((item) => item.id).filter((id) => id.startsWith("robot"))).toEqual(["robot", "robot_care"]);
+    await withRobots([robot(), robot({ id: "rb_2", name: "Tug" })]);
+    expect(activeSpecialists().some((item) => item.id === "robot_fleet")).toBe(true);
   });
 
-  it("a request about a robot brings the robot tools to the model", () => {
-    const picked = selectToolsForRequest(getDeviceTools(), "Move the robot to the workbench").map((item) => item.name);
-    expect(picked).toEqual(expect.arrayContaining(["robot_list", "robot_navigate", "robot_stop", "robot_wait_for_mission"]));
-    expect(selectToolsForRequest(getDeviceTools(), "What's the weather tomorrow?").some((item) => item.name.startsWith("robot_"))).toBe(false);
+  it("a request about a robot brings the tools it needs, always with a way to stop, and never more than the model may be given", () => {
+    const pick = (request: string) => selectToolsForRequest(getDeviceTools(), request).map((item) => item.name);
+    const always = ["robot_stop", "robot_cancel", "robot_pause", "robot_list", "robot_wait_for_mission"];
+    const move = pick("Move the robot to the workbench");
+    expect(move).toEqual(expect.arrayContaining([...always, "robot_navigate", "robot_destinations", "robot_state"]));
+    expect(move).not.toContain("robot_diagnostics");
+    expect(pick("Assign the available robot to inspect Zone B")).toEqual(expect.arrayContaining([...always, "robot_assign", "robot_fleet", "robot_inspect"]));
+    expect(pick("Show me all connected robots and their health status")).toEqual(expect.arrayContaining(["robot_fleet", "robot_stop"]));
+    // A question that also brings this device's own battery tools fills the limit; what is cut is never stop, pause or cancel.
+    expect(pick("Check the robot battery")).toEqual(expect.arrayContaining(["robot_stop", "robot_pause", "robot_cancel", "robot_list", "robot_battery"]));
+    expect(pick("Is there an obstacle near the robot?")).toEqual(expect.arrayContaining(["robot_surroundings", "robot_stop"]));
+    expect(pick("Stop the current mission")).toEqual(expect.arrayContaining(["robot_stop", "robot_cancel"]));
+    for (const request of ["Move the robot to the workbench", "Assign the available robot to inspect Zone B and check its battery and sensors", "robot fleet battery obstacle patrol beacon mission"]) expect(pick(request).length).toBeLessThanOrEqual(20);
+    expect(pick("robot fleet battery obstacle patrol beacon mission")).toContain("robot_stop");
+    expect(pick("What's the weather tomorrow?").some((name) => name.startsWith("robot_"))).toBe(false);
   });
 
   it("moving a robot is asked of the engine, approved on the card, and reported as started, not as arrived", async () => {

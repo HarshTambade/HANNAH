@@ -24,6 +24,7 @@
  * There is no action here for wheel speeds or any other actuator value.
  */
 const { capability } = require("../../robotics/contract");
+const fleet = require("../../robotics/fleet");
 
 const fail = (status, message, reason, extra = {}) => Object.assign(new Error(message), { status, reason, ...extra });
 const clip = (value, max) => String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
@@ -138,6 +139,40 @@ function robotActions({ robotics }) {
     localized: robot.state?.localized ?? null, faults: robot.state?.faults ?? [], mission: robot.state?.mission ?? null, devices: robot.state?.devices ?? null,
   });
 
+  /**
+   * Give a task to whichever robot can best take it. The choice is made when the
+   * task is asked for and is part of what the person approves: if that robot can
+   * no longer take it when it is sent, it is refused, never quietly given to another.
+   */
+  function assignAction() {
+    const tasks = { navigate_to: "robots.navigate_to", return_to_dock: "robots.return_to_dock", inspect_area: "robots.inspect_area" };
+    const inner = (capabilityId) => missions.find((action) => action.id === tasks[capabilityId]);
+    return {
+      id: "robots.assign", service: "robots", kind: "write", title: "Assign a task to an available robot", needs: "At least one robot that can take the task",
+      description: "Choose the robot best placed to take a movement task (drive to a place, return to dock, visit points) and start it there. A robot is chosen only if it is connected, ready, commissioned if physical, not busy, and has the destination on its own map; the nearest wins. The answer lists every robot considered and why the others weren't chosen.",
+      input: { type: "object", properties: { task: { type: "string", enum: Object.keys(tasks), description: "What to do." }, place: { type: "string" }, x: { type: "number" }, y: { type: "number" }, waypoints: { type: "array", items: { type: "object" } }, maxSpeed: { type: "number" }, among: { type: "string", description: "Only consider this robot (name or id). Optional." } }, required: ["task"] },
+      async normalize(raw, ctx) {
+        const capabilityId = String(raw?.task || raw?.capability || "navigate_to");
+        if (!tasks[capabilityId]) throw fail(400, `A robot can be assigned: ${Object.keys(tasks).join(", ")}.`, "bad-request");
+        const task = { capability: capabilityId, ...(await inner(capabilityId).normalize(raw || {}, ctx)) };
+        const [robots, active] = await Promise.all([robotics.listRobots(ctx.db, ctx.userId), robotics.listMissions(ctx.db, ctx.userId, { active: true, limit: 100 })]);
+        const choice = fleet.choose({ robots, task, active, only: clip(raw?.among, 80) });
+        if (!choice.chosen) throw fail(409, choice.problem || (choice.considered.length ? `No robot can take that now. ${choice.considered.map((entry) => `${entry.name}: ${entry.reason}`).join("; ")}.` : "You have no robots."), choice.conflict ? "conflict" : "no-robot-available", { candidates: choice.considered });
+        const { capability: _capability, robot: _robot, ...rest } = task;
+        return { task: capabilityId, ...rest, robot: choice.chosen.id, chosen: { name: choice.chosen.name, why: choice.chosen.why }, considered: choice.considered.map(({ id: _id, eligible, ...entry }) => ({ ...entry, chosen: entry.name === choice.chosen.name, eligible })) };
+      },
+      forward: (params) => { const { task: _task, chosen: _chosen, considered: _considered, ...rest } = params; return rest; },
+      async assess(params, ctx) { return inner(params.task).assess(this.forward(params), ctx); },
+      async preview(params, ctx, assessed) {
+        const base = await inner(params.task).preview(this.forward(params), ctx, assessed);
+        const others = params.considered.filter((entry) => !entry.chosen);
+        return { ...base, lines: [{ label: "Chosen", value: `${params.chosen.name}: ${params.chosen.why}` }, ...(others.length ? [{ label: "Not chosen", value: others.map((entry) => `${entry.name} (${entry.eligible ? `${entry.distanceM ?? "?"} m away` : entry.reason})`).join("; ") }] : []), ...base.lines] };
+      },
+      async execute(params, ctx) { return { ...(await inner(params.task).execute(this.forward(params), ctx)), chosen: params.chosen, considered: params.considered }; },
+      verify(response, params, ctx) { return inner(params.task).verify(response, this.forward(params), ctx); },
+    };
+  }
+
   /** The mission a control action is about: the one named, or the robot's unfinished one. */
   async function target(ctx, params, wanted, word) {
     if (params.mission) {
@@ -184,6 +219,12 @@ function robotActions({ robotics }) {
     };
   }
 
+  const missions = [
+    missionAction({ capabilityId: "navigate_to", title: "Drive a robot to a place", describe: (sent) => `drives to ${pointText(sent)}` }),
+    missionAction({ capabilityId: "return_to_dock", title: "Send a robot to its dock", describe: (sent) => `returns to its dock at (${round(sent.x)}, ${round(sent.y)})` }),
+    missionAction({ capabilityId: "inspect_area", title: "Have a robot visit points and report", describe: (sent) => `visits ${sent.waypoints.length} point${sent.waypoints.length === 1 ? "" : "s"}: ${sent.waypoints.map(pointText).join(", ")}` }),
+    missionAction({ capabilityId: "set_supported_device_state", title: "Switch a robot's onboard device", describe: (sent) => `switches its ${sent.device} ${sent.state}` }),
+  ];
   return [
     readAction({
       id: "robots.list", title: "List robots", description: "Every robot enrolled in the account: whether it is a simulation or physical, whether it is connected, what it can do and the places it knows.", input: {},
@@ -218,6 +259,22 @@ function robotActions({ robotics }) {
       },
     }),
     readAction({
+      id: "robots.fleet", title: "Show the fleet", description: "Every robot with its connection, health, battery, position, current mission and whether it can take a task now, with the reason when it can't.", input: {},
+      run: async (_params, ctx) => {
+        const [robots, active] = await Promise.all([robotics.listRobots(ctx.db, ctx.userId), robotics.listMissions(ctx.db, ctx.userId, { active: true, limit: 100 })]);
+        const rows = fleet.overview(robots, active);
+        return { robots: rows, available: rows.filter((row) => row.available).map((row) => row.name), needAttention: rows.filter((row) => row.health === "attention").map((row) => row.name), note: "A robot that is offline shows no battery or position: its last report is not the present." };
+      },
+    }),
+    readAction({
+      id: "robots.diagnostics", title: "Diagnose a robot", description: "What the evidence says about one robot's condition: sensors not reporting, faults, battery, link losses, refused commands, missions that didn't finish, software versions, the last maintenance entry. Findings come from what the robot reported and what was recorded; nothing is guessed.", input: { robot: ROBOT },
+      run: async (params, ctx) => {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        const [events, missions, maintenance] = await Promise.all([robotics.events(ctx.db, ctx.userId, { robotId: robot.id, limit: 200 }), robotics.listMissions(ctx.db, ctx.userId, { robotId: robot.id, limit: 30 }), robotics.maintenance(ctx.db, ctx.userId, robot.id, 5)]);
+        return fleet.diagnose(robot, { events, missions, maintenance, now: ctx.now() });
+      },
+    }),
+    readAction({
       id: "robots.battery", title: "Report a robot's battery", description: capability("report_battery_state").description, input: { robot: ROBOT },
       run: async (params, ctx) => {
         const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
@@ -243,10 +300,7 @@ function robotActions({ robotics }) {
         return { robot: robot.name, ...(await robotics.listDestinations(ctx.db, ctx.userId, robot.id)) };
       },
     }),
-    missionAction({ capabilityId: "navigate_to", title: "Drive a robot to a place", describe: (sent) => `drives to ${pointText(sent)}` }),
-    missionAction({ capabilityId: "return_to_dock", title: "Send a robot to its dock", describe: (sent) => `returns to its dock at (${round(sent.x)}, ${round(sent.y)})` }),
-    missionAction({ capabilityId: "inspect_area", title: "Have a robot visit points and report", describe: (sent) => `visits ${sent.waypoints.length} point${sent.waypoints.length === 1 ? "" : "s"}: ${sent.waypoints.map(pointText).join(", ")}` }),
-    missionAction({ capabilityId: "set_supported_device_state", title: "Switch a robot's onboard device", describe: (sent) => `switches its ${sent.device} ${sent.state}` }),
+    ...missions,
     {
       id: "robots.stop_motion", service: "robots", kind: "write", deescalates: true, title: "Stop a robot", description: capability("stop_motion").description, needs: "A robot enrolled under Robots",
       input: { type: "object", properties: { robot: ROBOT, reason: { type: "string" } }, required: [] },
@@ -273,6 +327,7 @@ function robotActions({ robotics }) {
         return { confirmed: false, evidence: missionText(mission, response.robot.name) };
       },
     },
+    assignAction(),
     control({ id: "robots.cancel_mission", capabilityId: "cancel_mission", title: "Cancel a robot's mission", verb: "Cancel", act: (db, userId, missionId) => robotics.cancelMission(db, userId, missionId), settled: (item) => item.final, good: ["cancelled"] }),
     control({ id: "robots.pause_mission", capabilityId: "pause_mission", title: "Pause a robot's mission", verb: "Pause", act: (db, userId, missionId) => robotics.pauseMission(db, userId, missionId), settled: (item) => item.status === "paused" || item.final, good: ["paused"] }),
     {

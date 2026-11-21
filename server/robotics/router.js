@@ -38,6 +38,7 @@ const express = require("express");
 const { getDatabase } = require("../db");
 const { vaultConfigured } = require("../vault");
 const contract = require("./contract");
+const fleet = require("./fleet");
 const safety = require("./safety");
 const { missionText } = require("../actions/catalog/robots");
 const { outcomeText } = require("../actions/engine");
@@ -124,6 +125,10 @@ function createRobotAccountRouter({ robotics, engine }) {
 
   const shown = ({ commissioningRecord: _record, ...robot }) => robot;
   router.get("/robots", anyAccount(async (_req, res, db, account) => res.json({ robots: (await robotics.listRobots(db, account.id)).map(shown), canEnroll: vaultConfigured(), onlineWithinS: safety.ONLINE_MS / 1000 })));
+  router.get("/robots/fleet", anyAccount(async (_req, res, db, account) => {
+    const [robots, active] = await Promise.all([robotics.listRobots(db, account.id), robotics.listMissions(db, account.id, { active: true, limit: 100 })]);
+    res.json({ robots: fleet.overview(robots, active) });
+  }));
   router.get("/robots/contract", anyAccount(async (_req, res) => res.json({ capabilities: contract.publicContract(), robotTypes: contract.ROBOT_TYPES, categories: contract.CATEGORIES, risks: contract.RISK, preconditions: contract.PRECONDITIONS, environments: safety.ENVIRONMENTS })));
   router.post("/robots", json, person(async (req, res, db, account) => {
     const created = await robotics.createRobot(db, account.id, { name: req.body?.name, simulated: req.body?.simulated });
@@ -174,6 +179,11 @@ function createRobotAccountRouter({ robotics, engine }) {
   router.get("/robots/:id/destinations", anyAccount(async (req, res, db, account) => res.json(await robotics.listDestinations(db, account.id, req.params.id))));
   router.post("/robots/:id/destinations", json, person(async (req, res, db, account) => res.status(201).json(await robotics.addDestination(db, account.id, req.params.id, req.body || {}))));
   router.delete("/robots/:id/destinations/:destination", person(async (req, res, db, account) => res.json(await robotics.removeDestination(db, account.id, req.params.id, req.params.destination))));
+  router.get("/robots/:id/diagnostics", anyAccount(async (req, res, db, account) => {
+    const robot = await robotics.getRobot(db, account.id, req.params.id);
+    const [events, missions, maintenance] = await Promise.all([robotics.events(db, account.id, { robotId: robot.id, limit: 200 }), robotics.listMissions(db, account.id, { robotId: robot.id, limit: 30 }), robotics.maintenance(db, account.id, robot.id, 5)]);
+    res.json({ diagnostics: fleet.diagnose(robot, { events, missions, maintenance }) });
+  }));
   router.get("/robots/:id/maintenance", anyAccount(async (req, res, db, account) => res.json({ maintenance: await robotics.maintenance(db, account.id, (await robotics.getRobot(db, account.id, req.params.id)).id) })));
   router.post("/robots/:id/maintenance", json, person(async (req, res, db, account) => res.status(201).json({ maintenance: await robotics.addMaintenance(db, account.id, req.params.id, req.body || {}) })));
   router.get("/robots/:id/telemetry", anyAccount(async (req, res, db, account) => {

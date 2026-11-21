@@ -19,6 +19,7 @@ const api = `http://127.0.0.1:${port}`;
 const python = spawnSync("python3", ["-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)"]).status === 0;
 let server: ChildProcess;
 let runtime: ChildProcess | null = null;
+let second: ChildProcess | null = null;
 let serverLog = "";
 let runtimeLog = "";
 let stateDir = "";
@@ -43,7 +44,7 @@ test.beforeAll(async () => {
   }
   throw new Error(`The HANNAH server didn't start:\n${serverLog}`);
 });
-test.afterAll(() => { runtime?.kill(); server?.kill(); });
+test.afterAll(() => { runtime?.kill(); second?.kill(); server?.kill(); });
 
 async function signedIn(page: Page) {
   await page.route(/\/(api|v1)\//, async (route) => {
@@ -188,15 +189,111 @@ test("Stop needs no approval and is confirmed by measured speed; an emergency st
   await expect(detail(page).getByTestId("robot-mode")).not.toHaveText("Emergency stop engaged", { timeout: 15_000 });
 });
 
+test("a mission is paused and resumed from the screen; resuming asks, because it moves the robot again", async ({ page }) => {
+  await signedIn(page);
+  await page.goto("/robotics");
+  await expect(detail(page).getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  const approval = await driveTo(page, "loading bay");
+  await approval.getByRole("button", { name: "Approve and start" }).click();
+  await expect(detail(page).getByTestId("robot-mode")).toHaveText("Driving", { timeout: 15_000 });
+  await page.getByTestId("pause-mission").click();
+  await expect(page.getByTestId("robot-outcome")).toContainText(/Done and confirmed: Pause Rover's mission “Drive to a place”.*holding where it is and keeps the mission/, { timeout: 15_000 });
+  await expect(detail(page).getByTestId("robot-mode")).toHaveText("Paused");
+  await expect(page.locator('[data-testid="mission-row"][data-status="paused"]')).toHaveCount(1);
+  await expect(page.getByTestId("robot-approval")).toHaveCount(0);
+  await page.getByTestId("resume-mission").click();
+  const resume = page.getByTestId("robot-approval");
+  await expect(resume).toContainText("Resume: Rover carries on with “Drive to a place”");
+  await expect(resume).toContainText("The resume is valid for 20 seconds and works once.");
+  await resume.getByRole("button", { name: "Approve and start" }).click();
+  await expect(page.locator('[data-testid="mission-row"]').first()).toHaveAttribute("data-status", "succeeded", { timeout: 40_000 });
+});
+
+test("destinations are added from the map and checked; what the robot senses and its condition come from its reports", async ({ page }) => {
+  await signedIn(page);
+  await page.goto("/robotics");
+  await expect(detail(page).getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  const destinations = page.getByTestId("destinations");
+  await expect(destinations).toContainText("map: workcell");
+  await expect(destinations.getByTestId("destination")).toHaveCount(5);
+  await expect(destinations).toContainText("reported by the simulator");
+  // A point in the keep-out corner is refused with the reason; a point on open floor is accepted.
+  const map = page.getByTestId("robot-map");
+  const box = (await map.boundingBox())!;
+  await map.click({ position: { x: box.width * 0.04, y: box.height * 0.06 } });
+  await destinations.getByPlaceholder("Name, for example Kitchen").fill("Cabinet");
+  await destinations.getByRole("button", { name: /^Add at/ }).click();
+  await expect(destinations.getByRole("alert")).toContainText("keep-out zone “charging cabinet”");
+  await map.click({ position: { x: box.width * 0.5, y: box.height * 0.72 } });
+  await destinations.getByPlaceholder("Name, for example Kitchen").fill("Bay 2");
+  await destinations.getByRole("button", { name: /^Add at/ }).click();
+  await expect(destinations.getByTestId("destination").filter({ hasText: "Bay 2" })).toContainText("defined by you");
+  await expect(page.getByLabel("Place to drive to").locator("option", { hasText: "Bay 2" })).toHaveCount(1);
+
+  // Something the map doesn't have, straight ahead of the robot: reported as a measurement, with its sensor and confidence.
+  const surroundings = page.getByTestId("surroundings");
+  await expect(surroundings).toContainText("Nothing detected that isn't on its map.");
+  // Put down a metre away in the most open direction the robot's own scan shows.
+  const now = await page.evaluate(async () => (await (await fetch("/api/robots")).json()).robots[0].state);
+  const ranges: number[] = now.sensors.lidar.ranges;
+  const direction = now.pose.yaw + (2 * Math.PI * ranges.indexOf(Math.max(...ranges))) / ranges.length;
+  simulatorInput({ obstacles: [{ name: "crate", x: now.pose.x + Math.cos(direction) * 1.2 - 0.2, y: now.pose.y + Math.sin(direction) * 1.2 - 0.2, w: 0.4, h: 0.4 }] });
+  await expect(surroundings.getByTestId("detected-object").first()).toContainText(/An object that isn't on the map, \d\.\d\d m away .* returns from the lidar; confidence 0\.\d\d\./, { timeout: 15_000 });
+  simulatorInput({ obstacles: [], sensorFaults: ["lidar"] });
+  await expect(surroundings.getByRole("alert")).toContainText("The range sensor isn't reporting. What is around the robot is unknown, and it won't be moved.", { timeout: 15_000 });
+  const condition = page.getByTestId("diagnostics");
+  await expect(condition.locator('[data-testid="finding"][data-severity="error"]')).toContainText("Sensor not reporting: lidar", { timeout: 15_000 });
+  await expect(condition).toContainText("needs attention now");
+  simulatorInput({ obstacles: [], sensorFaults: [] });
+  await expect(condition).toContainText("no problem found in what it reports", { timeout: 15_000 });
+  await expect(condition).toContainText("No model was asked to judge its condition.");
+  await condition.getByLabel("Maintenance note").fill("Lidar connector reseated.");
+  await condition.getByRole("button", { name: "Add entry" }).click();
+  await expect(condition).toContainText("inspection · Lidar connector reseated.");
+  await expect(page.getByTestId("robot-fingerprint")).toHaveText(/^[0-9A-F]{4}( [0-9A-F]{4}){3}$/);
+});
+
+test("with two robots the fleet view says which can take a task, chooses one and shows why before asking", async ({ page }) => {
+  await signedIn(page);
+  await page.goto("/robotics");
+  await expect(detail(page).getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  await expect(page.getByTestId("fleet")).toHaveCount(0);
+  // A second simulated robot, enrolled through the API and its own runtime process.
+  const created = await page.request.post(`${api}/api/robots`, { data: { name: "Tug", simulated: true } });
+  expect(created.status(), await created.text()).toBe(201);
+  const tugDir = join(stateDir, "..", "tug");
+  const enrolled = await run(["enroll", "--server", api, "--code", (await created.json()).enrollment.code, "--state-dir", tugDir]);
+  expect(enrolled.code, enrolled.output).toBe(0);
+  second = spawn("python3", ["-m", "hannah_robot", "run", "--state-dir", tugDir, "--sim-speed", "8", "--sync-interval", "0.2"], { cwd: runtimeDir, stdio: ["ignore", "ignore", "ignore"] });
+  const fleet = page.getByTestId("fleet");
+  await expect(fleet.getByTestId("fleet-row")).toHaveCount(2, { timeout: 20_000 });
+  await expect(fleet.locator('[data-testid="fleet-row"][data-available="true"]')).toHaveCount(2, { timeout: 20_000 });
+  // Tug is in the dock; Rover is far from it. The dock-side shelves go to Tug.
+  await fleet.getByLabel("Destination for the fleet").selectOption("shelves");
+  await fleet.getByTestId("fleet-assign").click();
+  await expect(page.getByTestId("fleet-outcome")).toContainText(/Waiting for your approval: Start a mission: (Tug|Rover) drives to shelves/, { timeout: 15_000 });
+  const approval = page.getByTestId("robot-approval");
+  await expect(approval).toContainText(/Chosen(Tug|Rover): the nearest of 2 that can take it \(\d+(\.\d+)? m away\)/);
+  await expect(approval).toContainText(/Not chosen(Tug|Rover) \(\d+(\.\d+)? m away\)/);
+  await approval.getByRole("button", { name: "Approve and start" }).click();
+  await expect(fleet.locator('[data-testid="fleet-row"][data-available="false"]')).toHaveCount(1, { timeout: 15_000 });
+  await expect(fleet).toContainText("Drive to a place (accepted)");
+  await expect(page.locator('[data-testid="mission-row"]').first()).toHaveAttribute("data-status", "succeeded", { timeout: 40_000 });
+  second?.kill("SIGKILL");
+  second = null;
+});
+
 test("when the robot's runtime is gone the screen says offline and marks what it shows as old", async ({ page }) => {
   await signedIn(page);
   await page.goto("/robotics");
   await expect(detail(page).getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  await page.getByTestId("robot-card").filter({ hasText: "Rover" }).click();
+  await expect(detail(page).getByRole("heading", { name: "Rover" })).toBeVisible();
   runtime?.kill("SIGKILL");
   runtime = null;
   await expect(detail(page).getByTestId("robot-connection")).toHaveText("Offline", { timeout: 30_000 });
   await expect(detail(page).getByRole("status").filter({ hasText: /What you see below is that last report, not where it is now\. A robot that loses its link stops by itself within 5 seconds\./ })).toBeVisible();
-  await expect(detail(page).getByText("last report, not current")).toBeVisible();
+  await expect(detail(page).getByText("last report, not current").first()).toBeVisible();
   await page.getByLabel("Place to drive to").selectOption("door");
   await page.getByTestId("go-place").click();
   await expect(page.getByTestId("robot-outcome")).toContainText(/it is offline/);

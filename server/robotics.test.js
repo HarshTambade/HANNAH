@@ -615,7 +615,7 @@ test("robots appear in the permission screen, the action catalog and the integra
   assert.equal(service.level, 3);
   assert.ok(service.actions.some((action) => action.id === "robots.navigate_to"));
   const catalog = (await call(users.asha, "GET", "/actions/catalog")).body.actions.filter((action) => action.service === "robots");
-  assert.deepEqual(catalog.map((action) => action.id).sort(), ["robots.battery", "robots.cancel_mission", "robots.destinations", "robots.inspect_area", "robots.list", "robots.mission", "robots.navigate_to", "robots.pause_mission", "robots.read_sensor", "robots.resume_mission", "robots.return_to_dock", "robots.set_supported_device_state", "robots.state", "robots.stop_motion", "robots.surroundings"]);
+  assert.deepEqual(catalog.map((action) => action.id).sort(), ["robots.assign", "robots.battery", "robots.cancel_mission", "robots.destinations", "robots.diagnostics", "robots.fleet", "robots.inspect_area", "robots.list", "robots.mission", "robots.navigate_to", "robots.pause_mission", "robots.read_sensor", "robots.resume_mission", "robots.return_to_dock", "robots.set_supported_device_state", "robots.state", "robots.stop_motion", "robots.surroundings"]);
   const list = await act(users.ashaKey, "robots.list", {});
   assert.deepEqual(list.body.record.response.robots.map((robot) => [robot.name, robot.kind]), [["Rover", "simulation"]]);
   assert.deepEqual(list.body.record.response.robots[0].places, ["dock", "workbench", "door"]);
