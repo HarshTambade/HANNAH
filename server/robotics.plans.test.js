@@ -210,7 +210,7 @@ test("every step meets the Safety Gateway again when it is reached: what was val
     const bad = await act(users.asha, "robots.run_plan", { robot: "Rover", steps: [{ do: "navigate_to", place: "workbench" }, { do: "navigate_to", x: 4.5, y: -3.5 }] });
     assert.equal(bad.body.record.permission.code, "forbidden");
     assert.match(bad.body.record.permission.reason, /Step 2 \(drive to \(4.5, -3.5\)\): .*keep-out zone “stairs”/);
-    for (const steps of [[{ do: "set_motor_pwm", left: 255 }], [{ do: "stop_motion" }], [{ do: "capture_image" }], []]) {
+    for (const steps of [[{ do: "set_motor_pwm", left: 255 }], [{ do: "stop_motion" }], [{ do: "follow_target", target: "person" }], []]) {
       const refused = await act(users.asha, "robots.run_plan", { robot: "Rover", steps });
       assert.equal(refused.status, 400, JSON.stringify(refused.body));
     }

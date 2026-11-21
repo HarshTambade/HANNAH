@@ -33,6 +33,7 @@ from .hal.base import RobotAdapter
 from .link import Link, LinkError
 from .protocol import CommandGuard
 from .safety import ARM, EXCLUSIVE, LocalSafety
+from .vision import capture_result, provider
 
 
 @dataclass
@@ -58,6 +59,7 @@ class Runtime:
         self.adapter = adapter
         self.guard = guard
         self.safety = safety
+        self.vision = provider(getattr(adapter, "vision_provider", None))
         self.link_timeout = float(link_timeout)
         self.clock = clock
         self.log = log or (lambda event, **fields: None)
@@ -117,14 +119,16 @@ class Runtime:
         self.log("report", mission=mission_id, status=status, reason=fields.get("reason", ""))
         return report
 
-    def _finish(self, mission: Mission, status: str, reason: str = "", result: dict | None = None) -> None:
+    def _finish(self, mission: Mission, status: str, reason: str = "", result: dict | None = None, attachment: dict | None = None) -> None:
         mission.status = status
         fields = {}
         if reason:
             fields["reason"] = reason
         if result is not None:
             fields["result"] = result
-        mission.final_report = self._report(mission.id, status, **fields)
+        # What is kept for answering a repeated command is the report without the image: an image is sent once.
+        mission.final_report = {"missionId": mission.id, "status": status, "at": int(self.clock() * 1000), **fields}
+        self._report(mission.id, status, **fields, **({"attachment": attachment} if attachment else {}))
         if self._active is mission:
             self._active = None
 
@@ -237,6 +241,15 @@ class Runtime:
                 self._finish(mission, "succeeded", result={"device": decision.params["device"], "state": decision.params["state"]})
             except Exception as error:  # noqa: BLE001 - whatever the adapter raises is the failure
                 self._finish(mission, "failed", f"The device didn't switch ({type(error).__name__}).")
+        elif capability == "capture_image":
+            try:
+                frame = self.adapter.capture(decision.params["camera"])
+                result, attachment = capture_result(frame, self.vision)
+                self._event("camera-capture", "info", f"A picture was taken with the {decision.params['camera']} (frame {frame.number}) for mission {mission_id}.")
+                self._state = self._compose(self.adapter.state())
+                self._finish(mission, "succeeded", result=result, attachment=attachment)
+            except Exception as error:  # noqa: BLE001 - no image is a failed capture, never an empty success
+                self._finish(mission, "failed", f"No picture was taken: {error}.")
         else:
             mission.waypoints = decision.params.get("waypoints") or [decision.params]
             self._active = mission

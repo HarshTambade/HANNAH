@@ -190,6 +190,15 @@ function check({ robot, capabilityId, params = {}, now = Date.now(), active = nu
       if (!objects.includes(params.object)) refuse("unknown-object", `${robot.name} doesn't report an object called “${params.object}”${objects.length ? ` (it reports: ${objects.join(", ")})` : ""}.`);
       if (robot.state?.gripper?.holding) refuse("gripper-full", `${robot.name}'s gripper is already holding ${robot.state.gripper.holding}.`);
       sent.object = params.object;
+    } else if (definition.id === "capture_image") {
+      const cameras = (robot.sensors || []).filter((sensor) => /camera/.test(String(sensor.type || ""))).map((sensor) => sensor.id);
+      const camera = params.camera || (cameras.length === 1 ? cameras[0] : "");
+      if (!cameras.length) refuse("no-camera", `${robot.name} has no camera registered.`);
+      else if (!cameras.includes(camera)) refuse("unknown-camera", `${robot.name} has no camera called “${String(params.camera || "").slice(0, 40)}” (it has: ${cameras.join(", ")}).`);
+      else if (robot.state?.sensors?.[camera]?.ok === false) refuse("sensor-down", `${robot.name}'s ${camera} isn't reporting.`);
+      // A camera is used only after a person has switched camera use on for this robot.
+      if (cameras.length && robot.camera?.enabled !== true) refuse("camera-off", `Camera use is switched off for ${robot.name}. A signed-in person can switch it on under Robots → Camera.`);
+      sent.camera = camera;
     } else if (definition.id === "release_object") {
       if (!robot.state?.gripper?.holding) refuse("nothing-held", `${robot.name}'s gripper isn't holding anything.`);
     }
@@ -243,6 +252,10 @@ function check({ robot, capabilityId, params = {}, now = Date.now(), active = nu
       if (!limits.estop?.hardware) warnings.push(`${robot.name} didn't report a hardware emergency stop.`);
     }
     if (limits.motionRequiresApproval) flags.push(`you set ${robot.name} to ask before every movement`);
+  }
+  if (definition.id === "capture_image" && !robot.simulated) {
+    flags.push("this takes a picture with a physical robot's camera");
+    warnings.push("Whoever is in front of the robot will be in the picture. Make sure they know.");
   }
   if ((robot.alwaysAsk || []).includes(definition.id) && !definition.deescalates) flags.push(`you set “${definition.title}” on ${robot.name} to always ask`);
 

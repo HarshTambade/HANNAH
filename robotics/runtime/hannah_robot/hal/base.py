@@ -88,6 +88,11 @@ class RobotAdapter(ABC):
         """Open the gripper."""
         raise NotImplementedError(f"{self.name} has no gripper")
 
+    # ---- sensing on request ----
+    def capture(self, sensor: str):
+        """One frame from a camera, as a vision.Frame. The camera is read only when this is called."""
+        raise NotImplementedError(f"{self.name} has no camera")
+
     def heartbeat(self) -> None:
         """Called every tick while the runtime is healthy, for an adapter-side watchdog."""
 

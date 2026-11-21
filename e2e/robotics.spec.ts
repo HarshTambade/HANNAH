@@ -129,7 +129,7 @@ test("a robot is added with a one-time code, its runtime enrolls, and it shows a
   await expect(page.getByTestId("robot-pose")).toContainText("The simulator's ground truth differs by 0.00 m.");
   await expect(detail(page).getByText("HANNAH's built-in 2-D kinematic simulator", { exact: false })).toHaveCount(0);
   // What it registered, and the rules that can't be changed.
-  await expect(page.getByTestId("capability")).toHaveCount(8);
+  await expect(page.getByTestId("capability")).toHaveCount(9);
   await expect(page.locator('[data-capability="stop_motion"]')).toContainText("Never needs approval and can't be switched off.");
   await expect(page.locator('[data-capability="navigate_to"]')).toContainText("Confirmed when the robot's reported position is within the tolerance of the goal");
   await expect(detail(page).getByText("Simulated emergency-stop input. Not a safety device.")).toBeVisible();
@@ -295,6 +295,50 @@ test("an inspection route runs as one plan: every step is on the approval card, 
   await expect(row).toContainText(/\d+ of \d+ \(\d+%\)/);
   await expect(row).toContainText(/\d+ ms \(\d+\)/);
   await expect(figures).toContainText("A figure with no records behind it is empty, not zero.");
+});
+
+test("the camera is off until switched on; a picture is approved, shown with what was detected, its opening is logged, and it can be deleted", async ({ page }, testInfo) => {
+  await signedIn(page);
+  await page.goto("/robotics");
+  await expect(detail(page).getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  const camera = page.getByTestId("camera");
+  await expect(camera).toContainText("Simulated camera");
+  await expect(camera).toContainText("Camera use is off for this robot. HANNAH and its agents are refused a picture until you switch it on.");
+  await expect(camera.getByTestId("take-picture")).toBeDisabled();
+  await camera.getByLabel("Allow camera use").check();
+  await expect(camera.getByTestId("take-picture")).toBeEnabled({ timeout: 10_000 });
+  // Something orange, 1.4 m straight ahead of where the simulated robot really is.
+  const now = await page.evaluate(async () => (await (await fetch("/api/robots")).json()).robots[0].state);
+  expect(now.sensors.lidar.ranges[0]).toBeGreaterThan(2.2);
+  simulatorInput({ obstacles: [{ name: "cone", colour: "orange", x: now.sim.truth.x + Math.cos(now.sim.truth.yaw) * 1.4 - 0.2, y: now.sim.truth.y + Math.sin(now.sim.truth.yaw) * 1.4 - 0.2, w: 0.4, h: 0.4 }] });
+  await expect(page.getByTestId("surroundings").getByTestId("detected-object").first()).toBeVisible({ timeout: 15_000 });
+  await camera.getByTestId("take-picture").click();
+  const approval = page.getByTestId("robot-approval");
+  await expect(approval).toContainText("Take a picture: Rover takes one picture with its camera");
+  for (const line of ["camera (simulated)", "24 hours, then deleted", "Only this account. Every viewing is logged", "Not what an object is, and never who a person is"]) await expect(approval).toContainText(line);
+  await approval.getByRole("button", { name: "Approve and start" }).click();
+  await expect(page.getByTestId("robot-outcome")).toContainText(/Done and confirmed: Take a picture: Rover takes one picture with its camera.*A 64×48 image from the camera \(frame 1, .* simulated camera\) arrived and is stored/, { timeout: 15_000 });
+  const picture = camera.getByTestId("picture");
+  await expect(picture).toHaveCount(1, { timeout: 10_000 });
+  await expect(picture).toContainText("frame 1");
+  await expect(picture).toContainText("Simulated camera");
+  // Reported as a region of colour with a distance and a confidence, not as a cone.
+  await expect(picture).toContainText(/orange region 1\.\d\d m \(0\.\d\d\)/);
+  await picture.getByRole("button", { name: "Open" }).click();
+  const opened = camera.getByTestId("picture-open");
+  await expect(opened.getByRole("img")).toHaveAttribute("alt", /Picture from Rover's camera, frame 1, simulated camera/);
+  await expect(opened).toContainText("Opening this picture was logged.");
+  await expect(opened).toContainText("hannah-colour-regions");
+  await testInfo.attach("camera", { body: await page.screenshot({ fullPage: true, ...(process.env.HANNAH_E2E_SHOTS ? { path: join(process.env.HANNAH_E2E_SHOTS, "robotics-camera.png") } : {}) }), contentType: "image/png" });
+  const events: Array<{ type: string; message: string }> = await page.evaluate(async () => (await (await fetch("/api/robots/events?limit=40")).json()).events);
+  expect(events.some((event) => event.type === "image-viewed" && /was opened by a signed-in person/.test(event.message))).toBe(true);
+  expect(events.some((event) => event.type === "camera-capture")).toBe(true);
+  await picture.getByRole("button", { name: /Delete the picture/ }).click();
+  await expect(camera.getByTestId("picture")).toHaveCount(0);
+  await expect(camera.getByTestId("picture-open")).toHaveCount(0);
+  await camera.getByLabel("Allow camera use").uncheck();
+  await expect(camera.getByTestId("take-picture")).toBeDisabled();
+  simulatorInput({ obstacles: [] });
 });
 
 test("with two robots the fleet view says which can take a task, chooses one and shows why before asking", async ({ page }) => {

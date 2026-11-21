@@ -232,12 +232,19 @@ const CAPABILITIES = [
   },
   // ---- In the contract, with no runtime behind them yet. A robot can't register these in Block 1. ----
   {
-    id: "capture_image", title: "Take a picture", status: "contract-only", kind: "read", motion: false, risk: "none",
-    description: "Capture one frame from a registered camera.", robotTypes: ANY, preconditions: ["enrolled", "online"], constraints: ["privacy-zones"],
-    input: { type: "object", properties: { camera: { type: "string", maxLength: 40 } }, required: ["camera"], additionalProperties: false },
-    output: { type: "object", properties: { image: { type: "string" }, capturedAt: { type: "number" } } },
-    timeoutS: { default: 15, max: 60 }, cancel: { supported: true, behaviour: "No image is kept." },
-    verification: { method: "image-returned", description: "Confirmed when an image with its capture time comes back." },
+    id: "capture_image", title: "Take a picture", status: "implemented", kind: "write", motion: false, risk: "low",
+    description: "Take one picture with a registered camera and report the coloured regions a detector finds in it, each with its frame, time, detector and confidence. The camera is read only for this. Camera use has to be switched on for the robot by a signed-in person first. The picture is kept for a limited time and every viewing of it is logged.",
+    robotTypes: ANY, preconditions: ["enrolled", "online"], constraints: ["camera-enabled-by-owner", "retention-limit", "access-log", "command-expiry"],
+    input: { type: "object", properties: { camera: { type: "string", maxLength: 40, description: "The camera's sensor id. Leave out when the robot has one camera." } }, additionalProperties: false },
+    output: { type: "object", properties: { imageId: { type: "string" }, capturedAt: { type: "number" }, frame: { type: "number" }, detections: { type: "array" } } },
+    timeoutS: { default: 15, max: 60 }, cancel: { supported: false, behaviour: "A picture is taken at once." },
+    verification: { method: "image-received", description: "Confirmed when a valid image of the size the camera reports arrives with its frame number and capture time, taken after the command was issued." },
+    failures: [
+      { when: "The robot has no camera, or the camera isn't reporting", response: "Refused before anyone is asked, with the reason." },
+      { when: "Camera use is switched off for the robot", response: "Refused; a signed-in person can switch it on under Robots." },
+      { when: "The robot is offline or doesn't accept the command in time", response: "The command expires. No picture is taken later." },
+      { when: "No image arrives, or what arrives isn't a valid image of the size the camera reports", response: "Recorded as unverified; nothing is stored." },
+    ],
   },
   {
     id: "follow_target", title: "Follow a target", status: "contract-only", kind: "write", motion: true, risk: "high",

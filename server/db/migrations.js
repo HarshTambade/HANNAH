@@ -792,6 +792,29 @@ const MIGRATIONS = [
       "ALTER TABLE hannah_robot_missions ADD COLUMN plan_id TEXT",
     ],
   },
+  {
+    version: 21,
+    name: "robot camera images",
+    // A picture a robot took on request: who owns it, which mission asked for
+    // it, what the camera and the detector said about it, the image itself and
+    // when it is deleted. Kept for a limited time only. Additive.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_robot_images (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        mission_id TEXT,
+        at BIGINT NOT NULL,
+        meta TEXT NOT NULL,
+        detections TEXT NOT NULL,
+        data TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        expires_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robot_images_robot ON hannah_robot_images (robot_id, at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

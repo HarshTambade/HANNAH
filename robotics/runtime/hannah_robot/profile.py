@@ -80,4 +80,5 @@ def descriptor(profile: dict, adapter: RobotAdapter) -> dict:
 
 def local_safety(adapter: RobotAdapter) -> LocalSafety:
     described = adapter.describe()
-    return LocalSafety(described["limits"], described["capabilities"], described.get("world"), described["limits"].get("robotRadius", 0.2), described.get("devices"), described.get("dock"))
+    cameras = [sensor["id"] for sensor in described.get("sensors", []) if "camera" in str(sensor.get("type", ""))]
+    return LocalSafety(described["limits"], described["capabilities"], described.get("world"), described["limits"].get("robotRadius", 0.2), described.get("devices"), described.get("dock"), cameras)

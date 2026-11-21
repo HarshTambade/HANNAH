@@ -57,6 +57,10 @@ const FINAL = new Set(["succeeded", "unverified", "failed", "cancelled", "reject
 const PLAN_OPEN = "('queued', 'running')";
 const MODES = new Set(["idle", "navigating", "manipulating", "paused", "holding", "stopping", "docked", "estopped", "fault", "starting"]);
 const MAX_DESTINATIONS = 60;
+const IMAGE_MAX_BYTES = 200_000;
+const IMAGE_RETENTION_H = { default: 24, max: 720 };
+const IMAGES_PER_ROBOT = 40;
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const RESUME_TTL_MS = 20_000;
 const AUTH_LABEL = "hannah-robot-auth-v1";
 const COMMAND_LABEL = "hannah-robot-command-v1";
@@ -119,7 +123,12 @@ function cleanState(input, now) {
 }
 
 const pointOf = (input) => (finite(input?.x) && finite(input?.y) ? { x: round(input.x, 3), y: round(input.y, 3), ...(finite(input.yaw) ? { yaw: round(input.yaw, 4) } : {}) } : null);
-const partList = (input) => (Array.isArray(input) ? input.slice(0, 24).map((item) => ({ id: slug(item?.id), type: clean(item?.type, 40), description: clean(item?.description, 160) })).filter((item) => item.id) : []);
+/** A sensor or actuator as registered: what it is, and for a sensor its frame, rate, resolution, message type and calibration when the robot gives them. */
+const partList = (input) => (Array.isArray(input) ? input.slice(0, 24).map((item) => ({
+  id: slug(item?.id), type: clean(item?.type, 40), description: clean(item?.description, 160),
+  ...Object.fromEntries(["manufacturer", "model", "frame", "resolution", "messageType", "calibration", "topic"].map((key) => [key, clean(item?.[key], 120)]).filter(([, value]) => value)),
+  ...(finite(item?.rateHz) && item.rateHz >= 0 ? { rateHz: round(item.rateHz, 2) } : {}),
+})).filter((item) => item.id) : []);
 
 /** What a robot says about itself, checked. Throws when it isn't a robot HANNAH can register. */
 function normalizeDescriptor(input) {
@@ -207,6 +216,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       ...profile, devices: Object.fromEntries((profile.devices || []).map((id) => [id, true])), places, reportedPlaces: profile.places || {}, staleDestinations, mapName, sensors: profile.sensors || [], actuators: profile.actuators || [],
       configVersion: Number(row.config_version) || 1, commissioning: commissioning.summary({ simulated }, record), commissioningRecord: record,
       capabilities: parse(row.capabilities, []), disabled: access.disabled || [], alwaysAsk: access.alwaysAsk || [],
+      camera: { enabled: access.camera?.enabled === true, retentionHours: Math.max(1, Math.min(IMAGE_RETENTION_H.max, Number(access.camera?.retentionHours) || IMAGE_RETENTION_H.default)), cameras: (profile.sensors || []).filter((sensor) => /camera/.test(sensor.type || "")).map((sensor) => sensor.id) },
       safety: robotSafety, limits: safety.effectiveLimits(robotSafety),
       state, stateAgeS: state?.receivedAt ? Math.max(0, Math.round((at - state.receivedAt) / 100) / 10) : null,
       owner: "you", createdAt: Number(row.created_at), enrolledAt: row.enrolled_at ? Number(row.enrolled_at) : null, revokedAt: row.revoked_at ? Number(row.revoked_at) : null,
@@ -301,7 +311,15 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       // Stopping can't be switched off or made to ask.
       const disabled = change.disabled !== undefined ? known(change.disabled).filter((item) => !contract.capability(item).deescalates) : robot.disabled;
       const alwaysAsk = change.alwaysAsk !== undefined ? known(change.alwaysAsk).filter((item) => !contract.capability(item).deescalates) : robot.alwaysAsk;
-      fields.permissions = JSON.stringify({ disabled, alwaysAsk });
+      fields.permissions = JSON.stringify({ ...parse(row.permissions, {}), disabled, alwaysAsk });
+    }
+    if (change.camera !== undefined) {
+      // Camera use is off until a person switches it on for this robot. Switching it off deletes nothing; pictures still expire.
+      const before = parse(fields.permissions ?? row.permissions, {});
+      const camera = { enabled: change.camera?.enabled === undefined ? robot.camera.enabled : change.camera.enabled === true, retentionHours: Math.max(1, Math.min(IMAGE_RETENTION_H.max, Math.round(Number(change.camera?.retentionHours) || robot.camera.retentionHours))) };
+      if (camera.enabled && !robot.camera.cameras.length) throw fail(409, `${robot.name} has no camera registered.`, "no-camera");
+      fields.permissions = JSON.stringify({ ...before, camera });
+      if (camera.enabled !== robot.camera.enabled) await addEvent(db, userId, row.id, { type: camera.enabled ? "camera-enabled" : "camera-disabled", severity: "warning", message: camera.enabled ? `Camera use was switched on. Pictures are kept for ${camera.retentionHours} hours.` : "Camera use was switched off." });
     }
     const names = Object.keys(fields);
     if (names.length) {
@@ -325,7 +343,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const row = await robotRow(db, userId, id);
     if (!row) return false;
     if (row.status === "enrolled") await revokeRobot(db, userId, row.id);
-    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_plans", "hannah_robot_destinations", "hannah_robot_maintenance"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
+    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_plans", "hannah_robot_images", "hannah_robot_destinations", "hannah_robot_maintenance"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
     return (await db.query("DELETE FROM hannah_robots WHERE user_id = $1 AND id = $2", [userId, row.id])).rowCount > 0;
   }
 
@@ -432,6 +450,13 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       const gripper = state?.gripper;
       return gripper && gripper.open === true && !gripper.holding ? { confirmed: true, evidence: "The gripper reports open and holding nothing." } : { confirmed: false, evidence: `The robot reported a release, but its gripper reports ${gripper?.holding ? `holding ${gripper.holding}` : gripper?.open === false ? "closed" : "nothing"}.` };
     }
+    if (mission.capability === "capture_image") {
+      const image = report.image;
+      if (!image) return { confirmed: false, evidence: report.imageProblem || "The robot reported a picture, but no valid image arrived with the report. Nothing was stored." };
+      const when = new Date(image.capturedAt).toISOString().slice(11, 19);
+      const found = Array.isArray(report.result?.detections) ? report.result.detections.length : 0;
+      return { confirmed: true, evidence: `A ${image.width}×${image.height} image from the ${image.sensor} (frame ${image.frame}, taken ${when} UTC, ${robot.simulated ? "simulated camera" : "physical camera"}) arrived and is stored as ${image.id} until ${new Date(image.expiresAt).toISOString().slice(0, 16).replace("T", " ")} UTC. The detector found ${found} coloured region${found === 1 ? "" : "s"}.` };
+    }
     if (mission.capability === "set_supported_device_state") {
       const actual = state?.devices?.[params.device];
       return actual === params.state ? { confirmed: true, evidence: `The robot's state report shows ${params.device} ${actual}.` } : { confirmed: false, evidence: `The robot's state report shows ${params.device} ${actual ?? "unknown"}, not ${params.state}.` };
@@ -471,7 +496,10 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
         if (await set({ resume_requested_at: null, control_nonce: null, error: reason || "The robot refused to resume." }, ["paused"])) await addEvent(db, robot.userId, robot.id, { type: "resume-refused", severity: "warning", message: `The robot refused to resume ${row.capability}: ${reason || "no reason given"}.`, source: "robot", at });
         break;
       case "succeeded": {
+        if (row.capability === "capture_image") report.image = await storeImage(db, robot, row, report, at).catch(() => null);
+        const stored = report.image ? JSON.stringify({ ...tidy(report.result || {}), imageId: report.image.id, expiresAt: report.image.expiresAt }).slice(0, 12_000) : result;
         const verification = verifyMission(row, report, state, robot);
+        if (report.image) { await set({ status: verification.confirmed ? "succeeded" : "unverified", accepted_at: row.accepted_at || at, result: stored, verification: JSON.stringify({ ...verification, checkedAt: at }), finished_at: at }, ["queued", "sent", "accepted"]); break; }
         await set({ status: verification.confirmed ? "succeeded" : "unverified", accepted_at: row.accepted_at || at, result, verification: JSON.stringify({ ...verification, checkedAt: at }), finished_at: at }, ["queued", "sent", "accepted"]);
         break;
       }
@@ -669,6 +697,60 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     if (mission.status !== "paused") throw fail(409, mission.final ? "That mission is already over." : "That mission isn't paused.", "not-paused");
     await db.query("UPDATE hannah_robot_missions SET resume_requested_at = $1, control_nonce = $2, error = NULL, updated_at = $1 WHERE user_id = $3 AND id = $4 AND status = 'paused'", [now(), crypto.randomBytes(16).toString("hex"), userId, mission.id]);
     return getMission(db, userId, mission.id);
+  }
+
+  // ---------- camera images: kept for a limited time, every viewing logged ----------
+  const imageView = (row) => ({ id: row.id, robotId: row.robot_id, missionId: row.mission_id || null, at: Number(row.at), bytes: Number(row.bytes), expiresAt: Number(row.expires_at), ...parse(row.meta, {}), detections: parse(row.detections, []) });
+  /** Keep the image a capture reported, if it is what it says it is. Returns its record, or null. */
+  async function storeImage(db, robot, mission, report, at) {
+    const sent = report.attachment;
+    if (!sent || sent.kind !== "image" || sent.encoding !== "png" || typeof sent.data !== "string" || sent.data.length > IMAGE_MAX_BYTES * 1.4) return null;
+    const bytes = Buffer.from(sent.data, "base64");
+    // A PNG, of the size it claims, and not larger than a picture from a robot's camera needs to be.
+    if (bytes.length < 33 || bytes.length > IMAGE_MAX_BYTES || !bytes.subarray(0, 8).equals(PNG_MAGIC) || bytes.toString("latin1", 12, 16) !== "IHDR") return null;
+    const [width, height] = [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+    if (width !== sent.width || height !== sent.height || width > 4096 || height > 4096) return null;
+    if (!robot.camera?.cameras?.includes(sent.sensor) || !finite(sent.capturedAt)) return null;
+    // A picture from before it was asked for is not the picture that was asked for.
+    if (sent.capturedAt < Number(mission.issued_at) - SKEW_MS) { report.imageProblem = `The image that arrived was taken at ${new Date(sent.capturedAt).toISOString().slice(11, 19)} UTC, before this picture was asked for. It was not stored.`; return null; }
+    // Switched off while the command was on its way: the picture is not kept.
+    if (!robot.camera.enabled) return null;
+    const id = `im_${crypto.randomBytes(9).toString("hex")}`;
+    const meta = { sensor: clean(sent.sensor, 40), frame: finite(sent.frame) ? sent.frame : null, capturedAt: Math.round(sent.capturedAt), width, height, fovDeg: finite(sent.fovDeg) ? sent.fovDeg : null, source: clean(sent.source, 120), depth: sent.depth ? clean(sent.depth, 80) : null, pose: sent.pose && finite(sent.pose.x) && finite(sent.pose.y) ? { x: sent.pose.x, y: sent.pose.y, yaw: finite(sent.pose.yaw) ? sent.pose.yaw : null, frame: clean(sent.pose.frame, 20) || "map" } : null, kind: robot.simulated ? "simulation" : "physical", detector: tidy(report.result?.detector || null) };
+    const detections = (Array.isArray(report.result?.detections) ? report.result.detections : []).slice(0, 12).map((item) => tidy(item));
+    const expiresAt = at + robot.camera.retentionHours * 3_600_000;
+    await db.query("INSERT INTO hannah_robot_images (user_id, id, robot_id, mission_id, at, meta, detections, data, bytes, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [robot.userId, id, robot.id, mission.id, at, JSON.stringify(meta), JSON.stringify(detections).slice(0, 12_000), bytes.toString("base64"), bytes.length, expiresAt]);
+    await sweepImages(db, robot.userId, robot.id, at);
+    await addEvent(db, robot.userId, robot.id, { type: "image-stored", message: `A picture from the ${meta.sensor} (frame ${meta.frame ?? "?"}) was stored as ${id}. It is deleted after ${robot.camera.retentionHours} hours.`, at });
+    return { id, expiresAt, ...meta };
+  }
+  /** Delete what has expired, and the oldest beyond the number kept per robot. */
+  async function sweepImages(db, userId, robotId, at) {
+    await db.query("DELETE FROM hannah_robot_images WHERE user_id = $1 AND robot_id = $2 AND expires_at <= $3", [userId, robotId, at]);
+    const extra = (await db.query("SELECT id FROM hannah_robot_images WHERE user_id = $1 AND robot_id = $2 ORDER BY at DESC", [userId, robotId])).rows.slice(IMAGES_PER_ROBOT);
+    for (const row of extra) await db.query("DELETE FROM hannah_robot_images WHERE user_id = $1 AND id = $2", [userId, row.id]);
+  }
+  /** A robot's pictures, newest first, without the image data. Reading the list is not logged; opening a picture is. */
+  async function listImages(db, userId, robotId, limit = 12) {
+    const robot = await getRobot(db, userId, robotId);
+    await sweepImages(db, userId, robot.id, now());
+    const { rows } = await db.query("SELECT user_id, id, robot_id, mission_id, at, meta, detections, bytes, expires_at FROM hannah_robot_images WHERE user_id = $1 AND robot_id = $2 ORDER BY at DESC LIMIT $3", [userId, robot.id, Math.max(1, Math.min(IMAGES_PER_ROBOT, Number(limit) || 12))]);
+    return { camera: robot.camera, images: rows.map(imageView) };
+  }
+  /** One picture with its data. Every call is written to the robot's events: who opened it and when. */
+  async function getImage(db, userId, robotId, imageId, viewer = "a signed-in person") {
+    const robot = await getRobot(db, userId, robotId);
+    const row = (await db.query("SELECT * FROM hannah_robot_images WHERE user_id = $1 AND robot_id = $2 AND id = $3 AND expires_at > $4", [userId, robot.id, String(imageId || ""), now()])).rows[0];
+    if (!row) throw fail(404, "That picture doesn't exist or has been deleted.", "not-found");
+    await addEvent(db, userId, robot.id, { type: "image-viewed", message: `Picture ${row.id} was opened by ${clean(viewer, 80)}.` });
+    return { ...imageView(row), dataUrl: `data:image/png;base64,${row.data}` };
+  }
+  async function deleteImage(db, userId, robotId, imageId) {
+    const robot = await getRobot(db, userId, robotId);
+    const gone = await db.query("DELETE FROM hannah_robot_images WHERE user_id = $1 AND robot_id = $2 AND id = $3", [userId, robot.id, String(imageId || "")]);
+    if (!gone.rowCount) throw fail(404, "That picture doesn't exist or has been deleted.", "not-found");
+    await addEvent(db, userId, robot.id, { type: "image-deleted", message: `Picture ${clean(imageId, 40)} was deleted by a signed-in person.` });
+    return listImages(db, userId, robot.id);
   }
 
   // ---------- plans: several steps under one approval ----------
@@ -980,7 +1062,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return fleet.analytics({ robots, missions, plans: planRows, events, telemetry: telemetryOf, now: at, windowMs });
   }
 
-  return { activeMotion, addDestination, analytics, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
+  return { activeMotion, addDestination, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
 }
 
 module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, fingerprintOf, normalizeDescriptor, requestMessage, signCommand, signRequest };

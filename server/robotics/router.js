@@ -171,7 +171,7 @@ function createRobotAccountRouter({ robotics, engine }) {
     const [missions, events] = await Promise.all([robotics.listMissions(db, account.id, { robotId: robot.id, limit: 25 }), robotics.events(db, account.id, { robotId: robot.id, limit: 40 })]);
     res.json({ robot: shown(robot), missions: missions.map((mission) => ({ ...mission, robotName: robot.name, summary: missionText(mission, robot.name) })), events });
   }));
-  router.patch("/robots/:id", json, person(async (req, res, db, account) => res.json({ robot: await robotics.updateRobot(db, account.id, req.params.id, { name: req.body?.name, limits: req.body?.limits, disabled: req.body?.disabled, alwaysAsk: req.body?.alwaysAsk }) })));
+  router.patch("/robots/:id", json, person(async (req, res, db, account) => res.json({ robot: await robotics.updateRobot(db, account.id, req.params.id, { name: req.body?.name, limits: req.body?.limits, disabled: req.body?.disabled, alwaysAsk: req.body?.alwaysAsk, camera: req.body?.camera }) })));
   router.post("/robots/:id/enrollment", person(async (req, res, db, account) => {
     const issued = await robotics.issueCode(db, account.id, req.params.id);
     res.status(201).json({ ...issued, command: `${command(req)}${issued.enrollment.code}` });
@@ -202,6 +202,10 @@ function createRobotAccountRouter({ robotics, engine }) {
   }));
   router.get("/robots/:id/maintenance", anyAccount(async (req, res, db, account) => res.json({ maintenance: await robotics.maintenance(db, account.id, (await robotics.getRobot(db, account.id, req.params.id)).id) })));
   router.post("/robots/:id/maintenance", json, person(async (req, res, db, account) => res.status(201).json({ maintenance: await robotics.addMaintenance(db, account.id, req.params.id, req.body || {}) })));
+  // Pictures: the list carries no image data; opening one is written to the robot's events with who opened it.
+  router.get("/robots/:id/images", anyAccount(async (req, res, db, account) => res.json(await robotics.listImages(db, account.id, req.params.id, req.query.limit))));
+  router.get("/robots/:id/images/:image", anyAccount(async (req, res, db, account) => res.json({ image: await robotics.getImage(db, account.id, req.params.id, req.params.image, account.via === "session" ? "a signed-in person" : "a developer key") })));
+  router.delete("/robots/:id/images/:image", person(async (req, res, db, account) => res.json(await robotics.deleteImage(db, account.id, req.params.id, req.params.image))));
   router.get("/robots/:id/templates", anyAccount(async (req, res, db, account) => res.json({ templates: plans.templatesFor(await robotics.getRobot(db, account.id, req.params.id)) })));
   router.post("/robots/:id/plans", json, anyAccount(async (req, res, db, account) => {
     const robot = await robotics.getRobot(db, account.id, req.params.id);

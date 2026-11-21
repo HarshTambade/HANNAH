@@ -146,7 +146,7 @@ class Sensors(unittest.TestCase):
         sim = simulator("home")
         sim.advance(1.0)
         sensors = sim.state()["sensors"]
-        self.assertEqual(sorted(sensors), ["battery", "bumper", "environment", "imu", "lidar", "odometry"])
+        self.assertEqual(sorted(sensors), ["battery", "bumper", "camera", "environment", "imu", "lidar", "odometry"])
         for name, reading in sensors.items():
             self.assertTrue(reading["ok"], name)
             self.assertEqual(reading["source"], "simulated", name)
@@ -163,7 +163,7 @@ class Sensors(unittest.TestCase):
             self.assertEqual(state["sensors"][name], {"ok": False, "problem": "not reporting", "source": "simulated"})
         self.assertIsNone(state["battery"])
         health = {item["id"]: item["ok"] for item in state["perception"]["sensorHealth"]}
-        self.assertEqual(health, {"lidar": False, "odometry": True, "imu": True, "environment": False, "bumper": True, "battery": False})
+        self.assertEqual(health, {"lidar": False, "odometry": True, "imu": True, "environment": False, "bumper": True, "battery": False, "camera": True})
         # With no range sensor, what is around the robot is unknown, not "nothing".
         self.assertFalse(state["perception"]["obstaclesKnown"])
         self.assertIsNone(state["perception"]["route"]["blocked"])

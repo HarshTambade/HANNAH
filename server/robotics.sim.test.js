@@ -146,7 +146,7 @@ test("the runtime enrolls as a simulation and keeps its secret to itself", { ski
   assert.equal(value.simulator, GAZEBO ? "gazebo-harmonic" : "hannah-kinematic");
   assert.equal(value.robotType, "differential-drive");
   assert.equal(value.adapter, GAZEBO ? "ros2" : "kinematic");
-  assert.deepEqual(value.capabilities, ["report_robot_state", "read_sensor", ...(GAZEBO ? [] : ["report_surroundings"]), "stop_motion", "navigate_to", "return_to_dock", "inspect_area", ...(GAZEBO ? [] : ["set_supported_device_state"])]);
+  assert.deepEqual(value.capabilities, ["report_robot_state", "read_sensor", ...(GAZEBO ? [] : ["report_surroundings"]), "stop_motion", "navigate_to", "return_to_dock", "inspect_area", ...(GAZEBO ? [] : ["set_supported_device_state", "capture_image"])]);
   assert.deepEqual(Object.keys(value.places), ["dock", "workbench", "shelves", "door", "loading bay"]);
   assert.equal(value.limits.maxLinearSpeed, 0.5);
   assert.equal(value.limits.environment, "simulation");
@@ -387,6 +387,100 @@ test("an inspection route as one plan: drive, record what the sensors detect and
   // The agent's read of the finished plan.
   const read = (await act("robots.plan", { robot: "Rover" })).body.record.response;
   assert.match(read.summary, /all 7 steps finished and verified/);
+});
+
+test("a picture: refused until a person switches camera use on, approved, detected regions reported with their source, kept for a limited time, every viewing logged", { skip: skip || (GAZEBO ? "the ROS 2 adapter has no camera yet" : false) }, async () => {
+  await idle();
+  const key = { Authorization: `Bearer ${(await call("POST", "/account/api-keys", { name: "camera agent" })).body.key}` };
+  const asKey = async (method, route, body) => { const response = await fetch(`${base}/api${route}`, { method, headers: { ...key, ...(body ? { "Content-Type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); return { status: response.status, body: await response.json().catch(() => null) }; };
+  const before = await robot();
+  // Registered with what is needed to trace a reading back to it.
+  const camera = before.sensors.find((sensor) => sensor.id === "camera");
+  assert.deepEqual([camera.type, camera.frame, camera.resolution, camera.messageType], ["rgbd-camera", "camera_link", "64x48, 70 degrees", "sensor_msgs/msg/Image, sensor_msgs/msg/CameraInfo"]);
+  assert.deepEqual(before.camera, { enabled: false, retentionHours: 24, cameras: ["camera"] });
+  assert.equal(before.state.sensors.camera.framesCaptured, 0, "the camera has not been read");
+
+  // Off by default: refused with the reason, and never shown for approval. A key can't switch it on.
+  const off = await act("robots.capture_image", { robot: "Rover" });
+  assert.equal(off.body.record.status, "denied", JSON.stringify(off.body));
+  assert.match(off.body.record.permission.reason, /Camera use is switched off for Rover\. A signed-in person can switch it on/);
+  assert.ok((await asKey("PATCH", `/robots/${robotId}`, { camera: { enabled: true } })).status >= 401);
+  const on = await call("PATCH", `/robots/${robotId}`, { camera: { enabled: true, retentionHours: 2 } });
+  assert.deepEqual(on.body.robot.camera, { enabled: true, retentionHours: 2, cameras: ["camera"] });
+
+  // Put something red in front of where it stands. Beam 0 of its scan points where the camera does.
+  const now = (await robot()).state;
+  assert.ok(now.sensors.lidar.ranges[0] > 2.2, `there is room ahead of the robot for the test object: ${now.sensors.lidar.ranges[0]} m`);
+  const ahead = now.sim.truth.yaw;
+  inputs({ obstacles: [{ name: "red crate", colour: "red", x: now.sim.truth.x + Math.cos(ahead) * 1.4 - 0.25, y: now.sim.truth.y + Math.sin(ahead) * 1.4 - 0.25, w: 0.5, h: 0.5 }] });
+  await until(robot, (value) => value.state.sensors.lidar.ranges[0] < 1.4, { what: "the range sensor to see the crate" });
+
+  const asked = await act("robots.capture_image", { robot: "Rover" });
+  assert.equal(asked.body.record.status, "waiting-approval", JSON.stringify(asked.body));
+  const lines = Object.fromEntries(asked.body.record.preview.lines.map((line) => [line.label, line.value]));
+  assert.equal(asked.body.record.preview.title, "Take a picture: Rover takes one picture with its camera");
+  assert.deepEqual([lines.Camera, lines["Kept for"], lines["Who can see it"]], ["camera (simulated)", "2 hours, then deleted", "Only this account. Every viewing is logged"]);
+  assert.match(lines["What is detected"], /Not what an object is, and never who a person is/);
+  const taken = await call("POST", `/actions/${asked.body.record.id}/decision`, { approve: true });
+  assert.equal(taken.body.record.status, "done", JSON.stringify(taken.body.record));
+  const picture = taken.body.record.response;
+  assert.match(picture.imageId, /^im_[0-9a-f]{18}$/);
+  assert.deepEqual([picture.sensor, picture.frame, picture.detector.model], ["camera", 1, "hannah-colour-regions"]);
+  assert.match(picture.source, /simulated camera/);
+  assert.match(taken.body.record.verification.evidence, /A 64×48 image from the camera \(frame 1, taken \d\d:\d\d:\d\d UTC, simulated camera\) arrived and is stored as im_[0-9a-f]+ until .* UTC\. The detector found \d+ coloured regions?\./);
+  // Every detection carries what it came from.
+  for (const item of picture.detections) assert.deepEqual([item.model, item.sensor, item.frame, item.capturedAt], ["hannah-colour-regions", "camera", 1, picture.capturedAt]);
+
+  // The list has no image data. Opening the picture returns it and is written down, with who opened it.
+  const listed = (await call("GET", `/robots/${robotId}/images`)).body;
+  assert.equal(listed.images.length, 1);
+  assert.equal(listed.images[0].dataUrl, undefined);
+  assert.deepEqual([listed.images[0].kind, listed.images[0].width, listed.images[0].height, listed.images[0].missionId], ["simulation", 64, 48, picture.missionId]);
+  assert.ok(Math.abs(listed.images[0].expiresAt - listed.images[0].at - 2 * 3_600_000) < 1000);
+  const opened = (await call("GET", `/robots/${robotId}/images/${picture.imageId}`)).body.image;
+  const png = Buffer.from(opened.dataUrl.replace("data:image/png;base64,", ""), "base64");
+  assert.deepEqual([png.subarray(1, 4).toString(), png.readUInt32BE(16), png.readUInt32BE(20), png.length], ["PNG", 64, 48, opened.bytes]);
+  assert.equal((await asKey("GET", `/robots/${robotId}/images/${picture.imageId}`)).status, 200);
+  const log = (await call("GET", `/robots/events?robot=${robotId}&limit=30`)).body.events;
+  assert.ok(log.some((event) => event.type === "camera-enabled"));
+  assert.ok(log.some((event) => event.type === "camera-capture" && event.source === "robot"), "the robot itself recorded that its camera was used");
+  assert.ok(log.some((event) => event.type === "image-stored"));
+  assert.deepEqual(log.filter((event) => event.type === "image-viewed").map((event) => event.message).sort(), [`Picture ${picture.imageId} was opened by a developer key.`, `Picture ${picture.imageId} was opened by a signed-in person.`]);
+
+  // The red crate: a red region, straight ahead, at the distance the simulated depth gives.
+  const red = picture.detections.find((item) => item.colour === "red");
+  assert.ok(red, `a red region ahead: ${JSON.stringify(picture.detections)}`);
+  assert.equal(red.label, "red region");
+  assert.ok(Math.abs(red.distanceM - 1.15) < 0.15, JSON.stringify(red));
+  assert.ok(Math.abs(red.bearingDeg) < 6, JSON.stringify(red));
+  assert.equal(red.distanceSource, "simulated depth (ray cast)");
+  assert.match(red.position.source, /from the robot's own position estimate/);
+
+  // What the camera last saw, for an agent: with its age, and never as "now" once it is old.
+  const last = (await act("robots.camera", { robot: "Rover" })).body.record.response;
+  assert.deepEqual([last.imageId, last.kind, last.cameraUse, last.stale], [picture.imageId, "simulation", "on", false]);
+  assert.match(last.note, /cannot say what an object is\. The camera is simulated\./);
+
+  // A camera that stops reporting: refused, by name.
+  inputs({ obstacles: [], sensorFaults: ["camera"] });
+  await until(robot, (value) => value.state.sensors.camera.ok === false, { what: "the camera fault" });
+  const dark = await act("robots.capture_image", { robot: "Rover" });
+  assert.match(dark.body.record.permission.reason, /Rover's camera isn't reporting/);
+  inputs({ obstacles: [], sensorFaults: [] });
+  await until(robot, (value) => value.state.sensors.camera.ok === true, { what: "the camera to return" });
+
+  // After its time a picture is gone, and "what it last saw" says there is none.
+  const db = await require("./db").getDatabase();
+  const owner = (await db.query("SELECT user_id FROM hannah_robot_images WHERE id = $1", [picture.imageId])).rows[0].user_id;
+  const later = require("./robotics/service").createRoboticsService({ now: () => Date.now() + 3 * 3_600_000 });
+  assert.deepEqual((await later.listImages(db, owner, robotId)).images, []);
+  assert.equal((await call("GET", `/robots/${robotId}/images/${picture.imageId}`)).status, 404);
+  assert.equal((await act("robots.camera", { robot: "Rover" })).body.record.response.picture, null);
+
+  // Switched off again: refused again.
+  await call("PATCH", `/robots/${robotId}`, { camera: { enabled: false } });
+  assert.equal((await act("robots.capture_image", { robot: "Rover" })).body.record.status, "denied");
+  assert.equal((await robot()).state.sensors.camera.framesCaptured, 1, "one picture was asked for and one was taken");
 });
 
 test("revoking the robot ends its access; the runtime holds and reports it locally", { skip }, async () => {

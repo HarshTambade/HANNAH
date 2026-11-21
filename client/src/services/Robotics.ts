@@ -48,7 +48,8 @@ export type Robot = {
   connection: "awaiting-enrollment" | "revoked" | "online" | "offline" | "never-connected"; online: boolean; lastSeenAt: number | null; mode: string;
   manufacturer?: string; model?: string; robotType?: string; category?: string; os?: string; compute?: string; rosDistro?: string; protocols?: string[];
   softwareVersion?: string; firmwareVersion?: string; runtimeVersion?: string; adapter?: string; hostname?: string;
-  sensors: Array<{ id: string; type: string; description: string }>; actuators: Array<{ id: string; type: string; description: string }>;
+  sensors: Array<{ id: string; type: string; description: string; frame?: string; rateHz?: number; resolution?: string; messageType?: string; calibration?: string; manufacturer?: string; model?: string }>; actuators: Array<{ id: string; type: string; description: string }>;
+  camera: CameraSetting;
   devices: Record<string, boolean>; places: Record<string, Point>; dock?: Point | null;
   world?: { name: string; bounds: { minX: number; minY: number; maxX: number; maxY: number } | null; obstacles: Array<{ x: number; y: number; w: number; h: number }> } | null;
   network?: { transport: string; syncIntervalMs: number }; refusedCapabilities?: Array<{ id: string; reason: string }>;
@@ -72,6 +73,9 @@ export type Mission = {
   progress: { phase?: string; distanceRemaining?: number | null; travelled?: number } | null; result: Record<string, unknown> | null;
   verification: { confirmed: boolean; evidence: string } | null; error: string | null;
 };
+export type Detection = { label: string; colour: string; box: { x: number; y: number; w: number; h: number }; pixels: number; confidence: number; model: string; modelVersion: string; sensor: string; frame: number; capturedAt: number; bearingDeg: number; distanceM?: number; distanceSource?: string; position?: { x: number; y: number; frame: string; source: string } };
+export type RobotImage = { id: string; robotId: string; missionId: string | null; at: number; bytes: number; expiresAt: number; sensor: string; frame: number | null; capturedAt: number; width: number; height: number; source: string; depth: string | null; kind: "simulation" | "physical"; detector: { model: string; version: string; kind: string; detects: string; cannot: string } | null; detections: Detection[]; dataUrl?: string };
+export type CameraSetting = { enabled: boolean; retentionHours: number; cameras: string[] };
 export type PlanStep = { n: number; capability: string; title: string; text: string; kind: "mission" | "observation"; status: "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped"; params: Record<string, unknown>; missionId: string | null; startedAt: number | null; finishedAt: number | null; output: Record<string, unknown> | null; evidence: string | null; error: string | null };
 export type Plan = { id: string; robotId: string; robotName: string | null; title: string; template: string | null; status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "expired"; final: boolean; cursor: number; priority: number; error: string | null; startBy: number; createdAt: number; startedAt: number | null; finishedAt: number | null; steps: PlanStep[]; summary: string };
 export type PlanTemplate = { id: string; title: string; description: string; inputs: Record<string, string>; needs: string[]; available: boolean; reason: string | null };
@@ -125,7 +129,7 @@ export const Robotics = {
   get: (robotId: string) => accountRequest<{ robot: Robot; missions: Mission[]; events: RobotEvent[] }>(`/api/robots/${id(robotId)}`),
   contract: () => accountRequest<{ capabilities: Capability[]; robotTypes: Record<string, { label: string; category: string }>; environments: Record<string, string> }>("/api/robots/contract"),
   create: (name: string, simulated: boolean) => accountRequest<Enrollment>("/api/robots", { method: "POST", body: json({ name, simulated }) }),
-  update: (robotId: string, change: { name?: string; limits?: Record<string, unknown>; disabled?: string[]; alwaysAsk?: string[] }) => accountRequest<{ robot: Robot }>(`/api/robots/${id(robotId)}`, { method: "PATCH", body: json(change) }),
+  update: (robotId: string, change: { name?: string; limits?: Record<string, unknown>; disabled?: string[]; alwaysAsk?: string[]; camera?: { enabled?: boolean; retentionHours?: number } }) => accountRequest<{ robot: Robot }>(`/api/robots/${id(robotId)}`, { method: "PATCH", body: json(change) }),
   newCode: (robotId: string) => accountRequest<Enrollment>(`/api/robots/${id(robotId)}/enrollment`, { method: "POST" }),
   revoke: (robotId: string) => accountRequest<{ robot: Robot }>(`/api/robots/${id(robotId)}/revoke`, { method: "POST" }),
   remove: async (robotId: string) => { const answer = await accountRequest<{ removed: boolean }>(`/api/robots/${id(robotId)}`, { method: "DELETE" }); await Robotics.refresh(); return answer; },
@@ -149,6 +153,11 @@ export const Robotics = {
   fleet: async () => (await accountRequest<{ robots: FleetRow[] }>("/api/robots/fleet")).robots,
   /** Ask HANNAH to choose a robot for a task. Throws with the reasons when none can take it. */
   assign: (task: "navigate_to" | "return_to_dock" | "inspect_area", params: Record<string, unknown>) => Operator.run("robots.assign", { task, ...params }, { request: "Assigned on the Robots screen", agent: "You", intent: "robots" }),
+  /** A robot's stored pictures, without the image data. */
+  images: (robotId: string) => accountRequest<{ camera: CameraSetting; images: RobotImage[] }>(`/api/robots/${id(robotId)}/images`),
+  /** Open one picture. The server writes down that it was opened. */
+  image: async (robotId: string, imageId: string) => (await accountRequest<{ image: RobotImage }>(`/api/robots/${id(robotId)}/images/${id(imageId)}`)).image,
+  deleteImage: (robotId: string, imageId: string) => accountRequest<{ camera: CameraSetting; images: RobotImage[] }>(`/api/robots/${id(robotId)}/images/${id(imageId)}`, { method: "DELETE" }),
   plans: async (robotId?: string, limit = 12) => (await accountRequest<{ plans: Plan[] }>(`/api/robots/plans?limit=${limit}${robotId ? `&robot=${id(robotId)}` : ""}`)).plans,
   plan: async (planId: string) => (await accountRequest<{ plan: Plan }>(`/api/robots/plans/${id(planId)}`)).plan,
   templates: async (robotId: string) => (await accountRequest<{ templates: PlanTemplate[] }>(`/api/robots/${id(robotId)}/templates`)).templates,
@@ -169,7 +178,7 @@ export const Robotics = {
   telemetry: async (robotId: string, minutes = 15) => (await accountRequest<{ samples: TelemetrySample[] }>(`/api/robots/${id(robotId)}/telemetry?minutes=${minutes}`)).samples,
   events: async (robotId?: string) => (await accountRequest<{ events: RobotEvent[] }>(`/api/robots/events${robotId ? `?robot=${id(robotId)}` : ""}`)).events,
   /** Ask for a mission. The record says whether it started, waits for approval, or was refused and why. */
-  ask: (action: "robots.navigate_to" | "robots.return_to_dock" | "robots.inspect_area" | "robots.set_supported_device_state" | "robots.resume_mission" | "robots.move_robot_arm" | "robots.grasp_object" | "robots.release_object", params: Record<string, unknown>, request = "Asked on the Robots screen") =>
+  ask: (action: "robots.navigate_to" | "robots.return_to_dock" | "robots.inspect_area" | "robots.set_supported_device_state" | "robots.resume_mission" | "robots.move_robot_arm" | "robots.grasp_object" | "robots.release_object" | "robots.capture_image", params: Record<string, unknown>, request = "Asked on the Robots screen") =>
     Operator.run(action, params, { request, agent: "You", intent: "robots" }),
   /** Watch a mission until it ends or the time is up. Returns it as it is then. */
   async waitFor(missionId: string, seconds: number, signal?: AbortSignal) {
@@ -254,6 +263,13 @@ const tools: HANNAHTool[] = [
   mission("robot_assign", "robots.assign", "Give a movement task to whichever robot can best take it: HANNAH picks the nearest robot that is connected, ready, commissioned if physical, not busy and has that destination on its own map. Use when the user doesn't name a robot (“assign the available robot to…”, “send a robot to…”). The answer names the robot chosen and why, and why each other robot wasn't. If none can take it, the tool fails with each robot's reason: tell the user those reasons.",
     { task: { type: "string", enum: ["navigate_to", "return_to_dock", "inspect_area"] }, place: { type: "string", description: "A destination name." }, x: { type: "number" }, y: { type: "number" }, places: { type: "array", items: { type: "string" }, description: "For inspect_area: destinations to visit, in order." } }, ["task"],
     (args) => ({ task: str(args.task) || "navigate_to", place: str(args.place), x: num(args.x), y: num(args.y), waypoints: Array.isArray(args.places) && args.places.length ? args.places.map((place) => ({ place: str(place) })) : undefined, robot: undefined })),
+  {
+    name: "robot_capture_image",
+    description: "Take ONE picture with a robot's camera and get the coloured regions a detector finds in it: each with a colour, a confidence, its frame and capture time and, when the camera has depth, a distance and a position. You do not see the picture; you get the detections. The detector finds regions of colour: it cannot say what an object is and never who a person is, so say “a red region 1.2 m ahead, confidence 0.8”, never “a fire extinguisher” or “a person”. Camera use must have been switched on for that robot by the user; if it is off the tool is refused and you tell the user they can switch it on under Robots → Camera. The user approves each picture unless a standing permission covers it; a physical robot's camera always asks. Say when the camera is simulated.",
+    inputSchema: { type: "object", properties: { robot: robotProp, camera: { type: "string", description: "The camera's sensor id. Leave out when the robot has one camera." } } }, asksUser: true,
+    execute: async (args) => toolResult(await Operator.perform("robots.capture_image", compact({ robot: str(args.robot), camera: str(args.camera) }), { agent: "Robot agent" })),
+  },
+  read("robot_camera", "robots.camera", "What a robot's camera saw in the most recent picture it took on request: the detections with their confidence, and how old the picture is. An old picture is what the camera saw then, not what is there now: say its age. It never says what an object is. If there is no stored picture, say so; do not describe a scene.", { robot: robotProp }, (args) => ({ robot: str(args.robot) })),
   read("robot_templates", "robots.templates", "The plan templates and whether this robot can run each one (go to a place and come back, an inspection route, pick and place, a status report), with each template's inputs. A template the robot lacks the hardware for is listed as unavailable with the reason: say that reason, don't try it.", { robot: robotProp }, (args) => ({ robot: str(args.robot) })),
   {
     name: "robot_run_plan",

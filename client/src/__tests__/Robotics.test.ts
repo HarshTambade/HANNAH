@@ -232,6 +232,38 @@ describe("robot tools and the Robot Agent", () => {
     }
   });
 
+  it("a picture is asked of the engine and approved; the agent gets detections, not the picture, and a refusal says how to switch the camera on", async () => {
+    const preview = { title: "Take a picture: Rover takes one picture with its camera", lines: [{ label: "Robot", value: "Rover — SIMULATION (hannah-kinematic)" }, { label: "Kept for", value: "24 hours, then deleted" }, { label: "Who can see it", value: "Only this account. Every viewing is logged" }], warnings: [] };
+    const detection = { label: "red region", colour: "red", confidence: 0.82, distanceM: 1.2, model: "hannah-colour-regions", sensor: "camera", frame: 3, capturedAt: 5 };
+    respond = (call) => (call.path === "/api/actions" ? { record: record("waiting-approval", { action: "robots.capture_image", preview }) } : { record: record("done", { action: "robots.capture_image", response: { imageId: "im_1", status: "succeeded", detections: [detection], note: "1 coloured region detected." }, verification: { confirmed: true, evidence: "A 64×48 image arrived." } }) });
+    const screen = host(true);
+    const taken = await tool("robot_capture_image").execute({ robot: "Rover" }) as Record<string, unknown>;
+    screen.detach();
+    expect(calls[0]).toMatchObject({ path: "/api/actions", body: { action: "robots.capture_image", params: { robot: "Rover" } } });
+    expect(screen.seen[0]).toContain("Kept for: 24 hours, then deleted");
+    expect(screen.seen[0]).toContain("Every viewing is logged");
+    expect(taken).toMatchObject({ status: "done" });
+    expect(JSON.stringify(taken)).toContain("red region");
+    expect(JSON.stringify(taken)).not.toContain("data:image");
+    // Camera use switched off: the refusal is passed on as given, with nothing sent for approval.
+    calls.length = 0;
+    respond = () => ({ record: record("denied", { action: "robots.capture_image", permission: { outcome: "deny", code: "forbidden", reason: "Camera use is switched off for Rover. A signed-in person can switch it on under Robots → Camera." }, outcome: "Not allowed: Camera use is switched off for Rover. A signed-in person can switch it on under Robots → Camera." }) });
+    const refused = await tool("robot_capture_image").execute({ robot: "Rover" }).catch((error: Error) => ({ error: error.message })) as Record<string, unknown>;
+    expect(calls).toHaveLength(1);
+    expect(JSON.stringify(refused)).toMatch(/Camera use is switched off for Rover/);
+    // The tool descriptions keep the model from naming things it can't know.
+    expect(tool("robot_capture_image").description).toMatch(/cannot say what an object is and never who a person is/);
+    expect(tool("robot_camera").description).toMatch(/An old picture is what the camera saw then/);
+    const pick = (request: string) => selectToolsForRequest(getDeviceTools(), request).map((item) => item.name);
+    expect(pick("What can the robot see with its camera?")).toEqual(expect.arrayContaining(["robot_capture_image", "robot_camera", "robot_surroundings", "robot_stop"]));
+    expect(pick("What can the robot see with its camera?").length).toBeLessThanOrEqual(20);
+    // The read-only care agent can read what was seen but can't take a picture.
+    const care = SPECIALISTS.find((agent) => agent.id === "robot_care")!;
+    expect(care.tools).toContain("robot_camera");
+    expect(care.tools).not.toContain("robot_capture_image");
+    for (const agent of SPECIALISTS.filter((item) => item.id.startsWith("robot"))) expect(agent.tools.length).toBeLessThanOrEqual(20);
+  });
+
   it("the Robots screen has its own address", () => {
     expect(pathForScreen("robotics")).toBe("/robotics");
     expect(screenForLocation({ pathname: "/robotics", hash: "" })).toBe("robotics");

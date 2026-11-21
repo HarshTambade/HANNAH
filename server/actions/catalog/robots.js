@@ -93,6 +93,19 @@ function robotActions({ robotics }) {
         const { verdict } = assessed;
         const robot = verdict.robot;
         return {
+          ...(capabilityId === "capture_image" ? {
+            title: `Take a picture: ${robot.name} ${describe(verdict.params, robot)}`,
+            lines: [
+              { label: "Robot", value: `${robot.name} — ${kindLabel(robot)}` },
+              { label: "Camera", value: `${verdict.params.camera || "none"}${robot.simulated ? " (simulated)" : ""}` },
+              { label: "Kept for", value: `${robot.camera?.retentionHours ?? 24} hours, then deleted` },
+              { label: "Who can see it", value: "Only this account. Every viewing is logged" },
+              { label: "What is detected", value: "Regions of colour, with a confidence. Not what an object is, and never who a person is" },
+            ],
+            body: verdict.ok ? "The camera is read once, for this picture. Nothing moves." : verdict.violations.map((item) => item.message).join("\n"),
+            warnings: verdict.warnings,
+          } : {}),
+          ...(capabilityId === "capture_image" ? {} : {
           title: `Start a mission: ${robot.name} ${describe(verdict.params, robot)}`,
           lines: [
             { label: "Robot", value: `${robot.name} — ${kindLabel(robot)}` },
@@ -103,19 +116,24 @@ function robotActions({ robotics }) {
           ],
           body: verdict.ok ? `${["move_robot_arm", "grasp_object", "release_object"].includes(capabilityId) ? "The arm's own planner chooses the joint motion; HANNAH sends the target, never joint values." : "The robot's own planner drives it; HANNAH sends the goal, not wheel commands."} The command is valid for ${Math.round(verdict.limits?.commandTtlS ?? 20)} seconds after it is sent.` : verdict.violations.map((item) => item.message).join("\n"),
           warnings: verdict.warnings,
+          }),
         };
       },
       async execute(params, ctx) {
         const verdict = await robotics.assess(ctx.db, ctx.userId, params.robot, capabilityId, inputOf(params));
         if (!verdict.ok) throw fail(409, `Not sent. ${verdict.violations.map((item) => item.message).join(" ")}`, "safety-refused");
         const queued = await robotics.dispatch(ctx.db, ctx.userId, { robot: verdict.robot, capabilityId, params: verdict.params, actionId: ctx.record?.id });
-        const mission = await robotics.waitFor(ctx.db, ctx.userId, queued.id, (item) => item.status !== "queued" && item.status !== "sent");
+        const mission = await robotics.waitFor(ctx.db, ctx.userId, queued.id, (item) => (capabilityId === "capture_image" ? item.final : item.status !== "queued" && item.status !== "sent"));
         if (["rejected", "failed", "timed-out", "expired", "lost", "cancelled"].includes(mission.status)) throw fail(409, missionText(mission, verdict.robot.name), `mission-${mission.status}`);
+        if (capabilityId === "capture_image" && mission.result?.imageId) {
+          const { detector, detections = [], ...picture } = mission.result;
+          return { missionId: mission.id, robot: { id: verdict.robot.id, name: verdict.robot.name, kind: verdict.robot.simulated ? "simulation" : "physical" }, status: mission.status, imageId: picture.imageId, capturedAt: picture.capturedAt, frame: picture.frame, sensor: picture.sensor, source: picture.source, keptUntil: picture.expiresAt, detector, detections, note: `${detections.length} coloured region${detections.length === 1 ? "" : "s"} detected by ${detector?.model || "the detector"}. It finds regions of colour; it cannot say what an object is. ${verdict.robot.simulated ? "This is a simulated camera." : ""}`.trim() };
+        }
         return { missionId: mission.id, robot: { id: verdict.robot.id, name: verdict.robot.name, kind: verdict.robot.simulated ? "simulation" : "physical" }, status: mission.status, sent: verdict.params, note: missionText(mission, verdict.robot.name) };
       },
       async verify(response, _params, ctx) {
         const mission = await robotics.getMission(ctx.db, ctx.userId, response.missionId);
-        if (mission.status === "succeeded") return { confirmed: true, evidence: `Mission ${mission.id} already finished. ${mission.verification?.evidence || ""}`.trim() };
+        if (mission.status === "succeeded") return { confirmed: true, evidence: capabilityId === "capture_image" ? mission.verification?.evidence || "The picture arrived." : `Mission ${mission.id} already finished. ${mission.verification?.evidence || ""}`.trim() };
         if (mission.status === "accepted") return { confirmed: true, evidence: `${response.robot.name} accepted mission ${mission.id} and is carrying it out. This confirms the start, not the result: read the mission for where the robot ended up.` };
         if (mission.status === "queued" || mission.status === "sent") return { confirmed: false, evidence: `${response.robot.name} hasn't acknowledged mission ${mission.id} yet. If it doesn't accept it within ${Math.max(0, Math.round((mission.expiresAt - Date.now()) / 1000))} seconds the command expires and nothing runs.` };
         return { confirmed: false, evidence: missionText(mission, response.robot.name) };
@@ -321,6 +339,7 @@ function robotActions({ robotics }) {
     missionAction({ capabilityId: "move_robot_arm", title: "Move a robot arm", describe: (sent) => `moves its arm to ${sent.place ? `${sent.place} (${round(sent.x, 3)}, ${round(sent.y, 3)})` : `(${round(sent.x, 3)}, ${round(sent.y, 3)})`}` }),
     missionAction({ capabilityId: "grasp_object", title: "Grasp an object with a robot arm", describe: (sent) => `closes its gripper on the ${sent.object}` }),
     missionAction({ capabilityId: "release_object", title: "Release what a robot arm holds", describe: () => "opens its gripper" }),
+    missionAction({ capabilityId: "capture_image", title: "Take a picture with a robot's camera", describe: (sent) => `takes one picture with its ${sent.camera || "camera"}` }),
   ];
   return [
     readAction({
@@ -396,6 +415,22 @@ function robotActions({ robotics }) {
         const perception = verdict.robot.state?.perception;
         if (!perception) throw fail(409, `${verdict.robot.name} hasn't reported what its sensors detect yet.`, "no-reading");
         return { robot: verdict.robot.name, kind: verdict.robot.simulated ? "simulation" : "physical", online: verdict.robot.online, stale: !verdict.robot.online, ageS: verdict.robot.stateAgeS, position: verdict.robot.state.pose ?? null, ...perception, note: "These are sensor measurements with their source. Nothing here was inferred by a language model." };
+      },
+    }),
+    readAction({
+      id: "robots.camera", title: "Report what a robot's camera last saw", description: "The most recent picture a robot took on request: when, with which camera and frame, and the coloured regions a detector found, each with its confidence and, when the camera has depth, a distance and position. The answer says how old the picture is; an old picture is not what the robot sees now. It never says what an object is. Reading this is not viewing the picture.", input: { robot: ROBOT },
+      run: async (params, ctx) => {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        const { camera, images } = await robotics.listImages(ctx.db, ctx.userId, robot.id, 1);
+        if (!camera.cameras.length) throw fail(409, `${robot.name} has no camera registered.`, "no-camera");
+        const latest = images[0];
+        if (!latest) return { robot: robot.name, kind: robot.simulated ? "simulation" : "physical", cameraUse: camera.enabled ? "on" : "off", picture: null, note: camera.enabled ? `${robot.name} has no stored picture. Take one with robots.capture_image.` : `Camera use is switched off for ${robot.name}, and it has no stored picture.` };
+        const ageS = Math.max(0, Math.round((ctx.now() - latest.capturedAt) / 1000));
+        return {
+          robot: robot.name, kind: latest.kind, cameraUse: camera.enabled ? "on" : "off", imageId: latest.id, sensor: latest.sensor, frame: latest.frame, capturedAt: latest.capturedAt, ageS, stale: ageS > 30,
+          takenFrom: latest.pose, source: latest.source, depth: latest.depth, detector: latest.detector, detections: latest.detections,
+          note: `${ageS > 30 ? `This picture is ${ageS >= 120 ? `${Math.round(ageS / 60)} minutes` : `${ageS} seconds`} old: it is what the camera saw then, not what is there now. ` : ""}The detector finds regions of colour; it cannot say what an object is.${latest.kind === "simulation" ? " The camera is simulated." : ""}`,
+        };
       },
     }),
     readAction({

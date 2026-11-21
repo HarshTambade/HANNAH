@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, Loader2, MapPin, OctagonX, Plus, Radio, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
-import { AnalyticsPanel, ArmPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
+import { AnalyticsPanel, ArmPanel, CameraPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -345,6 +345,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
       <PlansPanel robot={robot} busy={Boolean(busy)} onAsk={(plan) => void control("plan", async () => ({ record: await Robotics.runPlan(robot.id, plan) }))} />
       {!isArm && <DestinationsPanel robot={robot} picked={target} />}
       <SurroundingsPanel robot={robot} />
+      <CameraPanel robot={robot} busy={Boolean(busy)} onAsk={() => void ask("picture", "robots.capture_image", {})} onChanged={() => void refresh()} />
 
       {robot.status === "enrolled" && state && (
         <section className={`${card} space-y-3`}>

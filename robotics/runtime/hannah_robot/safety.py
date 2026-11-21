@@ -21,7 +21,7 @@ from .geometry import distance_to_rect, point_in_polygon
 MOTION = {"navigate_to", "return_to_dock", "inspect_area"}
 ARM = {"move_robot_arm", "grasp_object", "release_object"}
 EXCLUSIVE = MOTION | ARM   # one of these at a time
-KNOWN = EXCLUSIVE | {"stop_motion", "set_supported_device_state"}
+KNOWN = EXCLUSIVE | {"stop_motion", "set_supported_device_state", "capture_image"}
 
 
 @dataclass
@@ -37,13 +37,14 @@ def _number(value) -> bool:
 
 
 class LocalSafety:
-    def __init__(self, limits: dict, capabilities: list[str], world: dict | None = None, robot_radius: float = 0.2, devices: list[str] | None = None, dock: dict | None = None):
+    def __init__(self, limits: dict, capabilities: list[str], world: dict | None = None, robot_radius: float = 0.2, devices: list[str] | None = None, dock: dict | None = None, cameras: list[str] | None = None):
         self.limits = limits
         self.capabilities = set(capabilities)
         self.world = world or {}
         self.radius = robot_radius
         self.devices = set(devices or [])
         self.dock = dock
+        self.cameras = set(cameras or [])
 
     def _point_problem(self, point: dict, label: str) -> str:
         if not isinstance(point, dict) or not _number(point.get("x")) or not _number(point.get("y")):
@@ -76,6 +77,15 @@ class LocalSafety:
             if state.get("faults"):
                 return Decision(False, "the robot has an active fault")
             return Decision(True, params={"device": params["device"], "state": params["state"]})
+
+        if capability == "capture_image":
+            # A picture moves nothing, so it is allowed with the emergency stop engaged or a fault active. It needs a camera this robot has, and one that works.
+            camera = params.get("camera") or (sorted(self.cameras)[0] if len(self.cameras) == 1 else None)
+            if camera not in self.cameras:
+                return Decision(False, "not a camera of this robot")
+            if ((state.get("sensors") or {}).get(camera) or {}).get("ok") is False:
+                return Decision(False, f"the {camera} isn't reporting")
+            return Decision(True, params={"camera": camera})
 
         # Everything below moves the robot.
         if (state.get("estop") or {}).get("engaged"):

@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Circle, Loader2, MapPin, MinusCircle, Trash2, XCircle } from "lucide-react";
-import { Robotics, type Analytics, type Commissioning, type Destinations, type Diagnostics, type FleetRow, type MaintenanceEntry, type Plan, type PlanTemplate, type Robot } from "../services/Robotics";
+import { Robotics, type Analytics, type CameraSetting, type Commissioning, type RobotImage, type Destinations, type Diagnostics, type FleetRow, type MaintenanceEntry, type Plan, type PlanTemplate, type Robot } from "../services/Robotics";
 import type { ActionRecord } from "../services/Operator";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -441,6 +441,81 @@ export function AnalyticsPanel() {
         </table>
       </div>
       <p className="text-xs text-slate-600">{figures.notes.join(" ")} Numbers in brackets are how many records a figure came from.</p>
+    </section>
+  );
+}
+
+/**
+ * A robot's camera: off until a person switches it on, one picture at a time
+ * on request, kept for a limited time, and opening a picture is logged. The
+ * boxes drawn on a picture are what the detector reported, nothing more.
+ */
+export function CameraPanel({ robot, busy, onAsk, onChanged }: { robot: Robot; busy: boolean; onAsk: () => void; onChanged: () => void }) {
+  const [setting, setSetting] = useState<CameraSetting>(robot.camera);
+  const [images, setImages] = useState<RobotImage[]>([]);
+  const [open, setOpen] = useState<RobotImage | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const load = useCallback(() => { void Robotics.images(robot.id).then((answer) => { setSetting(answer.camera); setImages(answer.images); }).catch(() => undefined); }, [robot.id]);
+  useEffect(() => { load(); const timer = window.setInterval(() => { if (!document.hidden) load(); }, 3000); return () => window.clearInterval(timer); }, [load]);
+  if (robot.status !== "enrolled" || !robot.camera?.cameras?.length) return null;
+  const change = async (camera: { enabled?: boolean; retentionHours?: number }) => {
+    const before = setting;
+    // Shown at once, and put back if the server refuses.
+    setSaving(true); setError(""); setSetting({ ...setting, ...camera });
+    try { setSetting((await Robotics.update(robot.id, { camera })).robot.camera); onChanged(); } catch (reason) { setSetting(before); setError(message(reason)); } finally { setSaving(false); }
+  };
+  const view = async (image: RobotImage) => {
+    setError("");
+    try { setOpen(await Robotics.image(robot.id, image.id)); } catch (reason) { setError(message(reason)); }
+  };
+  const remove = async (image: RobotImage) => {
+    setError("");
+    try { const answer = await Robotics.deleteImage(robot.id, image.id); setImages(answer.images); if (open?.id === image.id) setOpen(null); } catch (reason) { setError(message(reason)); }
+  };
+  const health = robot.state?.sensors?.camera;
+  return (
+    <section className={`${card} space-y-3`} data-testid="camera">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="font-semibold text-slate-900">Camera <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800">{robot.simulated ? "Simulated camera" : "Physical camera"}</span></h2>
+          <p className="text-sm text-slate-600">Off until you switch it on. One picture at a time, when asked for. HANNAH reports regions of colour it detects; it does not identify objects or people.</p>
+        </div>
+        <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-900"><input type="checkbox" checked={setting.enabled} disabled={saving} onChange={(event) => void change({ enabled: event.target.checked })} aria-label="Allow camera use" />Allow camera use</label>
+      </div>
+      {health?.ok === false && <Notice tone="rose">The camera isn't reporting. No picture can be taken.</Notice>}
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-sm text-slate-700">Keep pictures for
+          <select className={`${input} mt-1 block w-36`} value={setting.retentionHours} disabled={saving} onChange={(event) => void change({ retentionHours: Number(event.target.value) })} aria-label="How long pictures are kept">{[1, 2, 24, 72, 168, 720].map((hours) => <option key={hours} value={hours}>{hours < 24 ? `${hours} hour${hours === 1 ? "" : "s"}` : `${hours / 24} day${hours === 24 ? "" : "s"}`}</option>)}</select>
+        </label>
+        <button type="button" className={primary} disabled={busy || !setting.enabled || !robot.online || health?.ok === false} onClick={onAsk} data-testid="take-picture">{busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}Take a picture</button>
+      </div>
+      {!setting.enabled && <p className="text-sm text-slate-700">Camera use is off for this robot. HANNAH and its agents are refused a picture until you switch it on.</p>}
+      {!robot.simulated && setting.enabled && <Notice tone="amber">Whoever is in front of this robot will be in its pictures. Make sure they know.</Notice>}
+      {error && <Notice tone="rose">{error}</Notice>}
+      {images.length > 0 && (
+        <ul className="space-y-1">
+          {images.map((image) => (
+            <li key={image.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm" data-testid="picture">
+              <span className="text-slate-800">{day(image.capturedAt)} · frame {image.frame ?? "?"} · {image.detections.length ? image.detections.map((item) => `${item.label}${typeof item.distanceM === "number" ? ` ${fixed(item.distanceM)} m` : ""} (${fixed(item.confidence)})`).join(", ") : "nothing detected"}<span className="block text-xs text-slate-600">{image.kind === "simulation" ? "Simulated camera" : "Physical camera"} · deleted {day(image.expiresAt)}</span></span>
+              <span className="flex gap-2"><button type="button" className={button} onClick={() => void view(image)}>Open</button><button type="button" className={button} onClick={() => void remove(image)} aria-label={`Delete the picture from ${day(image.capturedAt)}`}><Trash2 className="h-4 w-4" aria-hidden="true" /></button></span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {open?.dataUrl && (
+        <figure className="space-y-2" data-testid="picture-open">
+          <div className="relative inline-block max-w-full overflow-hidden rounded-xl border border-slate-300 bg-slate-900" style={{ width: Math.min(480, open.width * 7.5) }}>
+            <img src={open.dataUrl} alt={`Picture from ${robot.name}'s ${open.sensor}, frame ${open.frame ?? "unknown"}, ${open.kind === "simulation" ? "simulated" : "physical"} camera`} className="block w-full" style={{ imageRendering: "pixelated" }} />
+            {open.detections.map((item, index) => (
+              <span key={index} className="absolute border-2 border-white" style={{ left: `${(item.box.x / open.width) * 100}%`, top: `${(item.box.y / open.height) * 100}%`, width: `${(item.box.w / open.width) * 100}%`, height: `${(item.box.h / open.height) * 100}%` }} aria-hidden="true" />
+            ))}
+          </div>
+          <figcaption className="text-xs text-slate-600">{open.source}. {open.detections.length} region{open.detections.length === 1 ? "" : "s"} detected by {open.detector?.model || "the detector"} ({open.detector?.kind || "detector"}). It cannot {open.detector?.cannot || "say what an object is"}. Opening this picture was logged.</figcaption>
+          <button type="button" className={button} onClick={() => setOpen(null)}>Close</button>
+        </figure>
+      )}
+      <p className="text-xs text-slate-600">Pictures are stored on the HANNAH server for this account only and deleted after the time above. Each opening of a picture is written to this robot's events with who opened it. The camera's own computer records every capture too.</p>
     </section>
   );
 }

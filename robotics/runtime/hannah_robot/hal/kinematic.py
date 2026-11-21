@@ -32,6 +32,7 @@ import random
 import time
 
 from ..geometry import clamp, distance_to_rect, path_length, ray_bounds, ray_rect, wrap
+from ..vision import Frame
 from .base import NavigationStatus, RobotAdapter
 
 DT = 0.02                 # simulation step, seconds
@@ -42,6 +43,10 @@ LIDAR_PERIOD = 0.2
 COMMAND_TIMEOUT = 0.5     # the base controller stops if it hears nothing for this long
 LOOKAHEAD = 0.45
 BLOCKED_GIVE_UP = 8.0     # seconds standing in front of an obstacle before the goal fails
+CAMERA_WIDTH, CAMERA_HEIGHT, CAMERA_FOV_DEG, CAMERA_RANGE = 64, 48, 70.0, 8.0
+# What the simulated camera paints. An obstacle with no colour is grey, which no detector here picks out.
+PALETTE = {"red": (205, 45, 45), "orange": (230, 130, 30), "yellow": (225, 205, 40), "green": (40, 160, 70), "blue": (45, 85, 205), "purple": (140, 60, 170)}
+GREY, WALL, FLOOR, CEILING = (120, 120, 126), (172, 172, 166), (70, 70, 74), (202, 207, 212)
 
 
 class OccupancyGrid:
@@ -218,6 +223,7 @@ class KinematicSimAdapter(RobotAdapter):
         self._accumulator = 0.0
         self._frozen = False       # test hook: the navigator stops issuing commands
         self.sensor_faults: set[str] = set()   # sensors that have stopped reporting (set through the simulated inputs)
+        self._frames, self._captured_at = 0, 0.0
         self.ambient = dict(world.get("ambient") or {"temperatureC": 21.0, "humidityPercent": 45.0})
         self._scan_at = time.time()
         self._clusters: list[dict] = []
@@ -240,16 +246,17 @@ class KinematicSimAdapter(RobotAdapter):
             "robotType": "differential-drive",
             "protocols": ["hannah-robot-v1"],
             "sensors": [
-                {"id": "lidar", "type": "2d-range", "description": f"{LIDAR_BEAMS} beams, {LIDAR_RANGE:.0f} m, simulated by ray casting"},
-                {"id": "odometry", "type": "wheel-odometry", "description": "Integrated wheel motion with simulated drift"},
-                {"id": "imu", "type": "imu", "description": "Simulated gyroscope; fused with the wheels for heading"},
-                {"id": "environment", "type": "temperature-humidity", "description": "Simulated ambient temperature and humidity"},
-                {"id": "bumper", "type": "contact", "description": "Latches a fault on collision"},
-                {"id": "battery", "type": "battery", "description": "Simulated charge"},
+                {"id": "lidar", "type": "2d-range", "description": f"{LIDAR_BEAMS} beams, {LIDAR_RANGE:.0f} m, simulated by ray casting", "frame": "laser", "rateHz": round(1 / LIDAR_PERIOD, 1), "resolution": f"{LIDAR_BEAMS} beams over 360 degrees", "messageType": "sensor_msgs/msg/LaserScan", "calibration": "none needed (simulated)"},
+                {"id": "odometry", "type": "wheel-odometry", "description": "Integrated wheel motion with simulated drift", "frame": "odom", "rateHz": round(1 / DT), "messageType": "nav_msgs/msg/Odometry", "calibration": "none needed (simulated)"},
+                {"id": "imu", "type": "imu", "description": "Simulated gyroscope; fused with the wheels for heading", "frame": "imu_link", "rateHz": round(1 / DT), "messageType": "sensor_msgs/msg/Imu", "calibration": "none needed (simulated)"},
+                {"id": "environment", "type": "temperature-humidity", "description": "Simulated ambient temperature and humidity", "frame": "base_link", "rateHz": 1, "messageType": "sensor_msgs/msg/Temperature, sensor_msgs/msg/RelativeHumidity"},
+                {"id": "bumper", "type": "contact", "description": "Latches a fault on collision", "frame": "base_link", "messageType": "none (a fault flag)"},
+                {"id": "battery", "type": "battery", "description": "Simulated charge", "frame": "base_link", "rateHz": 1, "messageType": "sensor_msgs/msg/BatteryState"},
+                {"id": "camera", "type": "rgbd-camera", "description": "Simulated forward camera with depth, rendered by ray casting only when a picture is asked for", "frame": "camera_link", "rateHz": 0, "resolution": f"{CAMERA_WIDTH}x{CAMERA_HEIGHT}, {CAMERA_FOV_DEG:.0f} degrees", "messageType": "sensor_msgs/msg/Image, sensor_msgs/msg/CameraInfo", "calibration": "ideal pinhole (simulated); no distortion"},
             ],
             "actuators": [{"id": "drive", "type": "differential-drive", "description": "Two driven wheels, simulated base controller"}],
             "devices": sorted(self.devices),
-            "capabilities": ["report_robot_state", "read_sensor", "report_surroundings", "stop_motion", "navigate_to", "return_to_dock", "inspect_area", "set_supported_device_state"],
+            "capabilities": ["report_robot_state", "read_sensor", "report_surroundings", "stop_motion", "navigate_to", "return_to_dock", "inspect_area", "set_supported_device_state", "capture_image"],
             "places": self.world.get("places", {}),
             "dock": self.world.get("dock"),
             "world": {"name": self.world.get("name", "world"), "bounds": bounds, "obstacles": [{"name": r.get("name", "obstacle"), "x": r["x"], "y": r["y"], "w": r["w"], "h": r["h"]} for r in self.static]},
@@ -308,6 +315,42 @@ class KinematicSimAdapter(RobotAdapter):
         if self.grid.dirty:
             self.grid.rebuild()
             self._replan_due = 0.0
+
+    def capture(self, sensor: str = "camera") -> Frame:
+        """Render one frame from where the robot really is. Called only for a capture: nothing is rendered otherwise."""
+        if sensor != "camera":
+            raise ValueError(f"this robot has no camera called '{sensor}'")
+        if "camera" in self.sensor_faults:
+            raise RuntimeError("the camera isn't reporting")
+        bounds = self.world["bounds"]
+        obstacles = self._obstacles()
+        half = CAMERA_HEIGHT / 2.0
+        columns, depth = [], []
+        for col in range(CAMERA_WIDTH):
+            offset = math.radians(CAMERA_FOV_DEG * (0.5 - (col + 0.5) / CAMERA_WIDTH))  # the image's left is the robot's left
+            angle = self.yaw + offset
+            dx, dy = math.cos(angle), math.sin(angle)
+            best, colour = ray_bounds(self.x, self.y, dx, dy, bounds), WALL
+            for rect in obstacles:
+                hit = ray_rect(self.x, self.y, dx, dy, rect)
+                if hit is not None and hit < best:
+                    best, colour = hit, PALETTE.get(str(rect.get("colour", "")).lower(), GREY)
+            seen = best <= CAMERA_RANGE
+            depth.append(round(best, 3) if seen else None)
+            flat = max(0.05, best * math.cos(offset))  # distance along the optical axis, so walls don't bulge
+            shade = max(0.45, 1.0 - best / 12.0)
+            columns.append((min(half, CAMERA_HEIGHT * 0.3 / flat) if seen else 0.0, tuple(int(channel * shade) for channel in colour)))
+        pixels = []
+        for row in range(CAMERA_HEIGHT):
+            away = abs(row + 0.5 - half)
+            pixels.append([colour if away <= height else (CEILING if row < half else FLOOR) for height, colour in columns])
+        self._frames += 1
+        self._captured_at = time.time()
+        return Frame(
+            width=CAMERA_WIDTH, height=CAMERA_HEIGHT, pixels=pixels, sensor="camera", number=self._frames, at_ms=int(self._captured_at * 1000), fov_deg=CAMERA_FOV_DEG,
+            source="simulated camera (HANNAH's built-in simulator, ray cast)", depth=depth, depth_source="simulated depth (ray cast)",
+            pose={"x": round(self.odom_x, 3), "y": round(self.odom_y, 3), "yaw": round(self.odom_yaw, 4), "frame": "map", "source": "odometry"},
+        )
 
     def _detect(self) -> list[dict]:
         """Group the range sensor's returns into objects. A measurement, not an interpretation:
@@ -553,7 +596,7 @@ class KinematicSimAdapter(RobotAdapter):
         self.estop = bool(engaged)
 
     def place_obstacle(self, rect: dict) -> None:
-        self.dynamic.append({"name": rect.get("name", "unexpected object"), "x": float(rect["x"]), "y": float(rect["y"]), "w": float(rect["w"]), "h": float(rect["h"])})
+        self.dynamic.append({"name": rect.get("name", "unexpected object"), "x": float(rect["x"]), "y": float(rect["y"]), "w": float(rect["w"]), "h": float(rect["h"]), **({"colour": str(rect["colour"])} if rect.get("colour") else {})})
 
     def clear_obstacles(self) -> None:
         self.dynamic = []
@@ -588,7 +631,7 @@ class KinematicSimAdapter(RobotAdapter):
         if isinstance(inputs.get("freezeNavigator"), bool):
             self._frozen = inputs["freezeNavigator"]
         if isinstance(inputs.get("sensorFaults"), list):
-            self.sensor_faults = {str(item) for item in inputs["sensorFaults"]} & {"lidar", "imu", "environment", "battery"}
+            self.sensor_faults = {str(item) for item in inputs["sensorFaults"]} & {"lidar", "imu", "environment", "battery", "camera"}
 
     # ---------------- time ----------------
     def advance(self, sim_seconds: float) -> None:
@@ -625,6 +668,8 @@ class KinematicSimAdapter(RobotAdapter):
             "environment": down("environment") if "environment" in self.sensor_faults else {"ok": True, "source": "simulated", "measuredAt": now_ms, "temperatureC": round(float(self.ambient.get("temperatureC", 21.0)), 1), "humidityPercent": round(float(self.ambient.get("humidityPercent", 45.0)), 1)},
             "bumper": {"ok": True, "source": "simulated", "measuredAt": now_ms, "pressed": any(item["code"] == "collision" for item in self.faults)},
             "battery": down("battery") if "battery" in self.sensor_faults else {"ok": True, "source": "simulated", "measuredAt": now_ms, "percent": round(self.battery, 1)},
+            # The camera's health only. It holds no image: a frame exists only when a capture was asked for.
+            "camera": down("camera") if "camera" in self.sensor_faults else {"ok": True, "source": "simulated", "measuredAt": now_ms, "width": CAMERA_WIDTH, "height": CAMERA_HEIGHT, "fovDeg": CAMERA_FOV_DEG, "framesCaptured": self._frames, "lastCapturedAt": int(self._captured_at * 1000) if self._captured_at else None},
         }
 
     def _perception(self) -> dict:
@@ -639,7 +684,7 @@ class KinematicSimAdapter(RobotAdapter):
             "obstaclesKnown": lidar_ok,
             "route": {"blocked": blocked, "reason": f"The last goal was given up: {self._nav.reason}" if gave_up else "Something the range sensor sees is in the robot's path." if blocked else ("No route is being followed." if self._goal is None else "Clear ahead.")} if lidar_ok else {"blocked": None, "reason": "Unknown: the range sensor isn't reporting."},
             "changes": self._changes(),
-            "sensorHealth": [{"id": name, "ok": name not in self.sensor_faults, **({"problem": "not reporting"} if name in self.sensor_faults else {})} for name in ("lidar", "odometry", "imu", "environment", "bumper", "battery")],
+            "sensorHealth": [{"id": name, "ok": name not in self.sensor_faults, **({"problem": "not reporting"} if name in self.sensor_faults else {})} for name in ("lidar", "odometry", "imu", "environment", "bumper", "battery", "camera")],
         }
 
     def state(self) -> dict:
