@@ -76,7 +76,14 @@ def main(argv=None) -> int:
             print("This robot isn't enrolled yet. Run: python3 -m hannah_robot enroll --server … --code …", file=sys.stderr)
             return 2
         server = check_server_url(credentials["server"], args.allow_insecure)
-        adapter.start()
+        try:
+            adapter.start()
+        except ImportError as error:
+            print(f"The {adapter.name} adapter can't start: {error.name or 'a ROS 2 package'} isn't available. Source your ROS 2 environment first (for example: source /opt/ros/jazzy/setup.bash).", file=sys.stderr)
+            return 3
+        except RuntimeError as error:
+            print(str(error), file=sys.stderr)
+            return 3
         safety = local_safety(adapter)
         guard = CommandGuard(credentials["secret"], credentials["robotId"], os.path.join(state_dir, "guard.json"))
         runtime = Runtime(adapter, guard, safety, link_timeout=float(safety.limits.get("linkTimeoutS", 5)), log=log)

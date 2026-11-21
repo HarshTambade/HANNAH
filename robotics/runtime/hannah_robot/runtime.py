@@ -207,7 +207,10 @@ class Runtime:
     def _start_leg(self, mission: Mission) -> None:
         goal = mission.waypoints[mission.index]
         mission.phase = f"driving to point {mission.index + 1} of {len(mission.waypoints)}" if len(mission.waypoints) > 1 else "driving"
-        self.adapter.navigate(goal, mission.max_speed, mission.params.get("tolerance", 0.25))
+        try:
+            self.adapter.navigate(goal, mission.max_speed, mission.params.get("tolerance", 0.25))
+        except Exception as error:  # noqa: BLE001 - an adapter that can't take the goal is a failed mission, not a crashed runtime
+            self._abort(f"The robot's navigation stack didn't take the goal ({type(error).__name__}).")
 
     # ---------------- the loop ----------------
     def _compose(self, raw: dict) -> dict:

@@ -1,0 +1,23 @@
+name: Robotics — Gazebo acceptance check
+
+# Manual only. This job has NOT been run yet: it is the way to find out whether
+# HANNAH's ROS 2 adapter, the Gazebo Harmonic robot and Nav2 work together.
+# Expect to fix things on the first runs. It never runs on a push, so it can't
+# fail the main build.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gazebo:
+    name: ROS 2 Jazzy + Gazebo Harmonic + Nav2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -f robotics/Dockerfile.gazebo -t hannah-gazebo .
+      - name: Run HANNAH's simulation suite against Gazebo
+        run: docker run --rm hannah-gazebo

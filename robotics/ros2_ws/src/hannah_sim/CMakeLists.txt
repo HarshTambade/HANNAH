@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.8)
+project(hannah_sim)
+find_package(ament_cmake REQUIRED)
+install(DIRECTORY worlds maps models urdf config launch DESTINATION share/${PROJECT_NAME})
+ament_package()

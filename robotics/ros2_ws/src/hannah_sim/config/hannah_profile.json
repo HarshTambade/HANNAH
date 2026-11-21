@@ -1,0 +1,30 @@
+{
+  "adapter": "ros2",
+  "identity": {
+    "manufacturer": "HANNAH",
+    "model": "hannah_bot in Gazebo Harmonic",
+    "robotType": "differential-drive",
+    "softwareVersion": "0.1.0",
+    "firmwareVersion": "none (simulated)"
+  },
+  "world": "../../../../worlds/workcell.json",
+  "robot": { "radius": 0.18 },
+  "limits": {
+    "maxLinearSpeed": 0.5,
+    "maxAngularSpeed": 1.6,
+    "maxLinearAccel": 0.8,
+    "minBatteryPercent": 15,
+    "linkTimeoutS": 5,
+    "commandTtlS": 20,
+    "environment": "simulation"
+  },
+  "ros": {
+    "simulation": { "kind": "gazebo-harmonic", "note": "Gazebo Harmonic with Nav2 on ROS 2 Jazzy." },
+    "useSimTime": true,
+    "mapFrame": "map",
+    "baseFrame": "base_footprint",
+    "topics": { "odom": "/odom", "scan": "/scan", "cmdVel": "/cmd_vel", "battery": "", "estop": "", "heartbeat": "/hannah/heartbeat", "speedLimit": "/speed_limit", "initialPose": "/initialpose" },
+    "navigateAction": "navigate_to_pose",
+    "publishInitialPose": true
+  }
+}

@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1
+# ROS 2 Jazzy + Gazebo Harmonic + Nav2, with HANNAH's server and robot runtime,
+# to run the Gazebo acceptance check. NOT YET BUILT OR RUN.
+#
+#   docker build -f robotics/Dockerfile.gazebo -t hannah-gazebo .
+#   docker run --rm hannah-gazebo                      # runs the check and exits 0 when it passes
+#
+# Jazzy with Harmonic is the pairing Gazebo's own table recommends
+# (https://gazebosim.org/docs/latest/ros_installation/). Rendering for the
+# simulated lidar is done in software, so no GPU is needed.
+FROM ros:jazzy-ros-base
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LIBGL_ALWAYS_SOFTWARE=1 \
+    HANNAH_ROBOT_PROFILE=/hannah/robotics/ros2_ws/install/hannah_sim/share/hannah_sim/config/hannah_profile.json \
+    HANNAH_WORLD_JSON=/hannah/robotics/worlds/workcell.json \
+    PYTHONPATH=/hannah/robotics/runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ros-jazzy-ros-gz ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-robot-state-publisher ros-jazzy-tf2-ros \
+        python3-colcon-common-extensions curl ca-certificates xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js for HANNAH's server (the acceptance check starts the real server in-process).
+ARG NODE_VERSION=24.11.0
+RUN arch="$(dpkg --print-architecture)" \
+    && case "$arch" in amd64) node_arch=x64 ;; arm64) node_arch=arm64 ;; *) echo "unsupported architecture $arch" && exit 1 ;; esac \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" | tar -xJ -C /usr/local --strip-components=1
+
+WORKDIR /hannah
+COPY server/package*.json server/
+RUN cd server && npm ci --ignore-scripts --no-audit --no-fund
+COPY server server
+COPY robotics robotics
+
+RUN . /opt/ros/jazzy/setup.sh && cd robotics/ros2_ws && colcon build
+# The profile is installed into the package's share directory; its world file is the repository's.
+RUN sed -i 's#"world": "[^"]*"#"world": "/hannah/robotics/worlds/workcell.json"#' "$HANNAH_ROBOT_PROFILE"
+
+COPY robotics/tools/gazebo_check.sh /usr/local/bin/gazebo_check
+RUN chmod +x /usr/local/bin/gazebo_check
+CMD ["gazebo_check"]

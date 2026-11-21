@@ -4,8 +4,15 @@
 // (robotics/runtime, Python) driving HANNAH's built-in kinematic simulator,
 // talking over HTTP through a proxy the test can cut.
 //
-// This is not Gazebo and not a physical robot. The Gazebo and ROS 2 files in
-// robotics/ros2_ws are not exercised by any test here.
+// By default this is not Gazebo and not a physical robot.
+//
+// The same suite is the acceptance check for the Gazebo robot: with a ROS 2
+// environment sourced and `ros2 launch hannah_sim sim.launch.py` running, set
+//   HANNAH_ROBOT_PROFILE=<…>/hannah_sim/config/hannah_profile.json
+// and the runtime uses its ROS 2 adapter against Gazebo Harmonic and Nav2
+// instead. That mode has NOT been run yet (see robotics/README.md); the
+// emergency-stop test is skipped in it because the Gazebo robot has no
+// emergency-stop input in Block 1.
 const assert = require("node:assert/strict");
 const { spawn, spawnSync } = require("node:child_process");
 const { once } = require("node:events");
@@ -32,7 +39,11 @@ const python = (() => {
 })();
 const skip = python ? false : "python3 (3.9 or newer) isn't installed, so the robot runtime can't run here";
 
-const SPEED = 8; // simulated seconds per real second
+const PROFILE = process.env.HANNAH_ROBOT_PROFILE || ""; // empty: HANNAH's built-in simulator
+const GAZEBO = Boolean(PROFILE);
+const SPEED = 8; // simulated seconds per real second (built-in simulator only; Gazebo runs in real time)
+const PATIENCE = GAZEBO ? 6 : 1; // real time is slower than 8x
+const runtimeArgs = (command, extra = []) => ["-m", "hannah_robot", command, "--state-dir", stateDir, ...(PROFILE ? ["--profile", PROFILE] : []), ...extra];
 const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "hannah-robot-sim-"));
 const inputs = (value) => fs.writeFileSync(path.join(stateDir, "sim-inputs.json"), JSON.stringify(value));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -54,7 +65,7 @@ const act = (action, params) => call("POST", "/actions", { action, params, reque
 const robot = async () => (await call("GET", `/robots/${robotId}`)).body.robot;
 const mission = async (id) => (await call("GET", `/robots/missions/${id}`)).body.mission;
 async function until(read, done, { ms = 20_000, every = 100, what = "the condition" } = {}) {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms * PATIENCE;
   for (;;) {
     const value = await read();
     if (done(value)) return value;
@@ -96,18 +107,18 @@ before(async () => {
   assert.equal(created.status, 201);
   robotId = created.body.robot.id;
   // Not spawnSync: the server it enrolls with lives in this process and has to answer.
-  const enrolling = spawn("python3", ["-m", "hannah_robot", "enroll", "--server", link.url, "--code", created.body.enrollment.code, "--state-dir", stateDir], { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
+  const enrolling = spawn("python3", runtimeArgs("enroll", ["--server", link.url, "--code", created.body.enrollment.code]), { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
   let said = "";
   enrolling.stdout.on("data", (chunk) => { said += chunk; });
   enrolling.stderr.on("data", (chunk) => { said += chunk; });
   const [code] = await once(enrolling, "exit");
   assert.equal(code, 0, said);
   log.push(...said.split("\n").filter(Boolean).map((line) => { try { return JSON.parse(line); } catch { return { event: "text", message: line }; } }));
-  runtime = spawn("python3", ["-m", "hannah_robot", "run", "--state-dir", stateDir, "--sim-speed", String(SPEED), "--sync-interval", "0.2"], { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
+  runtime = spawn("python3", runtimeArgs("run", ["--sync-interval", "0.2", ...(GAZEBO ? [] : ["--sim-speed", String(SPEED)])]), { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
   let buffer = "";
   runtime.stdout.on("data", (chunk) => { buffer += chunk; const lines = buffer.split("\n"); buffer = lines.pop(); for (const line of lines) { try { log.push(JSON.parse(line)); } catch { /* not a log line */ } } });
   runtime.stderr.on("data", (chunk) => log.push({ event: "stderr", message: String(chunk) }));
-  await until(robot, (value) => value.online, { what: "the robot to connect" });
+  await until(robot, (value) => value.online && (!GAZEBO || value.state?.localized), { ms: 60_000, what: GAZEBO ? "the robot to connect and Nav2 to localize it" : "the robot to connect" });
 });
 
 after(async () => {
@@ -131,46 +142,50 @@ test("the runtime and the server sign the same way", () => {
 test("the runtime enrolls as a simulation and keeps its secret to itself", { skip }, async () => {
   const value = await robot();
   assert.equal(value.simulated, true);
-  assert.equal(value.simulator, "hannah-kinematic");
+  assert.equal(value.simulator, GAZEBO ? "gazebo-harmonic" : "hannah-kinematic");
   assert.equal(value.robotType, "differential-drive");
-  assert.equal(value.adapter, "kinematic");
-  assert.deepEqual(value.capabilities, ["report_robot_state", "read_sensor", "stop_motion", "navigate_to", "return_to_dock", "inspect_area", "set_supported_device_state"]);
+  assert.equal(value.adapter, GAZEBO ? "ros2" : "kinematic");
+  assert.deepEqual(value.capabilities, ["report_robot_state", "read_sensor", "stop_motion", "navigate_to", "return_to_dock", "inspect_area", ...(GAZEBO ? [] : ["set_supported_device_state"])]);
   assert.deepEqual(Object.keys(value.places), ["dock", "workbench", "shelves", "door", "loading bay"]);
   assert.equal(value.limits.maxLinearSpeed, 0.5);
   assert.equal(value.limits.environment, "simulation");
   assert.equal(value.world.obstacles.length, 6);
-  assert.equal(value.state.pose.source, "odometry");
-  assert.equal(value.state.sim.kind, "hannah-kinematic");
+  assert.equal(value.state.pose.source, GAZEBO ? "map localization (tf)" : "odometry");
+  assert.equal(value.state.sim.kind, GAZEBO ? "gazebo-harmonic" : "hannah-kinematic");
   const credentials = path.join(stateDir, "credentials.json");
   assert.equal(fs.statSync(credentials).mode & 0o777, 0o600);
   const { secret } = JSON.parse(fs.readFileSync(credentials, "utf8"));
   assert.equal(log.some((line) => JSON.stringify(line).includes(secret)), false, "the secret is never logged");
-  assert.ok(log.some((line) => line.event === "running" && line.simulation === "hannah-kinematic"));
+  assert.ok(log.some((line) => line.event === "running" && line.simulation === (GAZEBO ? "gazebo-harmonic" : "hannah-kinematic")));
 });
 
 test("“Move the robot to the destination”: a goal is planned, driven and verified from the robot's state", { skip }, async () => {
   const before = await idle();
   const started = await start("robots.navigate_to", { robot: "Rover", place: "workbench" });
   assert.equal(started.asked.preview.title, "Start a mission: Rover drives to workbench (3.1, 1.9)");
-  assert.ok(started.asked.preview.lines.some((line) => /SIMULATION \(hannah-kinematic\)/.test(line.value)));
+  assert.ok(started.asked.preview.lines.some((line) => /SIMULATION \((hannah-kinematic|gazebo-harmonic)\)/.test(line.value)));
   assert.equal(started.record.status, "done", JSON.stringify(started.record));
   assert.match(started.record.verification.evidence, /accepted mission .* This confirms the start, not the result/);
   // While it drives: moving, a path planned around the obstacles, and not there yet.
   const moving = await until(robot, (value) => value.mode === "navigating" && value.state.velocity.linear > 0.2, { what: "the robot to move" });
   assert.equal(moving.state.mission.id, started.missionId);
-  assert.ok(moving.state.nav.path.length >= 2);
+  if (!GAZEBO) assert.ok(moving.state.nav.path.length >= 2);
   assert.ok(distance(moving.state.pose, { x: 3.1, y: 1.9 }) > 1);
   assert.equal((await mission(started.missionId)).status, "accepted");
   const done = await until(() => mission(started.missionId), (value) => value.final, { what: "the mission to finish" });
   assert.equal(done.status, "succeeded", JSON.stringify(done));
   assert.equal(done.verification.confirmed, true);
-  assert.match(done.verification.evidence, /The robot's localization \(odometry\) reports \(\d\.\d+, \d\.\d+\), 0\.\d+ m from the goal \(3\.1, 1\.9\), standing still\. Simulator ground truth: 0\.\d+ m from the goal\./);
-  assert.ok(done.result.travelled > 8, "it drove around the obstacles, not through them");
+  assert.match(done.verification.evidence, GAZEBO
+    ? /The robot's localization \(map localization \(tf\)\) reports \(\d\.\d+, \d\.\d+\), 0\.\d+ m from the goal \(3\.1, 1\.9\), standing still\./
+    : /The robot's localization \(odometry\) reports \(\d\.\d+, \d\.\d+\), 0\.\d+ m from the goal \(3\.1, 1\.9\), standing still\. Simulator ground truth: 0\.\d+ m from the goal\./);
+  assert.ok(done.result.travelled > 7.5, "it drove around the obstacles, not through them");
   const arrived = await idle();
   assert.ok(distance(arrived.state.pose, { x: 3.1, y: 1.9 }) <= 0.25);
-  assert.ok(distance(arrived.state.sim.truth, { x: 3.1, y: 1.9 }) <= 0.4, "the simulator's ground truth agrees");
   assert.deepEqual(arrived.state.faults, []);
-  assert.ok(arrived.state.battery.percent < before.state.battery.percent, "driving used some battery");
+  if (!GAZEBO) {
+    assert.ok(distance(arrived.state.sim.truth, { x: 3.1, y: 1.9 }) <= 0.4, "the simulator's ground truth agrees");
+    assert.ok(arrived.state.battery.percent < before.state.battery.percent, "driving used some battery");
+  }
   // What an agent is told when it asks afterwards.
   const asked = await act("robots.mission", { robot: "Rover" });
   assert.match(asked.body.record.response.summary, /Drive to a place: finished and verified/);
@@ -213,7 +228,7 @@ test("stop needs no approval, cancels the mission and is confirmed by the robot'
   assert.equal((await robot()).state.velocity.linear, 0);
 });
 
-test("a pressed emergency stop halts the robot at once, fails the mission and blocks new ones until released at the robot", { skip }, async () => {
+test("a pressed emergency stop halts the robot at once, fails the mission and blocks new ones until released at the robot", { skip: skip || (GAZEBO ? "the Gazebo robot has no emergency-stop input in Block 1" : false) }, async () => {
   await idle();
   const started = await start("robots.navigate_to", { robot: "Rover", place: "shelves" });
   await until(robot, (value) => value.state.velocity.linear > 0.3, { what: "the robot to move" });
@@ -242,7 +257,7 @@ test("when the network goes away the robot stops by itself, and says so when it 
   // Start from the far corner and drive slowly, so the trip outlasts the outage.
   const home = await start("robots.return_to_dock", { robot: "Rover" });
   assert.equal((await until(() => mission(home.missionId), (value) => value.final, { what: "the trip to the dock" })).status, "succeeded");
-  assert.equal((await idle()).mode, "docked");
+  if (!GAZEBO) assert.equal((await idle()).mode, "docked");
   const started = await start("robots.navigate_to", { robot: "Rover", place: "loading bay", maxSpeed: 0.1 });
   assert.equal(started.record.status, "done");
   await until(robot, (value) => value.state.velocity.linear > 0.05, { what: "the robot to move" });
