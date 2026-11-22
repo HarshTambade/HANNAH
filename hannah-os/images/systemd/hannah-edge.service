@@ -1,0 +1,53 @@
+# HANNAH Edge (the device hub) as a systemd service.
+#
+# NOT YET RUN: this unit was written on a machine without systemd and has
+# never been started. Expect to adjust paths. See hannah-os/HANNAH_OS_DEPLOYMENT_GUIDE.md.
+#
+# Install by hand on an existing Linux computer:
+#   sudo useradd --system --home /var/lib/hannah-edge --create-home hannah-edge
+#   sudo cp -r hannah-os/runtime /opt/hannah-edge
+#   sudo -u hannah-edge python3 -m hannah_edge enroll --server https://… --code … --state-dir /var/lib/hannah-edge/state
+#   sudo cp hannah-os/images/systemd/hannah-edge.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hannah-edge
+#
+# A restart loads the last signed configuration from disk, so devices are read
+# and automations run again before the server is reached.
+
+[Unit]
+Description=HANNAH Edge device hub
+Documentation=https://github.com/HarshTambade
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hannah-edge
+Group=hannah-edge
+WorkingDirectory=/opt/hannah-edge
+Environment=PYTHONUNBUFFERED=1
+# Refuse to start on a computer that isn't ready (bad clock, key file readable by others).
+ExecStartPre=/usr/bin/python3 -m hannah_edge doctor --state-dir /var/lib/hannah-edge/state
+ExecStart=/usr/bin/python3 -m hannah_edge run --state-dir /var/lib/hannah-edge/state
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5
+
+# The hub needs the network and its state directory. Nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ReadOnlyPaths=/opt/hannah-edge
+ReadWritePaths=/var/lib/hannah-edge
+
+[Install]
+WantedBy=multi-user.target

@@ -425,6 +425,22 @@ app.use("/api", createPhoneBridgeRouter({ hooks: phoneWorkflowHooks }));
 app.use("/api", createRobotDeviceRouter({ robotics: () => operator.robotics, enrollLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "robot-enroll" }) }));
 // A device hub's own requests, the same way.
 app.use("/api", createHubDeviceRouter({ devices: () => operator.devices, enrollLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "hub-enroll" }) }));
+
+// One inventory across robots and devices: a single answer for the account's hardware.
+app.get("/api/inventory", async (req, res) => {
+  const account = res.locals.hannahAccount;
+  if (!account) return res.status(401).json({ error: "Sign in to see your inventory.", reason: "signin-required" });
+  const db = await getDatabase().catch(() => null);
+  if (!db) return res.status(503).json({ error: "Devices need the account database.", reason: "no-database" });
+  try {
+    const [robots, devices, hubs] = await Promise.all([
+      operator.robotics.listRobots(db, account.id),
+      operator.devices.listDevices(db, account.id),
+      operator.devices.listHubs(db, account.id),
+    ]);
+    res.json({ robots, devices, hubs, total: robots.length + devices.length });
+  } catch (error) { res.status(500).json({ error: error.message || "The inventory couldn't be loaded." }); }
+});
 app.use(express.json({ limit: "12mb" }));
 // HANNAH as an MCP server (streamable HTTP) at /mcp, for callers with their own
 // credential: a developer key, the operator token, or a Groq key, checked by

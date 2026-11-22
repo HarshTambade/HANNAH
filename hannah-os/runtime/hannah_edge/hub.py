@@ -18,6 +18,8 @@ from __future__ import annotations
 import glob
 import json
 import os
+import socket
+import struct
 import threading
 import time
 
@@ -26,6 +28,7 @@ from .adapters.base import AdapterError, check_value, writable
 from .link import LinkError
 from .mqtt import MqttClient, MqttError
 from .protocol import CONFIG_LABEL, CommandGuard, verified, write_private
+from .update import Updater
 from .rules import RuleEngine
 
 CONFIRM_S = 4.0
@@ -51,6 +54,7 @@ class Hub:
         self._devices: dict = {}
         self._config: dict = {"version": 0, "devices": [], "rules": []}
         self._outbox: list = []
+        self._updater = Updater(os.path.join(state_dir or ".", "updates"))
         self._serial = 0
         self._last_write: dict = {}
         self._confirm: list = []
@@ -184,7 +188,7 @@ class Hub:
         if verdict.duplicate:
             return
         command = verdict.command
-        runner = {"write": self._run_write, "probe": self._run_probe, "discover": self._run_discover}[command["type"]]
+        runner = {"write": self._run_write, "probe": self._run_probe, "discover": self._run_discover, "update": self._run_update}[command["type"]]
         threading.Thread(target=self._guarded, args=(runner, command), name=f"command-{command['id'][-6:]}", daemon=True).start()
 
     def _guarded(self, runner, command: dict) -> None:
@@ -235,9 +239,18 @@ class Hub:
             ports = sorted(set(sum((glob.glob(pattern) for pattern in ("/dev/ttyUSB*", "/dev/ttyACM*", "/dev/cu.usb*", "/dev/serial/by-id/*")), [])))[:40]
             self._result(command, "done", discovered={"kind": "serial", "ports": [{"path": port} for port in ports], "note": "Listed only. Nothing was opened or written to."})
             return
+        if kind == "mdns":
+            service_type = str((command.get("settings") or {}).get("service") or "_http._tcp.local")
+            seconds = max(1.0, min(15.0, float((command.get("settings") or {}).get("seconds") or 5)))
+            try:
+                found = self._mdns_browse(service_type, seconds)
+            except Exception as error:
+                self._result(command, "failed", reason="mdns-error", message=str(error))
+                return
+            self._result(command, "done", discovered={"kind": "mdns", "service": service_type, "seconds": seconds, "services": found, "note": "Listened only. Nothing was published."})
+            return
         if kind != "mqtt":
             self._result(command, "refused", reason="unknown-kind", message="This hub can look at an MQTT broker's topics or list serial ports.")
-            return
         settings = command.get("settings") or {}
         seconds = max(1.0, min(15.0, float(command.get("seconds") or 5)))
         seen: dict = {}
@@ -262,6 +275,147 @@ class Hub:
         self._result(command, "done", discovered={"kind": "mqtt", "seconds": seconds, "topics": sorted(seen.values(), key=lambda item: item["topic"])[:200], "note": "Listened only. Nothing was published."})
 
     # ---------- the loop ----------
+    def _mdns_browse(self, service_type: str, seconds: float) -> list:
+        """A named, person-authorised look for one service type. Best effort; parses PTR/SRV/A records."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except (AttributeError, OSError):
+            pass
+        sock.bind(("", 5353))
+        sock.settimeout(0.5)
+        group = "224.0.0.251"
+        # Build a DNS query for service_type PTR.
+        def encode_name(name: str) -> bytes:
+            out = b""
+            for label in name.strip(".").split("."):
+                raw = label.encode("utf-8")
+                out += bytes([len(raw)]) + raw
+            return out + b"\x00"
+
+        transaction = 0x1234
+        header = struct.pack("!HHHHHH", transaction, 0x0000, 1, 0, 0, 0)
+        question = encode_name(service_type) + struct.pack("!HH", 12, 0x0001)  # PTR, IN
+        packet = header + question
+        sock.sendto(packet, (group, 5353))
+        found: dict = {}
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            try:
+                data, _addr = sock.recvfrom(4096)
+            except socket.timeout:
+                # re-send query once midway
+                try:
+                    sock.sendto(packet, (group, 5353))
+                except OSError:
+                    pass
+                continue
+            self._parse_mdns(data, found)
+        sock.close()
+        return sorted(found.values(), key=lambda item: item.get("name", ""))[:200]
+
+    @staticmethod
+    def _parse_mdns(data: bytes, found: dict) -> None:
+        if len(data) < 12:
+            return
+        _id, flags, qd, an, ns, ar = struct.unpack("!HHHHHH", data[:12])
+        offset = 12
+        # skip questions
+        for _ in range(qd):
+            offset = Hub._skip_name(data, offset)
+            offset += 4
+        records = an + ns + ar
+        instances: list = []
+        for _ in range(records):
+            name, offset = Hub._read_name(data, offset)
+            if offset + 10 > len(data):
+                return
+            rtype, rclass, ttl, rdlength = struct.unpack("!HHIH", data[offset:offset+10])
+            offset += 10
+            rdata = data[offset:offset+rdlength]
+            offset += rdlength
+            if rtype == 12:  # PTR
+                target, _ = Hub._read_name(data, offset - rdlength)
+                # target is the instance name; resolve later by name
+                found.setdefault(target, {"name": target, "type": "ptr"})
+            elif rtype == 33:  # SRV
+                if rdlength >= 6:
+                    priority, weight, port = struct.unpack("!HHH", rdata[:6])
+                    target, _ = Hub._read_name(data, offset - rdlength + 6)
+                    # find matching instance by target host? store port under target host
+                    found.setdefault(target, {"name": target, "port": port})
+            elif rtype == 1:  # A
+                if rdlength == 4:
+                    addr = ".".join(str(b) for b in rdata)
+                    # associate with the name we read
+                    found.setdefault(name, {"name": name, "address": addr})
+                    found[name]["address"] = addr
+        # merge: if an instance name has a port/address, keep it; also keep ptr targets
+        # Flatten: move ptr-target entries that look like instances
+        for key, value in list(found.items()):
+            if "port" not in value and "address" not in value and key.count(".") >= 2:
+                found[key] = {"name": key}
+
+    @staticmethod
+    def _skip_name(data: bytes, offset: int) -> int:
+        while offset < len(data):
+            length = data[offset]
+            if length == 0:
+                return offset + 1
+            if (length & 0xC0) == 0xC0:
+                return offset + 2
+            offset += 1 + length
+        return offset
+
+    @staticmethod
+    def _read_name(data: bytes, offset: int):
+        labels = []
+        jumped = False
+        original_offset = offset
+        visited = set()
+        while offset < len(data):
+            if offset in visited:
+                break
+            visited.add(offset)
+            length = data[offset]
+            if length == 0:
+                offset += 1
+                break
+            if (length & 0xC0) == 0xC0:
+                if offset + 2 > len(data):
+                    break
+                ptr = ((length & 0x3F) << 8) | data[offset + 1]
+                if not jumped:
+                    original_offset = offset + 2
+                offset = ptr
+                jumped = True
+                continue
+            offset += 1
+            if offset + length > len(data):
+                break
+            labels.append(data[offset:offset+length].decode("utf-8", "replace"))
+            offset += length
+        name = ".".join(labels)
+        return name, (original_offset if jumped else offset)
+
+    def _run_update(self, command: dict) -> None:
+        announced = {"version": command.get("version"), "size": command.get("size"), "sha256": command.get("sha256")}
+        url = command.get("url")
+        if not url:
+            self._result(command, "failed", reason="no-url", message="The update didn't say where to get it.")
+            return
+        try:
+            import urllib.request
+            with urllib.request.urlopen(str(url), timeout=120) as response:
+                bundle = response.read()
+            version = self._updater.stage(bundle, announced)
+            self._updater.activate(version)
+            self._updater.on_start()
+            self._result(command, "done", update=self._updater.status())
+        except Exception as error:
+            self._result(command, "failed", reason="update-error", message=str(error))
+
     def tick(self) -> None:
         with self._lock:
             entries = list(self._devices.items())
@@ -292,7 +446,7 @@ class Hub:
                 devices.append({"id": device_id, "connection": adapter.connection() if adapter else entry["error"], "points": adapter.readings() if adapter else {}, "rejected": adapter.rejected if adapter else 0})
             return {
                 "at": int(self.clock() * 1000), "protocol": PROTOCOL, "software": __version__, "configVersion": self._config.get("version", 0),
-                "devices": devices, "rules": self.rules.report(), "outbox": list(self._outbox[:40]),
+                "devices": devices, "rules": self.rules.report(), "outbox": list(self._outbox[:40]), "update": self._updater.status(),
             }
 
     def exchange(self) -> bool:

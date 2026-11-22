@@ -22,7 +22,7 @@ class MqttDevice(DeviceAdapter):
         "permissions": "network-local",
         "security": "Device messages are data: a value that doesn't fit the point's type and range is dropped",
         "diagnostics": "Broker connection, the device's own availability message, time since each point was heard",
-        "tested": "Against HANNAH's own test broker. Not against any physical device",
+        "tested": "Against HANNAH's own test broker and against aedes, an independent broker. Not against any physical device",
         "notSupported": "QoS 2, MQTT 5 features, client certificates",
     }
 

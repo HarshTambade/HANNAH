@@ -214,7 +214,33 @@ export const ROBOTICS = {
   ],
 } as const;
 
+/**
+ * The Devices section. The protocols named here are the ones the hub has an
+ * adapter for (server/devices/profiles.js); a test fails if this list says
+ * more than the server does, or if a shipped profile is called plug and play.
+ */
+export const DEVICES = {
+  status: "beta" as Status,
+  rules: [
+    ["A hub on your own network", "A small program, HANNAH Edge, runs on a computer next to your devices. It speaks to them and opens the connection to HANNAH. Nothing connects in to your network."],
+    ["Added without writing code", "Pick the device from a list, give HANNAH its manual, or describe it with a form. The hub then connects and shows you what it heard, before anything is switched on."],
+    ["You choose what may be changed", "Reading is separate from changing. HANNAH can change only what you allowed, inside its range, and a change counts as done only when the device itself reports the new value."],
+    ["Automations with no AI in them", "“When the temperature is above 28, switch the fan on” is approved once. After that the hub runs it by itself, and keeps running it without the internet."],
+  ],
+  protocols: [{ id: "mqtt", label: "MQTT" }, { id: "modbus-tcp", label: "Modbus TCP" }, { id: "http", label: "HTTP on the local network" }],
+  notBuilt: [{ id: "matter", label: "Matter" }, { id: "zigbee", label: "Zigbee" }, { id: "zwave", label: "Z-Wave" }, { id: "ble", label: "Bluetooth" }, { id: "opcua", label: "OPC UA" }, { id: "modbus-rtu", label: "Modbus over a serial line" }],
+  also: ["A manual's values come with the page and the line each was read from, and every one starts as unverified", "Each device shows how far its description was tested", "A value says whether it is live or only the last one known, and how old it is"],
+  limits: [
+    "Tested with HANNAH's own simulated devices, which speak MQTT and Modbus TCP over real sockets. No physical device has been connected.",
+    "No description of a real product ships yet, and none is called plug and play.",
+    "Matter, Zigbee, Z-Wave, Bluetooth, OPC UA and Modbus over a serial line are not built.",
+    "There is no HANNAH OS image to install yet: the hub is a program you start on a computer you already have.",
+    "HANNAH is not a safety system. A lock, a heater or a machine keeps its own protections.",
+  ],
+} as const;
+
 export const ROADMAP = [
+  ["Real devices and more ways to reach them", "Today devices work with HANNAH's own simulated ones over MQTT, Modbus TCP and HTTP. Next: the same checks against real products, then Matter and Zigbee, then images that make an edge computer a hub from first boot."],
   ["Robots in Gazebo and on real hardware", "Today robots work with HANNAH's built-in simulators. Running the ROS 2 adapter with Nav2 in Gazebo comes first, then a supervised physical robot, then arms with MoveIt 2."],
   ["Computer use in the desktop app", "Seeing the screen and using the mouse and keyboard, with approval for each action. Today it needs a desktop app you build yourself (see the README)."],
   ["Signed store releases", "Notarized macOS, signed Windows, Google Play and TestFlight builds."],
@@ -223,6 +249,10 @@ export const ROADMAP = [
 ] as const;
 
 export const FAQS = [
+  {
+    q: "Can HANNAH control my lights, plugs and sensors?",
+    a: "With simulated devices, yes; with real ones it is untested. You run a hub (HANNAH Edge) on a computer on your network, add a device by picking it from a list, giving HANNAH its manual or describing it with a form, and the hub checks the connection before you switch it on. HANNAH speaks MQTT, Modbus TCP and HTTP today. It has been tested only with its own simulated devices; Matter, Zigbee, Z-Wave and Bluetooth are not built. HANNAH is not a safety system.",
+  },
   {
     q: "Can HANNAH control a robot?",
     a: "In simulation, yes; on real hardware, not yet. You add a robot under Robots, start HANNAH's robot runtime, and ask it to drive to a place, inspect a route, take a picture or move an arm. Every request is checked by a Safety Gateway, approved by you, and verified from the robot's own state. This is tested with HANNAH's built-in simulators only: the ROS 2 and Gazebo files have not been run, no physical robot has been connected, and HANNAH is not safety-certified. Its Stop button is a software request, not an emergency stop.",

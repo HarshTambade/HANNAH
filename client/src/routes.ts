@@ -22,7 +22,8 @@ export type AppScreen =
   | "integrations"
   | "marketplace"
   | "actions"
-  | "robotics";
+  | "robotics"
+  | "devices";
 
 export type Screen = AppScreen | "not-found";
 
@@ -39,6 +40,7 @@ export const ROUTE_PATHS: Record<AppScreen, string> = {
   marketplace: "/marketplace",
   actions: "/actions",
   robotics: "/robotics",
+  devices: "/devices",
 };
 
 export const ROUTE_TITLES: Record<Screen, string> = {
@@ -54,6 +56,7 @@ export const ROUTE_TITLES: Record<Screen, string> = {
   marketplace: "Marketplace · HANNAH",
   actions: "Actions · HANNAH",
   robotics: "Robots · HANNAH",
+  devices: "Devices · HANNAH",
   "not-found": "Page not found · HANNAH",
 };
 
@@ -61,7 +64,7 @@ export const ROUTE_TITLES: Record<Screen, string> = {
 export const APP_ROUTE_PATHS = Object.values(ROUTE_PATHS).filter((path) => path !== "/");
 
 /** Older names some links used; they open the current screen. */
-const ALIASES: Record<string, AppScreen> = { "/conversation": "conversation", "/home": "landing", "/workflows": "automations", "/tasks": "agents", "/permissions": "actions", "/code": "actions", "/robots": "robotics", "/connectors/callback": "marketplace" };
+const ALIASES: Record<string, AppScreen> = { "/conversation": "conversation", "/home": "landing", "/workflows": "automations", "/tasks": "agents", "/permissions": "actions", "/code": "actions", "/robots": "robotics", "/hardware": "devices", "/iot": "devices", "/connectors/callback": "marketplace" };
 
 /** Extra pages the build emits (an index.html each) that open another screen: a connector's sign-in returns to /connectors/callback. */
 export const EXTRA_PAGE_PATHS: Record<string, AppScreen> = { "/connectors/callback": "marketplace" };

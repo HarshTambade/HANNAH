@@ -151,6 +151,19 @@ function createDeviceAccountRouter({ devices, engine, manuals = null }) {
     res.json({ removed: true });
   }));
   router.post("/hubs/:id/discover", json, person(async (req, res, db, account) => res.json(await devices.discover(db, account.id, req.params.id, req.body || {}, { requestedBy: "a signed-in person" }))));
+  router.get("/devices/publishers", anyAccount(async (_req, res, db, account) => res.json({ keys: await devices.listPublisherKeys(db, account.id) })));
+  router.post("/devices/publishers", json, person(async (req, res, db, account) => res.status(201).json(await devices.addPublisherKey(db, account.id, req.body || {}))));
+  router.delete("/devices/publishers/:keyId", person(async (req, res, db, account) => res.json(await devices.revokePublisherKey(db, account.id, req.params.keyId))));
+  router.post("/devices/profiles/install", json, person(async (req, res, db, account) => res.status(201).json(await devices.installSignedProfile(db, account.id, req.body?.profile))));
+
+  router.post("/hubs/:id/update", json, person(async (req, res, db, account) => {
+    const hub = await devices.getHub(db, account.id, req.params.id);
+    const commandId = await devices.issueUpdate(db, account.id, hub.id, { version: req.body?.version, size: Number(req.body?.size), sha256: req.body?.sha256, url: req.body?.url, requestedBy: "a signed-in person" });
+    const command = await devices.waitForCommand(db, account.id, commandId, { ms: 2000 });
+    res.status(command.final && command.status !== "done" ? 409 : 202).json({ commandId, command });
+  }));
+  router.get("/hubs/updates", anyAccount(async (_req, res, db, account) => res.json({ hubs: (await devices.listHubs(db, account.id)).map((hub) => ({ id: hub.id, name: hub.name, software: hub.software, updateStatus: hub.updateStatus })) })));
+
   return router;
 }
 

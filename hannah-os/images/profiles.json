@@ -1,0 +1,50 @@
+{
+  "format": 1,
+  "status": "NOT BUILT. No image described here has been built, booted or installed. These are the build inputs.",
+  "validatedHardware": [],
+  "core": {
+    "components": [{ "id": "hannah-edge", "source": "hannah-os/runtime", "module": "hannah_edge", "needs": "Python 3.9 or newer, standard library only" }],
+    "services": ["hannah-os/images/systemd/hannah-edge.service"],
+    "security": [
+      "No listening port: the hub opens every connection itself",
+      "A firewall that denies incoming connections",
+      "Automatic security updates from the base system",
+      "No secret in the image: a hub is enrolled by a person with a one-time code",
+      "The hub runs as its own locked user, with a read-only system and one writable directory"
+    ]
+  },
+  "profiles": [
+    {
+      "id": "edge", "name": "HANNAH OS Desktop/Edge", "for": "A mini PC or single-board computer that is the household's or office's hub",
+      "base": { "system": "ubuntu-server", "release": "24.04 LTS", "why": "Widest hardware and driver support; standard packages; easiest to debug" },
+      "architectures": ["amd64", "arm64"], "firstBoot": "hannah-os/images/first-boot/user-data.yaml", "packages": ["python3", "ufw", "unattended-upgrades"], "components": [], "services": []
+    },
+    {
+      "id": "robotics", "name": "HANNAH OS Robotics", "for": "A robot's own computer",
+      "base": { "system": "ubuntu-server", "release": "24.04 LTS", "why": "ROS 2 Jazzy's supported platform; see robotics/ros2_ws/VERSIONS.yaml" },
+      "architectures": ["amd64", "arm64"], "firstBoot": "hannah-os/images/first-boot/user-data.yaml",
+      "packages": ["python3", "ufw", "unattended-upgrades", "ros-jazzy-ros-base", "ros-jazzy-navigation2", "ros-jazzy-nav2-bringup", "ros-jazzy-robot-state-publisher", "ros-jazzy-tf2-ros"],
+      "components": [{ "id": "hannah-robot", "source": "robotics/runtime", "module": "hannah_robot", "needs": "Python 3.9 or newer; rclpy for the ROS 2 adapter" }],
+      "services": ["robotics/deploy/hannah-robot.service"],
+      "notes": ["Real-time motor control is not on this computer's Linux processes: it belongs to the robot's controller (ros2_control, a microcontroller or the vendor's drive)."]
+    },
+    {
+      "id": "iot-gateway", "name": "HANNAH OS IoT Gateway", "for": "A small, unattended box that only runs the hub",
+      "base": { "system": "ubuntu-core", "release": "24", "why": "Immutable, made of confined snaps, with transactional updates that roll back by themselves" },
+      "architectures": ["amd64", "arm64"], "snap": "hannah-os/images/snap/snapcraft.yaml", "packages": [], "components": [], "services": []
+    },
+    {
+      "id": "industrial-edge", "name": "HANNAH OS Industrial Edge", "for": "A gateway on a plant network, between equipment and HANNAH",
+      "base": { "system": "ubuntu-core", "release": "24", "why": "As the IoT gateway; a custom image for one board family is the case for a Yocto build instead" },
+      "architectures": ["amd64", "arm64"], "snap": "hannah-os/images/snap/snapcraft.yaml", "packages": [], "components": [], "services": [],
+      "notes": ["Modbus TCP is in the core. OPC UA is not built.", "The equipment's network must not be reachable from the internet: the gateway has one interface to the plant network and one outbound route."]
+    },
+    {
+      "id": "developer", "name": "HANNAH OS Developer Edition", "for": "Building and testing integrations",
+      "base": { "system": "ubuntu-server", "release": "24.04 LTS", "why": "As Desktop/Edge, with the tools to build" },
+      "architectures": ["amd64", "arm64"], "firstBoot": "hannah-os/images/first-boot/user-data.yaml", "packages": ["python3", "ufw", "unattended-upgrades", "git", "python3-venv"],
+      "components": [{ "id": "hannah-robot", "source": "robotics/runtime", "module": "hannah_robot", "needs": "Python 3.9 or newer" }], "services": ["robotics/deploy/hannah-robot.service"],
+      "notes": ["Includes HANNAH's simulators: python3 -m hannah_edge simulate"]
+    }
+  ]
+}

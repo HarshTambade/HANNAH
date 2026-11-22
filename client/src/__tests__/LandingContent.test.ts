@@ -36,6 +36,26 @@ describe("landing model and agent content", () => {
   });
 });
 
+describe("landing devices content", () => {
+  it("names only protocols the hub has an adapter for, and keeps saying no physical device was tested", async () => {
+    const { DEVICES, FAQS, ROADMAP } = await import("../content/landing");
+    const profiles = require("../../../server/devices/profiles.js") as { ADAPTERS: Record<string, unknown>; NOT_BUILT: Record<string, string>; builtin: () => Array<Record<string, unknown>>; compatibility: (profile: unknown) => { level: string } };
+    expect(DEVICES.protocols.map((item) => item.id).sort()).toEqual(Object.keys(profiles.ADAPTERS).sort());
+    for (const item of DEVICES.notBuilt) expect(profiles.NOT_BUILT[item.id], item.label).toBeTruthy();
+    // "None is called plug and play" has to be true of what ships.
+    expect(profiles.builtin().some((profile) => profiles.compatibility(profile).level === "plug-and-play")).toBe(false);
+    expect(profiles.builtin().every((profile) => profile.simulated === true)).toBe(true);
+    expect(DEVICES.status).toBe("beta");
+    const limits = DEVICES.limits.join(" ");
+    expect(limits).toMatch(/No physical device has been connected/);
+    expect(limits).toMatch(/none is called plug and play/);
+    expect(limits).toMatch(/no HANNAH OS image to install yet/);
+    expect(limits).toMatch(/not a safety system/);
+    expect(FAQS.find((item) => /lights, plugs and sensors/.test(item.q))?.a).toMatch(/with real ones it is untested/);
+    expect(ROADMAP[0][1]).toMatch(/simulated/);
+  });
+});
+
 describe("landing robotics content", () => {
   it("names only capabilities the robot contract has as implemented, and keeps saying it is simulation only", async () => {
     const { ROBOTICS, FAQS, ROADMAP, CAPABILITIES } = await import("../content/landing");

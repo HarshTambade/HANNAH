@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, BookOpen, Bot, Brain, CheckCircle2, CircleDashed, Code2, Hand, ListChecks, Loader2, MinusCircle, MonitorSmartphone, PauseCircle, Play, ShieldCheck, Square, Trash2, Users, XCircle } from "lucide-react";
+import { AlertTriangle, BookOpen, Bot, Brain, CheckCircle2, CircleDashed, Code2, Hand, ListChecks, Loader2, MinusCircle, MonitorSmartphone, PauseCircle, Play, Plug, ShieldCheck, Square, Trash2, Users, XCircle } from "lucide-react";
 import { apiFetch, apiUrl } from "../services/api";
 import { ChatHistory } from "../services/ChatHistory";
 import { resumeTeamRun, TEAM_RUNS_EVENT, TeamRuns, type TeamRun, type TeamStep, type TeamStepStatus } from "../services/Orchestrator";
@@ -9,8 +9,8 @@ import { TaskRecords } from "../services/TaskRecords";
 
 const onDesktop = desktopFilesAvailable();
 
-const agentIcons: Record<SpecialistId, typeof Brain> = { research: BookOpen, coding: Code2, memory: Brain, tasks: ListChecks, robot: Bot, robot_fleet: Bot, robot_care: Bot, robot_arm: Bot };
-const agentTones: Record<SpecialistId, string> = { research: "tone-sky", coding: "tone-lavender", memory: "tone-mint", tasks: "tone-butter", robot: "tone-sky", robot_fleet: "tone-lavender", robot_care: "tone-mint", robot_arm: "tone-butter" };
+const agentIcons: Record<SpecialistId, typeof Brain> = { research: BookOpen, coding: Code2, memory: Brain, tasks: ListChecks, robot: Bot, robot_fleet: Bot, robot_care: Bot, robot_arm: Bot, devices: Plug };
+const agentTones: Record<SpecialistId, string> = { research: "tone-sky", coding: "tone-lavender", memory: "tone-mint", tasks: "tone-butter", robot: "tone-sky", robot_fleet: "tone-lavender", robot_care: "tone-mint", robot_arm: "tone-butter", devices: "tone-mint" };
 
 const stepStatus: Record<TeamStepStatus, { label: string; Icon: typeof Brain; className: string }> = {
   pending: { label: "Waiting", Icon: CircleDashed, className: "text-slate-500" },

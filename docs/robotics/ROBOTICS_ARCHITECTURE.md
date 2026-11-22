@@ -22,7 +22,7 @@ Read this first; the other documents in this folder go into each part.
 | [DEVELOPER_SDK.md](./DEVELOPER_SDK.md) | Adding robots, capabilities, worlds and packages; the HTTP API; the JavaScript client; webhooks |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Putting the runtime on a robot's computer; the health check; the service unit |
 | [REFERENCE_ROBOT.md](./REFERENCE_ROBOT.md) | What a first physical robot has to provide, by function |
-| [INDUSTRIAL_AND_IOT.md](./INDUSTRIAL_AND_IOT.md) | An evaluation of Home Assistant, MQTT, Modbus, OPC UA, PLCs and CAN. Nothing built |
+| [INDUSTRIAL_AND_IOT.md](./INDUSTRIAL_AND_IOT.md) | An evaluation of Home Assistant, MQTT, Modbus, OPC UA, PLCs and CAN. MQTT and Modbus TCP have since been built in the device hub (`hannah-os/`); the rest are not |
 | [robotics/PROGRESS.md](../../robotics/PROGRESS.md) | **Start here for what works:** every requirement with its real state, tests and blockers; milestones; known limitations |
 
 ## 1. The one rule

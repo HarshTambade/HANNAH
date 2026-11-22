@@ -13,7 +13,9 @@ import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
 import OperatorPage from "./components/OperatorPage";
 import RoboticsPage from "./components/RoboticsPage";
+import DevicesPage from "./components/DevicesPage";
 import { Robotics } from "./services/Robotics";
+import { Devices } from "./services/Devices";
 import { REMINDER_FIRED_EVENT, startReminderScheduler, type Reminder } from "./services/ReminderService";
 import { startAutomationRunner } from "./services/AutomationService";
 import { Diagnostics } from "./services/Diagnostics";
@@ -35,7 +37,7 @@ import AppWelcome from "./components/AppWelcome";
 import { MarketplaceService } from "./services/MarketplaceService";
 import { IS_WEBSITE } from "./config/site";
 
-const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "robotics", "settings"]);
+const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "robotics", "devices", "settings"]);
 const base = import.meta.env.BASE_URL;
 
 function currentScreen(): Screen {
@@ -99,7 +101,7 @@ export default function App() {
   useEffect(() => startReminderScheduler(), []);
   // Which robots the account has decides whether robot tools and the Robot Agent are offered.
   useEffect(() => {
-    const load = () => { void Robotics.refresh(); };
+    const load = () => { void Robotics.refresh(); void Devices.refresh(); };
     load();
     window.addEventListener("hannah:account", load);
     return () => window.removeEventListener("hannah:account", load);
@@ -306,6 +308,14 @@ export default function App() {
     return (
       <AppShell {...shellProps}>
         <RoboticsPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "devices") {
+    return (
+      <AppShell {...shellProps}>
+        <DevicesPage />
       </AppShell>
     );
   }

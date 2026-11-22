@@ -1,0 +1,1021 @@
+{
+  "updated": "2026-11-22",
+  "stages": {
+    "0": "Phase 0 \u2014 Audit",
+    "1": "Phase 1 \u2014 Architecture",
+    "2": "Phase 2 \u2014 Edge OS foundation",
+    "3": "Phase 3 \u2014 Universal device abstraction",
+    "4": "Phase 4 \u2014 Discovery and onboarding",
+    "5": "Phase 5 \u2014 Manual intelligence",
+    "6": "Phase 6 \u2014 No-code Hardware Studio and automation",
+    "7": "Phase 7 \u2014 Robotics OS",
+    "8": "Phase 8 \u2014 Physical hardware",
+    "9": "Phase 9 \u2014 IoT",
+    "10": "Phase 10 \u2014 Intelligence, agents, voice",
+    "11": "Phase 11 \u2014 Manipulation",
+    "12": "Phase 12 \u2014 Fleet",
+    "13": "Phase 13 \u2014 Marketplace and developer platform",
+    "14": "Phase 14 \u2014 Updates and recovery",
+    "15": "Phase 15 \u2014 Security, validation, production"
+  },
+  "items": [
+    {
+      "id": "0.1",
+      "stage": "0",
+      "feature": "Audit of existing HANNAH and what is reused",
+      "status": "IMPLEMENTED",
+      "files": [
+        "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md"
+      ],
+      "note": "A section of the architecture page. Reused: Action Engine, permission manager, vault, webhooks, workflows, model gateway, agents, document reader, the robot runtime's protocol design."
+    },
+    {
+      "id": "1.1",
+      "stage": "1",
+      "feature": "Three parts kept apart: edge hub, control plane, clients",
+      "status": "VERIFIED",
+      "where": [
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "Three separate processes in the tests. A client never talks to a device; the server never connects to a hub."
+    },
+    {
+      "id": "1.2",
+      "stage": "1",
+      "feature": "Hardware compatibility strategy: levels computed from evidence",
+      "status": "VERIFIED",
+      "where": [
+        "server"
+      ],
+      "tests": [
+        "server/devices.test.js"
+      ],
+      "note": "plug-and-play, guided, experimental, simulation, developer required, unsupported. Nothing that ships is plug-and-play."
+    },
+    {
+      "id": "1.3",
+      "stage": "1",
+      "feature": "No real-time control and no raw addressing above an adapter",
+      "status": "VERIFIED",
+      "where": [
+        "unit"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_adapters.py"
+      ],
+      "note": "An adapter exposes named points only. Deterministic control stays in the device, an MCU or the robot's controller."
+    },
+    {
+      "id": "2.1",
+      "stage": "2",
+      "feature": "Evaluation of the Linux foundation: Ubuntu Server, Ubuntu Core, Yocto/OpenEmbedded",
+      "status": "IMPLEMENTED",
+      "files": [
+        "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md"
+      ],
+      "note": "A written evaluation with the choice per image profile. Not validated by a build."
+    },
+    {
+      "id": "2.2",
+      "stage": "2",
+      "feature": "Five image profiles that share one core, and a manifest that is the same every time",
+      "status": "VERIFIED",
+      "where": [
+        "unit"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_images.py"
+      ],
+      "files": [
+        "hannah-os/images/profiles.json",
+        "hannah-os/tools/image_manifest.py"
+      ],
+      "note": "This verifies the description and the manifest. It is not an image."
+    },
+    {
+      "id": "2.3",
+      "stage": "2",
+      "feature": "Building the images (ubuntu-image, snapcraft, Yocto)",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "files": [
+        "hannah-os/images/snap/snapcraft.yaml"
+      ],
+      "note": "Build inputs are written and have never been built.",
+      "blockedBy": [
+        "H2"
+      ]
+    },
+    {
+      "id": "2.4",
+      "stage": "2",
+      "feature": "Installation, boot and first-boot setup on a board",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "files": [
+        "hannah-os/images/first-boot/user-data.yaml"
+      ],
+      "note": "The first-boot configuration is written and has never been booted.",
+      "blockedBy": [
+        "H2"
+      ]
+    },
+    {
+      "id": "2.5",
+      "stage": "2",
+      "feature": "The hub as a hardened system service",
+      "status": "IMPLEMENTED",
+      "files": [
+        "hannah-os/images/systemd/hannah-edge.service"
+      ],
+      "note": "Written on a machine without systemd; never started."
+    },
+    {
+      "id": "2.6",
+      "stage": "2",
+      "feature": "Hub identity: one-time enrollment code, key sealed in the vault, fingerprint on both sides",
+      "status": "VERIFIED",
+      "where": [
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ]
+    },
+    {
+      "id": "2.7",
+      "stage": "2",
+      "feature": "Hub health check (doctor)",
+      "status": "VERIFIED",
+      "where": [
+        "unit"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_adapters.py"
+      ]
+    },
+    {
+      "id": "2.8",
+      "stage": "2",
+      "feature": "Secure boot, signed images, disk encryption",
+      "status": "NOT_STARTED",
+      "note": "They belong to the image build (2.3). Ubuntu Core offers them on supported hardware; nothing was configured."
+    },
+    {
+      "id": "2.9",
+      "stage": "2",
+      "feature": "Separate, fault-isolated system services (discovery, adapters, automation, telemetry, updates)",
+      "status": "NOT_STARTED",
+      "note": "Today the hub is one process with one thread per device connection and per command. One device's fault doesn't stop the others (tested), but they are not separate services."
+    },
+    {
+      "id": "3.1",
+      "stage": "3",
+      "feature": "Device registry: owner, hub, maker, model, category, protocol, points, permissions, connection, health, last seen",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "tests": [
+        "server/devices.sim.test.js"
+      ],
+      "note": "Not in the model: workspaces (a device belongs to one account), and a device's firmware version (no protocol here reports it)."
+    },
+    {
+      "id": "3.2",
+      "stage": "3",
+      "feature": "Device Profile Package: declarative, versioned, validated",
+      "status": "VERIFIED",
+      "where": [
+        "server"
+      ],
+      "tests": [
+        "server/devices.test.js"
+      ],
+      "files": [
+        "server/devices/profiles.js",
+        "hannah-os/profiles/org.hannah.sim.fan.json"
+      ]
+    },
+    {
+      "id": "3.3",
+      "stage": "3",
+      "feature": "Profile signatures: Ed25519, trusted keys, revocation, a review of what it can change",
+      "status": "VERIFIED",
+      "where": [
+        "server"
+      ],
+      "tests": [
+        "server/devices.test.js"
+      ],
+      "note": "The check exists. There is no screen to add a publisher's key or install a published profile yet (13.2)."
+    },
+    {
+      "id": "3.4",
+      "stage": "3",
+      "feature": "Protocol adapter framework: each adapter declares protocol, sign-in, limits, errors, security and how far it was tested",
+      "status": "VERIFIED",
+      "where": [
+        "unit",
+        "sim"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_adapters.py",
+        "server/devices.sim.test.js"
+      ]
+    },
+    {
+      "id": "3.5",
+      "stage": "3",
+      "feature": "MQTT 3.1.1 adapter (QoS 0 and 1, TLS, user name and password)",
+      "status": "VERIFIED",
+      "where": [
+        "sim",
+        "server"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_mqtt.py",
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js",
+        "server/devices.interop.test.js"
+      ],
+      "note": "Tested against HANNAH's own test broker and against aedes, an independent broker. Not against Mosquitto or any device. No QoS 2, no MQTT 5."
+    },
+    {
+      "id": "3.6",
+      "stage": "3",
+      "feature": "Modbus TCP adapter (function codes 1-6 and 16; 16/32-bit and float formats)",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_modbus.py",
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js"
+      ],
+      "note": "Tested against HANNAH's own test server only. Local network addresses only."
+    },
+    {
+      "id": "3.7",
+      "stage": "3",
+      "feature": "HTTP adapter for local devices",
+      "status": "VERIFIED",
+      "where": [
+        "unit"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_adapters.py"
+      ],
+      "note": "Tested against a local test server. Not part of the end-to-end tests."
+    },
+    {
+      "id": "3.8",
+      "stage": "3",
+      "feature": "Device Safety Gateway on the server, repeated on the hub",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "tests": [
+        "server/devices.test.js",
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js"
+      ]
+    },
+    {
+      "id": "3.9",
+      "stage": "3",
+      "feature": "One inventory across robots and devices",
+      "status": "IMPLEMENTED",
+      "note": "A single /api/inventory answer combines robots, devices and hubs. No dedicated screen yet.",
+      "files": [
+        "server/index.js"
+      ]
+    },
+    {
+      "id": "4.1",
+      "stage": "4",
+      "feature": "Guided onboarding: pick, connect, check, switch on",
+      "status": "VERIFIED",
+      "where": [
+        "browser"
+      ],
+      "tests": [
+        "e2e/hardware.spec.ts"
+      ]
+    },
+    {
+      "id": "4.2",
+      "stage": "4",
+      "feature": "Verification report: connection, sign-in, encryption, data heard per point, values that fit; identity marked not checked",
+      "status": "VERIFIED",
+      "where": [
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ]
+    },
+    {
+      "id": "4.3",
+      "stage": "4",
+      "feature": "Looking at an MQTT broker's topics, with the person's say-so",
+      "status": "VERIFIED",
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "The hub side and the server route are tested, and the Devices and Hardware Studio screens have a button for it.",
+      "where": [
+        "sim",
+        "browser"
+      ]
+    },
+    {
+      "id": "4.4",
+      "stage": "4",
+      "feature": "Listing serial ports",
+      "status": "IMPLEMENTED",
+      "note": "Lists paths only; opens nothing. No test."
+    },
+    {
+      "id": "4.5",
+      "stage": "4",
+      "feature": "QR codes",
+      "status": "IMPLEMENTED",
+      "files": [
+        "client/src/components/QrScanner.tsx",
+        "client/src/components/DevicesPage.tsx"
+      ],
+      "note": "Client-side QR scan via BarcodeDetector with a manual-entry fallback. No server-side QR handling yet."
+    },
+    {
+      "id": "4.6",
+      "stage": "4",
+      "feature": "mDNS and local-network discovery",
+      "status": "IMPLEMENTED",
+      "note": "Hub can browse one mDNS service type on demand (best-effort parser). Client button not wired yet.",
+      "files": [
+        "hannah-os/runtime/hannah_edge/hub.py",
+        "server/devices/service.js"
+      ]
+    },
+    {
+      "id": "4.7",
+      "stage": "4",
+      "feature": "USB device discovery",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "4.8",
+      "stage": "4",
+      "feature": "Bluetooth Low Energy scanning",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "blockedBy": [
+        "H3"
+      ]
+    },
+    {
+      "id": "4.9",
+      "stage": "4",
+      "feature": "Matter commissioning",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "blockedBy": [
+        "H3"
+      ]
+    },
+    {
+      "id": "4.10",
+      "stage": "4",
+      "feature": "Unknown devices: say what is missing, keep the proposal, never enable it",
+      "status": "VERIFIED",
+      "where": [
+        "server"
+      ],
+      "tests": [
+        "server/devices.test.js"
+      ],
+      "note": "The answer names the missing protocol or driver. It is not stored as a request anyone is notified of."
+    },
+    {
+      "id": "5.1",
+      "stage": "5",
+      "feature": "Reading a manual (PDF, Word, text) with page numbers",
+      "status": "VERIFIED",
+      "where": [
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "Text only. A scanned PDF has no text layer and is reported as unreadable."
+    },
+    {
+      "id": "5.2",
+      "stage": "5",
+      "feature": "Facts with value, page, the line quoted, confidence and a verification state",
+      "status": "VERIFIED",
+      "where": [
+        "server",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.test.js",
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "Pattern-based: identity, protocol, serial settings, unit number, port, address, topics, register rows, operating limits, safety lines."
+    },
+    {
+      "id": "5.3",
+      "stage": "5",
+      "feature": "Evidence gate: a suggested value is dropped unless its quote is on the cited page and contains the value",
+      "status": "VERIFIED",
+      "where": [
+        "server"
+      ],
+      "tests": [
+        "server/devices.test.js"
+      ],
+      "note": "Applies to this code's own patterns and to anything a model suggests."
+    },
+    {
+      "id": "5.4",
+      "stage": "5",
+      "feature": "A language or vision model reading the manual",
+      "status": "IMPLEMENTED",
+      "note": "analyze() accepts an optional suggester; accept() gates every suggestion. No model is wired by default (H5).",
+      "files": [
+        "server/devices/manuals.js"
+      ]
+    },
+    {
+      "id": "5.5",
+      "stage": "5",
+      "feature": "Proposed profile from a manual, usable only after the hub connects with it",
+      "status": "VERIFIED",
+      "where": [
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "Always experimental. A writable register is proposed read-only; a register with no stated table is left out."
+    },
+    {
+      "id": "5.6",
+      "stage": "5",
+      "feature": "Diagrams, wiring diagrams, product labels, images",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "5.7",
+      "stage": "5",
+      "feature": "Electrical values reported for a qualified person, never used",
+      "status": "VERIFIED",
+      "where": [
+        "server",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ]
+    },
+    {
+      "id": "5.8",
+      "stage": "5",
+      "feature": "A manual is data: it cannot allow a write or grant a permission",
+      "status": "VERIFIED",
+      "where": [
+        "server"
+      ],
+      "tests": [
+        "server/devices.test.js",
+        "server/devices.sim.test.js"
+      ]
+    },
+    {
+      "id": "6.1",
+      "stage": "6",
+      "feature": "Hardware Studio: describe a device with a form; the server says what is missing",
+      "status": "VERIFIED",
+      "where": [
+        "browser"
+      ],
+      "tests": [
+        "e2e/hardware.spec.ts",
+        "client/src/__tests__/Devices.test.ts"
+      ]
+    },
+    {
+      "id": "6.2",
+      "stage": "6",
+      "feature": "Mapping sensors and actuators: type, unit, range, topic or register",
+      "status": "VERIFIED",
+      "where": [
+        "browser"
+      ],
+      "tests": [
+        "e2e/hardware.spec.ts",
+        "client/src/__tests__/Devices.test.ts"
+      ]
+    },
+    {
+      "id": "6.3",
+      "stage": "6",
+      "feature": "Visual automation builder",
+      "status": "VERIFIED",
+      "where": [
+        "browser"
+      ],
+      "tests": [
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "One condition and one change, with the opposite when it stops. The server accepts up to four of each."
+    },
+    {
+      "id": "6.4",
+      "stage": "6",
+      "feature": "Automation from plain language, through an agent tool",
+      "status": "VERIFIED",
+      "where": [
+        "unit"
+      ],
+      "tests": [
+        "client/src/__tests__/Devices.test.ts"
+      ],
+      "note": "The tool and its routing are tested with a scripted server. No live model has used it (H5)."
+    },
+    {
+      "id": "6.5",
+      "stage": "6",
+      "feature": "Deterministic rules on the hub: hysteresis, hold time, stale readings, hourly limit, pause",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js"
+      ],
+      "note": "No model is involved. Runs with the server away."
+    },
+    {
+      "id": "6.6",
+      "stage": "6",
+      "feature": "Developer mode: the generated description is shown",
+      "status": "IMPLEMENTED",
+      "note": "Shown in the Studio; no test asserts it."
+    },
+    {
+      "id": "6.7",
+      "stage": "6",
+      "feature": "Trying a change from the Studio before switching a device on",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "6.8",
+      "stage": "6",
+      "feature": "Schedules, variables, retries and error branches for device actions",
+      "status": "IMPLEMENTED",
+      "note": "The existing workflow engine can call device actions and is triggered by device.alert and device.rule.fired; combination still has no end-to-end test."
+    },
+    {
+      "id": "7.1",
+      "stage": "7",
+      "feature": "Robot runtime, simulators, Safety Gateway, missions, plans",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "files": [
+        "robotics/PROGRESS.md"
+      ],
+      "note": "Tracked in robotics/PROGRESS.md, with its own tests (server/robotics.*.test.js).",
+      "tests": [
+        "server/robotics.sim.test.js"
+      ]
+    },
+    {
+      "id": "7.2",
+      "stage": "7",
+      "feature": "ROS 2, Gazebo, Nav2",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "note": "Written, never run. See robotics/PROGRESS.md.",
+      "blockedBy": [
+        "H4"
+      ]
+    },
+    {
+      "id": "8.1",
+      "stage": "8",
+      "feature": "Physical robots and physical devices",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "note": "Nothing has been connected.",
+      "blockedBy": [
+        "H1",
+        "H4"
+      ]
+    },
+    {
+      "id": "9.1",
+      "stage": "9",
+      "feature": "IoT runtime: readings in, state kept with its age, events, reconnection, working offline",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js"
+      ]
+    },
+    {
+      "id": "9.2",
+      "stage": "9",
+      "feature": "Matter",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "blockedBy": [
+        "H3"
+      ]
+    },
+    {
+      "id": "9.3",
+      "stage": "9",
+      "feature": "Zigbee, Z-Wave, Bluetooth Low Energy",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "blockedBy": [
+        "H3"
+      ]
+    },
+    {
+      "id": "9.4",
+      "stage": "9",
+      "feature": "OPC UA",
+      "status": "NOT_STARTED",
+      "note": "Needs a client library with certificate handling and a server to test against."
+    },
+    {
+      "id": "9.5",
+      "stage": "9",
+      "feature": "Modbus RTU, CAN, raw serial, GPIO/I2C/SPI, CoAP",
+      "status": "NOT_STARTED",
+      "note": "Each is listed in the app as not built, with what it needs. CAN is out of scope by design."
+    },
+    {
+      "id": "9.6",
+      "stage": "9",
+      "feature": "Profiles for real products",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "note": "None ships. Writing one without the device to test it would be a guess.",
+      "blockedBy": [
+        "H1"
+      ]
+    },
+    {
+      "id": "9.7",
+      "stage": "9",
+      "feature": "Device events for webhooks and workflows",
+      "status": "VERIFIED",
+      "note": "Device events are offered to webhooks and workflow triggers (device.alert, device.rule.fired).",
+      "tests": [
+        "server/devices.sim.test.js"
+      ],
+      "where": [
+        "server"
+      ]
+    },
+    {
+      "id": "10.1",
+      "stage": "10",
+      "feature": "Devices agent, ten tools, routing by what the person says",
+      "status": "VERIFIED",
+      "where": [
+        "unit"
+      ],
+      "tests": [
+        "client/src/__tests__/Devices.test.ts"
+      ]
+    },
+    {
+      "id": "10.2",
+      "stage": "10",
+      "feature": "Voice: a spoken request reaches the same tools",
+      "status": "IMPLEMENTED",
+      "note": "A transcript takes the same road as typed text (tested on sentences). Speech recognition with device requests was not tested."
+    },
+    {
+      "id": "10.3",
+      "stage": "10",
+      "feature": "Device and configuration history in memory",
+      "status": "NOT_STARTED",
+      "note": "A device's events and changes are kept in the registry, not in HANNAH's memory."
+    },
+    {
+      "id": "10.4",
+      "stage": "10",
+      "feature": "Model gateway",
+      "status": "VERIFIED",
+      "where": [
+        "server"
+      ],
+      "files": [
+        "server/providers/catalog.js"
+      ],
+      "note": "Existing: 20 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM and custom endpoints (server/gateway.test.js). Not built: Azure AI and Amazon Bedrock. MLX works through a custom endpoint.",
+      "tests": [
+        "server/gateway.test.js"
+      ]
+    },
+    {
+      "id": "11.1",
+      "stage": "11",
+      "feature": "Manipulation",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "files": [
+        "robotics/PROGRESS.md"
+      ],
+      "note": "Arm simulator verified; MoveIt 2 not started. Tracked in robotics/PROGRESS.md.",
+      "tests": [
+        "server/robotics.arm.sim.test.js"
+      ]
+    },
+    {
+      "id": "12.1",
+      "stage": "12",
+      "feature": "Robot fleet",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "files": [
+        "robotics/PROGRESS.md"
+      ],
+      "note": "Tracked in robotics/PROGRESS.md.",
+      "tests": [
+        "server/robotics.fleet.test.js"
+      ]
+    },
+    {
+      "id": "12.2",
+      "stage": "12",
+      "feature": "Several hubs in one account",
+      "status": "IMPLEMENTED",
+      "note": "The registry and the screen handle several; the tests use one."
+    },
+    {
+      "id": "13.1",
+      "stage": "13",
+      "feature": "Signed profile packages with a review before use",
+      "status": "VERIFIED",
+      "where": [
+        "server"
+      ],
+      "tests": [
+        "server/devices.test.js"
+      ]
+    },
+    {
+      "id": "13.2",
+      "stage": "13",
+      "feature": "Marketplace: publish, browse, install, revoke, roll back",
+      "status": "IMPLEMENTED",
+      "files": [
+        "server/devices/service.js",
+        "server/devices/router.js",
+        "client/src/services/Devices.ts",
+        "client/src/components/DevicesPage.tsx"
+      ],
+      "note": "Account-level publisher keys and a verified install of a signed profile (verifyProfile + saveProfile)."
+    },
+    {
+      "id": "13.3",
+      "stage": "13",
+      "feature": "SDKs for devices (profile, adapter, workflow)",
+      "status": "NOT_STARTED",
+      "note": "The profile format and the HTTP API are documented. A robot client exists (robotics/sdk/js); none for devices."
+    },
+    {
+      "id": "13.4",
+      "stage": "13",
+      "feature": "Third-party driver code on a hub",
+      "status": "NOT_STARTED",
+      "note": "By design nothing third-party runs on a hub today: a profile is data. Running a contributed adapter needs a sandbox and a review step."
+    },
+    {
+      "id": "14.1",
+      "stage": "14",
+      "feature": "Hub self-update: announced hash, safe unpack, health check, probation, rollback",
+      "status": "VERIFIED",
+      "where": [
+        "unit"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_update.py"
+      ],
+      "note": "The module only. It is not wired to a server command and has never replaced an installed hub."
+    },
+    {
+      "id": "14.2",
+      "stage": "14",
+      "feature": "Update distribution: signed command, staged rollout, fleet view",
+      "status": "IMPLEMENTED",
+      "files": [
+        "hannah-os/runtime/hannah_edge/hub.py",
+        "hannah-os/runtime/hannah_edge/update.py",
+        "server/devices/service.js",
+        "server/devices/router.js",
+        "client/src/services/Devices.ts",
+        "client/src/components/DevicesPage.tsx"
+      ],
+      "note": "Hub handles an update command (stage, activate, rollback on restart); server can announce one and report status; client can announce."
+    },
+    {
+      "id": "14.3",
+      "stage": "14",
+      "feature": "Operating-system image updates and rollback",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "note": "Planned through Ubuntu Core's own transactional updates for the gateway profiles.",
+      "blockedBy": [
+        "H2"
+      ]
+    },
+    {
+      "id": "14.4",
+      "stage": "14",
+      "feature": "The hub keeps its signed configuration and resumes from it",
+      "status": "VERIFIED",
+      "where": [
+        "sim"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js"
+      ],
+      "note": "A configuration edited on disk is not obeyed."
+    },
+    {
+      "id": "14.5",
+      "stage": "14",
+      "feature": "Device firmware updates",
+      "status": "NOT_STARTED",
+      "note": "Not planned as an AI action. A profile cannot expose firmware, reset or pairing as a point (tested)."
+    },
+    {
+      "id": "15.1",
+      "stage": "15",
+      "feature": "Security tests: forged and replayed hub requests, wrong hub, expired and replayed commands, edited configuration, malicious profile, wildcard topics, untrusted manual text, cross-account access, out-of-range and unallowed writes, unsafe update archives",
+      "status": "VERIFIED",
+      "where": [
+        "unit",
+        "server",
+        "sim"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.test.js",
+        "server/devices.sim.test.js",
+        "hannah-os/runtime/tests/test_update.py",
+        "hannah-os/runtime/tests/test_adapters.py"
+      ]
+    },
+    {
+      "id": "15.2",
+      "stage": "15",
+      "feature": "Existing HANNAH still works: whole server, client and browser suites",
+      "status": "VERIFIED",
+      "where": [
+        "server",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "See the last full verification below."
+    },
+    {
+      "id": "15.3",
+      "stage": "15",
+      "feature": "No-code acceptance: add a hub, add a device, check, switch on, change, automate, see history",
+      "status": "VERIFIED",
+      "where": [
+        "browser"
+      ],
+      "tests": [
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "With simulated devices and a hub started by hand. Step 1 of the acceptance list, installing the operating environment on a target, is not done (2.3, 2.4)."
+    },
+    {
+      "id": "15.4",
+      "stage": "15",
+      "feature": "Independent security review",
+      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+      "blockedBy": [
+        "H6"
+      ]
+    },
+    {
+      "id": "15.5",
+      "stage": "15",
+      "feature": "Performance measurements",
+      "status": "NOT_STARTED",
+      "note": "None taken. No figure is claimed anywhere."
+    },
+    {
+      "id": "15.6",
+      "stage": "15",
+      "feature": "Landing page and README say what works and what doesn't",
+      "status": "VERIFIED",
+      "where": [
+        "unit"
+      ],
+      "tests": [
+        "client/src/__tests__/LandingContent.test.ts"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "id": "H1",
+      "what": "No physical device, broker, PLC or machine to test against",
+      "needs": "The owner names a device (maker, model) and has it on a network with a hub",
+      "unblocks": "Real product profiles, plug-and-play, any claim about a physical device"
+    },
+    {
+      "id": "H2",
+      "what": "No Linux build host with ubuntu-image or snapcraft, and no board to boot",
+      "needs": "A Linux machine (or CI job) and a target board or virtual machine",
+      "unblocks": "Building, booting and updating HANNAH OS images"
+    },
+    {
+      "id": "H3",
+      "what": "No Matter controller, Zigbee or Z-Wave coordinator, or Bluetooth radio, and no stack for them on the hub",
+      "needs": "The radio hardware, a decision on the library for each, and a device to pair",
+      "unblocks": "Matter, Zigbee, Z-Wave, Bluetooth"
+    },
+    {
+      "id": "H4",
+      "what": "No ROS 2, Gazebo or robot (robotics blockers B1 to B3)",
+      "needs": "See robotics/PROGRESS.md",
+      "unblocks": "Everything robotics that says Gazebo, ROS 2 or hardware"
+    },
+    {
+      "id": "H5",
+      "what": "No live language model run in the development environment",
+      "needs": "A provider key the owner is willing to use for tests",
+      "unblocks": "Model-assisted manual reading; showing an agent using device tools with a real model"
+    },
+    {
+      "id": "H6",
+      "what": "No independent security review",
+      "needs": "A reviewer who did not write the code",
+      "unblocks": "Any statement that the security design was reviewed"
+    }
+  ],
+  "next": [
+    "Wire the hub's self-update to a signed server command, with a staged rollout and a fleet view (14.2).",
+    "A button for looking at a broker's topics, and a server test for it (4.3); offer the topics found in the Hardware Studio.",
+    "A test for device events reaching a webhook and starting a workflow (9.7, 6.8).",
+    "Call a model for manual reading behind the evidence gate, off by default, with the provider named before anything is sent (5.4).",
+    "One inventory across robots and devices (3.9).",
+    "QR codes and mDNS, each as a named, person-authorised look (4.5, 4.6).",
+    "A publisher-key screen and installing a signed profile (13.2)."
+  ],
+  "lastVerified": {
+    "date": "2026-11-22",
+    "hub runtime": "60 passed on Python 3.14.6 and 3.9.6",
+    "robot runtime": "105 passed",
+    "server": "559 tests: 558 passed, 1 skipped (older), 0 failed; lint clean",
+    "client": "427 passed; typecheck clean; lint 0 errors",
+    "browser": "BROWSER_RESULT",
+    "device layer": "109 tests: 60 hub, 26 server (3 against an independent MQTT broker), 15 client, 8 browser",
+    "checks": "secret scan clean; licences permissive; catalogue, image description and both trackers consistent"
+  },
+  "resume": [
+    "git status -sb && git log --oneline -5",
+    "python3 hannah-os/tools/progress.py --check && python3 hannah-os/tools/build_catalog.py --check && python3 hannah-os/tools/image_manifest.py --check",
+    "cd hannah-os/runtime && python3 -m unittest discover -s tests -t .",
+    "cd server && node --test devices.test.js devices.sim.test.js",
+    "cd client && npx vitest run src/__tests__/Devices.test.ts && npm run build && npx playwright test hardware.spec.ts",
+    "python3 -m hannah_edge simulate    # from hannah-os/runtime: simulated devices to try the Devices screen with"
+  ]
+}

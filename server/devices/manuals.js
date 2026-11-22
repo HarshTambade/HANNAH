@@ -215,12 +215,20 @@ function propose(facts, registers, name) {
 }
 
 /** Read a manual and say what it supports. Nothing is stored. */
-async function analyze({ name, buffer }) {
+async function analyze({ name, buffer, suggest = null }) {
   const read = await readFile(buffer, name, { maxText: 2_000_000 });
   const pages = pagesOf(read);
   const { facts, registers } = extract(pages);
   // Each fact is checked against the document the same way a suggestion would be: a pattern that misquotes is a bug, and is dropped rather than shown.
   const kept = facts.filter((fact) => supported(pages, fact));
+  // Optional model assistance: a model may suggest facts, but only those the evidence gate accepts are kept. The model never bypasses the gate.
+  if (typeof suggest === "function") {
+    try {
+      const suggested = await suggest(pages.map((page) => `## Page ${page.page}\n${page.lines.join("\n")}`).join("\n\n"));
+      const { accepted } = accept(pages, Array.isArray(suggested) ? suggested : suggested?.facts || []);
+      for (const fact of accepted) { if (!kept.some((item) => item.field === fact.field && item.value === fact.value && item.page === fact.page)) kept.push(fact); }
+    } catch (_error) { /* model assistance is optional; the pattern-based reading still stands */ }
+  }
   const quoted = new Set(kept.filter((fact) => fact.field.startsWith("register.")).map((fact) => `${fact.page}|${fact.quote}`));
   const proposal = propose(kept, registers.filter((register) => quoted.has(`${register.page}|${register.quote}`)), name);
   const problems = proposal.profile ? profiles.validateProfile(proposal.profile) : [];
@@ -250,10 +258,10 @@ function decode(body) {
 }
 
 /** Routes, added to the device router: POST /devices/manuals (read one) and POST /devices/manuals/save (keep a proposal with its evidence). */
-function manualRoutes({ devices }) {
+function manualRoutes({ devices, suggest = null }) {
   return (router, { person }) => {
     const big = require("express").json({ limit: "30mb" });
-    router.post("/devices/manuals", big, person(async (req, res) => res.json(await analyze(decode(req.body)))));
+    router.post("/devices/manuals", big, person(async (req, res) => res.json(await analyze({ ...decode(req.body), suggest }))));
     router.post("/devices/manuals/save", big, person(async (req, res, db, account) => {
       // The document is read again here, so the evidence kept is what the server found, not what a client says it found.
       const analysis = await analyze(decode(req.body));

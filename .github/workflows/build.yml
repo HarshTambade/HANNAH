@@ -109,6 +109,13 @@ jobs:
       - name: Robot runtime tests (unit and built-in simulator; standard library only)
         run: python -m unittest discover -s tests -t .
         working-directory: robotics/runtime
+      - name: Device hub tests (protocol stacks, simulated devices, image description; standard library only)
+        run: |
+          python -m unittest discover -s tests -t .
+          python ../tools/build_catalog.py --check
+          python ../tools/image_manifest.py --check
+          python ../tools/progress.py --check
+        working-directory: hannah-os/runtime
 
   e2e:
     name: Browser end-to-end

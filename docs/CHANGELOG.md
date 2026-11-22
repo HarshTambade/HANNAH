@@ -2,6 +2,31 @@
 
 All notable changes to HANNAH. Versions follow [Semantic Versioning](https://semver.org/). Android `versionCode` and the iOS build number are `MAJOR×10000 + MINOR×100 + PATCH`.
 
+## Unreleased
+
+Devices (beta): HANNAH can work with lights, plugs, fans, sensors and meters through a hub on your own network. Proven end to end with HANNAH's own simulated devices; **not tested with any physical device.** No profile for a real product ships, and there is no HANNAH OS image to install.
+
+### Added
+
+- **HANNAH Edge**, a hub for a computer on your network (`hannah-os/runtime`, Python 3.9+, standard library only): MQTT 3.1.1, Modbus TCP and HTTP adapters, signed requests and commands, a saved signed configuration, `enroll`, `run`, `doctor` and `simulate` commands.
+- **Device profiles**: a declarative description of a device as named points. Validated, signable, and shown with a compatibility level computed from evidence (plug and play, guided, experimental, simulation, developer required, unsupported). Four simulated devices ship; nothing is plug and play.
+- **A Device Safety Gateway** on the server, repeated on the hub. A change goes only to a point you allowed, inside its range; elevated and high-risk points ask every time; a change is done only when the device reports the new value.
+- **Adding a device without code**: from the list, from its manual (each value with its page and line, all unverified, the proposal read-only and experimental), or with a form (the Hardware Studio). The hub checks the connection before a device can be switched on.
+- **Automations the hub runs by itself**, with no model involved: a condition, a change, and the opposite when it stops; hysteresis, an hourly limit, no action on a stale reading. Approved once through the Action Engine. The account's emergency stop pauses them.
+- **A Devices screen**, a Devices agent and ten tools, and `device.alert` and `device.rule.fired` for webhooks and workflows.
+- A self-update module for the hub with a health check and rollback (tested by itself; not wired to the server).
+- Descriptions of five HANNAH OS images that share one core, a service unit, a first-boot configuration and a snap description (written; never built or booted).
+- Migration 22: seven tables for hubs, devices, commands, automations, events, readings and profiles.
+
+### Changed
+
+- The app has ten sections. On a narrow window the header shows icons, with the current section named.
+- The account's emergency stop also pauses device automations.
+
+### Not done
+
+Real devices and real product profiles; Matter, Zigbee, Z-Wave, Bluetooth, OPC UA, Modbus over a serial line; QR codes and network discovery; a model reading manuals; a marketplace for profiles; building and booting images. See `hannah-os/HANNAH_OS_BLOCKERS.md`.
+
 ## 1.8.0 — 2026-11-21
 
 Robotics (beta): HANNAH can work with robots. Proven end to end with HANNAH's built-in simulators, a mobile robot and an arm; **not run with Gazebo, ROS 2 or any physical robot.** HANNAH is not safety-certified. Documents: [`docs/robotics`](./robotics/ROBOTICS_ARCHITECTURE.md); every requirement's state: [`robotics/PROGRESS.md`](../robotics/PROGRESS.md).

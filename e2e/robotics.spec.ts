@@ -92,7 +92,7 @@ test("without an account the screen says what an account is for, and what Stop i
   await expect(page.getByRole("note")).toContainText("Stop is not an emergency stop.");
   await expect(page.getByRole("note")).toContainText("HANNAH is not safety-certified");
   await expect(page.getByRole("button", { name: "Add a robot" })).toHaveCount(0);
-  // On a phone the tab bar has nine sections: Robots is reachable and the page doesn't scroll sideways.
+  // On a phone the tab bar has ten sections: Robots is reachable and the page doesn't scroll sideways.
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('nav[aria-label="App navigation"]:visible').getByRole("link", { name: /Robots/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

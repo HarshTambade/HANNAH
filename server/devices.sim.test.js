@@ -23,6 +23,9 @@ process.env.HANNAH_RATE_LIMIT_HUB_SYNC_PER_5S = "100000";
 delete process.env.VERCEL;
 
 const { signRequest } = require("./devices/service");
+const { onUserEvent } = require("./webhooks");
+const deviceHeard = [];
+onUserEvent((_userId, event, data) => { if (event.startsWith("device.")) deviceHeard.push({ event, data }); });
 
 const RUNTIME = path.join(__dirname, "..", "hannah-os", "runtime");
 const python = (() => {
@@ -114,6 +117,25 @@ before(async () => {
   ids.fingerprint = said.find((item) => item.event === "enrolled").fingerprint;
   startHub();
   await until(async () => (await call("GET", `/hubs/${hubId}`)).body.hub, (value) => value.online, { what: "the hub to connect" });
+});
+
+
+
+test("looking at a broker lists its topics and publishes nothing", { skip }, async () => {
+  const found = await call("POST", `/hubs/${hubId}/discover`, { kind: "mqtt", settings: { host: sim.mqtt.host, port: sim.mqtt.port } });
+  assert.equal(found.status, 200, JSON.stringify(found.body));
+  assert.ok(!found.body.pending);
+  const topics = new Set((found.body.discovered?.topics || []).map((item) => item.topic));
+  for (const topic of ["sim/fan/state", "sim/lamp/state", "sim/thermo/reading", "sim/thermo/status"]) assert.ok(topics.has(topic), `${topic} missing from ${JSON.stringify([...topics])}`);
+  const refused = await call("POST", `/hubs/${hubId}/discover`, { kind: "network-scan", settings: {} });
+  assert.equal(refused.status, 400, JSON.stringify(refused.body));
+});
+
+test("device events reach the account's webhooks and workflow triggers", { skip }, async () => {
+  const offered = (await call("GET", "/account/webhooks")).body.events;
+  for (const name of ["device.alert", "device.rule.fired"]) assert.ok(offered.includes(name), name);
+  const options = require("./workflows/nodes").REGISTRY.get("trigger.event").params.find((param) => param.name === "event").options.map((option) => option.value);
+  for (const name of ["device.alert", "device.rule.fired"]) assert.ok(options.includes(name), name);
 });
 
 after(async () => {

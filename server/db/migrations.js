@@ -939,6 +939,28 @@ const MIGRATIONS = [
       )`,
     ],
   },
+  {
+    version: 23,
+    name: "publisher keys for signed profiles",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_publisher_keys (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        key_id TEXT NOT NULL,
+        owner TEXT NOT NULL,
+        public_key TEXT NOT NULL,
+        revoked_at BIGINT,
+        created_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, key_id)
+      )`,
+    ],
+  },
+  {
+    version: 24,
+    name: "hub update status",
+    statements: [
+      "ALTER TABLE hannah_hubs ADD COLUMN update_status TEXT",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

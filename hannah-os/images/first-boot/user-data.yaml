@@ -1,0 +1,39 @@
+#cloud-config
+# First boot of a HANNAH OS IoT Gateway or Edge image built on Ubuntu Server.
+#
+# NOT YET RUN: written on a machine that cannot boot an image. No board has
+# been booted with this file. See hannah-os/HANNAH_OS_DEPLOYMENT_GUIDE.md.
+#
+# What it sets up: a locked system user for the hub, the hub's service, a
+# firewall that accepts nothing from outside, and automatic security updates.
+# What it does not do: enroll the hub. Enrollment needs the one-time code from
+# HANNAH, entered by a person (python3 -m hannah_edge enroll …). No secret is
+# baked into an image.
+package_update: true
+packages:
+  - python3
+  - ufw
+  - unattended-upgrades
+users:
+  - default
+  - name: hannah-edge
+    system: true
+    homedir: /var/lib/hannah-edge
+    shell: /usr/sbin/nologin
+    lock_passwd: true
+write_files:
+  - path: /etc/apt/apt.conf.d/52hannah-auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+runcmd:
+  - [mkdir, -p, /var/lib/hannah-edge/state]
+  - [chown, -R, "hannah-edge:hannah-edge", /var/lib/hannah-edge]
+  - [chmod, "700", /var/lib/hannah-edge/state]
+  # The hub opens every connection itself. Nothing needs to reach it.
+  - [ufw, default, deny, incoming]
+  - [ufw, default, allow, outgoing]
+  - [ufw, --force, enable]
+  # The service is enabled, and will not start until the hub is enrolled: its pre-start check fails without a key.
+  - [systemctl, enable, hannah-edge.service]

@@ -56,6 +56,10 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   // The Action Engine's tools (services/Operator.ts).
   { match: /repo|github|pull request|\bPRs?\b|\bbugs?\b|codebase|source code|commit|branch|\bCI\b|build (is )?fail|deploy|refactor|stack trace|vulnerab|dependenc|my (code|project)/i, tools: /^code_/ },
   { match: /whats ?app|telegram|slack|\bmessages?\b|\btext\b|\breply to\b|\bdm\b/i, tools: /^message_/ },
+  // Devices behind the account's hub (services/Devices.ts). The tools exist only when a device is switched on.
+  { match: /\b(lights?|lamps?|bulbs?|plugs?|sockets?|fans?|sensors?|thermostat|temperature|humidity|relay|meters?|smart home|power use|energy use)\b|\b(turn|switch) (it |them |the |my |everything )?.{0,30}\b(on|off)\b|\bdim\b|\bbrighter\b|how (warm|cold|hot|humid|bright|dark)\b/i, tools: /^hardware_(list|read|switch|set)$/ },
+  { match: /\bautomations?\b|\bwhen(ever)? (the|it|my|a)\b.{0,60}\b(turn|switch|set|dim)\b|\b(turn|switch|set)\b.{0,60}\bwhen(ever)? (the|it|my)\b|\bif the (temperature|humidity|light|room)\b|goes (above|below|over|under)|gets? (too )?(hot|cold|dark|warm|bright)/i, tools: /^hardware_(list|automations|create_automation|enable_automation|disable_automation|delete_automation)$/ },
+  { match: /(temperature|humidity|power|energy|reading|sensor).{0,40}(today|yesterday|history|trend|over the|last (hour|night|day)|been)|how (warm|cold|hot|humid) (has|was|did)/i, tools: /^hardware_(list|history|read)$/ },
   // Robots enrolled in the account (services/Robotics.ts). The tools exist only when there is one. Kept in
   // narrow families so a request never carries all of them and loses one to the tool limit; stopping,
   // pausing and cancelling come with every robot request.

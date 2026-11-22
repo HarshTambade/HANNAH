@@ -1,0 +1,41 @@
+# HANNAH Edge as a strictly confined snap, for Ubuntu Core.
+#
+# NOT YET BUILT: written on a machine without snapcraft. This file has never
+# been built, installed or run. Treat every line as a starting point.
+#
+# Why a snap for the gateway profiles: Ubuntu Core is made of snaps, updates
+# them as transactions and goes back to the previous revision when a new one
+# fails to start. That gives the hub a rollback path without HANNAH building one.
+name: hannah-edge
+base: core24
+version: "0.1.0"
+summary: HANNAH Edge, the hub that runs next to your devices
+description: |
+  Speaks MQTT, Modbus TCP and HTTP to devices on the local network, runs the
+  automations a person approved, and opens a signed connection to HANNAH.
+  It listens on no port.
+grade: devel
+confinement: strict
+apps:
+  hub:
+    command: bin/hannah-edge-run
+    daemon: simple
+    restart-condition: on-failure
+    plugs: [network]
+  doctor:
+    command: bin/hannah-edge-doctor
+    plugs: [network]
+parts:
+  runtime:
+    plugin: dump
+    source: ../../runtime
+    stage-packages: [python3-minimal]
+    organize:
+      hannah_edge: lib/hannah_edge
+  launchers:
+    plugin: nil
+    override-build: |
+      mkdir -p "$CRAFT_PART_INSTALL/bin"
+      printf '#!/bin/sh\nexport PYTHONPATH="$SNAP/lib"\nexec python3 -m hannah_edge run --state-dir "$SNAP_COMMON/state"\n' > "$CRAFT_PART_INSTALL/bin/hannah-edge-run"
+      printf '#!/bin/sh\nexport PYTHONPATH="$SNAP/lib"\nexec python3 -m hannah_edge doctor --state-dir "$SNAP_COMMON/state"\n' > "$CRAFT_PART_INSTALL/bin/hannah-edge-doctor"
+      chmod 755 "$CRAFT_PART_INSTALL/bin/hannah-edge-run" "$CRAFT_PART_INSTALL/bin/hannah-edge-doctor"

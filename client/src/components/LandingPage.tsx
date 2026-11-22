@@ -7,7 +7,7 @@ import {
 import AvatarScene from "./AvatarScene";
 import {
   AGENTS as agents, AUTOMATION as automation, CAPABILITIES as capabilities, FAQS as faqs, MODEL_PROVIDERS as providers, PLATFORM_MATRIX as matrix,
-  ROADMAP as roadmap, ROBOTICS as robotics, ROUTING_MODES as routingModes, type IconName, type Status,
+  DEVICES as devices, ROADMAP as roadmap, ROBOTICS as robotics, ROUTING_MODES as routingModes, type IconName, type Status,
 } from "../content/landing";
 import AppTour from "./AppTour";
 import { APP_VERSION, PLATFORM_DOWNLOADS, RELEASE_NOTES_URL, RELEASES_URL, REPOSITORY_URL } from "../config/project";
@@ -121,7 +121,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
     setKeyDialogOpen(true);
   };
 
-  const sections: Array<[string, string]> = [["Features", "features"], ["Models", "models"], ["Agents", "agents"], ["Automation", "automation"], ["Robots", "robots"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
+  const sections: Array<[string, string]> = [["Features", "features"], ["Models", "models"], ["Agents", "agents"], ["Automation", "automation"], ["Robots", "robots"], ["Devices", "devices"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
   const others = capabilities.filter((item) => !PILLAR_TITLES.has(item.title));
 
   return (
@@ -439,6 +439,47 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
                 <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-950"><Radar size={15} aria-hidden="true" /> What this is not, yet</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-6 text-amber-950">
                   {robotics.limits.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Devices */}
+        <section id="devices" tabIndex={-1} className="mx-auto max-w-7xl px-5 py-14 outline-none sm:px-8 sm:py-20 lg:px-12 lg:py-24">
+          <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+            <div>
+              <figure className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
+                <img src="/screens/devices.webp" width={1280} height={800} loading="lazy" decoding="async" alt="HANNAH's Devices screen: one hub connected with its key fingerprint, a simulated room sensor reporting a live temperature, humidity and light level, and a simulated fan that is on, with a button to switch it off. A message confirms that an automation was created. Each device is tagged as a simulated device." className="block h-auto w-full" />
+                <figcaption className="border-t border-slate-200 px-4 py-3 text-[13px] leading-5 text-slate-600">A real run, captured by the project's own browser test: HANNAH's server, its hub and its simulated devices talking MQTT. The devices are simulated; the checks, the approval and the read-back are the real ones.</figcaption>
+              </figure>
+              <p className="mt-6 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-500">What a hub can speak today</p>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {devices.protocols.map((item) => <li key={item.id} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[12px] text-slate-700">{item.label}</li>)}
+                {devices.notBuilt.map((item) => <li key={item.id} className="rounded-lg border border-dashed border-slate-300 px-2.5 py-1 text-[12px] text-slate-500">{item.label}: not built</li>)}
+              </ul>
+              <ul className="mt-4 space-y-1.5 text-[13px] leading-6 text-slate-600">
+                {devices.also.map((item) => <li key={item} className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-700" aria-hidden="true" />{item}</li>)}
+              </ul>
+            </div>
+            <div>
+              <SectionHeading kicker="Devices" title="Connect a device. Then just ask.">“Turn on the fan.” “What's the temperature?” “When it gets above 28, switch the fan on.” Lights, plugs, fans, sensors and meters, reached through a hub on your own network, with no code to write.</SectionHeading>
+              <p className="mt-4 flex flex-wrap items-center gap-2 text-[13px] text-slate-600"><StatusChip status={devices.status} /> Works with HANNAH's simulated devices today. Not yet tested with a physical device.</p>
+              <ul className="mt-7 space-y-5">
+                {devices.rules.map(([title, text]) => (
+                  <li key={title} className="flex gap-3">
+                    <ShieldCheck size={18} strokeWidth={1.8} className="mt-0.5 shrink-0 text-brand-600" aria-hidden="true" />
+                    <span>
+                      <span className="block text-[15px] font-semibold text-ink">{title}</span>
+                      <span className="mt-1 block text-[14px] leading-6 text-slate-600">{text}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-950"><Radar size={15} aria-hidden="true" /> What this is not, yet</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-6 text-amber-950">
+                  {devices.limits.map((item) => <li key={item}>{item}</li>)}
                 </ul>
               </div>
             </div>

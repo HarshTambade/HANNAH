@@ -25,6 +25,8 @@ Three rules shape the product:
 > - **tested with HANNAH's built-in simulators only.** The ROS 2 and Gazebo files are written and have not been run, no physical robot has been connected, and HANNAH is not safety-certified. See [Robots](#robots);
 > - migrations 18 to 21 (eight new tables on first start).
 >
+> **On `main`, not in a release yet — devices (beta):** a hub you run on your own network (HANNAH Edge) that speaks MQTT, Modbus TCP and HTTP to lights, plugs, sensors and meters; adding a device from a list, from its manual or with a form, with no code; a Devices screen; automations the hub runs by itself. **Tested with HANNAH's own simulated devices only**: no physical device has been connected, no real product's profile ships, and there is no HANNAH OS image to install. See [Devices](#devices).
+>
 > 1.7.0 added one Action Engine that asks permission, runs an action once, reads back the result and keeps the record; calendar, email and messaging through it; and a coding service over GitHub or a local repository.
 >
 > Earlier releases: [1.5.1](./docs/CHANGELOG.md) (agents and skills that do visible work, integration tests, a home page) and [1.5.0](./docs/CHANGELOG.md) (web research and documents, connectors and chat apps, web search, macOS app control, Vercel and Supabase setup, command sandbox, CLI, Docker, plugin kit, phone and desktop workflows, mail and Google Chat, "Hey HANNAH", memory updates).
@@ -52,6 +54,7 @@ Three rules shape the product:
 - [Marketplace: agents and skills](#marketplace-agents-and-skills)
 - [Automations](#automations)
 - [Robots](#robots)
+- [Devices](#devices)
 - [MCP integration](#mcp-integration)
 - [Desktop files and terminal](#desktop-files-and-terminal)
 - [HANNAH uses your apps (macOS)](#hannah-uses-your-apps-macos)
@@ -105,6 +108,7 @@ Every screen has its own address, so refresh, bookmarks and the back button work
 | **Marketplace** | `/marketplace` | **Connectors**: 30 services (GitHub, Linear, Notion, Atlassian, Stripe, Vercel, Supabase and more) with their official icons, connected without needing an AI key, or any MCP server by URL once you're signed in. **Chat apps**: talk to HANNAH from Telegram, Slack, Discord, Google Chat, Teams or WhatsApp, and in the desktop app iMessage and Signal. **Agents and skills**: 11 agents (Study coach, Research analyst, Data analyst, Daily organizer and more) that set how HANNAH works for a conversation, the tools she keeps to hand and the prompts she suggests, and 12 skills that adjust every reply. One click turns one on; chat shows which agent is active and lets you switch. Plus **Community skills**: paste or open a skill manifest, review its publisher, permissions, privacy and integrity, then install and turn it on. |
 | **Integrations** | `/integrations` | **Test this server now**: runs the REST API, the OpenAI-compatible API, a real reply, the MCP endpoint, A2A and webhooks with your credential and shows what came back; create a developer key there. REST and MCP guide with copyable examples, tool limits, server environment and host setup. **Database**: connection status and a guided setup for Supabase, Neon, any Postgres or SQLite, with a connection test for the operator. **Tools from other MCP servers**: what HANNAH can use as an MCP client. |
 | **Robots** | `/robotics` | Robots you enrolled: each one on its map with its route and what its sensors detect, missions and how each was verified, plans with every step's outcome, the camera, the arm, the fleet with figures from real records, commissioning, destinations, capabilities and limits. Add a robot with a one-time code and run HANNAH's robot runtime on the robot's computer; with no robot, the runtime starts a built-in simulated one. Every robot is labelled **SIMULATION** or **PHYSICAL**, movement is approved through the Action Engine, and **Stop** is a software request, not an emergency stop. Beta, tested with the built-in simulators only. See [Robots](#robots). |
+| **Devices** | `/devices` | Hubs on your network and the devices behind them: add a device from a list, from its manual or with a form; see what the hub heard when it checked the connection; choose what HANNAH may change; live values with their age; switch and set devices with approval; automations the hub runs by itself. Beta, tested with simulated devices only. Needs an account. |
 | **Settings** | `/settings` | Connection (token, Groq key, disconnect). **Account** (when the server has a database): sign in, saved provider keys, sync, developer API keys, webhooks, security activity, export and deletion. **Calendar and email**: connect Google or Microsoft with their own sign-in. **Voice**: speaking and listening engines, voice choice, interrupt-by-talking and the **“Hey HANNAH”** wake word. **Daily briefing**: which sections, the place for the weather, and a preview (see [Daily briefing](#daily-briefing)). **Setup check**: one pass over the server, model, account, connections, voice, microphone, notifications, storage, desktop app and recent errors, with a verdict and a fix for each. Your data: per-item counts with **Clear** for conversation, memories and style feedback, **Export my data** as JSON, and **Delete everything**. Developer options. Also **Appearance** (text size), **Desktop app** (update channel, check for updates, update history, shortcut and `hannah://` links; desktop only), **Backup and restore** (one file with your data and choices, never your keys; optional passphrase; merge or replace on restore) and **Diagnostics** (what went wrong on this device, redacted, searchable, exportable). |
 
 The design follows a bento and glassmorphism style: rounded `2rem` cards, pastel tones (sky, lavender, butter, mint), large light-weight stat numbers and a floating header. Layouts are responsive down to phone width.
@@ -387,6 +391,7 @@ flowchart LR
 | API | [`server/index.js`](./server/index.js), [`server/api-security.js`](./server/api-security.js) | Routes, auth, rate limits, provider calls. |
 | Providers | [`server/providers/catalog.js`](./server/providers/catalog.js), [`server/providers/runtime.js`](./server/providers/runtime.js) | Provider presets, model discovery, request adapters. |
 | Robots | [`server/robotics/`](./server/robotics/), [`server/actions/catalog/robots.js`](./server/actions/catalog/robots.js), [`robotics/runtime/`](./robotics/runtime/), [`RoboticsPage.tsx`](./client/src/components/RoboticsPage.tsx), [`Robotics.ts`](./client/src/services/Robotics.ts) | The robot registry, capability contract and Safety Gateway; the runtime that runs on the robot; the Robots screen and robot tools. |
+| Devices | [`server/devices/`](./server/devices/), [`server/actions/catalog/hardware.js`](./server/actions/catalog/hardware.js), [`hannah-os/runtime/`](./hannah-os/runtime/), [`DevicesPage.tsx`](./client/src/components/DevicesPage.tsx), [`Devices.ts`](./client/src/services/Devices.ts) | The device registry, profiles, the Device Safety Gateway, the manual reader, and the hub that runs next to the devices. |
 | MCP | [`server/mcp-core.mjs`](./server/mcp-core.mjs), [`mcp-http.mjs`](./server/mcp-http.mjs), [`mcp-stdio.mjs`](./server/mcp-stdio.mjs) | Exposes HANNAH to MCP hosts. |
 
 ### Vercel topology
@@ -1065,6 +1070,45 @@ More: [architecture](./docs/robotics/ROBOTICS_ARCHITECTURE.md), [safety gateway]
 
 ---
 
+## Devices
+
+**Beta. Tested with HANNAH's own simulated devices only.** No physical device has been connected, no profile for a real product ships, and no HANNAH OS image has been built. HANNAH is not a safety system: a lock, a heater or a machine keeps its own protections.
+
+![HANNAH's Devices screen: one hub connected, a simulated room sensor reporting a live temperature, and a simulated fan that is on, with a message confirming that an automation was created.](./client/public/screens/devices.webp)
+
+*A real run with HANNAH's server, hub and simulated devices, captured by the project's own browser test.*
+
+A **hub** (HANNAH Edge, [`hannah-os/runtime`](./hannah-os/runtime/), Python 3.9+, standard library only) runs on a computer on the same network as your devices. It speaks to them and opens a signed connection to the server; nothing connects in. The app never talks to a device.
+
+**Adding a device needs no code.** Pick it from the list, give HANNAH its manual, or describe it with a form (the Hardware Studio). The hub then connects and reports what it heard, and only after that can you switch the device on and choose what HANNAH may change.
+
+```sh
+cd hannah-os/runtime
+python3 -m hannah_edge simulate                       # simulated devices: a room sensor, a fan and a lamp on MQTT, a power meter on Modbus TCP
+# In the app: Devices → Add a hub. It shows this command with a one-time code:
+python3 -m hannah_edge enroll --server http://127.0.0.1:3001 --code XXXX-XXXX
+python3 -m hannah_edge run
+# Then: Add a device → Simulated room sensor → the broker address the simulator printed.
+```
+
+What holds for every device:
+
+- **A model never addresses a device.** It names a device and one of the points its profile lists ("temperature", "power"). It never sees a topic, a register or a URL.
+- **Reading and changing are separate.** A point can be changed only if you allowed it for that device, inside its range. A lock, an actuator or industrial equipment asks every time.
+- **Checked on the server, and again on the hub.** A change that can't be valid is refused with the reason before you are asked.
+- **Done means the device said so.** A write the device didn't confirm is reported as not confirmed.
+- **A value says how old it is.** When the hub is away, values are shown as last known, and nothing is queued for later.
+- **Automations have no AI in them.** "When the temperature is above 28, switch the fan on" is approved once and then runs on the hub, also without the internet. The account's emergency stop pauses them.
+- **A manual can propose, never verify.** Each value comes with the page and the line it was read from, and starts as unverified. A proposal changes nothing and is marked experimental.
+
+Every profile shows how far it was tested: plug and play, guided, experimental, simulation, developer required or unsupported. Nothing that ships today is plug and play.
+
+**What is not done:** real devices and real product profiles; Matter, Zigbee, Z-Wave, Bluetooth, OPC UA and Modbus over a serial line; QR codes and network discovery; a model reading manuals; a marketplace for profiles; building and booting HANNAH OS images; wiring the hub's self-update to the server.
+
+More: [architecture](./hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md), [device compatibility and the profile format](./hannah-os/HANNAH_OS_DEVICE_COMPATIBILITY.md), [security](./hannah-os/HANNAH_OS_SECURITY_ARCHITECTURE.md), [deployment](./hannah-os/HANNAH_OS_DEPLOYMENT_GUIDE.md), [tests](./hannah-os/HANNAH_OS_TEST_REPORT.md), [what is blocked](./hannah-os/HANNAH_OS_BLOCKERS.md), and [every requirement with its real state](./hannah-os/HANNAH_OS_IMPLEMENTATION_TRACKER.md).
+
+---
+
 ## MCP integration
 
 HANNAH includes a Model Context Protocol server, so MCP hosts (IDEs, desktop assistants) can talk to her.
@@ -1426,6 +1470,7 @@ curl -s http://localhost:3001/api/chat \
 │   └── *.test.js               # node:test suites
 ├── sdk/js/                     # Dependency-free JavaScript SDK
 ├── robotics/                   # Robot runtime (Python), simulators, worlds, profiles, robot SDK, ROS 2 package (not yet run)
+├── hannah-os/                  # HANNAH Edge hub (Python), device profiles, simulated devices, image descriptions (not built), tracker and docs
 ├── shared/                     # Marketplace catalog, model profiles, trusted skill publishers
 ├── backend/                    # Optional FastAPI fallback, tools, audit log, tests
 ├── apps/                       # Alternate frontend and Python-enabled Electron shell
@@ -1484,6 +1529,7 @@ python3 -m pytest -q backend/tests       # Python fallback, approvals, audit cha
 npm run test:e2e --prefix client         # Playwright against real local servers (AI is a local stand-in): every screen and every control, signed in and as a guest
 npm run build --prefix client
 (cd robotics/runtime && python3 -m unittest discover -s tests -t .)   # robot runtime and simulators; standard library only
+(cd hannah-os/runtime && python3 -m unittest discover -s tests -t .)  # device hub, protocol stacks and simulated devices; standard library only
 ```
 
 The suites cover:
@@ -1498,6 +1544,7 @@ The suites cover:
   - every chat app, using real signatures (HMAC, Ed25519, RS256 tokens) against stand-in platform APIs;
   - the hosting setup, and serving the web app in Docker.
 - **Robots:** the contract, both Safety Gateways, signed commands, missions, plans, the camera, commissioning and the fleet, as unit tests, on the real server with a scripted stand-in robot (SQLite and Postgres), and with the real runtime driving the built-in simulators, also in a browser. None of it is a Gazebo or hardware test ([details](./docs/robotics/TESTS.md)).
+- **Devices:** the MQTT and Modbus TCP stacks against HANNAH's own test servers, the MQTT client also against an independent broker (aedes), the hub with simulated devices, profiles and the Device Safety Gateway as unit tests, the manual reader on a real PDF, and the whole chain with three real processes (server, hub, simulated devices) on the server and in a browser. No physical device.
 - **Desktop rules** (`node --test` in `client/plugins/desktop-tools`):
   - folders, commands and the sandbox;
   - the browser;
@@ -1561,6 +1608,7 @@ Others (`KillSwitch`, `PolicyEnforcementLayer`, `EgressPolicy`, `CredentialBroke
 
   Each is tested against the platform's protocol, and its real endpoints were checked. [`KNOWN_ISSUES.md`](./docs/architecture/KNOWN_ISSUES.md) tracks each one.
 - **Robots are simulation only.** The ROS 2 adapter, the Gazebo robot and its container have never been run; no physical robot, arm or camera has been connected; no live model has driven the robot agents; HANNAH is not safety-certified. [`robotics/PROGRESS.md`](./robotics/PROGRESS.md) lists every requirement and what blocks it.
+- **Devices are simulation only.** No physical device, broker or PLC has been connected; the Modbus TCP client has been tested only against HANNAH's own test server, and the MQTT client against that and one independent broker; no HANNAH OS image has been built or booted. See [`hannah-os/HANNAH_OS_BLOCKERS.md`](./hannah-os/HANNAH_OS_BLOCKERS.md).
 - Memory search matches words, not meaning (no vector search yet).
 - What's verified on each platform: [`docs/CAPABILITY_MATRIX.md`](./docs/CAPABILITY_MATRIX.md).
 - Webhooks are delivered once, with no retries.
@@ -1618,6 +1666,7 @@ To report a security issue, use GitHub's private vulnerability reporting or cont
 | --- | --- |
 | Architecture, decisions and roadmap | [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) |
 | Robots: architecture, safety, security, tests, deploying the runtime | [`docs/robotics/`](./docs/robotics/ROBOTICS_ARCHITECTURE.md), [`robotics/PROGRESS.md`](./robotics/PROGRESS.md) |
+| Devices and HANNAH OS: architecture, compatibility, security, deployment, tests, blockers, tracker | [`hannah-os/`](./hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md) |
 | API, MCP, the command-line tool and plugins | [`docs/API-INTEGRATION.md`](./docs/API-INTEGRATION.md) |
 | Research and Document Studio: pipeline, guarantees, API, limits | [`docs/RESEARCH_AND_DOCUMENTS.md`](./docs/RESEARCH_AND_DOCUMENTS.md) |
 | Desktop and phone features: screen, apps, computer control, browser, Phone Bridge | [`docs/DEVICE_INTELLIGENCE.md`](./docs/DEVICE_INTELLIGENCE.md) |

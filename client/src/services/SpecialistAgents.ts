@@ -4,8 +4,9 @@
  * for anything that changes data, the user's approval.
  */
 import { Robotics } from "./Robotics";
+import { Devices } from "./Devices";
 
-export type SpecialistId = "research" | "coding" | "memory" | "tasks" | "robot" | "robot_fleet" | "robot_care" | "robot_arm";
+export type SpecialistId = "research" | "coding" | "memory" | "tasks" | "robot" | "robot_fleet" | "robot_care" | "robot_arm" | "devices";
 export type RouteHint = "simple" | "standard" | "complex";
 
 export type Specialist = {
@@ -105,6 +106,17 @@ export const SPECIALISTS: Specialist[] = [
     maxIterations: 6,
     available: () => Robotics.known().length > 0,
     needs: "Add a robot under Robots to use this agent.",
+  },
+  {
+    id: "devices",
+    name: "Devices",
+    description: "The user's connected devices, real or simulated: lights, plugs, fans, sensors and meters reached through their hub. Reads values with their age, switches and sets devices the user allowed, and sets up automations that the hub then runs by itself. Every change is approved by the user and confirmed by the device's own report.",
+    instructions: "Work as HANNAH's devices agent. You never address a device by anything but its name and its point ids. Always: (1) call hardware_list first and use only the devices and points it returns; if the user's words match no device, say which devices exist and ask. (2) For a question, call hardware_read and give each value with its unit; if a value is not live, say it is the last known value and how old it is. (3) For a change, call hardware_switch or hardware_set once. If the Device Safety Gateway refuses, repeat its reason and stop: do not try another value, point or device. If the result says the device did not confirm it, say that; never say it worked. (4) For “when X then Y”, call hardware_create_automation with exact names and ids; explain that the hub runs it by itself from then on with no AI involved, and that it can be switched off under Devices. You cannot make a point writable, add a device or change a hub: the user does that under Devices. A lock, a heater or a machine keeps its own protections; HANNAH is not a safety system.",
+    tools: ["hardware_list", "hardware_read", "hardware_history", "hardware_switch", "hardware_set", "hardware_automations", "hardware_create_automation", "hardware_enable_automation", "hardware_disable_automation", "hardware_delete_automation"],
+    routeHint: "standard",
+    maxIterations: 6,
+    available: () => Devices.known().length > 0,
+    needs: "Add a device under Devices to use this agent.",
   },
 ];
 

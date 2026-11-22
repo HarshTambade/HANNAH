@@ -96,7 +96,7 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
       connection: row.status === "pending" ? "awaiting-enrollment" : row.status === "revoked" ? "revoked" : online ? "online" : lastSeenAt ? "offline" : "never-connected",
       software: descriptor.software || null, system: [descriptor.system, descriptor.machine].filter(Boolean).join(" ") || null, adapters: (descriptor.adapters || []).map((item) => item.name), adapterDetails: descriptor.adapters || [],
       fingerprint: descriptor.fingerprint || null, rulesSuspended: Boolean(Number(row.rules_suspended)), configVersion: Number(row.config_version), upToDate: Number(row.reported_config) === Number(row.config_version),
-      discovered: parse(row.discovered), createdAt: Number(row.created_at), enrolledAt: row.enrolled_at ? Number(row.enrolled_at) : null,
+      discovered: parse(row.discovered), updateStatus: parse(row.update_status), createdAt: Number(row.created_at), enrolledAt: row.enrolled_at ? Number(row.enrolled_at) : null,
       enrollmentExpiresAt: row.enroll_hash && row.enroll_expires_at ? Number(row.enroll_expires_at) : null,
     };
   }
@@ -280,6 +280,33 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
     if (used) throw fail(409, "A device uses this profile. Remove the device first.", "in-use");
     return { removed: (await db.query("DELETE FROM hannah_device_profiles WHERE user_id = $1 AND id = $2", [userId, String(id)])).rowCount > 0 };
   }
+  // ---------- publisher keys and signed profiles ----------
+  async function listPublisherKeys(db, userId) {
+    const { rows } = await db.query("SELECT key_id, owner, public_key, revoked_at, created_at FROM hannah_publisher_keys WHERE user_id = $1 ORDER BY created_at", [userId]);
+    return rows.map((row) => ({ keyId: row.key_id, owner: row.owner, publicKey: row.public_key, revokedAt: row.revoked_at ? Number(row.revoked_at) : null, createdAt: Number(row.created_at) }));
+  }
+  async function addPublisherKey(db, userId, { keyId, owner, publicKey }) {
+    const cleanKeyId = clean(keyId, 80);
+    const cleanOwner = clean(owner, 80) || cleanKeyId;
+    if (!cleanKeyId || !publicKey || typeof publicKey !== "string") throw fail(400, "A publisher key needs an id and a public key.", "bad-request");
+    const at = now();
+    await db.query("INSERT INTO hannah_publisher_keys (user_id, key_id, owner, public_key, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id, key_id) DO UPDATE SET owner = EXCLUDED.owner, public_key = EXCLUDED.public_key", [userId, cleanKeyId, cleanOwner, publicKey, at]);
+    return { keyId: cleanKeyId, owner: cleanOwner };
+  }
+  async function revokePublisherKey(db, userId, keyId) {
+    await db.query("UPDATE hannah_publisher_keys SET revoked_at = $1 WHERE user_id = $2 AND key_id = $3", [now(), userId, String(keyId)]);
+    return { revoked: true };
+  }
+  async function installSignedProfile(db, userId, profile) {
+    const keys = await listPublisherKeys(db, userId);
+    const trustedKeys = keys.map((key) => ({ keyId: key.keyId, owner: key.owner, publicKey: key.publicKey, revokedAt: key.revokedAt }));
+    const verdict = profiles.verifyProfile(profile, { trustedKeys });
+    if (!verdict.ok) throw fail(400, `This signed profile can't be installed: ${verdict.problems.join(" ")}`, "bad-profile", { problems: verdict.problems });
+    // Save it as a normal own profile, keeping the signature and review.
+    const saved = await saveProfile(db, userId, profile, { source: "studio" });
+    return { profile: saved, signedBy: verdict.signedBy, review: verdict.review };
+  }
+
   const protocols = () => ({
     available: Object.entries(profiles.ADAPTERS).map(([id, item]) => ({ id, label: item.label })),
     notBuilt: Object.entries(profiles.NOT_BUILT).map(([id, reason]) => ({ id, reason })),
@@ -430,6 +457,9 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
   async function write(db, userId, { device, point, value, actionId = null, requestedBy = "" }) {
     return issue(db, userId, device.hub.id, { type: "write", deviceId: device.id, payload: { deviceId: device.id, point, value }, actionId, requestedBy });
   }
+  async function issueUpdate(db, userId, hubId, { version, size, sha256, url, requestedBy = "" }) {
+    return issue(db, userId, hubId, { type: "update", payload: { version, size, sha256, url }, requestedBy });
+  }
 
   // ---------- checking a device before it runs ----------
   function verificationFrom(profile, settings, command) {
@@ -504,8 +534,8 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
   async function discover(db, userId, hubReference, { kind, settings = {} } = {}, { requestedBy = "" } = {}) {
     const hub = await resolveHub(db, userId, hubReference);
     if (!hub.online) throw fail(409, `The hub “${hub.name}” isn't connected.`, "hub-offline");
-    if (!["mqtt", "serial"].includes(kind)) throw fail(400, "A hub can look at an MQTT broker's topics or list its serial ports. It does not scan a network.", "bad-request");
-    const cleaned = kind === "mqtt" ? { host: clean(settings.host, 120), port: Number(settings.port) || undefined, username: clean(settings.username, 120) || undefined, password: typeof settings.password === "string" ? settings.password.slice(0, 200) : undefined, tls: settings.tls === true } : {};
+    if (!["mqtt", "serial", "mdns"].includes(kind)) throw fail(400, "A hub can look at an MQTT broker's topics, list serial ports, or browse for one mDNS service type.", "bad-request");
+    const cleaned = kind === "mqtt" ? { host: clean(settings.host, 120), port: Number(settings.port) || undefined, username: clean(settings.username, 120) || undefined, password: typeof settings.password === "string" ? settings.password.slice(0, 200) : undefined, tls: settings.tls === true } : kind === "mdns" ? { service: clean(settings.service, 120) || "_http._tcp.local", seconds: Math.max(1, Math.min(15, Number(settings.seconds) || 5)) } : {};
     if (kind === "mqtt" && !/^[A-Za-z0-9.\-:]{1,120}$/.test(cleaned.host)) throw fail(400, "Give the broker's address.", "bad-request");
     const commandId = await issue(db, userId, hub.id, { type: "discover", requestedBy, payload: { kind, settings: cleaned, seconds: 5 } });
     const command = await waitForCommand(db, userId, commandId, { ms: ackWaitMs + 6000 });
@@ -658,6 +688,7 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
       const status = { status: clean(item.status, 20), detail: clean(item.detail, 200), fires: Math.max(0, Number(item.fires) || 0), lastFiredAt: Number(item.lastFiredAt) || null, lastError: item.lastError ? clean(item.lastError, 300) : null, reportedAt: at };
       await db.query("UPDATE hannah_device_rules SET status = $1 WHERE user_id = $2 AND hub_id = $3 AND id = $4 AND enabled = 1", [JSON.stringify(status), userId, row.id, item.id]);
     }
+    if (body.update) await db.query("UPDATE hannah_hubs SET update_status = $1 WHERE id = $2", [JSON.stringify(body.update).slice(0, 60_000), row.id]).catch(() => {});
     // Results and events the hub has been holding until the server has them.
     const received = [];
     for (const item of (Array.isArray(body.outbox) ? body.outbox : []).slice(0, 40)) {
@@ -674,6 +705,7 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
         const command = commandView((await db.query("SELECT * FROM hannah_device_commands WHERE user_id = $1 AND id = $2", [userId, String(item.commandId)])).rows[0], at);
         if (command.type === "probe") await recordVerification(db, userId, command);
         if (command.type === "discover" && item.discovered) await db.query("UPDATE hannah_hubs SET discovered = $1 WHERE id = $2", [JSON.stringify({ ...item.discovered, at }).slice(0, 60_000), row.id]);
+        if (item.update) await db.query("UPDATE hannah_hubs SET update_status = $1 WHERE id = $2", [JSON.stringify(item.update).slice(0, 60_000), row.id]).catch(() => {});
       } else if (item.kind === "event") {
         const ruleId = typeof item.ruleId === "string" ? item.ruleId.slice(0, 40) : null;
         const deviceId = typeof item.deviceId === "string" && mine.has(item.deviceId) ? item.deviceId : null;
@@ -704,6 +736,7 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
     activateDevice, addDevice, assessRule, assessWrite, authenticate, commands, createHub, createRule, deleteProfile, deleteRule, discover, enrollHub, events, getCommand, getDevice, getHub, history,
     issueHubCode, listDevices, listHubs, listProfiles, listRules, overview, protocols, removeDevice, removeHub, resolveDevice, resolveHub, resolveRule, revokeHub, saveProfile, setRule, suspendRules, sync, testDevice,
     updateDevice, waitForCommand, write,
+    listPublisherKeys, addPublisherKey, revokePublisherKey, installSignedProfile,
   };
 }
 
