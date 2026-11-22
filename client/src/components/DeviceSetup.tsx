@@ -177,7 +177,7 @@ function HardwareStudio({ onProfile, hubs = [], hub = "" }: { onProfile: (profil
       setLookTopics(answer.discovered?.topics || []);
     } catch (reason) { setLookError(message(reason)); } finally { setLookBusy(false); }
   };
-  const useTopic = (topic: string) => {
+  const applyTopic = (topic: string) => {
     setPoints((list) => {
       const next = [...list];
       const index = next.findIndex((point) => !point.a.trim());
@@ -254,7 +254,7 @@ function HardwareStudio({ onProfile, hubs = [], hub = "" }: { onProfile: (profil
               {lookTopics && (
                 <div data-testid="studio-broker-topics">
                   <p className="text-sm text-slate-700">{lookTopics.length} topic{lookTopics.length === 1 ? "" : "s"} heard. Click one to use it for a reading.</p>
-                  <ul className="mt-1 space-y-0.5 text-sm text-slate-800">{lookTopics.map((item) => <li key={item.topic}><button type="button" className="font-mono text-xs text-sky-800 underline" data-testid="studio-broker-topic" onClick={() => useTopic(item.topic)}>{item.topic}</button></li>)}</ul>
+                  <ul className="mt-1 space-y-0.5 text-sm text-slate-800">{lookTopics.map((item) => <li key={item.topic}><button type="button" className="font-mono text-xs text-sky-800 underline" data-testid="studio-broker-topic" onClick={() => applyTopic(item.topic)}>{item.topic}</button></li>)}</ul>
                 </div>
               )}
             </div>
