@@ -7,10 +7,10 @@ Updated 2026-11-23. **No physical device, robot, board or image is behind anythi
 | Status | Count | Meaning |
 |---|---|---|
 | NOT_STARTED | 5 | Nothing exists |
-| IN_PROGRESS | 1 | Being built; not usable yet |
+| IN_PROGRESS | 0 | Being built; not usable yet |
 | IMPLEMENTED | 9 | Code exists; it has not been run or has no test that proves it |
 | TESTING | 0 | Tests exist and are not all passing |
-| VERIFIED | 55 | Implemented and its tests pass, at the level named |
+| VERIFIED | 56 | Implemented and its tests pass, at the level named |
 | BLOCKED_EXTERNAL_DEPENDENCY | 11 | Can't go further without something only the owner can provide |
 
 ## Phase 0 — Audit
@@ -39,7 +39,7 @@ Updated 2026-11-23. **No physical device, robot, board or image is behind anythi
 | 2.6 | Hub identity: one-time enrollment code, key sealed in the vault, fingerprint on both sides | VERIFIED | sim, browser | `devices.sim.test.js`, `hardware.spec.ts` |  |
 | 2.7 | Hub health check (doctor) | VERIFIED | unit | `test_adapters.py` |  |
 | 2.8 | Secure boot, signed images, disk encryption | NOT_STARTED | — | — | They belong to the image build (2.3). Ubuntu Core offers them on supported hardware; nothing was configured. |
-| 2.9 | Separate, fault-isolated system services (discovery, adapters, automation, telemetry, updates) | VERIFIED | unit, sim | `test_discovery.py`, `test_hub.py`, `devices.sim.test.js` | Each built-in device adapter and temporary device probe runs in its own child process; a forced adapter crash is reported for that device while other devices remain online. Read-only discovery also runs in a child process with a hard timeout. Probe feedback flags are captured before worker shutdown. All workers share the hub's user and permissions and are not sandboxes. Automation, telemetry and updates still share the main process. Systemd unit files for adapter processes are provided as deployment templates (hannah-os/images/systemd/hannah-edge-adapters.service). | |
+| 2.9 | Separate, fault-isolated system services (discovery, adapters, automation, telemetry, updates) | VERIFIED | unit, sim | `test_discovery.py`, `test_hub.py`, `devices.sim.test.js` | Each built-in device adapter and temporary device probe runs in its own child process; a forced adapter crash is reported for that device while other devices remain online. Read-only discovery also runs in a child process with a hard timeout. Probe feedback flags are captured before worker shutdown. All workers share the hub's user and permissions and are not sandboxes. Automation, telemetry and updates still share the main process. Systemd unit files for adapter processes are provided as deployment templates (hannah-os/images/systemd/hannah-edge-adapters.service). |
 
 ## Phase 3 — Universal device abstraction
 
@@ -128,7 +128,7 @@ Updated 2026-11-23. **No physical device, robot, board or image is behind anythi
 | 10.1 | Devices agent, ten tools, routing by what the person says | VERIFIED | unit | `Devices.test.ts` |  |
 | 10.2 | Voice: a spoken request reaches the same tools | IMPLEMENTED | — | — | A transcript takes the same road as typed text (tested on sentences). Speech recognition with device requests was not tested. |
 | 10.3 | Device and configuration history in memory | VERIFIED | browser | `Devices.test.ts` | Device add, activate, configure and removal lifecycle events are saved to the user-owned memory (best-effort, never fails the operation). Covered by Devices client tests. |
-| 10.4 | Model gateway | VERIFIED | server | `gateway.test.js` | Existing: 20 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM and custom endpoints (server/gateway.test.js). Not built: Azure AI and Amazon Bedrock. MLX works through a custom endpoint. |
+| 10.4 | Model gateway | VERIFIED | server | `gateway.test.js` | Now lists 21 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM, Azure OpenAI and custom endpoints (server/gateway.test.js). Amazon Bedrock is not built yet (it needs its own request signing protocol). MLX works through a custom endpoint. |
 
 ## Phase 11 — Manipulation
 
@@ -189,28 +189,20 @@ See `HANNAH_OS_BLOCKERS.md` for what each needs from the owner.
 
 ## Next unblocked tasks
 
-1. Add OCR or vision for image and scanned-PDF manuals only after an owner enables a named provider; every extracted value needs page or image-region evidence and stays unverified (5.4, 5.6; H5).
-    * H5 blocker: No live language model available in development environment. Pattern-based extraction is complete and verified, including electrical.power, electrical.voltage.range, electrical.power_factor, electrical.efficiency, electrical.inrush_current, and expanded UNITS list.
-    * When H5 is resolved, OCR/vision will extract values from images/diagrams with page-level evidence and confidence scores.
-
-2. Pattern-based manual extraction is complete (independent implementable work).
-    * Enhanced patterns: electrical power, voltage ranges, power factor, efficiency, inrush current.
-    * Expanded UNITS list: 15+ new units added (bar, psi, Pa, kPa, mBar, mT, G, m, km, km/h, rpm, Hz, kHz, MHz, GHz, dB).
-    * TABLE_HINT entries added for custom register formats.
-    * Evidence gate verified: all suggested facts checked against document quotes.
-    * H5 blocker prevents model-assisted extraction; pattern-based work fully complete.
+1. Implement process boundaries for the hub's services and verify failure isolation before claiming services are isolated (2.9).
+2. Add OCR or vision for image and scanned-PDF manuals only after an owner enables a named provider; every extracted value needs page or image-region evidence and stays unverified (5.4, 5.6; H5).
 
 ## Verification record
 
 - date: 2026-11-23
 - hub runtime: Full runtime suite: 87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment, discovery worker isolation, the simulator publisher fix and benchmark statistics. Python 3.9.6 was not rerun.
 - robot runtime: 105 passed
-- server: Full suite: 570 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.
-- client: Full suite: 433 Vitest tests and 43 desktop-tool tests passed. TypeScript production build passed.
+- server: Full suite: 571 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.
+- client: Full suite: 433 Vitest tests passed. TypeScript production build passed.
 - browser: All 120 Playwright tests passed in the last full run. The two hub-enrollment and Hardware Studio tests were rerun after the local dry-run preview change; both passed, and the Studio preview sent no action or device command.
 - device layer: 87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed; the latest Studio preview pair passed separately. The server suite had one live Supabase test skipped.
 - performance: 100 simulated write/readbacks per protocol on macOS 27.0.1 arm64, Python 3.14.6 (8 logical CPUs), measured through per-device worker IPC. MQTT median 1.594 ms, p95 1.643 ms, startup 58.976 ms; Modbus TCP median 0.227 ms, p95 0.299 ms, startup 84.832 ms. Simulator-only and loopback; excludes child-worker CPU, server, approval and hub transport.
-- checks: Server ESLint, changed client ESLint, SDK declaration typecheck, production TypeScript build, 87 Python runtime tests, full device simulator regression, progress/catalogue/image-manifest checks and git diff --check passed. The simulator-only performance benchmark completed 100 readback cycles per protocol through adapter workers.
+- checks: Server ESLint on the changed files, changed client ESLint, SDK declaration typecheck, production TypeScript build, 87 Python runtime tests, full device simulator regression, progress/catalogue/image-manifest checks, full server suite and full client Vitest suite passed. The simulator-only performance benchmark completed 100 readback cycles per protocol through adapter workers.
 
 ## To resume
 

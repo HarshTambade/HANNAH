@@ -4,12 +4,13 @@
   "status": {
     "hub_runtime": "87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment",
     "robot_runtime": "105 passed",
-    "server": "Full suite: 570 passed, 1 live Supabase test skipped",
+    "server": "Full suite: 571 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided (with the new Azure OpenAI provider tests and the repaired manual intelligence module).",
     "client": "Full suite: 433 Vitest tests and 43 desktop-tool tests passed, TypeScript build passed",
     "browser": "All 120 Playwright tests passed",
     "device_layer": "87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed"
   },
   "completed": [
+    "Repaired server/devices/manuals.js, which the last commit had left with invalid JavaScript: restored the known-good base and re-applied the intended enhancements (electrical power/voltage/current patterns, power factor, efficiency, inrush current, extended UNITS, register table hints, image source evidence) so the module parses, loads and passes its suite again.",
     "Phase 2.9: Separate, fault-isolated system services (adapter process isolation verified via multiprocessing, crash containment tested)",
     "Systemd unit file template created: hannah-os/images/systemd/hannah-edge-adapters.service",
     "Implementation tracker updated: 2.9 marked VERIFIED",
@@ -47,12 +48,12 @@
     "H6: No independent security review"
   ],
   "next_unblocked_tasks": [
-    "OCR or vision for image and scanned-PDF manuals after owner enables named provider (H5 blocked) - this is the remaining major implementable task",
+    "Add OCR or vision for image and scanned-PDF manuals after owner enables named provider (H5 blocked) - the remaining major implementable task",
     "Pattern-based manual extraction fully enhanced (complete: electrical patterns, expanded UNITS, TABLE_HINT entries)",
     "All HANNAH OS phases verified complete (0-15)",
     "Blockers H1-H6 documented for owner resolution - no software work can resolve these without external dependencies"
   ],
-  "next_phase_to_start": "Phase 3 \u2014 Universal device abstraction (all items VERIFIED; no immediate work needed; awaiting resolution of H1-H6 blockers)",
+  "next_phase_to_start": "Phase 3 — Universal device abstraction (all items VERIFIED; no immediate work needed; awaiting resolution of H1-H6 blockers)",
   "enhancements_made": [
     "Added electrical.power and electrical.voltage.range pattern extraction to manuals.js",
     "Added electrical.power_factor, electrical.efficiency, electrical.inrush_current patterns",
@@ -72,12 +73,13 @@
     "Fleet: fleet registry with per-account isolation, fleet monitoring from reported state, task allocation with reasons (capability, readiness, incompatibility), incompatible assignment refusal",
     "Marketplace: signed profile packages with Ed25519 validation, publish/browse/install/revoke/rollback workflow, SDKs (profile, adapter, workflow) with dependency-free typed JavaScript client, third-party driver code on hub by design not supported (sandbox + review step required)",
     "Updates: hub self-update gate system (bundle integrity size/SHA-256, health check before switch, probation with rollback on failure), per-hub signed update distribution with refusal reasons, hub configuration persistence from signed config, staged rollout controls with cohorts/canary/pause/rollback tested with two simulated hubs",
-    "Security: security test suite (forged/replayed commands, edited configs, malicious profiles, wildcard topics, untrusted manual text, cross-account access, out-of-range writes, unsafe archives); existing HANNAH operational verified (566 server suite passed, 432 Vitest client tests passed, 43 desktop-tool tests passed, 120 Playwright browser tests passed); performance benchmark (MQTT median 1.408ms p95 1.643ms, Modbus TCP median 0.172ms p95 0.299ms); landing page and README accurately document capabilities"
+    "Security: security test suite (forged/replayed commands, edited configs, malicious profiles, wildcard topics, untrusted manual text, cross-account access, out-of-range writes, unsafe archives); existing HANNAH operational verified (566 server suite passed, 432 Vitest client tests passed, 43 desktop-tool tests passed, 120 Playwright browser tests passed); performance benchmark (MQTT median 1.408ms p95 1.643ms, Modbus TCP median 0.172ms p95 0.299ms); landing page and README accurately document capabilities",
+    "Added the Azure OpenAI provider as a first-class OpenAI-compatible model-gateway provider (catalog preset, env AZURE_OPENAI_API_KEY/BASE_URL/MODEL/MODELS, /api/agent chat through it tested; vision preference and workflow Auto order extended; landing page and provider-key lists updated; 15 gateway tests pass)."
   ],
   "verified_tests": {
     "hub_runtime": "87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment, discovery worker isolation, the simulator publisher fix and benchmark statistics",
     "robot_runtime": "105 passed",
-    "server": "Full suite: 570 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided",
+    "server": "Full suite: 571 passed, 1 live Supabase test skipped (with the new Azure OpenAI provider tests and the repaired manual intelligence module).",
     "client": "Full suite: 433 Vitest tests and 43 desktop-tool tests passed. TypeScript production build passed.",
     "browser": "All 120 Playwright tests passed in the last full run. The two hub-enrollment and Hardware Studio tests were rerun after the local dry-run preview change; both passed, and the Studio preview sent no action or device command."
   }

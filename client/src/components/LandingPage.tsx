@@ -253,7 +253,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
           <SectionHeading kicker="What HANNAH does" title="One companion. Every kind of intelligence.">Four things HANNAH is built around, and everything else it does. Each feature is labelled when it's in beta or still coming.</SectionHeading>
           <div className="mt-10 grid gap-3 md:grid-cols-2">
             {[
-              { id: "models", icon: Cpu, title: "Any model, picked for you", text: "20 providers, cloud or on your own hardware. Auto mode chooses a model for each message, explains why, and falls back if a provider fails.", accent: "text-sky-700 bg-sky-50" },
+              { id: "models", icon: Cpu, title: "Any model, picked for you", text: "21 providers, cloud or on your own hardware. Auto mode chooses a model for each message, explains why, and falls back if a provider fails.", accent: "text-sky-700 bg-sky-50" },
               { id: "agents", icon: Bot, title: "Agents that get work done", text: "A team of Research, Coding, Memory and Tasks agents plans, works in parallel and checks the result. On desktop, they can work in folders you share.", accent: "text-violet-700 bg-violet-50" },
               { id: "automation", icon: Workflow, title: "Workflows that run on their own", text: "A visual editor and a server engine: triggers, AI steps, conditions and integrations, with retries, approvals and a record of every step.", accent: "text-amber-800 bg-amber-50" },
               { id: "privacy", icon: Brain, title: "Memory and privacy you control", text: "See, edit, export or delete what HANNAH remembers. Private mode keeps every request on your own hardware.", accent: "text-emerald-700 bg-emerald-50" },

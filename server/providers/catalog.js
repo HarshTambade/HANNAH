@@ -69,6 +69,21 @@ const PROVIDERS = [
     ],
   },
   {
+    id: "azure",
+    label: "Azure OpenAI",
+    kind: "openai",
+    baseUrl: "https://api.openai.azure.com/openai/deployments",
+    envKey: "AZURE_OPENAI_API_KEY",
+    envBaseUrl: "AZURE_OPENAI_BASE_URL",
+    envModels: "AZURE_OPENAI_MODELS",
+    envDefaultModel: "AZURE_OPENAI_MODEL",
+    docs: "https://learn.microsoft.com/azure/ai-services/openai/",
+    models: [
+      { id: "gpt-4.1", label: "GPT-4.1 deployment", tools: true, vision: true, context: 1047576 },
+      { id: "gpt-4o", label: "GPT-4o deployment", tools: true, vision: true, context: 128000 },
+    ],
+  },
+  {
     id: "anthropic",
     label: "Anthropic",
     kind: "anthropic",

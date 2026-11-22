@@ -48,7 +48,7 @@ const DAILY_EXECUTIONS = Math.max(10, Number(process.env.WORKFLOW_DAILY_EXECUTIO
 const KEEP_EXECUTIONS_MS = 30 * 86_400_000;
 // Serverless requests should end quickly, so rate-limit waits there park the run sooner (see engine.execute).
 const INLINE_WAIT_MS = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME ? 5_000 : 20_000;
-const AUTO_ORDER = ["groq", "openai", "anthropic", "gemini", "openrouter", "mistral", "deepseek", "together", "cerebras", "xai", "fireworks"];
+const AUTO_ORDER = ["groq", "openai", "azure", "anthropic", "gemini", "openrouter", "mistral", "deepseek", "together", "cerebras", "xai", "fireworks"];
 
 const workerId = `w-${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
 const newId = (prefix) => `${prefix}_${Date.now().toString(36)}${crypto.randomBytes(6).toString("hex")}`;

@@ -23,7 +23,7 @@ const { anthropicUrl, ollamaUrl, openAiChatUrl, providerHeaders } = require("./p
 
 const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024;
 const MEDIA_TYPES = new Set(["image/jpeg", "image/png"]);
-const PREFERRED = ["groq", "gemini", "openai", "anthropic", "openrouter"];
+const PREFERRED = ["groq", "azure", "gemini", "openai", "anthropic", "openrouter"];
 
 const SYSTEM = [
   "You are HANNAH's eyes. You get one screenshot of the user's computer screen and their question about it.",

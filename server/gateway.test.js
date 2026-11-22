@@ -147,6 +147,24 @@ test("/v1/models lists the auto router and configured providers", async () => {
   assert.ok(body.data.some((model) => model.id.startsWith("groq/")));
 });
 
+test("the Azure OpenAI provider is a first-class OpenAI-compatible provider", async () => {
+  process.env.AZURE_OPENAI_API_KEY = "azure-test-key";
+  process.env.AZURE_OPENAI_BASE_URL = `http://127.0.0.1:${fake.address().port}/v1`;
+  process.env.AZURE_OPENAI_MODEL = "test-model";
+  const { resolveProvider, defaultModelFor } = require("./providers/catalog");
+  const azure = resolveProvider({ id: "azure" });
+  assert.equal(azure.id, "azure");
+  assert.equal(azure.label, "Azure OpenAI");
+  assert.equal(azure.kind, "openai");
+  assert.equal(azure.baseUrl, `http://127.0.0.1:${fake.address().port}/v1`);
+  assert.equal(defaultModelFor(azure), "test-model");
+  const response = await fetch(`${baseUrl}/api/agent`, { method: "POST", headers: auth, body: JSON.stringify({ provider: "azure", model: "test-model", messages: [{ role: "user", content: "ping from azure" }], tools: [] }) });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.providerId, "azure");
+  assert.equal(body.message.content, "echo:ping from azure");
+});
+
 test("visitor keys can use /v1 but only with Groq", async () => {
   const headers = { "X-Groq-API-Key": "gsk_" + "b".repeat(48), "Content-Type": "application/json" };
   const models = await (await fetch(`${baseUrl}/v1/models`, { headers })).json();
