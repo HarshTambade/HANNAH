@@ -21,7 +21,7 @@ AUTH_LABEL = b"hannah-hub-auth-v1"
 COMMAND_LABEL = b"hannah-hub-command-v1"
 CONFIG_LABEL = b"hannah-hub-config-v1"
 FUTURE_TOLERANCE_MS = 60_000
-COMMAND_TYPES = ("write", "probe", "discover")
+COMMAND_TYPES = ("write", "probe", "discover", "update")
 
 
 def _key(secret: str, label: bytes) -> bytes:

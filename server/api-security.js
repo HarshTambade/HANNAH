@@ -57,7 +57,7 @@ function accountMayUse(path) {
     // An account's own robots, their missions and telemetry.
     || path === "/robots" || path.startsWith("/robots/")
     // An account's own hubs, the devices behind them and their automations.
-    || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/");
+    || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/") || path === "/inventory";
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 

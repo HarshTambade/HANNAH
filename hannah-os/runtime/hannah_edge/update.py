@@ -16,10 +16,10 @@ An update goes through four gates, and stops at the first that fails:
   4. after the switch it is on probation: if it restarts three times without
      confirming that it reached the server, the previous version is put back.
 
-Who may announce an update is not decided here: the announcement (version,
-size, hash) must come in a command signed by the server, checked by
-protocol.CommandGuard like any other. That command is not wired up yet, so
-today this module is used only by its tests.
+The announcement (version, size, hash and download address) comes in a command
+signed by the server, checked by protocol.CommandGuard like any other. The
+running hub checks the staged package in a fresh Python process before
+switching to it.
 
 It replaces HANNAH's own files only. It never touches the operating system,
 a device's firmware or anything outside <root>.
@@ -32,6 +32,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 import tarfile
 import time
 
@@ -47,14 +49,41 @@ class UpdateError(Exception):
         self.reason = reason
 
 
+def check_package(folder: str, version: str) -> tuple:
+    """Import the staged hub in a clean process before it can become current."""
+    script = (
+        "import sys; "
+        "import hannah_edge; "
+        "import hannah_edge.__main__ as cli; "
+        "from hannah_edge import adapters; "
+        "from hannah_edge.hub import Hub, describe; "
+        "assert hannah_edge.__version__ == sys.argv[1]; "
+        "assert Hub is not None and describe() and adapters.ADAPTERS and callable(cli.main)"
+    )
+    env = {"PYTHONPATH": folder, "PYTHONNOUSERSITE": "1"}
+    if os.environ.get("PATH"):
+        env["PATH"] = os.environ["PATH"]
+    try:
+        checked = subprocess.run(
+            [sys.executable, "-c", script, version], cwd=folder, env=env,
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return False, f"The staged package check couldn't run ({type(error).__name__})."
+    if checked.returncode == 0:
+        return True, ""
+    detail = (checked.stderr or checked.stdout or "The staged hub didn't pass its import check.").strip()
+    return False, " ".join(detail.split())[:300]
+
+
 def _key(version: str) -> tuple:
     return tuple(int(part) for part in version.split("."))
 
 
 class Updater:
-    def __init__(self, root: str, health=None, clock=time.time):
+    def __init__(self, root: str, health=check_package, clock=time.time):
         self.root = root
-        self._health = health or (lambda _folder, _version: (True, ""))
+        self._health = health
         self._clock = clock
         os.makedirs(os.path.join(root, "versions"), exist_ok=True)
 
@@ -86,6 +115,36 @@ class Updater:
             os.remove(temporary)
         os.symlink(os.path.join("versions", version), temporary)
         os.replace(temporary, link)  # one step: there is never a moment with no current version
+
+    def initialize(self, version: str, source: str) -> str:
+        """Save the currently installed package as the rollback point on first run."""
+        state = self.status()
+        if state["current"]:
+            if state["current"] not in self.installed():
+                raise UpdateError("The selected hub version is missing from its update store.", "not-installed")
+            link = os.path.join(self.root, "current")
+            if not os.path.islink(link) or os.readlink(link) != os.path.join("versions", state["current"]):
+                self._point(state["current"])
+            return state["current"]
+        if not VERSION.match(str(version)):
+            raise UpdateError("The installed hub doesn't have a version that can be saved.", "bad-version")
+        target = self._folder(version)
+        shutil.rmtree(target, ignore_errors=True)
+        linked = False
+        try:
+            os.makedirs(target)
+            shutil.copytree(source, os.path.join(target, "hannah_edge"), ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            self._point(version)
+            linked = True
+            self._save({"current": version, "previous": None, "pending": None, "last": {"result": "installed", "version": version, "at": int(self._clock() * 1000)}})
+        except OSError:
+            if linked:
+                link = os.path.join(self.root, "current")
+                if os.path.islink(link) and os.readlink(link) == os.path.join("versions", version):
+                    os.remove(link)
+            shutil.rmtree(target, ignore_errors=True)
+            raise
+        return version
 
     def installed(self) -> list:
         return sorted((name for name in os.listdir(os.path.join(self.root, "versions")) if VERSION.match(name)), key=_key)
@@ -156,8 +215,16 @@ class Updater:
             self._save({**state, "last": {"result": "refused", "version": version, "reason": f"It failed its check before being switched on. {detail}".strip(), "at": int(self._clock() * 1000)}})
             raise UpdateError(f"Version {version} failed its check and was not switched on. {detail}".strip(), "unhealthy")
         previous = state["current"]
-        self._point(version)
-        self._save({"current": version, "previous": previous, "pending": {"version": version, "since": int(self._clock() * 1000), "starts": 0} if previous else None, "last": {"result": "switched", "version": version, "from": previous, "at": int(self._clock() * 1000)}})
+        switched = {"current": version, "previous": previous, "pending": {"version": version, "since": int(self._clock() * 1000), "starts": 0} if previous else None, "last": {"result": "switched", "version": version, "from": previous, "at": int(self._clock() * 1000)}}
+        # Persist the recovery target first. If power is lost before the link
+        # changes, cmd_run sees the old package against this state and rolls
+        # back; if changing the link fails, restore the old state here.
+        self._save(switched)
+        try:
+            self._point(version)
+        except OSError:
+            self._save(state)
+            raise
 
     # ---------- gate 4 ----------
     def on_start(self) -> dict:

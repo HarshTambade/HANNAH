@@ -8,6 +8,9 @@
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
+import { createServer, type Server as HttpServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { mkdtempSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -22,8 +25,10 @@ const python = spawnSync("python3", ["-c", "import sys; raise SystemExit(0 if sy
 let server: ChildProcess;
 let simulator: ChildProcess | null = null;
 let hub: ChildProcess | null = null;
+let updateServer: HttpServer | null = null;
 let serverLog = "";
 let simLog = "";
+let hubLog = "";
 let stateDir = "";
 let sim: { mqtt: { host: string; port: number }; modbus: { host: string; port: number } };
 const EMAIL = "homeowner@example.com";
@@ -52,13 +57,17 @@ test.beforeAll(async () => {
   }
   throw new Error(`The server or the simulator didn't start:\n${serverLog}\n${simLog}`);
 });
-test.afterAll(() => { hub?.kill(); simulator?.kill("SIGKILL"); server?.kill(); });
+test.afterAll(() => { hub?.kill(); simulator?.kill("SIGKILL"); updateServer?.close(); server?.kill(); });
 
 async function signedIn(page: Page) {
   await page.route(/\/(api|v1)\//, async (route) => {
     const url = new URL(route.request().url());
-    const response = await route.fetch({ url: `${api}${url.pathname}${url.search}`, timeout: 60_000 });
-    await route.fulfill({ response });
+    try {
+      const response = await route.fetch({ url: `${api}${url.pathname}${url.search}`, timeout: 60_000 });
+      await route.fulfill({ response });
+    } catch (error) {
+      throw new Error(`${String(error)}\nServer log:\n${serverLog}\nHub log:\n${hubLog}`);
+    }
   });
   const registered = await page.request.post(`${api}/api/account/register`, { data: { email: EMAIL, password: "correct horse battery" } });
   if (registered.status() !== 200) {
@@ -80,7 +89,36 @@ function run(args: string[]) {
     child.on("exit", (code) => done({ code, output }));
   });
 }
-const startHub = () => { hub = spawn("python3", ["-m", "hannah_edge", "run", "--state-dir", stateDir, "--sync-interval", "0.3", "--tick", "0.15"], { cwd: runtimeDir, stdio: ["ignore", "pipe", "pipe"] }); };
+function makeUpdateBundle(version: string, omitHub = false): Buffer {
+  const script = String.raw`import io, os, re, sys, tarfile
+source, version, omit_hub = sys.argv[1:]
+buffer = io.BytesIO()
+with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+    for root, dirs, files in os.walk(source):
+        dirs[:] = sorted(name for name in dirs if name != "__pycache__")
+        for name in sorted(files):
+            if not name.endswith(".py") or (omit_hub == "yes" and name == "hub.py"):
+                continue
+            path = os.path.join(root, name)
+            relative = os.path.relpath(path, source).replace(os.sep, "/")
+            with open(path, "rb") as handle:
+                contents = handle.read()
+            if relative == "__init__.py":
+                contents = re.sub(rb'__version__\s*=\s*"[^"]+"', b'__version__ = "' + version.encode() + b'"', contents, count=1)
+            member = tarfile.TarInfo("hannah_edge/" + relative)
+            member.mode = 0o644
+            member.size = len(contents)
+            archive.addfile(member, io.BytesIO(contents))
+sys.stdout.buffer.write(buffer.getvalue())`;
+  const result = spawnSync("python3", ["-c", script, join(runtimeDir, "hannah_edge"), version, omitHub ? "yes" : "no"], { encoding: null, maxBuffer: 24 * 1024 * 1024 });
+  if (result.status !== 0 || !result.stdout?.length) throw new Error(`Couldn't create update fixture: ${result.stderr?.toString() || "no output"}`);
+  return result.stdout;
+}
+const startHub = () => {
+  hub = spawn("python3", ["-m", "hannah_edge", "run", "--state-dir", stateDir, "--sync-interval", "0.3", "--tick", "0.15"], { cwd: runtimeDir, stdio: ["ignore", "pipe", "pipe"] });
+  hub.stdout?.on("data", (chunk) => { hubLog += chunk; });
+  hub.stderr?.on("data", (chunk) => { hubLog += chunk; });
+};
 const tell = (line: string) => simulator?.stdin?.write(`${line}\n`);
 const card = (page: Page, name: string) => page.locator(`[data-testid="device-card"][data-device="${name}"]`);
 /** Add a device from the list, let the hub check it, and switch it on. */
@@ -147,6 +185,97 @@ test("a hub is added with a one-time code, enrolls, and shows the same key finge
   await expect(page.getByTestId("hub-card")).toContainText("speaks http, modbus-tcp, mqtt");
   await expect(page.getByTestId("hub-enrollment")).toHaveCount(0);
   await expect(page.getByTestId("devices-overview")).toContainText("1 of 1 connected");
+  await expect(page.getByTestId("hardware-inventory")).toContainText("Home hub");
+  await page.getByTestId("scan-qr").click();
+  await page.getByTestId("qr-manual-entry").fill("https://example.invalid/profile/unknown");
+  await page.getByRole("button", { name: "Look up" }).click();
+  await expect(page.getByTestId("qr-lookup")).toContainText("was not opened as a web address");
+  await page.getByTestId("scan-qr").click();
+  await page.getByTestId("qr-manual-entry").fill("org.hannah.sim.thermometer");
+  await page.getByRole("button", { name: "Look up" }).click();
+  await expect(page.getByTestId("qr-profile-match")).toContainText("SIM-THERMO");
+  await page.getByRole("button", { name: "Use this profile" }).click();
+  await expect(page.getByTestId("device-name")).toHaveValue("SIM-THERMO");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  const addedRobot = await page.evaluate(async () => {
+    const response = await fetch("/api/robots", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Simulated rover", simulated: true }) });
+    return { status: response.status, body: await response.json() };
+  });
+  expect(addedRobot.status, JSON.stringify(addedRobot.body)).toBe(201);
+  await page.reload();
+  await expect(page.getByTestId("hardware-inventory")).toContainText("Simulated rover");
+  await expect(page.getByTestId("hardware-inventory")).toContainText("SIMULATED");
+
+  await page.getByTestId("look-usb").click();
+  await page.getByTestId("usb-submit").click();
+  await expect(page.getByTestId("usb-devices")).toContainText(/\d+ devices? listed/);
+
+  // The service result is fixed here so this screen test doesn't depend on
+  // whatever mDNS services happen to be present on the developer's network.
+  await page.route(/\/api\/hubs\/[^/]+\/discover$/, async (route) => {
+    const request = route.request().postDataJSON();
+    if (request.kind !== "mdns") return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ pending: false, commandId: "test-mdns", discovered: { kind: "mdns", service: "_http._tcp.local", services: [{ name: "Printer._http._tcp.local", address: "192.0.2.40", port: 631 }] } }),
+    });
+  });
+  await page.getByTestId("look-mdns").click();
+  await page.getByTestId("mdns-seconds").fill("1");
+  await page.getByTestId("mdns-submit").click();
+  await expect(page.getByTestId("mdns-services")).toContainText("1 service found.");
+  await expect(page.getByTestId("mdns-service-item")).toContainText("192.0.2.40:631");
+
+  let bundle = makeUpdateBundle("0.1.1");
+  updateServer = createServer((_request, response) => {
+    response.writeHead(200, { "Content-Type": "application/gzip", "Content-Length": String(bundle.length) });
+    response.end(bundle);
+  });
+  await new Promise<void>((resolve, reject) => {
+    updateServer?.once("error", reject);
+    updateServer?.listen(0, "127.0.0.1", resolve);
+  });
+  const address = updateServer.address() as AddressInfo;
+  const bundleUrl = `http://127.0.0.1:${address.port}/hannah-edge.tar.gz`;
+  const updates = async () => page.evaluate(async () => {
+    const response = await fetch("/api/hubs/updates");
+    return response.json();
+  }) as Promise<{ hubs: Array<{ software: string; updateStatus: { current: string; previous: string | null; pending: unknown; last: { result: string } | null } }> }>;
+
+  await page.getByTestId("hub-updates-toggle").click();
+  await page.getByTestId("hub-update-hub").selectOption({ index: 1 });
+  await page.getByTestId("hub-update-version").fill("0.1.1");
+  await page.getByTestId("hub-update-size").fill(String(bundle.length));
+  await page.getByTestId("hub-update-sha").fill(createHash("sha256").update(bundle).digest("hex"));
+  await page.getByTestId("hub-update-url").fill(bundleUrl);
+  await page.getByTestId("announce-hub-update").click();
+  try {
+    await expect.poll(async () => (await updates()).hubs[0]?.updateStatus?.last?.result, { timeout: 30_000 }).toBe("confirmed");
+  } catch (error) {
+    throw new Error(`${String(error)}\nHub log:\n${hubLog}\nServer log:\n${serverLog}`);
+  }
+  let updateState = (await updates()).hubs[0].updateStatus;
+  expect(updateState).toMatchObject({ current: "0.1.1", previous: "0.1.0", pending: null, last: { result: "confirmed" } });
+  await expect.poll(async () => (await updates()).hubs[0]?.software, { timeout: 5_000 }).toBe("0.1.1");
+  await page.reload();
+  await expect(page.getByTestId("hub-card")).toContainText("HANNAH Edge 0.1.1", { timeout: 20_000 });
+  await page.getByTestId("hub-updates-toggle").click();
+  await page.getByTestId("hub-update-hub").selectOption({ index: 1 });
+
+  // This archive has a matching version and hash but can't import the hub.
+  // The update must be refused before the running version is switched.
+  bundle = makeUpdateBundle("0.1.2", true);
+  await page.getByTestId("hub-update-version").fill("0.1.2");
+  await page.getByTestId("hub-update-size").fill(String(bundle.length));
+  await page.getByTestId("hub-update-sha").fill(createHash("sha256").update(bundle).digest("hex"));
+  await page.getByTestId("hub-update-url").fill(bundleUrl);
+  await page.getByTestId("announce-hub-update").click();
+  await expect(page.getByText(/failed its check and was not switched on/i)).toBeVisible({ timeout: 20_000 });
+  await expect.poll(async () => (await updates()).hubs[0]?.updateStatus?.last?.result, { timeout: 15_000 }).toBe("refused");
+  updateState = (await updates()).hubs[0].updateStatus;
+  expect(updateState.current).toBe("0.1.1");
+  expect(updateState.previous).toBe("0.1.0");
 });
 
 test("a device is picked from the list, checked by the hub, switched on, and its readings are live", async ({ page }) => {
@@ -257,6 +386,11 @@ test("a manual is read into values with their page and line, and its proposal is
   await page.goto("/devices");
   await page.getByRole("button", { name: "Add a device" }).click();
   await page.getByRole("tab", { name: "Use its manual" }).click();
+  const label = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/v9sAAAAASUVORK5CYII=", "base64");
+  await page.getByTestId("manual-file").setInputFiles({ name: "panel-label.png", mimeType: "image/png", buffer: label });
+  await expect(page.getByTestId("manual-image-source")).toContainText("Source image · image/png · SHA-256");
+  await expect(page.getByTestId("manual-summary")).toContainText("0 values found");
+  await expect(page.getByTestId("manual-missing")).toContainText("No vision reader is configured for this image");
   await page.getByTestId("manual-file").setInputFiles({ name: "pm210-manual.pdf", mimeType: "application/pdf", buffer: pdf });
   await expect(page.getByTestId("manual-summary")).toContainText("Read 3 of 3 pages of pm210-manual.pdf", { timeout: 30_000 });
   const model = page.getByTestId("fact-row").filter({ hasText: "Model" }).first();
@@ -290,6 +424,11 @@ test("a manual is read into values with their page and line, and its proposal is
 test("the Hardware Studio builds a description from a form, and the server says what is missing", async ({ page }) => {
   await signedIn(page);
   await page.goto("/devices");
+  const hardwareWrites: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (request.method() !== "GET" && (/\/api\/actions$/.test(path) || /\/api\/devices\/[^/]+\/set$/.test(path))) hardwareWrites.push(`${request.method()} ${path}`);
+  });
   await page.getByRole("button", { name: "Add a device" }).click();
   await page.getByRole("tab", { name: "Describe it yourself" }).click();
   const studio = page.getByTestId("studio");
@@ -307,6 +446,20 @@ test("the Hardware Studio builds a description from a form, and the server says 
   await point.getByLabel("Lowest").fill("0");
   await point.getByLabel("Highest").fill("100");
   await point.getByLabel("Topic that changes it").fill("home/dimmer/set");
+  const simulation = studio.getByTestId("studio-simulation");
+  await simulation.getByLabel("Point to preview").selectOption("brightness");
+  await simulation.getByLabel("Preview value").fill("101");
+  await simulation.getByRole("button", { name: "Preview change" }).click();
+  await expect(simulation.locator("[data-result]")).toHaveAttribute("data-result", "refused");
+  await expect(simulation).toContainText(/outside.*0 to 100/);
+  expect(hardwareWrites).toEqual([]);
+  await simulation.getByLabel("Preview value").fill("42");
+  await simulation.getByRole("button", { name: "Preview change" }).click();
+  await expect(simulation.locator("[data-result]")).toHaveAttribute("data-result", "preview");
+  await expect(simulation).toContainText("Simulation only");
+  await expect(simulation).toContainText("Nothing was sent");
+  await expect(simulation.getByTestId("studio-simulation-mapping")).toContainText("MQTT topic home/dimmer/set · 42");
+  expect(hardwareWrites).toEqual([]);
   await studio.getByRole("button", { name: "Save the description and connect the device" }).click();
   await expect(page.getByTestId("device-setup").getByTestId("level")).toHaveText("Guided setup", { timeout: 15_000 });
   await expect(page.getByTestId("setting-host")).toBeVisible();

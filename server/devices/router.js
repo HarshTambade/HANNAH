@@ -38,6 +38,7 @@ const express = require("express");
 const { getDatabase } = require("../db");
 const { vaultConfigured } = require("../vault");
 const { outcomeText } = require("../actions/engine");
+const { validateProfile } = require("./profiles");
 
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 
@@ -107,6 +108,11 @@ function createDeviceAccountRouter({ devices, engine, manuals = null }) {
 
   router.get("/devices/overview", anyAccount(async (_req, res, db, account) => res.json({ ...(await devices.overview(db, account.id)), canEnroll: vaultConfigured() })));
   router.get("/devices/profiles", anyAccount(async (req, res, db, account) => res.json({ profiles: await devices.listProfiles(db, account.id, { hub: req.query.hub ? await devices.resolveHub(db, account.id, req.query.hub) : null }) })));
+  // Validation is a side-effect-free preflight. Saving or installing remains a separate, person-only operation.
+  router.post("/devices/profiles/validate", json, anyAccount(async (req, res) => {
+    const problems = validateProfile(req.body?.profile);
+    res.json({ valid: problems.length === 0, problems });
+  }));
   router.post("/devices/profiles", json, person(async (req, res, db, account) => res.status(201).json({ profile: await devices.saveProfile(db, account.id, req.body?.profile, { source: "studio" }) })));
   router.delete("/devices/profiles/:id", person(async (req, res, db, account) => res.json(await devices.deleteProfile(db, account.id, req.params.id))));
   router.get("/devices/protocols", anyAccount(async (_req, res) => res.json(devices.protocols())));
@@ -142,6 +148,12 @@ function createDeviceAccountRouter({ devices, engine, manuals = null }) {
   }));
 
   router.get("/hubs", anyAccount(async (_req, res, db, account) => res.json({ hubs: await devices.listHubs(db, account.id), canEnroll: vaultConfigured() })));
+  router.get("/hubs/rollouts", anyAccount(async (_req, res, db, account) => res.json({ rollouts: await devices.listRollouts(db, account.id) })));
+  router.get("/hubs/updates", anyAccount(async (_req, res, db, account) => res.json({ hubs: (await devices.listHubs(db, account.id)).map((hub) => ({ id: hub.id, name: hub.name, software: hub.software, updateStatus: hub.updateStatus })) })));
+  router.post("/hubs/rollouts", json, person(async (req, res, db, account) => res.status(201).json(await devices.createRollout(db, account.id, req.body || {}))));
+  router.post("/hubs/rollouts/:id/pause", person(async (req, res, db, account) => res.json({ rollout: await devices.setRolloutPaused(db, account.id, req.params.id, true) })));
+  router.post("/hubs/rollouts/:id/resume", person(async (req, res, db, account) => res.json({ rollout: await devices.setRolloutPaused(db, account.id, req.params.id, false) })));
+  router.post("/hubs/rollouts/:id/rollback", person(async (req, res, db, account) => res.status(201).json({ rollout: await devices.rollbackRollout(db, account.id, req.params.id) })));
   router.post("/hubs", json, person(async (req, res, db, account) => { const created = await devices.createHub(db, account.id, req.body || {}); res.status(201).json({ ...created, command: command(req) + created.enrollment.code }); }));
   router.get("/hubs/:id", anyAccount(async (req, res, db, account) => { const hub = await devices.getHub(db, account.id, req.params.id); res.json({ hub, events: await devices.events(db, account.id, { hubId: hub.id, limit: 40 }) }); }));
   router.post("/hubs/:id/enrollment", person(async (req, res, db, account) => { const issued = await devices.issueHubCode(db, account.id, req.params.id); res.json({ ...issued, command: command(req) + issued.enrollment.code }); }));
@@ -160,10 +172,9 @@ function createDeviceAccountRouter({ devices, engine, manuals = null }) {
     const hub = await devices.getHub(db, account.id, req.params.id);
     const commandId = await devices.issueUpdate(db, account.id, hub.id, { version: req.body?.version, size: Number(req.body?.size), sha256: req.body?.sha256, url: req.body?.url, requestedBy: "a signed-in person" });
     const command = await devices.waitForCommand(db, account.id, commandId, { ms: 2000 });
-    res.status(command.final && command.status !== "done" ? 409 : 202).json({ commandId, command });
+    const failed = command.final && command.status !== "done";
+    res.status(failed ? 409 : 202).json({ commandId, command, ...(failed ? { error: command.error || command.result?.message || "The hub couldn't apply this update." } : {}) });
   }));
-  router.get("/hubs/updates", anyAccount(async (_req, res, db, account) => res.json({ hubs: (await devices.listHubs(db, account.id)).map((hub) => ({ id: hub.id, name: hub.name, software: hub.software, updateStatus: hub.updateStatus })) })));
-
   return router;
 }
 

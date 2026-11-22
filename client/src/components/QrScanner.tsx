@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 export function QrScanner({ onResult, onClose }: { onResult: (text: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState("");
+  const [manualCode, setManualCode] = useState("");
   const [supported] = useState(() => typeof (window as any).BarcodeDetector !== "undefined");
 
   useEffect(() => {
@@ -39,7 +40,12 @@ export function QrScanner({ onResult, onClose }: { onResult: (text: string) => v
         </div>
         {error && <p className="mt-2 text-sm text-rose-800" role="alert">{error}</p>}
         {!error && <video ref={videoRef} className="mt-3 w-full rounded-lg bg-black" playsInline muted />}
-        <p className="mt-2 text-xs text-slate-600">Point the camera at a QR code. If scanning isn't supported, type the code by hand.</p>
+        <p className="mt-2 text-sm text-slate-700">Point the camera at a QR code, or enter its contents. HANNAH checks installed profiles only; it won't open a web address from a code.</p>
+        <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); const value = manualCode.trim(); if (value) onResult(value); }}>
+          <label className="sr-only" htmlFor="qr-manual-entry">QR code contents</label>
+          <input id="qr-manual-entry" className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" data-testid="qr-manual-entry" value={manualCode} onChange={(event) => setManualCode(event.target.value)} placeholder="Device profile code" maxLength={300} />
+          <button type="submit" className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50" disabled={!manualCode.trim()}>Look up</button>
+        </form>
       </div>
     </div>
   );

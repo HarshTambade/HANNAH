@@ -4,10 +4,14 @@ No physical device is involved, and no broker or device HANNAH didn't write.
 """
 import json
 import os
+import socket
+import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from hannah_edge.hub import Hub
+from hannah_edge import adapters
 from hannah_edge.sim.broker import Broker
 from hannah_edge.sim.devices import ModbusMeter, MqttRoom, Room
 from tests.support import HUB, SECRET, Server, device, wait
@@ -53,6 +57,25 @@ class HubCase(unittest.TestCase):
 
     def by_id(self):
         return {item["id"]: item for item in self.hub.report()["devices"]}
+
+    def test_each_device_adapter_runs_in_its_own_child_process(self):
+        self.configure()
+        workers = [entry["adapter"].pid for entry in self.hub._devices.values()]
+        self.assertEqual(len(workers), len(self.devices))
+        self.assertEqual(len(set(workers)), len(workers))
+        self.assertNotIn(os.getpid(), workers)
+
+    def test_a_crashed_adapter_worker_is_reported_and_other_devices_keep_running(self):
+        self.configure()
+        self.assertTrue(self.spin(lambda: self.by_id()["dev_thermo"]["connection"]["state"] == "online"))
+        fan = self.hub._devices["dev_fan"]["adapter"]
+        fan._process.kill()
+        fan._process.join(timeout=2)
+
+        self.hub.tick()
+        devices = self.by_id()
+        self.assertEqual((devices["dev_fan"]["connection"]["state"], devices["dev_fan"]["connection"]["reason"]), ("error", "worker-exit"))
+        self.assertEqual(devices["dev_thermo"]["connection"]["state"], "online")
 
 
 class Reading(HubCase):
@@ -176,6 +199,24 @@ class Writing(HubCase):
         self.assertTrue(self.room.room.fan)
         self.assertEqual({item["commandId"]: item.get("reason") for item in self.results()}.get("old"), "replayed")
 
+    def test_a_signed_update_command_passes_the_same_command_guard(self):
+        payload, signature = self.server.command("update", id="update-without-url", url="")
+        self.hub.handle(payload, signature)
+        self.assertTrue(self.spin(lambda: any(item.get("commandId") == "update-without-url" for item in self.results()), 2.0))
+        result = next(item for item in self.results() if item.get("commandId") == "update-without-url")
+        self.assertEqual((result["status"], result["reason"]), ("failed", "no-url"))
+
+    def test_a_signed_fleet_rollback_uses_the_local_recovery_point_and_restarts(self):
+        restored = {"current": "0.1.0", "previous": None, "pending": None, "last": {"result": "rolled-back", "version": "0.1.1", "to": "0.1.0"}}
+        with patch.object(self.hub._updater, "rollback", return_value=restored) as rollback:
+            payload, signature = self.server.command("update", id="fleet-rollback", rollback=True)
+            self.hub.handle(payload, signature)
+            self.assertTrue(self.spin(lambda: any(item.get("commandId") == "fleet-rollback" for item in self.results()), 2.0))
+        rollback.assert_called_once_with("HANNAH received a signed fleet rollback command.")
+        result = next(item for item in self.results() if item.get("commandId") == "fleet-rollback")
+        self.assertEqual((result["status"], result["update"]["current"]), ("done", "0.1.0"))
+        self.assertEqual(self.hub._restart_after_update, "fleet-rollback")
+
     def test_the_guard_survives_a_restart(self):
         self.ready()
         payload, signature = self.server.command("write", seq=9, deviceId="dev_fan", point="power", value=True)
@@ -212,7 +253,9 @@ class Writing(HubCase):
         self.devices = self.devices[:1]
         self.configure()
         mqtt = {"host": self.broker.host, "port": self.broker.port}
-        result = self.run_command("probe", device=device("draft", "lamp", mqtt), seconds=4)
+        with patch("hannah_edge.hub.adapters.create", wraps=adapters.create) as create_adapter:
+            result = self.run_command("probe", device=device("draft", "lamp", mqtt), seconds=4)
+        self.assertTrue(create_adapter.call_args.kwargs["isolated"])
         self.assertEqual(result["status"], "done")
         probe = result["probe"]
         self.assertEqual((probe["adapter"], probe["connection"]["state"]), ("mqtt", "online"))
@@ -310,3 +353,168 @@ class Rules(HubCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Discovery(HubCase):
+    def run_command(self, command_type="discover", patience=10.0, **fields):
+        payload, signature = self.server.command(command_type, **fields)
+        self.hub.handle(payload, signature)
+        command_id = json.loads(payload)["id"]
+        found = self.spin(lambda: next((item for item in self.results() if item["commandId"] == command_id), None), patience)
+        self.assertTrue(found, self.hub.report()["outbox"])
+        return found
+
+    def test_listing_serial_ports_opens_nothing(self):
+        self.devices = []
+        self.configure()
+        result = self.run_command(kind="serial")
+        self.assertEqual(result["status"], "done")
+        self.assertEqual(result["discovered"]["kind"], "serial")
+        self.assertIn("ports", result["discovered"])
+        self.assertIn("Listed only", result["discovered"]["note"])
+        self.assertEqual(len(self.hub.report()["devices"]), 0)
+
+    def test_an_mdns_look_is_best_effort_and_never_crashes(self):
+        self.devices = []
+        self.configure()
+        result = self.run_command(kind="mdns", settings={"service": "_http._tcp.local", "seconds": 1})
+        self.assertIn(result["status"], ("done", "failed"))
+        if result["status"] == "done":
+            self.assertEqual(result["discovered"]["kind"], "mdns")
+            self.assertIn("services", result["discovered"])
+            self.assertIn("Listened only", result["discovered"]["note"])
+        else:
+            self.assertEqual(result["reason"], "mdns-error")
+
+    def test_mdns_records_join_service_instance_port_and_host_address(self):
+        def dns_name(value):
+            return b"".join(bytes([len(label)]) + label.encode("utf-8") for label in value.split(".")) + b"\x00"
+
+        def record(owner, kind, data):
+            return dns_name(owner) + struct.pack("!HHIH", kind, 1, 120, len(data)) + data
+
+        service_type = "_http._tcp.local"
+        instance = "Office printer._http._tcp.local"
+        host = "printer.local"
+        ptr = record(service_type, 12, dns_name(instance))
+        srv = record(instance, 33, struct.pack("!HHH", 0, 0, 631) + dns_name(host))
+        address = record(host, 1, bytes((192, 0, 2, 55)))
+        packet = struct.pack("!HHHHHH", 0, 0x8400, 0, 1, 0, 2) + ptr + srv + address
+        found = {}
+        hosts = {}
+
+        Hub._parse_mdns(packet, found, hosts, service_type)
+
+        self.assertEqual(found[instance]["service"], service_type)
+        self.assertEqual(found[instance]["port"], 631)
+        self.assertEqual(found[instance]["address"], "192.0.2.55")
+        self.assertEqual(hosts[host], "192.0.2.55")
+
+    def test_named_mdns_browse_sends_a_qu_query_and_returns_the_joined_result(self):
+        def dns_name(value):
+            return b"".join(bytes([len(label)]) + label.encode("utf-8") for label in value.split(".")) + b"\x00"
+
+        def record(owner, kind, data):
+            return dns_name(owner) + struct.pack("!HHIH", kind, 1, 120, len(data)) + data
+
+        service_type = "_http._tcp.local"
+        instance = "Printer._http._tcp.local"
+        host = "printer.local"
+        response = struct.pack("!HHHHHH", 0, 0x8400, 0, 1, 0, 2) + b"".join((
+            record(service_type, 12, dns_name(instance)),
+            record(instance, 33, struct.pack("!HHH", 0, 0, 631) + dns_name(host)),
+            record(host, 1, bytes((192, 0, 2, 40))),
+        ))
+
+        class FakeSocket:
+            def __init__(self):
+                self.sent = []
+                self.closed = False
+                self.reply = response
+
+            def settimeout(self, _seconds):
+                pass
+
+            def bind(self, _address):
+                pass
+
+            def setsockopt(self, *_args):
+                pass
+
+            def sendto(self, packet, address):
+                self.sent.append((packet, address))
+
+            def recvfrom(self, _size):
+                if self.reply:
+                    answer, self.reply = self.reply, None
+                    return answer, ("192.0.2.40", 5353)
+                raise socket.timeout()
+
+            def close(self):
+                self.closed = True
+
+        fake = FakeSocket()
+        tick = [0.0]
+
+        def monotonic():
+            tick[0] += 0.2
+            return tick[0]
+
+        with patch("hannah_edge.discovery.socket.socket", return_value=fake), patch("hannah_edge.discovery.time.monotonic", side_effect=monotonic):
+            services = self.hub._mdns_browse(service_type, 1)
+
+        self.assertEqual(services, [{"name": instance, "service": service_type, "port": 631, "address": "192.0.2.40"}])
+        self.assertEqual(fake.sent[0][1], ("224.0.0.251", 5353))
+        self.assertEqual(struct.unpack("!HH", fake.sent[0][0][-4:]), (12, 0x8001))
+        self.assertTrue(fake.closed)
+
+    def test_mdns_ignores_other_service_types_and_rejects_nonlocal_queries(self):
+        def dns_name(value):
+            return b"".join(bytes([len(label)]) + label.encode("utf-8") for label in value.split(".")) + b"\x00"
+
+        instance = "Printer._ipp._tcp.local"
+        ptr = dns_name("_ipp._tcp.local") + struct.pack("!HHIH", 12, 1, 120, len(dns_name(instance))) + dns_name(instance)
+        packet = struct.pack("!HHHHHH", 0, 0x8400, 0, 1, 0, 0) + ptr
+        found = {}
+        Hub._parse_mdns(packet, found, {}, "_http._tcp.local")
+        self.assertEqual(found, {})
+        with self.assertRaisesRegex(ValueError, "one local service type"):
+            self.hub._mdns_browse("_ipp._tcp.example", 1)
+
+    def test_usb_inventory_keeps_vendor_product_ids_and_labels_separate(self):
+        base = os.path.join(self.state.name, "usb")
+        device_path = os.path.join(base, "1-2")
+        os.makedirs(device_path)
+        fields = {
+            "idVendor": "1d6b",
+            "idProduct": "0002",
+            "manufacturer": "Example maker",
+            "product": "USB bridge",
+            "serial": "example-serial",
+            "version": "2.00",
+        }
+        for name, value in fields.items():
+            with open(os.path.join(device_path, name), "w", encoding="utf-8") as handle:
+                handle.write(value)
+
+        found = Hub._usb_devices(base)
+
+        self.assertEqual(found, [{
+            "path": "1-2",
+            "vendorId": "1d6b",
+            "productId": "0002",
+            "manufacturer": "Example maker",
+            "product": "USB bridge",
+            "serial": "example-serial",
+            "version": "2.00",
+        }])
+
+    def test_usb_listing_is_read_only_and_never_opens_a_device(self):
+        self.devices = []
+        self.configure()
+        result = self.run_command(kind="usb")
+        self.assertEqual(result["status"], "done")
+        self.assertEqual(result["discovered"]["kind"], "usb")
+        self.assertIsInstance(result["discovered"]["devices"], list)
+        self.assertIn("Listed only", result["discovered"]["note"])
+        self.assertEqual(len(self.hub.report()["devices"]), 0)

@@ -961,6 +961,43 @@ const MIGRATIONS = [
       "ALTER TABLE hannah_hubs ADD COLUMN update_status TEXT",
     ],
   },
+  {
+    version: 25,
+    name: "staged hub update rollouts",
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_update_rollouts (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        version TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        url TEXT NOT NULL,
+        cohort_size INTEGER NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'update',
+        rollback_to TEXT,
+        status TEXT NOT NULL,
+        detail TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_update_rollout_targets (
+        user_id TEXT NOT NULL,
+        rollout_id TEXT NOT NULL,
+        hub_id TEXT NOT NULL,
+        hub_name TEXT NOT NULL,
+        ordinal INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        command_id TEXT,
+        detail TEXT,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, rollout_id, hub_id),
+        FOREIGN KEY (user_id, rollout_id) REFERENCES hannah_update_rollouts(user_id, id) ON DELETE CASCADE
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_update_rollout_targets_order ON hannah_update_rollout_targets (user_id, rollout_id, ordinal)",
+      "CREATE INDEX IF NOT EXISTS hannah_update_rollouts_status ON hannah_update_rollouts (user_id, status, updated_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

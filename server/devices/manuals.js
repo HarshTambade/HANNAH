@@ -29,6 +29,7 @@
  */
 const { readFile } = require("../documents/read");
 const profiles = require("./profiles");
+const crypto = require("node:crypto");
 
 const MAX_PAGES = 400;
 const MAX_FACTS = 300;
@@ -50,10 +51,35 @@ const PROTOCOLS = [
   { id: "coap", pattern: /\bcoap\b/i, label: "CoAP" },
   { id: "can", pattern: /\bcan[\s-]?(bus|open|fd)\b/i, label: "CAN" },
 ];
+
+
+# Additional units (added 2026-11-23)
+# These extend the unit recognition for more device types
+UNITS += ["bar", "psi", "Pa", "kPa", "mBar", "mT", "G", "m", "km", "km/h", "rpm", "Hz", "kHz", "MHz", "GHz", "dB", "°K", "°R"]
+
 const UNITS = ["°C", "°F", "%RH", "%", "kWh", "Wh", "kW", "W", "VA", "V", "mA", "A", "Hz", "ppm", "lx", "lux", "Pa", "kPa", "bar", "rpm", "l/min", "m3/h", "s", "ms"];
 const TYPE = /^(u?int(?:16|32)|float(?:32)?|real|bool(?:ean)?|bit|word|dword)$/i;
 const ACCESS = /^(r|ro|rw|r\/w|w|wo|read(?:-|\s)?only|read\/write)$/i;
-const TABLE_HINT = [["holding", /\bholding\b|\b(fc|function(\s+code)?)\s*0?3\b|\b0x03\b/i], ["input", /\binput\s+register|\b(fc|function(\s+code)?)\s*0?4\b|\b0x04\b/i], ["coil", /\bcoils?\b|\b(fc|function(\s+code)?)\s*0?[15]\b/i], ["discrete", /\bdiscrete\b|\b(fc|function(\s+code)?)\s*0?2\b/i]];
+const 
+
+# Additional register table hints (added 2026-11-23)
+# These help identify register rows in manuals for more device types
+TABLE_HINT += [["bit", /(?:bit|coil|discrete)/i]]  # bit table
+TABLE_HINT += [["float32", /(?:float|single)/i]]  # 32-bit float table
+
+TABLE_HINT = [["holding", /\bholding\b|\b(fc|function(\s+code)?)\s*0?3\b|\b0x03\b/i], ["input", /\binput\s+register|\b(fc|function(\s+code)?)\s*0?4\b|\b0x04\b/i], ["coil", /\bcoils?\b|\b(fc|function(\s+code)?)\s*0?[15]\b/i], ["discrete", /\bdiscrete\b|\b(fc|function(\s+code)?)\s*0?2\b/i]];
+# Additional register table hints (added 2026-11-23)
+# Bit table for devices using semicolon separator
+TABLE_HINT += [["semicolon", /;\s*\d+/i]]  # semicolon-separated values
+TABLE_HINT += [["colon", /\d+\s*:\s*\d+/i]]  # colon-separated values
+
+function imageType(buffer) {
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (buffer.length >= 6 && ["GIF87a", "GIF89a"].includes(buffer.subarray(0, 6).toString("ascii"))) return "image/gif";
+  if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  return null;
+}
 
 /** A document's text as pages: [{ page, lines }]. A PDF keeps its page numbers; anything else is one page per form feed. */
 function pagesOf(read) {
@@ -120,11 +146,34 @@ function extract(pages) {
       if ((match = /\b(?:tcp\s*)?port\b[^0-9]{0,16}(\d{2,5})\b/i.exec(line)) && Number(match[1]) <= 65535) add({ field: "network.port", label: "Network port", value: Number(match[1]), confidence: "medium", ...at });
       if ((match = /\b(?:default\s+)?ip(?:\s*address)?\b[^0-9]{0,20}((?:\d{1,3}\.){3}\d{1,3})\b/i.exec(line))) add({ field: "network.address", label: "Network address", value: match[1], confidence: /default/i.test(line) ? "high" : "medium", ...at });
       if (/\btopics?\b/i.test(line)) for (const topic of line.match(/[A-Za-z0-9_$%<>{}-]+(?:\/[A-Za-z0-9_+#%<>{}-]+){1,8}/g) || []) if (!/^https?:?$/i.test(topic.split("/")[0])) add({ field: "mqtt.topic", label: "MQTT topic", value: topic, confidence: "medium", ...at });
-      // What it must not exceed. Reported, never used.
+      
+
+# Additional electrical value patterns (added 2026-11-23)
+# These extract more electrical constraints from manuals
+
+# Power consumption
+if ((match = /(?:power\s+)?consump tion[^0-9]{0,30}(\d+(?:\.\d+)?)\s*(W|kW|mW)/i.exec(line))) add({ field: "electrical.power", label: "Power consumption", value: `${match[1]} ${match[2]}`, found: match[0], confidence: "medium", ...at });
+
+# Voltage range
+if ((match = /(?:operating|input|output)\s+voltage\s+range[^0-9]{0,30}(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*(V|kV|mV)/i.exec(line))) add({ field: "electrical.voltage.range", label: "Voltage range", value: `${match[1]} to ${match[2]} ${match[3]}`, found: match[0], confidence: "medium", ...at });
+
+# Current range
+if ((match = /(?:operating|output|load)\s+current\s+range[^0-9]{0,30}(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*(mA|A)/i.exec(line))) add({ field: "electrical.current.range", label: "Current range", value: `${match[1]} to ${match[2]} ${match[2]}`, found: match[0], confidence: "medium", ...at });
+
+// What it must not exceed. Reported, never used.
       if ((match = /\b(?:supply|power\s+supply|input|rated|operating)\s+voltage\b[^0-9]{0,24}(\d+(?:\.\d+)?(?:\s*(?:-|–|to|~)\s*\d+(?:\.\d+)?)?)\s*(V\s?(?:AC|DC)?|VAC|VDC)\b/i.exec(line))) add({ field: "electrical.voltage", label: "Supply voltage", value: `${squash(match[1])} ${squash(match[2])}`, found: match[1], confidence: "medium", hazardous: true, ...at });
       if ((match = /\b(?:max(?:imum)?|rated)\s+(?:load\s+)?current\b[^0-9]{0,24}(\d+(?:\.\d+)?)\s*(mA|A)\b/i.exec(line))) add({ field: "electrical.current", label: "Rated current", value: `${match[1]} ${match[2]}`, found: match[1], confidence: "medium", hazardous: true, ...at });
       if ((match = /\boperating\s+temperature\b[^0-9\-+]{0,24}([-+]?\d+(?:\.\d+)?)\s*(?:°?\s*[CF])?\s*(?:to|-|–|~|\.\.\.)\s*\+?([-+]?\d+(?:\.\d+)?)\s*°?\s*([CF])\b/i.exec(line))) add({ field: "limits.operatingTemperature", label: "Operating temperature", value: `${match[1]} to ${match[2]} °${match[3].toUpperCase()}`, found: match[1], confidence: "medium", ...at });
-      if (/^(?:⚠\s*)?(?:warning|caution|danger)\b/i.test(line) && line.length > 12) add({ field: "safety", label: "Safety instruction", value: line.slice(0, 300), confidence: "high", ...at });
+      
+
+# Additional electrical value patterns (added 2026-11-23)
+# Power factor
+if ((match = /\b(?:power\s+)?factor\b[^0-9]{0,20}([0-9](?:\.[0-9]+)?)\b/i.exec(line))) add({ field: "electrical.power_factor", label: "Power factor", value: match[1], confidence: "medium", found: match[0], ...at });
+# Efficiency
+if ((match = /\b(?:efficiency|eta)\b[^0-9]{0,20}(\d+(?:\.\d+)?)\s*%\b/i.exec(line))) add({ field: "electrical.efficiency", label: "Efficiency", value: `${match[1]}%`, found: match[0], confidence: "medium", ...at });
+# Inrush current
+if ((match = /\b(?:inrush|peak)\s+current\b[^0-9]{0,30}(\d+(?:\.\d+)?)\s*(mA|A)\b/i.exec(line))) add({ field: "electrical.inrush_current", label: "Inrush current", value: `${match[1]} ${match[2]}`, found: match[0], confidence: "medium", hazardous: true, ...at });
+if (/^(?:⚠\s*)?(?:warning|caution|danger)\b/i.test(line) && line.length > 12) add({ field: "safety", label: "Safety instruction", value: line.slice(0, 300), confidence: "high", ...at });
       // Register maps.
       for (const [name, hint] of TABLE_HINT) if (hint.test(line) && !/^\s*(?:0x[0-9a-f]+|\d+)\s/i.test(line)) table = name;
       if (!registerPage || registers.length >= MAX_REGISTERS) continue;
@@ -216,6 +265,17 @@ function propose(facts, registers, name) {
 
 /** Read a manual and say what it supports. Nothing is stored. */
 async function analyze({ name, buffer, suggest = null }) {
+  const mediaType = imageType(buffer);
+  if (mediaType) {
+    const source = { id: crypto.createHash("sha256").update(buffer).digest("hex"), name: String(name || "image").slice(0, 120), mediaType, bytes: buffer.length };
+    return {
+      document: { name: source.name, kind: "image", pages: 1, pagesWithText: 0, source, notes: ["Image received as source evidence. HANNAH has no image or diagram reader configured, so it did not extract text, wiring, pin assignments or ratings."] },
+      facts: [], proposal: null,
+      missing: ["No vision reader is configured for this image. Check the label or diagram yourself, then enter the verified connection details in the Hardware Studio."],
+      request: null,
+      reminder: "This image has not been interpreted. No electrical, wiring or device value was inferred from it.",
+    };
+  }
   const read = await readFile(buffer, name, { maxText: 2_000_000 });
   const pages = pagesOf(read);
   const { facts, registers } = extract(pages);

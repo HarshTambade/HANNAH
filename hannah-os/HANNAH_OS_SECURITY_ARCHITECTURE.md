@@ -71,7 +71,7 @@ Whatever the server sends, the hub (`hannah-os/runtime/hannah_edge/hub.py`):
 
 - An independent review.
 - Secure boot, signed images and disk encryption: they belong to an image that hasn't been built.
-- Separate, sandboxed services on the hub. Nothing third-party runs on a hub today.
+- Per-device built-in adapters and read-only discovery have process boundaries, but run as the same user with the same permissions and are not sandboxes. Automation, telemetry and updates remain in the main process, and no worker has its own systemd unit. Nothing third-party runs on a hub today.
 - Per-publisher key management in the app.
 - Key rotation for a hub other than enrolling it again with a new code.
 - Rate limits per account on device changes beyond the Action Engine's and the hub's one write a second per point.

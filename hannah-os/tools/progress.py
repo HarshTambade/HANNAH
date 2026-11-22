@@ -62,7 +62,7 @@ def render(record: dict) -> str:
     lines += [f"| {entry['id']} | {entry['what']} | {entry['unblocks']} |" for entry in record["blockers"]]
     lines += ["", "## Next unblocked tasks", ""]
     lines += [f"{index}. {task}" for index, task in enumerate(record["next"], 1)] or ["None."]
-    lines += ["", "## Last full verification", ""]
+    lines += ["", "## Verification record", ""]
     lines += [f"- {key}: {value}" for key, value in record["lastVerified"].items()]
     lines += ["", "## To resume", "", "```sh"] + record["resume"] + ["```", ""]
     return "\n".join(lines)

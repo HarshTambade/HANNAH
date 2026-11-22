@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { AlertTriangle, CheckCircle2, CircleSlash, Clock, HelpCircle, Loader2, PauseCircle, PlayCircle, Plug, Plus, Router, Trash2, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { Operator, type ActionRecord } from "../services/Operator";
-import { Devices, type Automation, type AutomationInput, type Check, type Device, type DeviceEvent, type Hub, type HubEnrollment, type Overview, type PointInfo, type RulePart } from "../services/Devices";
+import { Devices, type Automation, type AutomationInput, type Check, type Device, type DeviceEvent, type HardwareInventory, type Hub, type HubEnrollment, type Overview, type PointInfo, type Profile, type RulePart, type UpdateRollout } from "../services/Devices";
 import DeviceSetup, { LevelChip } from "./DeviceSetup";
 import { QrScanner } from "./QrScanner";
 
@@ -251,6 +251,14 @@ function HubCard({ hub, enrollment, onChanged, onEnrollment }: { hub: Hub; enrol
   const [lookTls, setLookTls] = useState(false);
   const [lookBusy, setLookBusy] = useState(false);
   const [lookTopics, setLookTopics] = useState<Array<{ topic: string; messages: number; sample?: string }> | null>(null);
+  const [mdnsOpen, setMdnsOpen] = useState(false);
+  const [mdnsService, setMdnsService] = useState("_http._tcp.local");
+  const [mdnsSeconds, setMdnsSeconds] = useState("3");
+  const [mdnsBusy, setMdnsBusy] = useState(false);
+  const [mdnsServices, setMdnsServices] = useState<Array<{ name: string; address?: string; port?: number }> | null>(null);
+  const [usbOpen, setUsbOpen] = useState(false);
+  const [usbBusy, setUsbBusy] = useState(false);
+  const [usbDevices, setUsbDevices] = useState<Array<{ path: string; vendorId?: string | null; productId?: string | null; product?: string | null; manufacturer?: string | null; serial?: string | null }> | null>(null);
   const state = HUB_STATE[hub.connection];
   const act = async (work: () => Promise<unknown>) => { setError(""); try { await work(); onChanged(); } catch (reason) { setError(message(reason)); } };
   const look = async () => {
@@ -260,6 +268,20 @@ function HubCard({ hub, enrollment, onChanged, onEnrollment }: { hub: Hub; enrol
       setLookTopics(answer.discovered?.topics || []);
     } catch (reason) { setError(message(reason)); } finally { setLookBusy(false); }
   };
+  const lookMdns = async () => {
+    setMdnsBusy(true); setError(""); setMdnsServices(null);
+    try {
+      const answer = await Devices.look(hub.id, "mdns", { service: mdnsService.trim() || "_http._tcp.local", seconds: Number(mdnsSeconds) || 3 });
+      setMdnsServices(answer.discovered?.services || []);
+    } catch (reason) { setError(message(reason)); } finally { setMdnsBusy(false); }
+  };
+  const lookUsb = async () => {
+    setUsbBusy(true); setError(""); setUsbDevices(null);
+    try {
+      const answer = await Devices.look(hub.id, "usb", {});
+      setUsbDevices(answer.discovered?.devices || []);
+    } catch (reason) { setError(message(reason)); } finally { setUsbBusy(false); }
+  };
   return (
     <li className="rounded-xl border border-slate-200 p-3" data-testid="hub-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -267,6 +289,8 @@ function HubCard({ hub, enrollment, onChanged, onEnrollment }: { hub: Hub; enrol
         <div className="flex gap-2">
           {hub.status !== "enrolled" && <button type="button" className={button} onClick={() => void act(async () => onEnrollment(await Devices.newHubCode(hub.id)))}>New code</button>}
           <button type="button" className={button} onClick={() => setLookOpen((value) => !value)} data-testid="look-broker">Look at a broker's topics</button>
+          <button type="button" className={button} onClick={() => setMdnsOpen((value) => !value)} data-testid="look-mdns">Look on the network (mDNS)</button>
+          <button type="button" className={button} onClick={() => setUsbOpen((value) => !value)} data-testid="look-usb">List USB devices</button>
           <button type="button" className={button} onClick={() => { if (window.confirm(`Remove the hub ${hub.name} and every device behind it?`)) void act(() => Devices.removeHub(hub.id)); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Remove</button>
         </div>
       </div>
@@ -297,6 +321,35 @@ function HubCard({ hub, enrollment, onChanged, onEnrollment }: { hub: Hub; enrol
           )}
         </div>
       )}
+      {mdnsOpen && (
+        <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="mdns-look">
+          <p className="text-sm font-medium text-slate-900">Look on the network (mDNS)</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="block text-sm text-slate-800">Service type<input className={input} data-testid="mdns-service" value={mdnsService} onChange={(event) => setMdnsService(event.target.value)} /></label>
+            <label className="block text-sm text-slate-800">Seconds<input className={input} type="number" min="1" max="15" step="1" data-testid="mdns-seconds" value={mdnsSeconds} onChange={(event) => setMdnsSeconds(event.target.value)} /></label>
+          </div>
+          <button type="button" className={primary} disabled={mdnsBusy || hub.connection !== "online"} data-testid="mdns-submit" onClick={() => void lookMdns()}>{mdnsBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}Look</button>
+          {mdnsServices && (
+            <div data-testid="mdns-services">
+              <p className="text-sm text-slate-700">{mdnsServices.length} service{mdnsServices.length === 1 ? "" : "s"} found.</p>
+              <ul className="mt-1 space-y-0.5 text-sm text-slate-800">{mdnsServices.map((item, index) => <li key={`${item.name}-${index}`} className="font-mono text-xs" data-testid="mdns-service-item">{item.name}{item.address ? ` (${item.address}${item.port ? `:${item.port}` : ""})` : ""}</li>)}</ul>
+            </div>
+          )}
+        </div>
+      )}
+      {usbOpen && (
+        <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="usb-look">
+          <p className="text-sm font-medium text-slate-900">List USB devices</p>
+          <p className="text-sm text-slate-700">Read from the hub's own system only. Nothing is opened or written to.</p>
+          <button type="button" className={primary} disabled={usbBusy || hub.connection !== "online"} data-testid="usb-submit" onClick={() => void lookUsb()}>{usbBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}List</button>
+          {usbDevices && (
+            <div data-testid="usb-devices">
+              <p className="text-sm text-slate-700">{usbDevices.length} device{usbDevices.length === 1 ? "" : "s"} listed.</p>
+              <ul className="mt-1 space-y-0.5 text-sm text-slate-800">{usbDevices.map((item, index) => <li key={`${item.path}-${index}`} className="font-mono text-xs" data-testid="usb-device-item">{item.path}{item.vendorId || item.productId ? ` · ${item.vendorId && item.productId ? `${item.vendorId}:${item.productId}` : item.vendorId || item.productId}` : ""}{item.manufacturer || item.product ? ` · ${[item.manufacturer, item.product].filter(Boolean).join(" ")}` : ""}{item.serial ? ` · ${item.serial}` : ""}</li>)}</ul>
+            </div>
+          )}
+        </div>
+      )}
       {error && <div className="mt-2"><Notice tone="rose">{error}</Notice></div>}
     </li>
   );
@@ -305,6 +358,7 @@ function HubCard({ hub, enrollment, onChanged, onEnrollment }: { hub: Hub; enrol
 export default function DevicesPage() {
   const [signedIn, setSignedIn] = useState(isAccountSession());
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [inventory, setInventory] = useState<HardwareInventory | null>(null);
   const [protocols, setProtocols] = useState<{ available: Array<{ id: string; label: string }>; notBuilt: Array<{ id: string; reason: string }> } | null>(null);
   const [events, setEvents] = useState<DeviceEvent[]>([]);
   const [enrollment, setEnrollment] = useState<HubEnrollment | null>(null);
@@ -315,6 +369,9 @@ export default function DevicesPage() {
   const [error, setError] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
   const [scanned, setScanned] = useState("");
+  const [scanProfile, setScanProfile] = useState<Profile | null>(null);
+  const [scanError, setScanError] = useState("");
+  const [scanBusy, setScanBusy] = useState(false);
   const [publishers, setPublishers] = useState<Array<{ keyId: string; owner: string; revokedAt: number | null }>>([]);
   const [pubKeyId, setPubKeyId] = useState("");
   const [pubOwner, setPubOwner] = useState("");
@@ -327,6 +384,8 @@ export default function DevicesPage() {
   const [updateSize, setUpdateSize] = useState("");
   const [updateSha, setUpdateSha] = useState("");
   const [updateUrl, setUpdateUrl] = useState("");
+  const [rolloutCohortSize, setRolloutCohortSize] = useState("1");
+  const [rollouts, setRollouts] = useState<UpdateRollout[]>([]);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateError, setUpdateError] = useState("");
   const [updateResult, setUpdateResult] = useState("");
@@ -334,7 +393,10 @@ export default function DevicesPage() {
 
   const load = useCallback(async () => {
     if (!isAccountSession()) { setOverview(null); return; }
-    try { setOverview(await Devices.overview()); setError(""); } catch (reason) { setError(message(reason)); }
+    try {
+      const [nextOverview, nextRollouts, nextInventory] = await Promise.all([Devices.overview(), Devices.rollouts(), Devices.inventory()]);
+      setOverview(nextOverview); setRollouts(nextRollouts.rollouts); setInventory(nextInventory); setError("");
+    } catch (reason) { setError(message(reason)); }
     void Devices.events().then((answer) => setEvents(answer.events)).catch(() => undefined);
   }, []);
   useEffect(() => {
@@ -357,6 +419,18 @@ export default function DevicesPage() {
     setError("");
     try { setEnrollment(await Devices.createHub(hubName)); setHubName(""); await load(); } catch (reason) { setError(message(reason)); }
   };
+  const identifyQr = async (raw: string) => {
+    const value = raw.trim().slice(0, 300);
+    if (!value) return;
+    setScanned(value); setScanProfile(null); setScanError(""); setScanBusy(true); setScanOpen(false);
+    try {
+      const token = /^hannah:\/\/profile\/([A-Za-z0-9.-]{1,120})\/?$/i.exec(value)?.[1] || value;
+      const profiles = (await Devices.profiles()).profiles;
+      const found = profiles.find((profile) => profile.id.toLowerCase() === token.toLowerCase());
+      if (found) setScanProfile(found);
+      else setScanError("No installed HANNAH profile matches this code. The code was not opened as a web address. You can type a profile code or add the device from the list, manual or Hardware Studio.");
+    } catch (reason) { setScanError(message(reason)); } finally { setScanBusy(false); }
+  };
   const pause = async (on: boolean) => { try { await Devices.pauseAutomations(on); await load(); } catch (reason) { setError(message(reason)); } };
   const counts = overview?.counts;
   const hubs = useMemo(() => overview?.hubs || [], [overview]);
@@ -372,7 +446,15 @@ export default function DevicesPage() {
       <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="note">HANNAH is not a safety system. A lock, a heater or a machine keeps its own protections; an automation here is a convenience, never an interlock. Nothing on this screen is safety-certified.</p>
       {!signedIn && <Notice>Sign in to use devices. A hub and its devices belong to an account.</Notice>}
       {signedIn && <div className="flex justify-end"><button type="button" className={button} data-testid="scan-qr" onClick={() => setScanOpen(true)}>Scan a QR code</button></div>}
-      {scanned && <Notice tone="emerald">Scanned: {scanned}</Notice>}
+      {scanned && <section className={card} aria-label="QR code lookup" data-testid="qr-lookup">
+        <p className="text-sm text-slate-700">Code checked against installed HANNAH profiles{scanned.length > 100 ? `: ${scanned.slice(0, 100)}…` : `: ${scanned}`}</p>
+        {scanBusy && <p className="mt-2 text-sm text-slate-700">Looking for a matching profile…</p>}
+        {scanError && <p className="mt-2 text-sm text-amber-900" role="status">{scanError}</p>}
+        {scanProfile && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3" data-testid="qr-profile-match">
+          <p className="text-sm text-emerald-950"><strong>{scanProfile.name}</strong> · {scanProfile.manufacturer} {scanProfile.model} · {scanProfile.compatibility?.label}</p>
+          <button type="button" className={primary} onClick={() => { setAdding(true); setScanError(""); }}>Use this profile</button>
+        </div>}
+      </section>}
       {error && <Notice tone="rose">{error}</Notice>}
       {signedIn && overview && (
         <>
@@ -388,6 +470,29 @@ export default function DevicesPage() {
                 : <button type="button" className={button} onClick={() => void pause(true)}><PauseCircle className="h-4 w-4" aria-hidden="true" />Pause every automation</button>)}
             </div>
             {overview.rulesSuspended && <p className="mt-2 text-sm text-amber-900">Every automation is paused. Devices stay as they are until you resume.</p>}
+          </section>
+
+          <section className={card} aria-labelledby="inventory-heading" data-testid="hardware-inventory">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="inventory-heading" className="text-lg font-semibold text-slate-900">All connected hardware</h2>
+                <p className="text-sm text-slate-700">Robots, edge hubs and devices in this account. Status reflects the latest report HANNAH received.</p>
+              </div>
+              {inventory && <p className="text-sm text-slate-700"><strong className="text-slate-900">{inventory.counts.online}</strong> of {inventory.counts.total} reporting</p>}
+            </div>
+            {!inventory?.items.length ? <p className="mt-3 text-sm text-slate-700">No hardware has been registered yet.</p> : (
+              <ul className="mt-3 divide-y divide-slate-100" data-testid="inventory-items">
+                {inventory.items.map((item) => (
+                  <li key={`${item.kind}:${item.id}`} className="flex flex-wrap items-center justify-between gap-2 py-2" data-testid="inventory-item" data-kind={item.kind}>
+                    <div>
+                      <p className="font-medium text-slate-900">{item.name} <span className="ml-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium capitalize text-slate-700">{item.kind}</span>{item.simulated && <span className="ml-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-900">SIMULATED</span>}</p>
+                      <p className="text-sm text-slate-600">{[item.manufacturer, item.model, item.category].filter(Boolean).join(" · ")}{item.compatibility ? ` · ${item.compatibility.replaceAll("-", " ")}` : ""}</p>
+                    </div>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${item.connection === "online" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>{item.connection.replaceAll("-", " ")}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           {(waiting.length > 0 || outcome) && (
@@ -413,7 +518,7 @@ export default function DevicesPage() {
               <h2 id="devices-heading" className="text-lg font-semibold text-slate-900">Your devices</h2>
               {!adding && <button type="button" className={primary} disabled={!hubs.some((hub) => hub.status === "enrolled")} onClick={() => setAdding(true)}><Plus className="h-4 w-4" aria-hidden="true" />Add a device</button>}
             </div>
-            {adding && <div className={card}><DeviceSetup hubs={hubs} onCancel={() => setAdding(false)} onAdded={() => { setAdding(false); void load(); }} /></div>}
+            {adding && <div className={card}><DeviceSetup hubs={hubs} initialProfileId={scanProfile?.id} onCancel={() => setAdding(false)} onAdded={() => { setAdding(false); void load(); }} /></div>}
             {devices.length === 0 && !adding && <p className="text-sm text-slate-700">No devices yet.{hubs.some((hub) => hub.status === "enrolled") ? " Add one: pick it from the list, use its manual, or describe it yourself." : " Add a hub first."}</p>}
             <ul className="space-y-3">{devices.map((device) => <DeviceCard key={device.id} device={device} onChanged={() => void load()} onRecord={record} />)}</ul>
           </section>
@@ -463,19 +568,34 @@ export default function DevicesPage() {
             </div>
           </details>
           <details className={card}>
-            <summary className="cursor-pointer text-lg font-semibold text-slate-900">Hub updates</summary>
+            <summary className="cursor-pointer text-lg font-semibold text-slate-900" data-testid="hub-updates-toggle">Hub updates</summary>
             <div className="mt-3 space-y-3">
               <p className="text-sm text-slate-700">Announce a signed update to a hub. The hub checks its size and SHA-256, unpacks it, runs its health check, and switches over with a way back.</p>
               {updateError && <Notice tone="rose">{updateError}</Notice>}
               {updateResult && <Notice tone="emerald">{updateResult}</Notice>}
-              <label className="block text-sm text-slate-800">Hub<select className={input} value={updateHubId} onChange={(event) => setUpdateHubId(event.target.value)}><option value="">choose</option>{hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name} ({hub.software || "?"})</option>)}</select></label>
+              <label className="block text-sm text-slate-800">Hub<select className={input} data-testid="hub-update-hub" value={updateHubId} onChange={(event) => setUpdateHubId(event.target.value)}><option value="">choose</option>{hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name} ({hub.software || "?"})</option>)}</select></label>
               <div className="grid gap-2 sm:grid-cols-2">
-                <label className="block text-sm text-slate-800">Version<input className={input} placeholder="1.9.0" value={updateVersion} onChange={(event) => setUpdateVersion(event.target.value)} /></label>
-                <label className="block text-sm text-slate-800">Size (bytes)<input className={input} inputMode="numeric" value={updateSize} onChange={(event) => setUpdateSize(event.target.value)} /></label>
-                <label className="block text-sm text-slate-800 sm:col-span-2">SHA-256<input className={input} value={updateSha} onChange={(event) => setUpdateSha(event.target.value)} /></label>
-                <label className="block text-sm text-slate-800 sm:col-span-2">Bundle URL<input className={input} value={updateUrl} onChange={(event) => setUpdateUrl(event.target.value)} /></label>
+                <label className="block text-sm text-slate-800">Version<input className={input} placeholder="1.9.0" data-testid="hub-update-version" value={updateVersion} onChange={(event) => setUpdateVersion(event.target.value)} /></label>
+                <label className="block text-sm text-slate-800">Size (bytes)<input className={input} inputMode="numeric" data-testid="hub-update-size" value={updateSize} onChange={(event) => setUpdateSize(event.target.value)} /></label>
+                <label className="block text-sm text-slate-800 sm:col-span-2">SHA-256<input className={input} data-testid="hub-update-sha" value={updateSha} onChange={(event) => setUpdateSha(event.target.value)} /></label>
+                <label className="block text-sm text-slate-800 sm:col-span-2">Bundle URL<input className={input} data-testid="hub-update-url" value={updateUrl} onChange={(event) => setUpdateUrl(event.target.value)} /></label>
               </div>
-              <button type="button" className={primary} disabled={updateBusy || !updateHubId || !updateVersion.trim() || !updateUrl.trim()} onClick={() => void (async () => { setUpdateBusy(true); setUpdateError(""); setUpdateResult(""); try { await Devices.updateHub(updateHubId, updateVersion.trim(), Number(updateSize) || 0, updateSha.trim(), updateUrl.trim()); setUpdateResult("Update announced. The hub will fetch and switch over."); } catch (reason) { setUpdateError(message(reason)); } finally { setUpdateBusy(false); } })()}>Announce update</button>
+              <button type="button" className={primary} data-testid="announce-hub-update" disabled={updateBusy || !updateHubId || !updateVersion.trim() || !updateUrl.trim()} onClick={() => void (async () => { setUpdateBusy(true); setUpdateError(""); setUpdateResult(""); try { await Devices.updateHub(updateHubId, updateVersion.trim(), Number(updateSize) || 0, updateSha.trim(), updateUrl.trim()); setUpdateResult("Update announced. The hub will fetch and switch over."); } catch (reason) { setUpdateError(message(reason)); } finally { setUpdateBusy(false); } })()}>Announce update</button>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                <label className="block text-sm text-slate-800">Hubs per cohort<input className={input} type="number" min="1" max="10" inputMode="numeric" data-testid="hub-update-cohort-size" value={rolloutCohortSize} onChange={(event) => setRolloutCohortSize(event.target.value)} /></label>
+                <button type="button" className={primary} data-testid="stage-hub-rollout" disabled={updateBusy || !updateVersion.trim() || !updateUrl.trim()} onClick={() => void (async () => { setUpdateBusy(true); setUpdateError(""); setUpdateResult(""); try { const answer = await Devices.createRollout(updateVersion.trim(), Number(updateSize) || 0, updateSha.trim(), updateUrl.trim(), Number(rolloutCohortSize) || 1); setRollouts((current) => [answer.rollout, ...current.filter((item) => item.id !== answer.rollout.id)]); setUpdateResult(`Staged rollout started with a canary cohort of ${Math.min(answer.rollout.cohortSize, answer.rollout.targets.length)} hub${answer.rollout.targets.length === 1 ? "" : "s"}.${answer.excluded.length ? ` ${answer.excluded.length} incompatible or offline hub${answer.excluded.length === 1 ? " was" : "s were"} left out.` : ""}`); } catch (reason) { setUpdateError(message(reason)); } finally { setUpdateBusy(false); } })()}>Stage rollout</button>
+              </div>
+              {rollouts.length > 0 && <ul className="space-y-2" data-testid="hub-rollouts">{rollouts.map((rollout) => <li key={rollout.id} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800">
+                <div className="flex flex-wrap items-center justify-between gap-2"><strong>{rollout.kind === "rollback" ? `Rollback to ${rollout.rollbackTo}` : `Version ${rollout.version}`}</strong><span className="capitalize">{rollout.status.replaceAll("-", " ")}</span></div>
+                {rollout.detail && <p className="mt-1 text-amber-900">{rollout.detail}</p>}
+                <p className="mt-1 text-slate-600">Canary and cohort size: {rollout.cohortSize}. Updates advance after every hub in a cohort confirms healthy.</p>
+                <ul className="mt-2 space-y-1">{rollout.targets.map((target) => <li key={target.hubId}>{target.hubName}: {target.status.replaceAll("-", " ")}{target.detail ? ` — ${target.detail}` : ""}</li>)}</ul>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {rollout.status === "running" && <button type="button" className={button} onClick={() => void Devices.pauseRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => items.map((item) => item.id === changed.id ? changed : item))).catch((reason) => setUpdateError(message(reason)))}>Pause rollout</button>}
+                  {["paused", "paused-failure"].includes(rollout.status) && <button type="button" className={button} onClick={() => void Devices.resumeRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => items.map((item) => item.id === changed.id ? changed : item))).catch((reason) => setUpdateError(message(reason)))}>Resume rollout</button>}
+                  {rollout.kind === "update" && rollout.status !== "running" && <button type="button" className={button} onClick={() => void Devices.rollbackRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => [changed, ...items])).catch((reason) => setUpdateError(message(reason)))}>Roll back confirmed hubs</button>}
+                </div>
+              </li>)}</ul>}
             </div>
           </details>
           {events.length > 0 && (
@@ -486,7 +606,7 @@ export default function DevicesPage() {
           )}
         </>
       )}
-      {scanOpen && <QrScanner onResult={(text) => { setScanned(text); setScanOpen(false); }} onClose={() => setScanOpen(false)} />}
+      {scanOpen && <QrScanner onResult={(text) => { void identifyQr(text); }} onClose={() => setScanOpen(false)} />}
     </div>
   );
 }

@@ -28,7 +28,7 @@ Every profile is shown with one of these. The level is computed from evidence in
 | Zigbee, Z-Wave | Not built | | Need a coordinator radio and its driver. A device behind a bridge that publishes to MQTT can be added as an MQTT device |
 | Bluetooth Low Energy | Not built | | Needs a radio and a library |
 | OPC UA | Not built | | Needs a client library with certificate handling, and a server to test against |
-| Modbus RTU, raw serial, USB, GPIO/I2C/SPI, CoAP | Not built | | Each needs a driver or library on the hub |
+| Modbus RTU, raw serial, USB device control, GPIO/I2C/SPI, CoAP | Not built | | USB discovery only lists metadata from sysfs; it does not open a USB device or provide a USB protocol adapter. Each protocol needs a driver or library on the hub |
 | CAN | Out of scope | | Belongs under a machine's own controller |
 | ROS 2 | Robots only | | See `docs/robotics` |
 

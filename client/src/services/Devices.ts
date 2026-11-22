@@ -18,12 +18,13 @@ import { accountRequest } from "./Account";
 import { isAccountSession } from "./api";
 import type { HANNAHTool } from "./DeviceTools";
 import { Operator, toolResult, type ActionRecord } from "./Operator";
+import { MemoryService } from "./MemoryService";
 
 export type Level = "plug-and-play" | "guided" | "experimental" | "simulation" | "developer-required" | "unsupported";
 export type Compatibility = { level: Level; label: string; reasons: string[] };
 export type PointInfo = { id: string; name: string; kind: "sensor" | "actuator"; type: "boolean" | "number" | "enum" | "text"; unit: string | null; range: [number, number] | null; step: number | null; choices: string[] | null; access: "read" | "read-write"; risk: "low" | "elevated" | "high" | null };
 export type SettingField = { id: string; label: string; type: "text" | "number" | "secret" | "toggle" | "choice"; required: boolean; default?: string | number | boolean; help?: string; min?: number; max?: number; choices?: string[] };
-export type Evidence = { document: { name: string; pages: number }; facts: Array<{ field: string; label: string; value: string | number; page: number; quote: string; confidence: string; state: string; hazardous?: boolean }> };
+export type Evidence = { document: { name: string; pages: number; source?: { id: string; name: string; mediaType: string; bytes: number } }; facts: Array<{ field: string; label: string; value: string | number; page: number; quote: string; confidence: string; state: string; hazardous?: boolean }> };
 export type Profile = {
   id: string; version: string; name: string; author: string; manufacturer: string; model: string; category: string; categoryLabel: string; domain: string; simulated: boolean;
   protocol: { adapter: string; label: string; version: string | null }; connection: { instructions: string[]; fields: SettingField[] }; points: PointInfo[]; constraints: string[];
@@ -32,8 +33,13 @@ export type Profile = {
 export type Hub = {
   id: string; name: string; status: "pending" | "enrolled" | "revoked"; online: boolean; lastSeenAt: number | null; connection: "awaiting-enrollment" | "revoked" | "online" | "offline" | "never-connected";
   software: string | null; system: string | null; adapters: string[]; fingerprint: string | null; rulesSuspended: boolean; upToDate: boolean; enrollmentExpiresAt: number | null;
-  discovered: { kind: string; at: number; note?: string; topics?: Array<{ topic: string; messages: number; sample?: string }>; ports?: Array<{ path: string }> } | null;
+  discovered: { kind: string; at: number; note?: string; topics?: Array<{ topic: string; messages: number; sample?: string }>; ports?: Array<{ path: string }>; services?: Array<{ name: string; service?: string; address?: string; port?: number }>; devices?: Array<{ path: string; vendorId?: string | null; productId?: string | null; product?: string | null; manufacturer?: string | null; serial?: string | null; version?: string | null }>; service?: string } | null;
   updateStatus?: { current?: string | null; previous?: string | null; pending?: { version: string; since: number; starts: number } | null; last?: unknown } | null;
+};
+export type UpdateRollout = {
+  id: string; version: string; cohortSize: number; kind: "update" | "rollback"; rollbackTo: string | null;
+  status: string; detail: string | null; createdAt: number; updatedAt: number;
+  targets: Array<{ hubId: string; hubName: string; ordinal: number; status: string; commandId: string | null; detail: string | null; updatedAt: number }>;
 };
 export type Check = { id: string; label: string; result: "pass" | "fail" | "warn" | "note" | "not-checked"; detail: string };
 export type Verification = { at: number; level: "verified" | "partial" | "failed"; passed: boolean; heard?: number; expected?: number; checks: Check[]; simulated?: boolean; activatedAt?: number; acceptedPartial?: boolean };
@@ -48,10 +54,18 @@ export type Automation = { id: string; hubId: string; name: string; enabled: boo
 export type DeviceEvent = { id: string; hubId: string | null; deviceId: string | null; ruleId: string | null; at: number; type: string; severity: "info" | "warning" | "error"; message: string; source: string };
 export type Change = { id: string; point: string | null; value: boolean | number | string | null; status: string; createdAt: number; error: string | null };
 export type Overview = { hubs: Hub[]; devices: Device[]; rules: Automation[]; counts: Record<string, number>; rulesSuspended: boolean; canEnroll: boolean };
+export type InventoryItem = {
+  id: string; kind: "robot" | "hub" | "device"; name: string; status: string; connection: string; category: string;
+  manufacturer: string | null; model: string | null; simulated: boolean; lastSeenAt: number | null; compatibility?: Level;
+};
+export type HardwareInventory = {
+  items: InventoryItem[];
+  counts: { total: number; online: number; robots: number; robotsOnline: number; hubs: number; hubsOnline: number; devices: number; devicesOnline: number };
+};
 export type HubEnrollment = { hub: Hub; enrollment: { code: string; expiresAt: number }; command: string };
 export type Fact = { id: string; field: string; label: string; value: string | number; shown?: string; page: number; quote: string; confidence: "high" | "medium" | "low"; state: string; hazardous?: boolean; note?: string };
 export type ManualAnalysis = {
-  document: { name: string; kind: string; pages: number; pagesWithText: number; notes: string[] }; facts: Fact[];
+  document: { name: string; kind: string; pages: number; pagesWithText: number; notes: string[]; source?: { id: string; name: string; mediaType: string; bytes: number } }; facts: Fact[];
   proposal: { profile: Record<string, unknown>; public: Profile; compatibility: Compatibility; notes: string[] } | null;
   missing: string[]; request: { manufacturer: string; model: string; protocolsFound: string[]; needs: string[] } | null; reminder: string;
 };
@@ -73,6 +87,17 @@ function remember(devices: Device[]) {
   if (changed && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(DEVICES_EVENT));
 }
 
+/** Best-effort: record a device lifecycle event in the user's memory. Never fails the device operation. */
+function rememberDevice(kind: "added" | "activated" | "changed" | "removed", device: Device, detail?: string) {
+  try {
+    const verb = kind === "added" ? "Added device" : kind === "activated" ? "Switched on device" : kind === "removed" ? "Removed device" : "Changed device";
+    const text = `${verb}: ${device.name} (${device.profile.manufacturer} ${device.profile.model}) through ${device.hub.name}${detail ? ". " + detail : ""}`;
+    MemoryService.remember(text, { source: { kind: "you" }, layer: "long_term", category: "project", sensitivity: "normal" });
+  } catch {
+    // Memory is best-effort: a device change must never fail because remembering it did.
+  }
+}
+
 export const Devices = {
   available: () => isAccountSession(),
   /** Devices switched on when the list was last read: decides whether device tools and the IoT agent are offered. */
@@ -82,6 +107,7 @@ export const Devices = {
     remember(answer.devices);
     return answer;
   },
+  inventory: () => accountRequest<HardwareInventory>("/api/inventory"),
   refresh: async () => {
     if (!isAccountSession()) { remember([]); return; }
     await Devices.overview().catch(() => null);
@@ -97,11 +123,31 @@ export const Devices = {
   protocols: () => accountRequest<{ available: Array<{ id: string; label: string }>; notBuilt: Array<{ id: string; reason: string }> }>("/api/devices/protocols"),
   events: () => accountRequest<{ events: DeviceEvent[] }>("/api/devices/events?limit=40"),
   history: (deviceId: string, point: string, minutes = 180) => accountRequest<{ samples: Array<{ at: number; value: number | boolean }> }>(`/api/devices/${id(deviceId)}/history?point=${id(point)}&minutes=${minutes}`),
-  add: (input: { hub?: string; profileId: string; name: string; location?: string; settings: Record<string, unknown> }) => accountRequest<{ device: Device }>("/api/devices", { method: "POST", body: json(input) }),
-  update: (deviceId: string, change: { name?: string; location?: string; settings?: Record<string, unknown>; writable?: string[]; alwaysAsk?: string[]; disabled?: boolean }) => accountRequest<{ device: Device }>(`/api/devices/${id(deviceId)}`, { method: "PATCH", body: json(change) }),
-  remove: async (deviceId: string) => { const answer = await accountRequest<{ removed: boolean }>(`/api/devices/${id(deviceId)}`, { method: "DELETE" }); await Devices.refresh(); return answer; },
+  add: async (input: { hub?: string; profileId: string; name: string; location?: string; settings: Record<string, unknown> }) => {
+    const answer = await accountRequest<{ device: Device }>("/api/devices", { method: "POST", body: json(input) });
+    rememberDevice("added", answer.device);
+    return answer;
+  },
+  update: async (deviceId: string, change: { name?: string; location?: string; settings?: Record<string, unknown>; writable?: string[]; alwaysAsk?: string[]; disabled?: boolean }) => {
+    const answer = await accountRequest<{ device: Device }>(`/api/devices/${id(deviceId)}`, { method: "PATCH", body: json(change) });
+    rememberDevice("changed", answer.device);
+    return answer;
+  },
+  remove: async (deviceId: string) => {
+    const device = (await Devices.get(deviceId).catch(() => null))?.device ?? null;
+    const answer = await accountRequest<{ removed: boolean }>(`/api/devices/${id(deviceId)}`, { method: "DELETE" });
+    await Devices.refresh();
+    if (device) rememberDevice("removed", device);
+    return answer;
+  },
   test: (deviceId: string) => accountRequest<{ device: Device; pending: boolean }>(`/api/devices/${id(deviceId)}/test`, { method: "POST", signal: LONG() }),
-  activate: async (deviceId: string, writable: string[], acceptPartial = false) => { const answer = await accountRequest<{ device: Device }>(`/api/devices/${id(deviceId)}/activate`, { method: "POST", body: json({ writable, acceptPartial }) }); await Devices.refresh(); return answer; },
+  activate: async (deviceId: string, writable: string[], acceptPartial = false) => {
+    const answer = await accountRequest<{ device: Device }>(`/api/devices/${id(deviceId)}/activate`, { method: "POST", body: json({ writable, acceptPartial }) });
+    await Devices.refresh();
+    const detail = answer.device.verification?.level === "partial" ? "Some readings were not heard; switched on anyway." : acceptPartial ? "Accepted partial verification." : undefined;
+    rememberDevice("activated", answer.device, detail);
+    return answer;
+  },
   /** Ask for a change. The answer is the action's record: usually waiting for approval. */
   set: (deviceId: string, point: string, value: boolean | number | string) => accountRequest<{ record: ActionRecord }>(`/api/devices/${id(deviceId)}/set`, { method: "POST", body: json({ point, value }), signal: LONG() }),
   createAutomation: (input: AutomationInput) => accountRequest<{ record: ActionRecord }>("/api/devices/automations", { method: "POST", body: json(input), signal: LONG() }),
@@ -112,9 +158,14 @@ export const Devices = {
   newHubCode: (hubId: string) => accountRequest<HubEnrollment>(`/api/hubs/${id(hubId)}/enrollment`, { method: "POST" }),
   revokeHub: (hubId: string) => accountRequest<{ hub: Hub }>(`/api/hubs/${id(hubId)}/revoke`, { method: "POST" }),
   removeHub: async (hubId: string) => { const answer = await accountRequest<{ removed: boolean }>(`/api/hubs/${id(hubId)}`, { method: "DELETE" }); await Devices.refresh(); return answer; },
-  look: (hubId: string, kind: "mqtt" | "serial" | "mdns", settings: Record<string, unknown> = {}) => accountRequest<{ pending: boolean; discovered: Hub["discovered"] }>(`/api/hubs/${id(hubId)}/discover`, { method: "POST", body: json({ kind, settings }), signal: LONG() }),
+  look: (hubId: string, kind: "mqtt" | "serial" | "mdns" | "usb", settings: Record<string, unknown> = {}) => accountRequest<{ pending: boolean; discovered: Hub["discovered"] }>(`/api/hubs/${id(hubId)}/discover`, { method: "POST", body: json({ kind, settings }), signal: LONG() }),
   updateHub: (hubId: string, version: string, size: number, sha256: string, url: string) => accountRequest<{ commandId: string; command: unknown }>(`/api/hubs/${id(hubId)}/update`, { method: "POST", body: json({ version, size, sha256, url }), signal: LONG() }),
   updates: () => accountRequest<{ hubs: Array<{ id: string; name: string; software: string | null; updateStatus: Hub["updateStatus"] }> }>("/api/hubs/updates"),
+  rollouts: () => accountRequest<{ rollouts: UpdateRollout[] }>("/api/hubs/rollouts"),
+  createRollout: (version: string, size: number, sha256: string, url: string, cohortSize: number) => accountRequest<{ rollout: UpdateRollout; excluded: Array<{ hubId: string; hubName: string; reason: string }> }>("/api/hubs/rollouts", { method: "POST", body: json({ version, size, sha256, url, cohortSize }), signal: LONG() }),
+  pauseRollout: (rolloutId: string) => accountRequest<{ rollout: UpdateRollout }>(`/api/hubs/rollouts/${id(rolloutId)}/pause`, { method: "POST", signal: LONG() }),
+  resumeRollout: (rolloutId: string) => accountRequest<{ rollout: UpdateRollout }>(`/api/hubs/rollouts/${id(rolloutId)}/resume`, { method: "POST", signal: LONG() }),
+  rollbackRollout: (rolloutId: string) => accountRequest<{ rollout: UpdateRollout }>(`/api/hubs/rollouts/${id(rolloutId)}/rollback`, { method: "POST", signal: LONG() }),
   readManual: (name: string, data: string) => accountRequest<ManualAnalysis>("/api/devices/manuals", { method: "POST", body: json({ name, data }), signal: LONG() }),
   keepManualProfile: (name: string, data: string, confirmed: string[], profile?: Record<string, unknown>) => accountRequest<{ profile: Profile }>("/api/devices/manuals/save", { method: "POST", body: json({ name, data, confirmed, ...(profile ? { profile } : {}) }), signal: LONG() }),
 };

@@ -29,13 +29,14 @@ vi.mock("../services/Account", () => ({
 }));
 
 const { Devices, getHardwareTools, HARDWARE_TOOL_NAMES } = await import("../services/Devices");
+const { MemoryService } = await import("../services/MemoryService");
 const { ApprovalCenter } = await import("../services/ApprovalCenter");
 const { SPECIALISTS, activeSpecialists } = await import("../services/SpecialistAgents");
 const { selectToolsForRequest } = await import("../services/AgentRouter");
 const { getDeviceTools } = await import("../services/DeviceTools");
 const { HITLDeniedError } = await import("../services/SafetyGuard");
 const { screenForLocation, pathForScreen } = await import("../routes");
-const { studioProfile } = await import("../components/DeviceSetup");
+const { studioProfile, simulateStudioChange } = await import("../components/DeviceSetup");
 const { automationText } = await import("../components/DevicesPage");
 
 const device = (extra: Record<string, unknown> = {}) => ({ id: "dev_1", name: "Fan", status: "active", profile: { categoryLabel: "Switch or plug" }, ...extra });
@@ -171,6 +172,13 @@ describe("the screen's own pieces", () => {
     expect(screenForLocation({ pathname: "/iot", hash: "" })).toBe("devices");
   });
 
+  it("loads the account-scoped inventory of robots, hubs and devices", async () => {
+    const items = [{ id: "robot-1", kind: "robot", name: "Rover", status: "enrolled", connection: "online", category: "mobile", manufacturer: "Example", model: "R1", simulated: true, lastSeenAt: 12_345 }];
+    respond = () => ({ items, counts: { total: 1, online: 1, robots: 1, robotsOnline: 1, hubs: 0, hubsOnline: 0, devices: 0, devicesOnline: 0 } });
+    await expect(Devices.inventory()).resolves.toMatchObject({ items, counts: { robots: 1, online: 1 } });
+    expect(calls).toEqual([{ path: "/api/inventory", method: "GET", body: null }]);
+  });
+
   it("an automation reads as a sentence", () => {
     const rule = { when: [{ device: "d1", deviceName: "Room sensor", point: "temperature", op: ">", value: 27 }], then: [{ device: "d2", deviceName: "Fan", point: "power", value: true }], otherwise: [{ device: "d2", deviceName: "Fan", point: "power", value: false }] };
     expect(automationText(rule)).toBe("When Room sensor temperature > 27: set Fan power to on. When that stops being true: set Fan power to off.");
@@ -194,5 +202,88 @@ describe("the screen's own pieces", () => {
     expect(modbus.points[0]).toMatchObject({ access: "read-write", binding: { register: { table: "holding", address: 10, type: "uint16" } } });
     expect("range" in modbus.points[0]).toBe(false); // the server refuses this: a writable number needs a range
     expect(modbus.constraints[0]).toMatch(/no sign-in or encryption/);
+  });
+
+  it("previews a described output locally, checks its range and never claims to contact a device", () => {
+    const blank = { name: "", changes: false, type: "number" as const, unit: "", low: "", high: "", a: "", b: "", c: "", table: "holding", format: "uint16", scale: "" };
+    const profile = studioProfile({ name: "Dimmer", maker: "Acme", model: "D2", category: "light", protocol: "mqtt" }, [
+      { ...blank, name: "Brightness", changes: true, unit: "%", low: "0", high: "100", a: "home/dimmer/state", c: "home/dimmer/set" },
+    ]);
+    const preview = simulateStudioChange(profile, "brightness", 42);
+    expect(preview).toMatchObject({ status: "preview", mapping: { adapter: "mqtt", target: "MQTT topic home/dimmer/set", value: "42" } });
+    expect(preview.message).toMatch(/Simulation only/);
+    expect(preview.message).toMatch(/Nothing was sent/);
+    expect(simulateStudioChange(profile, "brightness", 101)).toMatchObject({ status: "refused", message: expect.stringMatching(/outside.*0 to 100/) });
+
+    const missingCommand = studioProfile({ name: "Dimmer", maker: "Acme", model: "D2", category: "light", protocol: "mqtt" }, [
+      { ...blank, name: "Brightness", changes: true, low: "0", high: "100", a: "home/dimmer/state" },
+    ]);
+    expect(simulateStudioChange(missingCommand, "brightness", 42)).toMatchObject({ status: "refused", message: expect.stringMatching(/no MQTT command topic/) });
+
+    const modbus = studioProfile({ name: "Meter", maker: "Acme", model: "PM", category: "energy-meter", protocol: "modbus-tcp" }, [
+      { ...blank, name: "Limit", changes: true, low: "0", high: "100", a: "10", table: "input" },
+    ]);
+    expect(simulateStudioChange(modbus, "limit", 50)).toMatchObject({ status: "refused", message: expect.stringMatching(/no writable Modbus/) });
+  });
+});
+
+describe("device changes are remembered in the user's memory", () => {
+  const fullDevice = (overrides: Record<string, unknown> = {}) => ({
+    id: "dev_1",
+    name: "Fan",
+    status: "active",
+    hub: { id: "hub_1", name: "Home hub", online: true },
+    profile: { manufacturer: "Acme", model: "TH-1", categoryLabel: "Switch or plug" },
+    ...overrides,
+  });
+
+  const script = (handlers: Record<string, unknown>) => (call: { path: string; method: string; body: unknown }) => {
+    const key = `${call.method} ${call.path}`;
+    return handlers[key] ?? {};
+  };
+
+  beforeEach(() => {
+    vi.spyOn(MemoryService, "remember").mockClear();
+  });
+
+  const rememberedText = () => String(MemoryService.remember.mock.calls[0]?.[0] || "");
+
+  it("saves a memory when a device is added", async () => {
+    respond = script({ "POST /api/devices": { device: fullDevice() } });
+    await Devices.add({ profileId: "p1", name: "Fan", settings: {} });
+    expect(MemoryService.remember).toHaveBeenCalled();
+    const text = rememberedText();
+    expect(text).toContain("Added device: Fan");
+    expect(text).toContain("Acme");
+    expect(text).toContain("TH-1");
+    expect(text).toContain("Home hub");
+  });
+
+  it("saves a memory when a device is switched on", async () => {
+    respond = script({
+      "POST /api/devices/dev_1/activate": { device: fullDevice() },
+      "GET /api/devices/overview": overview([]),
+    });
+    await Devices.activate("dev_1", ["power"]);
+    expect(MemoryService.remember).toHaveBeenCalled();
+    expect(rememberedText()).toContain("Switched on device: Fan");
+  });
+
+  it("saves a memory when a device is removed", async () => {
+    respond = script({
+      "GET /api/devices/dev_1": { device: fullDevice(), events: [], changes: [] },
+      "DELETE /api/devices/dev_1": { removed: true },
+      "GET /api/devices/overview": overview([]),
+    });
+    await Devices.remove("dev_1");
+    expect(MemoryService.remember).toHaveBeenCalled();
+    expect(rememberedText()).toContain("Removed device: Fan");
+  });
+
+  it("never fails a device operation because memory could not be saved", async () => {
+    respond = script({ "POST /api/devices": { device: fullDevice() } });
+    MemoryService.remember.mockImplementation(() => { throw new Error("memory boom"); });
+    const answer = await Devices.add({ profileId: "p1", name: "Fan", settings: {} });
+    expect(answer.device.id).toBe("dev_1");
   });
 });

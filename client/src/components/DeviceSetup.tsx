@@ -65,9 +65,9 @@ function ManualReader({ onProfile, onStudio }: { onProfile: (profile: Profile) =
   };
   return (
     <div className="space-y-3" data-testid="manual-reader">
-      <p className="text-sm text-slate-700">Give HANNAH the device's manual or datasheet (PDF, Word or text). It reads how the device connects and shows you where each value came from. A manual helps HANNAH understand a device; it can't prove the description is right. Your hub does that, when it connects.</p>
+      <p className="text-sm text-slate-700">Give HANNAH the device's manual or datasheet (PDF, Word, text or an image of a label or diagram). It reads supported text and shows where each value came from. Images are shown as source evidence, but aren't interpreted yet. A manual can't prove the description is right; your hub checks that when it connects.</p>
       <label className="block text-sm font-medium text-slate-800">The manual
-        <input type="file" accept=".pdf,.docx,.txt,.md" className="mt-1 block w-full text-sm" data-testid="manual-file" onChange={(event) => void read(event.target.files?.[0])} />
+        <input type="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp" className="mt-1 block w-full text-sm" data-testid="manual-file" onChange={(event) => void read(event.target.files?.[0])} />
       </label>
       {busy && <p className="flex items-center gap-2 text-sm text-slate-700"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />{busy}</p>}
       {error && <Problem>{error}</Problem>}
@@ -75,6 +75,12 @@ function ManualReader({ onProfile, onStudio }: { onProfile: (profile: Profile) =
         <div className="space-y-3">
           <p className="text-sm text-slate-700" data-testid="manual-summary">Read {analysis.document.pagesWithText} of {analysis.document.pages} page{analysis.document.pages === 1 ? "" : "s"} of <span className="font-medium">{analysis.document.name}</span>. {analysis.facts.length} value{analysis.facts.length === 1 ? "" : "s"} found. {analysis.document.notes.join(" ")}</p>
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{analysis.reminder}</p>
+          {analysis.document.kind === "image" && analysis.document.source && file && (
+            <figure className="rounded-xl border border-slate-200 bg-slate-50 p-3" data-testid="manual-image-source">
+              <img className="max-h-96 max-w-full rounded-lg object-contain" src={`data:${analysis.document.source.mediaType};base64,${file.data}`} alt={`Uninterpreted source image: ${analysis.document.source.name}`} />
+              <figcaption className="mt-2 break-all text-xs text-slate-600">Source image · {analysis.document.source.mediaType} · SHA-256 {analysis.document.source.id}</figcaption>
+            </figure>
+          )}
           {analysis.facts.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm" data-testid="facts">
@@ -151,6 +157,69 @@ export function studioProfile(form: { name: string; maker: string; model: string
   };
 }
 
+export type StudioSimulation = {
+  status: "preview" | "refused";
+  message: string;
+  mapping?: { adapter: string; target: string; value: string };
+};
+
+/** Describe the command a draft profile would make, without contacting a hub or device. */
+export function simulateStudioChange(profile: ReturnType<typeof studioProfile>, pointId: string, value: boolean | number): StudioSimulation {
+  const point = profile.points.find((item) => item.id === pointId);
+  if (!point) return { status: "refused", message: "Preview refused: choose an output in this profile." };
+  if (point.access !== "read-write") return { status: "refused", message: `Preview refused: ${point.name} is read-only in this profile.` };
+  if (point.type === "boolean" ? typeof value !== "boolean" : typeof value !== "number" || !Number.isFinite(value)) {
+    return { status: "refused", message: `Preview refused: enter a ${point.type === "boolean" ? "state" : "number"} for ${point.name}.` };
+  }
+  if (point.type === "number") {
+    const range = point.range;
+    if (!range) return { status: "refused", message: `Preview refused: ${point.name} needs an allowed range before its value can be checked.` };
+    const numericValue = Number(value);
+    if (numericValue < range[0] || numericValue > range[1]) return { status: "refused", message: `Preview refused: ${numericValue} is outside ${point.name}'s allowed range of ${range[0]} to ${range[1]}.` };
+  }
+
+  const binding = point.binding as Record<string, unknown>;
+  const adapter = profile.protocol.adapter;
+  let target = "";
+  let wireValue = "";
+  if (adapter === "mqtt") {
+    const command = binding.command as Record<string, unknown> | undefined;
+    if (!command || typeof command.topic !== "string" || !command.topic.trim()) return { status: "refused", message: `Preview refused: ${point.name} has no MQTT command topic.` };
+    target = `MQTT topic ${command.topic}`;
+    if (point.type === "boolean") wireValue = String(value ? command.on ?? "ON" : command.off ?? "OFF");
+    else {
+      const scale = Number(command.scale) || 1;
+      const raw = (Number(value) - (Number(command.offset) || 0)) / scale;
+      wireValue = Number.isInteger(raw) ? String(raw) : String(Number(raw.toFixed(6)));
+    }
+    if (typeof command.json === "string" && command.json) wireValue = JSON.stringify({ [command.json]: point.type === "boolean" ? wireValue : Number(wireValue) });
+  } else if (adapter === "http") {
+    const command = binding.command as Record<string, unknown> | undefined;
+    if (!command || typeof command.path !== "string" || !command.path.startsWith("/")) return { status: "refused", message: `Preview refused: ${point.name} has no valid HTTP command path.` };
+    target = `${String(command.method || "POST").toUpperCase()} ${command.path}`;
+    const body = command.body && typeof command.body === "object" ? command.body as Record<string, unknown> : {};
+    const mapped = Object.fromEntries(Object.entries(body).map(([key, item]) => [key, item === "{value}" ? value : item]));
+    wireValue = JSON.stringify(Object.keys(mapped).length ? mapped : { value });
+  } else if (adapter === "modbus-tcp") {
+    const register = binding.register as Record<string, unknown> | undefined;
+    if (!register || !["coil", "holding"].includes(String(register.table))) return { status: "refused", message: `Preview refused: ${point.name} has no writable Modbus coil or holding register.` };
+    target = `Modbus ${register.table} register ${String(register.address)}`;
+    if (register.table === "coil") wireValue = String(Boolean(value));
+    else {
+      const scale = Number(register.scale) || 1;
+      const raw = (Number(value) - (Number(register.offset) || 0)) / scale;
+      wireValue = String(register.type === "float32" ? raw : Math.round(raw));
+    }
+  } else return { status: "refused", message: "Preview refused: this profile uses an adapter the Studio can't simulate." };
+
+  const displayValue = typeof value === "boolean" ? (value ? "on" : "off") : `${value}${point.unit ? ` ${point.unit}` : ""}`;
+  return {
+    status: "preview",
+    message: `Simulation only: ${point.name} would be requested at ${displayValue}. Nothing was sent, and this cannot confirm how the device will respond.`,
+    mapping: { adapter, target, value: wireValue },
+  };
+}
+
 /** Describe a device with form controls. The description is checked by the server before it can be used. */
 function HardwareStudio({ onProfile, hubs = [], hub = "" }: { onProfile: (profile: Profile) => void; hubs?: Hub[]; hub?: string }) {
   const [form, setForm] = useState({ name: "", maker: "", model: "", category: "sensor", protocol: "mqtt" });
@@ -167,8 +236,18 @@ function HardwareStudio({ onProfile, hubs = [], hub = "" }: { onProfile: (profil
   const [lookBusy, setLookBusy] = useState(false);
   const [lookTopics, setLookTopics] = useState<Array<{ topic: string; messages: number; sample?: string }> | null>(null);
   const [lookError, setLookError] = useState("");
+  const [previewPointId, setPreviewPointId] = useState("");
+  const [previewValue, setPreviewValue] = useState("");
+  const [simulation, setSimulation] = useState<StudioSimulation | null>(null);
   const profile = useMemo(() => studioProfile(form, points), [form, points]);
-  const change = (index: number, patch: Partial<StudioPoint>) => setPoints((list) => list.map((point, at) => (at === index ? { ...point, ...patch } : point)));
+  const previewPoints = profile.points.filter((point) => point.access === "read-write");
+  const selectedPreviewPoint = previewPoints.find((point) => point.id === previewPointId);
+  const change = (index: number, patch: Partial<StudioPoint>) => { setSimulation(null); setPoints((list) => list.map((point, at) => (at === index ? { ...point, ...patch } : point))); };
+  const runPreview = () => {
+    if (!selectedPreviewPoint || previewValue.trim() === "") return;
+    const value = selectedPreviewPoint.type === "boolean" ? previewValue === "on" : Number(previewValue);
+    setSimulation(simulateStudioChange(profile, previewPointId, value));
+  };
   const look = async () => {
     if (!lookHub) return;
     setLookBusy(true); setLookError(""); setLookTopics(null);
@@ -178,6 +257,7 @@ function HardwareStudio({ onProfile, hubs = [], hub = "" }: { onProfile: (profil
     } catch (reason) { setLookError(message(reason)); } finally { setLookBusy(false); }
   };
   const applyTopic = (topic: string) => {
+    setSimulation(null);
     setPoints((list) => {
       const next = [...list];
       const index = next.findIndex((point) => !point.a.trim());
@@ -199,10 +279,10 @@ function HardwareStudio({ onProfile, hubs = [], hub = "" }: { onProfile: (profil
     <div className="space-y-3" data-testid="studio">
       <p className="text-sm text-slate-700">Describe the device with the values from its manual. HANNAH checks that the description is complete, then your hub checks that the device answers. HANNAH can't know whether what you entered matches the device: a wrong address reads the wrong thing.</p>
       <div className="grid gap-2 sm:grid-cols-2">
-        <label className="text-sm text-slate-800">Maker<input className={input} value={form.maker} onChange={(event) => setForm({ ...form, maker: event.target.value })} /></label>
-        <label className="text-sm text-slate-800">Model<input className={input} value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></label>
-        <label className="text-sm text-slate-800">What kind of device<select className={input} value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{CATEGORY.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label className="text-sm text-slate-800">How it talks<select className={input} value={form.protocol} onChange={(event) => { setForm({ ...form, protocol: event.target.value }); setPoints([blankPoint()]); }}><option value="mqtt">MQTT</option><option value="modbus-tcp">Modbus TCP</option><option value="http">HTTP on the local network</option></select></label>
+        <label className="text-sm text-slate-800">Maker<input className={input} value={form.maker} onChange={(event) => { setSimulation(null); setForm({ ...form, maker: event.target.value }); }} /></label>
+        <label className="text-sm text-slate-800">Model<input className={input} value={form.model} onChange={(event) => { setSimulation(null); setForm({ ...form, model: event.target.value }); }} /></label>
+        <label className="text-sm text-slate-800">What kind of device<select className={input} value={form.category} onChange={(event) => { setSimulation(null); setForm({ ...form, category: event.target.value }); }}>{CATEGORY.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="text-sm text-slate-800">How it talks<select className={input} value={form.protocol} onChange={(event) => { setSimulation(null); setPreviewPointId(""); setPreviewValue(""); setForm({ ...form, protocol: event.target.value }); setPoints([blankPoint()]); }}><option value="mqtt">MQTT</option><option value="modbus-tcp">Modbus TCP</option><option value="http">HTTP on the local network</option></select></label>
       </div>
       <p className={heading}>What it reports and what can be changed</p>
       {points.map((point, index) => (
@@ -232,10 +312,27 @@ function HardwareStudio({ onProfile, hubs = [], hub = "" }: { onProfile: (profil
               </>
             )}
           </div>
-          {points.length > 1 && <button type="button" className={button} onClick={() => setPoints((list) => list.filter((_item, at) => at !== index))}><Trash2 className="h-4 w-4" aria-hidden="true" />Remove this one</button>}
+          {points.length > 1 && <button type="button" className={button} onClick={() => { setSimulation(null); setPoints((list) => list.filter((_item, at) => at !== index)); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Remove this one</button>}
         </fieldset>
       ))}
-      <button type="button" className={button} onClick={() => setPoints((list) => [...list, blankPoint()])}><Plus className="h-4 w-4" aria-hidden="true" />Add another</button>
+      <button type="button" className={button} onClick={() => { setSimulation(null); setPoints((list) => [...list, blankPoint()]); }}><Plus className="h-4 w-4" aria-hidden="true" />Add another</button>
+      <section className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3" data-testid="studio-simulation">
+        <p className={heading}>Try a change before connecting it</p>
+        <p className="text-sm text-slate-700">This local preview checks the profile's allowed value and shows the command it describes. It never contacts a hub or device. After connecting, a real change still needs the usual approval and device readback.</p>
+        {previewPoints.length ? (
+          <div className="grid gap-2 sm:grid-cols-3">
+            <label className="text-sm text-slate-800">Point to preview<select className={input} aria-label="Point to preview" value={previewPointId} onChange={(event) => { setPreviewPointId(event.target.value); setPreviewValue(""); setSimulation(null); }}><option value="">Choose an output</option>{previewPoints.map((point) => <option key={point.id} value={point.id}>{point.name}</option>)}</select></label>
+            {selectedPreviewPoint?.type === "boolean" ? (
+              <label className="text-sm text-slate-800">Requested state<select className={input} aria-label="Preview value" value={previewValue} onChange={(event) => { setPreviewValue(event.target.value); setSimulation(null); }}><option value="">Choose a state</option><option value="on">On</option><option value="off">Off</option></select></label>
+            ) : <label className="text-sm text-slate-800">Requested value{selectedPreviewPoint?.unit ? ` (${selectedPreviewPoint.unit})` : ""}<input className={input} aria-label="Preview value" inputMode="decimal" value={previewValue} onChange={(event) => { setPreviewValue(event.target.value); setSimulation(null); }} /></label>}
+            <div className="flex items-end"><button type="button" className={button} disabled={!selectedPreviewPoint || previewValue.trim() === ""} onClick={runPreview}>Preview change</button></div>
+          </div>
+        ) : <p className="text-sm text-slate-600">Add an output and allow it to change to preview a command.</p>}
+        {simulation && <div className={`rounded-lg border px-3 py-2 text-sm ${simulation.status === "preview" ? "border-slate-300 bg-white text-slate-800" : "border-rose-200 bg-rose-50 text-rose-900"}`} role={simulation.status === "preview" ? "status" : "alert"} data-result={simulation.status}>
+          <p>{simulation.message}</p>
+          {simulation.mapping && <p className="mt-1 font-mono text-xs" data-testid="studio-simulation-mapping">{simulation.mapping.adapter} · {simulation.mapping.target} · {simulation.mapping.value}</p>}
+        </div>}
+      </section>
       {form.protocol === "mqtt" && hubs.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" data-testid="studio-broker-look">
           <button type="button" className={button} onClick={() => setLookOpen((value) => !value)} data-testid="studio-look-broker">Look at a broker's topics</button>
@@ -282,7 +379,7 @@ function SettingInput({ field, value, onChange }: { field: SettingField; value: 
 }
 
 /** The whole "add a device" flow. `onAdded` is called with the device once the hub has checked it (or failed to). */
-export default function DeviceSetup({ hubs, onAdded, onCancel }: { hubs: Hub[]; onAdded: (device: Device) => void; onCancel: () => void }) {
+export default function DeviceSetup({ hubs, onAdded, onCancel, initialProfileId }: { hubs: Hub[]; onAdded: (device: Device) => void; onCancel: () => void; initialProfileId?: string }) {
   const usable = hubs.filter((hub) => hub.status === "enrolled");
   const [way, setWay] = useState<"list" | "manual" | "studio">("list");
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -293,12 +390,18 @@ export default function DeviceSetup({ hubs, onAdded, onCancel }: { hubs: Hub[]; 
   const [settings, setSettings] = useState<Record<string, string | boolean>>({});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => { void Devices.profiles().then((answer) => setProfiles(answer.profiles)).catch((reason) => setError(message(reason))); }, []);
   const choose = (chosen: Profile) => {
     setProfile(chosen); setError("");
     setName((current) => current || chosen.model);
     setSettings(Object.fromEntries(chosen.connection.fields.map((field) => [field.id, field.type === "toggle" ? field.default === true : field.default === undefined ? "" : String(field.default)])));
   };
+  useEffect(() => {
+    void Devices.profiles().then((answer) => {
+      setProfiles(answer.profiles);
+      const preselected = answer.profiles.find((item) => item.id === initialProfileId);
+      if (preselected && !["developer-required", "unsupported"].includes(preselected.compatibility?.level || "")) choose(preselected);
+    }).catch((reason) => setError(message(reason)));
+  }, [initialProfileId]);
   const add = async () => {
     if (!profile) return;
     setBusy("Adding the device…"); setError("");

@@ -51,6 +51,8 @@ const HISTORY_EVERY_MS = 60_000;
 const HISTORY_KEEP_MS = 24 * 60 * 60_000;
 const EVENTS_KEEP_MS = 30 * 24 * 60 * 60_000;
 const COMMANDS_KEEP_MS = 30 * 24 * 60 * 60_000;
+const UPDATE_BUNDLE_MAX = 20 * 1024 * 1024;
+const ROLLOUT_CONFIRM_MS = 5 * 60_000;
 const AUTH_LABEL = "hannah-hub-auth-v1";
 const COMMAND_LABEL = "hannah-hub-command-v1";
 const CONFIG_LABEL = "hannah-hub-config-v1";
@@ -458,7 +460,168 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
     return issue(db, userId, device.hub.id, { type: "write", deviceId: device.id, payload: { deviceId: device.id, point, value }, actionId, requestedBy });
   }
   async function issueUpdate(db, userId, hubId, { version, size, sha256, url, requestedBy = "" }) {
-    return issue(db, userId, hubId, { type: "update", payload: { version, size, sha256, url }, requestedBy });
+    const bundle = validateUpdateBundle({ version, size, sha256, url });
+    return issue(db, userId, hubId, { type: "update", payload: bundle, requestedBy });
+  }
+
+  function validateUpdateBundle({ version, size, sha256: digest, url }) {
+    const release = clean(version, 24);
+    const bytes = Number(size);
+    const hash = String(digest || "").toLowerCase();
+    let address;
+    try { address = new URL(String(url || "")); } catch { throw fail(400, "Enter a valid update bundle URL.", "bad-update-url"); }
+    const loopback = address.hostname === "localhost" || address.hostname === "[::1]" || /^127\./.test(address.hostname);
+    if (!/^\d+\.\d+\.\d+$/.test(release)) throw fail(400, "Use a version such as 1.2.3.", "bad-update-version");
+    if (!Number.isSafeInteger(bytes) || bytes < 1 || bytes > UPDATE_BUNDLE_MAX) throw fail(400, "The bundle size must be between 1 byte and 20 MiB.", "bad-update-size");
+    if (!/^[a-f0-9]{64}$/.test(hash)) throw fail(400, "Enter the bundle's 64 character SHA-256 hash.", "bad-update-hash");
+    if (!address.hostname || address.username || address.password || !(address.protocol === "https:" || (address.protocol === "http:" && loopback))) throw fail(400, "Update bundles need HTTPS. HTTP is allowed only from this computer for development.", "insecure-update-url");
+    return { version: release, size: bytes, sha256: hash, url: address.toString() };
+  }
+
+  const rolloutLockId = (userId) => crypto.createHash("sha256").update(`hannah-update-rollout:${userId}`).digest().readInt32BE(0);
+  async function inRolloutTransaction(db, userId, work) {
+    return db.transaction(async (query, { lock }) => { await lock(rolloutLockId(userId)); return work({ query }); });
+  }
+  function rolloutCompatible(row, version, at = now()) {
+    if (!row || row.status !== "enrolled") return "Hub isn't enrolled.";
+    if (!hubView(row, at).online) return "Hub isn't online.";
+    const descriptor = parse(row.descriptor, {});
+    if (descriptor.protocol !== "hannah-hub/1") return "Hub reports an unsupported HANNAH hub protocol.";
+    const update = parse(row.update_status, {});
+    const current = update.current || descriptor.software;
+    if (!/^\d+\.\d+\.\d+$/.test(String(current || ""))) return "Hub hasn't reported a compatible software version yet.";
+    if (current === version) return "Hub already runs this version.";
+    if (update.pending) return "Hub already has an update on probation.";
+    return "";
+  }
+  async function rolloutRow(db, userId, id) {
+    return (await db.query("SELECT * FROM hannah_update_rollouts WHERE user_id = $1 AND id = $2", [userId, String(id || "")])).rows[0] || null;
+  }
+  async function rolloutView(db, row) {
+    const targets = (await db.query("SELECT hub_id AS \"hubId\", hub_name AS \"hubName\", ordinal, status, command_id AS \"commandId\", detail, updated_at AS \"updatedAt\" FROM hannah_update_rollout_targets WHERE user_id = $1 AND rollout_id = $2 ORDER BY ordinal", [row.user_id, row.id])).rows;
+    return {
+      id: row.id, version: row.version, cohortSize: Number(row.cohort_size), kind: row.kind, rollbackTo: row.rollback_to || null,
+      status: row.status, detail: row.detail || null, createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), targets: targets.map((target) => ({ ...target, ordinal: Number(target.ordinal), updatedAt: Number(target.updatedAt) })),
+    };
+  }
+  async function stageRolloutCohort(db, row) {
+    const pending = (await db.query("SELECT * FROM hannah_update_rollout_targets WHERE user_id = $1 AND rollout_id = $2 AND status = 'pending' ORDER BY ordinal LIMIT $3", [row.user_id, row.id, Number(row.cohort_size)])).rows;
+    for (const target of pending) {
+      const commandId = row.kind === "rollback"
+        ? await issue(db, row.user_id, target.hub_id, { type: "update", payload: { rollback: true }, requestedBy: "a signed-in person" })
+        : await issue(db, row.user_id, target.hub_id, { type: "update", payload: { version: row.version, size: Number(row.size), sha256: row.sha256, url: row.url }, requestedBy: "a signed-in person" });
+      await db.query("UPDATE hannah_update_rollout_targets SET status = 'queued', command_id = $1, detail = NULL, updated_at = $2 WHERE user_id = $3 AND rollout_id = $4 AND hub_id = $5 AND status = 'pending'", [commandId, now(), row.user_id, row.id, target.hub_id]);
+    }
+    return pending.length;
+  }
+  async function reconcileRollout(db, row) {
+    if (row.status !== "running") return;
+    const targets = (await db.query("SELECT * FROM hannah_update_rollout_targets WHERE user_id = $1 AND rollout_id = $2 ORDER BY ordinal", [row.user_id, row.id])).rows;
+    const failure = targets.find((target) => target.status === "failed");
+    if (failure) {
+      await db.query("UPDATE hannah_update_rollouts SET status = 'paused-failure', detail = $1, updated_at = $2 WHERE user_id = $3 AND id = $4 AND status = 'running'", [`${failure.hub_name}: ${failure.detail || "update failed"}`, now(), row.user_id, row.id]);
+      return;
+    }
+    if (targets.some((target) => target.status === "queued")) return;
+    const dispatched = await stageRolloutCohort(db, row);
+    if (dispatched) return;
+    const remaining = (await db.query("SELECT COUNT(*) AS count FROM hannah_update_rollout_targets WHERE user_id = $1 AND rollout_id = $2 AND status = 'pending'", [row.user_id, row.id])).rows[0];
+    if (Number(remaining?.count || 0)) return;
+    const hasFailures = targets.some((target) => target.status === "failed" || target.status === "skipped");
+    await db.query("UPDATE hannah_update_rollouts SET status = $1, updated_at = $2 WHERE user_id = $3 AND id = $4 AND status = 'running'", [hasFailures ? "completed-with-errors" : "completed", now(), row.user_id, row.id]);
+  }
+  async function observeRollouts(db, userId, hubId, update) {
+    await inRolloutTransaction(db, userId, async (tx) => {
+      const targets = (await tx.query("SELECT t.*, r.version, r.kind, r.rollback_to FROM hannah_update_rollout_targets t JOIN hannah_update_rollouts r ON r.user_id = t.user_id AND r.id = t.rollout_id WHERE t.user_id = $1 AND t.hub_id = $2 AND t.status = 'queued'", [userId, hubId])).rows;
+      for (const target of targets) {
+        let status = "";
+        let detail = "";
+        const command = target.command_id ? (await tx.query("SELECT * FROM hannah_device_commands WHERE user_id = $1 AND id = $2", [userId, target.command_id])).rows[0] : null;
+        const commandStatus = command ? effectiveStatus(command, now()) : "";
+        if (commandStatus && FINAL.has(commandStatus) && commandStatus !== "done") {
+          status = "failed";
+          detail = command?.error || command?.message || `Hub command ended as ${commandStatus}.`;
+        } else if (target.kind === "rollback") {
+          if (update?.current === target.rollback_to && update?.last?.result === "rolled-back") status = "rolled-back";
+          else if (["refused", "failed"].includes(update?.last?.result) && update?.current !== target.rollback_to) { status = "failed"; detail = update.last.reason || update.last.message || "Hub refused the rollback."; }
+        } else if (update?.current === target.version && update?.last?.result === "confirmed") status = "confirmed";
+        else if (["refused", "rolled-back"].includes(update?.last?.result) && update?.current !== target.version) { status = "failed"; detail = update.last.reason || update.last.message || `Hub reported ${update.last.result}.`; }
+        if (!status && now() - Number(target.updated_at) > ROLLOUT_CONFIRM_MS) { status = "failed"; detail = "The hub did not confirm the update within five minutes."; }
+        if (status) await tx.query("UPDATE hannah_update_rollout_targets SET status = $1, detail = $2, updated_at = $3 WHERE user_id = $4 AND rollout_id = $5 AND hub_id = $6 AND status = 'queued'", [status, detail || null, now(), userId, target.rollout_id, hubId]);
+      }
+      const rows = (await tx.query("SELECT r.* FROM hannah_update_rollouts r JOIN hannah_update_rollout_targets t ON t.user_id = r.user_id AND t.rollout_id = r.id WHERE r.user_id = $1 AND t.hub_id = $2 AND r.status IN ('running', 'paused', 'paused-failure') GROUP BY r.user_id, r.id", [userId, hubId])).rows;
+      for (const row of rows) await reconcileRollout(tx, row);
+    });
+  }
+  async function createRollout(db, userId, input = {}) {
+    const bundle = validateUpdateBundle(input);
+    const cohortSize = Number(input.cohortSize ?? 1);
+    if (!Number.isInteger(cohortSize) || cohortSize < 1 || cohortSize > MAX_HUBS) throw fail(400, `Choose a cohort size from 1 to ${MAX_HUBS}.`, "bad-cohort-size");
+    return inRolloutTransaction(db, userId, async (tx) => {
+      const hubs = await hubRows(tx, userId);
+      const wanted = Array.isArray(input.hubIds) && input.hubIds.length ? [...new Set(input.hubIds.map((id) => clean(id, 80)))] : null;
+      if (wanted?.some((id) => !id)) throw fail(400, "Hub ids must be valid.", "bad-hub-selection");
+      const selected = wanted ? hubs.filter((hub) => wanted.includes(hub.id)) : hubs;
+      if (wanted && selected.length !== wanted.length) throw fail(404, "One or more selected hubs aren't in this account.", "not-found");
+      const excluded = [];
+      const eligible = [];
+      for (const hub of selected) {
+        const reason = rolloutCompatible(hub, bundle.version);
+        if (reason) {
+          if (wanted) throw fail(409, `${hub.name}: ${reason}`, "incompatible-hub");
+          excluded.push({ hubId: hub.id, hubName: hub.name, reason });
+        } else eligible.push(hub);
+      }
+      if (!eligible.length) throw fail(409, "No online, enrolled, compatible hubs are available for this rollout.", "no-compatible-hubs", { excluded });
+      const id = `roll_${crypto.randomBytes(10).toString("hex")}`;
+      const at = now();
+      await tx.query("INSERT INTO hannah_update_rollouts (user_id, id, version, size, sha256, url, cohort_size, kind, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'update', 'running', $8, $8)", [userId, id, bundle.version, bundle.size, bundle.sha256, bundle.url, cohortSize, at]);
+      for (const [ordinal, hub] of eligible.entries()) await tx.query("INSERT INTO hannah_update_rollout_targets (user_id, rollout_id, hub_id, hub_name, ordinal, status, updated_at) VALUES ($1, $2, $3, $4, $5, 'pending', $6)", [userId, id, hub.id, hub.name, ordinal, at]);
+      const row = await rolloutRow(tx, userId, id);
+      await stageRolloutCohort(tx, row);
+      return { rollout: await rolloutView(tx, row), excluded };
+    });
+  }
+  async function listRollouts(db, userId) {
+    return Promise.all((await db.query("SELECT * FROM hannah_update_rollouts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30", [userId])).rows.map((row) => rolloutView(db, row)));
+  }
+  async function setRolloutPaused(db, userId, id, paused) {
+    return inRolloutTransaction(db, userId, async (tx) => {
+      const row = await rolloutRow(tx, userId, id);
+      if (!row) throw fail(404, "There is no such rollout in your account.", "not-found");
+      if (paused) {
+        if (row.status !== "running") throw fail(409, "Only a running rollout can be paused.", "rollout-not-running");
+        await tx.query("UPDATE hannah_update_rollouts SET status = 'paused', detail = 'Paused by the account owner.', updated_at = $1 WHERE user_id = $2 AND id = $3", [now(), userId, id]);
+      } else {
+        if (!["paused", "paused-failure"].includes(row.status)) throw fail(409, "This rollout isn't paused.", "rollout-not-paused");
+        await tx.query("UPDATE hannah_update_rollout_targets SET status = 'skipped', updated_at = $1 WHERE user_id = $2 AND rollout_id = $3 AND status = 'failed'", [now(), userId, id]);
+        await tx.query("UPDATE hannah_update_rollouts SET status = 'running', detail = NULL, updated_at = $1 WHERE user_id = $2 AND id = $3", [now(), userId, id]);
+        await reconcileRollout(tx, { ...row, status: "running" });
+      }
+      return rolloutView(tx, await rolloutRow(tx, userId, id));
+    });
+  }
+  async function rollbackRollout(db, userId, id) {
+    return inRolloutTransaction(db, userId, async (tx) => {
+      const original = await rolloutRow(tx, userId, id);
+      if (!original || original.kind !== "update") throw fail(404, "There is no software update rollout to roll back.", "not-found");
+      const targets = (await tx.query("SELECT t.*, h.status AS hub_status, h.descriptor, h.update_status FROM hannah_update_rollout_targets t JOIN hannah_hubs h ON h.user_id = t.user_id AND h.id = t.hub_id WHERE t.user_id = $1 AND t.rollout_id = $2 ORDER BY t.ordinal", [userId, id])).rows;
+      const eligible = targets.filter((target) => {
+        const state = parse(target.update_status, {});
+        const descriptor = parse(target.descriptor, {});
+        return target.status === "confirmed" && target.hub_status === "enrolled" && hubView({ id: target.hub_id, name: target.hub_name, status: target.hub_status, descriptor: target.descriptor, update_status: target.update_status, last_seen_at: now() }).online && descriptor.protocol === "hannah-hub/1" && state.current === original.version && Boolean(state.previous) && !state.pending;
+      });
+      if (!eligible.length) throw fail(409, "No online hub from this rollout has a confirmed version with a previous version available.", "no-rollback-targets");
+      const rollbackTo = parse(eligible[0].update_status, {}).previous;
+      const sameRollback = eligible.filter((target) => parse(target.update_status, {}).previous === rollbackTo);
+      const id2 = `roll_${crypto.randomBytes(10).toString("hex")}`;
+      const at = now();
+      await tx.query("INSERT INTO hannah_update_rollouts (user_id, id, version, size, sha256, url, cohort_size, kind, rollback_to, status, created_at, updated_at) VALUES ($1, $2, $3, 0, '', '', $4, 'rollback', $5, 'running', $6, $6)", [userId, id2, original.version, Number(original.cohort_size), rollbackTo, at]);
+      for (const [ordinal, target] of sameRollback.entries()) await tx.query("INSERT INTO hannah_update_rollout_targets (user_id, rollout_id, hub_id, hub_name, ordinal, status, updated_at) VALUES ($1, $2, $3, $4, $5, 'pending', $6)", [userId, id2, target.hub_id, target.hub_name, ordinal, at]);
+      const row = await rolloutRow(tx, userId, id2);
+      await stageRolloutCohort(tx, row);
+      return rolloutView(tx, row);
+    });
   }
 
   // ---------- checking a device before it runs ----------
@@ -534,9 +697,10 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
   async function discover(db, userId, hubReference, { kind, settings = {} } = {}, { requestedBy = "" } = {}) {
     const hub = await resolveHub(db, userId, hubReference);
     if (!hub.online) throw fail(409, `The hub “${hub.name}” isn't connected.`, "hub-offline");
-    if (!["mqtt", "serial", "mdns"].includes(kind)) throw fail(400, "A hub can look at an MQTT broker's topics, list serial ports, or browse for one mDNS service type.", "bad-request");
-    const cleaned = kind === "mqtt" ? { host: clean(settings.host, 120), port: Number(settings.port) || undefined, username: clean(settings.username, 120) || undefined, password: typeof settings.password === "string" ? settings.password.slice(0, 200) : undefined, tls: settings.tls === true } : kind === "mdns" ? { service: clean(settings.service, 120) || "_http._tcp.local", seconds: Math.max(1, Math.min(15, Number(settings.seconds) || 5)) } : {};
+    if (!["mqtt", "serial", "mdns", "usb"].includes(kind)) throw fail(400, "A hub can look at an MQTT broker's topics, list serial ports, list USB devices, or browse for one mDNS service type.", "bad-request");
+    const cleaned = kind === "mqtt" ? { host: clean(settings.host, 120), port: Number(settings.port) || undefined, username: clean(settings.username, 120) || undefined, password: typeof settings.password === "string" ? settings.password.slice(0, 200) : undefined, tls: settings.tls === true } : kind === "mdns" ? { service: clean(settings.service, 120) || "_http._tcp.local", seconds: Math.max(1, Math.min(15, Number(settings.seconds) || 5)) } : kind === "usb" ? {} : {};
     if (kind === "mqtt" && !/^[A-Za-z0-9.\-:]{1,120}$/.test(cleaned.host)) throw fail(400, "Give the broker's address.", "bad-request");
+    if (kind === "mdns" && !/^_[A-Za-z0-9-]{1,15}\._(?:tcp|udp)\.local\.?$/i.test(cleaned.service)) throw fail(400, "Use one local service type, for example _http._tcp.local.", "bad-request");
     const commandId = await issue(db, userId, hub.id, { type: "discover", requestedBy, payload: { kind, settings: cleaned, seconds: 5 } });
     const command = await waitForCommand(db, userId, commandId, { ms: ackWaitMs + 6000 });
     if (command.final && command.status !== "done") throw fail(409, command.result?.message || command.error || "The hub couldn't look.", command.result?.reason || command.status);
@@ -649,6 +813,14 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
     const at = now();
     const userId = row.user_id;
     const reported = Number.isInteger(body.configVersion) ? body.configVersion : 0;
+    const software = typeof body.software === "string" ? body.software.slice(0, 40) : "";
+    if (/^\d+\.\d+\.\d+$/.test(software)) {
+      const descriptor = parse(row.descriptor, {});
+      if (descriptor.software !== software) {
+        descriptor.software = software;
+        await db.query("UPDATE hannah_hubs SET descriptor = $1 WHERE id = $2", [JSON.stringify(descriptor), row.id]);
+      }
+    }
     await db.query("UPDATE hannah_hubs SET last_seen_at = $1, reported_config = $2 WHERE id = $3", [at, reported, row.id]);
     // What the hub sees of its devices.
     const mine = new Map((await db.query("SELECT * FROM hannah_devices WHERE user_id = $1 AND hub_id = $2", [userId, row.id])).rows.map((device) => [device.id, device]));
@@ -713,6 +885,7 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
         if (fresh && item.type === "rule-fired") announce(userId, "device.rule.fired", { ruleId, hubId: row.id, branch: item.branch === "otherwise" ? "otherwise" : "then", message: clean(item.message, 400), at });
       }
     }
+    if (body.update) await observeRollouts(db, userId, row.id, body.update);
     // What the hub should have and do.
     const current = (await db.query("SELECT * FROM hannah_hubs WHERE id = $1", [row.id])).rows[0];
     const answer = { serverTime: at, intervalMs: SYNC_INTERVAL_MS, received, commands: [] };
@@ -734,7 +907,7 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
 
   return {
     activateDevice, addDevice, assessRule, assessWrite, authenticate, commands, createHub, createRule, deleteProfile, deleteRule, discover, enrollHub, events, getCommand, getDevice, getHub, history,
-    issueHubCode, listDevices, listHubs, listProfiles, listRules, overview, protocols, removeDevice, removeHub, resolveDevice, resolveHub, resolveRule, revokeHub, saveProfile, setRule, suspendRules, sync, testDevice,
+    createRollout, issueHubCode, issueUpdate, listDevices, listHubs, listProfiles, listRollouts, listRules, overview, protocols, removeDevice, removeHub, resolveDevice, resolveHub, resolveRule, revokeHub, rollbackRollout, saveProfile, setRolloutPaused, setRule, suspendRules, sync, testDevice,
     updateDevice, waitForCommand, write,
     listPublisherKeys, addPublisherKey, revokePublisherKey, installSignedProfile,
   };

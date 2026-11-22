@@ -181,8 +181,15 @@ function createRuntime({ fetchImpl = (...args) => fetch(...args), now = () => Da
       async action({ action, params, key, workflow }) {
         if (!operatorRef.current) throw fail(503, "Actions aren't available on this server.", "unavailable", { retryable: false });
         const { outcomeText } = require("../actions/engine");
-        const record = await operatorRef.current.engine.run(await database(), userId, { action, params, request: workflow ? `Workflow “${workflow}”` : "A workflow", agent: "Workflow", source: "workflow", idempotencyKey: String(key).replace(/[^A-Za-z0-9_.:-]/g, "-").slice(0, 120) });
-        return { ...record, outcome: outcomeText(record) };
+        try {
+          const record = await operatorRef.current.engine.run(await database(), userId, { action, params, request: workflow ? `Workflow “${workflow}”` : "A workflow", agent: "Workflow", source: "workflow", idempotencyKey: String(key).replace(/[^A-Za-z0-9_.:-]/g, "-").slice(0, 120) });
+          return { ...record, outcome: outcomeText(record) };
+        } catch (error) {
+          // Validation and permission failures won't improve if the workflow
+          // repeats them. Transient server errors can retry with the same key.
+          if (Number(error?.status) >= 400 && Number(error?.status) < 500) error.retryable = false;
+          throw error;
+        }
       },
       /** A read-only report on a connected repository (server/coding/service.js checkRepo). */
       async codeCheck({ repo }) {

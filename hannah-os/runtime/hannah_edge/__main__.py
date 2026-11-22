@@ -19,6 +19,7 @@ from . import PROTOCOL, __version__, adapters
 from .hub import Hub, describe
 from .link import Link, LinkError, check_server_url, enroll
 from .protocol import fingerprint, write_private
+from .update import Updater
 
 DEFAULT_STATE = os.path.expanduser("~/.hannah-hub")
 
@@ -37,6 +38,27 @@ def load_identity(state_dir: str) -> dict | None:
             return json.load(handle)
     except (OSError, ValueError):
         return None
+
+
+def _updated_env(state_dir: str) -> dict:
+    env = os.environ.copy()
+    current = os.path.abspath(os.path.join(state_dir, "updates", "current"))
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = current + (os.pathsep + existing if existing else "")
+    return env
+
+
+def _exec_current_update(args) -> None:
+    state_dir = os.path.abspath(args.state_dir)
+    command = [
+        sys.executable, "-m", "hannah_edge", "run", "--state-dir", state_dir,
+        "--sync-interval", str(args.sync_interval), "--tick", str(args.tick),
+    ]
+    # The current working directory is sys.path[0] for `python -m` and could
+    # still contain the old checkout. Start in the state folder so the selected
+    # updates/current package is the first importable hannah_edge package.
+    os.chdir(state_dir)
+    os.execvpe(sys.executable, command, _updated_env(state_dir))
 
 
 def cmd_enroll(args) -> int:
@@ -62,6 +84,20 @@ def cmd_run(args) -> int:
     except LinkError as error:
         log(event="bad-server", message=str(error))
         return 1
+    updater = Updater(os.path.join(args.state_dir, "updates"))
+    update = updater.status()
+    if update.get("current") and update["current"] != __version__:
+        if update.get("previous"):
+            updater.rollback("The selected package version didn't load.")
+            log(event="update-rolled-back", version=update["current"], reason="The selected package version didn't load.")
+            _exec_current_update(args)
+        log(event="update-version-mismatch", expected=update["current"], loaded=__version__)
+        return 1
+    if update.get("pending"):
+        update = updater.on_start()
+        if update.get("current") != __version__:
+            log(event="update-rolled-back", version=update.get("last", {}).get("version"), reason=update.get("last", {}).get("reason", ""))
+            _exec_current_update(args)
     hub = Hub(identity["hubId"], identity["secret"], args.state_dir, Link(server, identity["hubId"], identity["secret"]), sync_interval=args.sync_interval, log=log)
     signal.signal(signal.SIGTERM, lambda *_: hub.stop())
     log(event="started", hubId=identity["hubId"], software=__version__, protocol=PROTOCOL, adapters=sorted(adapters.ADAPTERS))
@@ -69,6 +105,9 @@ def cmd_run(args) -> int:
         hub.run(tick_s=args.tick)
     except KeyboardInterrupt:
         hub.close()
+    if hub.restart_requested:
+        log(event="update-restarting", version=hub.update_version)
+        _exec_current_update(args)
     log(event="stopped")
     return 0
 

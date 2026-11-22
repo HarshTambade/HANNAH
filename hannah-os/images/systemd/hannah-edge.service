@@ -25,6 +25,7 @@ User=hannah-edge
 Group=hannah-edge
 WorkingDirectory=/opt/hannah-edge
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/var/lib/hannah-edge/state/updates/current:/opt/hannah-edge
 # Refuse to start on a computer that isn't ready (bad clock, key file readable by others).
 ExecStartPre=/usr/bin/python3 -m hannah_edge doctor --state-dir /var/lib/hannah-edge/state
 ExecStart=/usr/bin/python3 -m hannah_edge run --state-dir /var/lib/hannah-edge/state

@@ -26,7 +26,7 @@ const { createContentReportHandler } = require("./content-reports");
 const { createSyncHandler, createSyncFetchHandler } = require("./cloud-sync");
 const { accountAuth, accountsUseServerKeys, createAccountRouter, createSpendStore, createSyncBlobStore } = require("./accounts");
 const { createRememberedKeyRouter, rememberedKeyMiddleware } = require("./remembered-key");
-const { databaseConfigured } = require("./db");
+const { databaseConfigured, getDatabase } = require("./db");
 const { knownPriceFor, tokenUsageMiddleware, verifiedPriceFor } = require("./cost-tracking");
 const { createV1Router } = require("./v1");
 const { createOrchestrateHandler } = require("./orchestrate");
@@ -438,8 +438,23 @@ app.get("/api/inventory", async (req, res) => {
       operator.devices.listDevices(db, account.id),
       operator.devices.listHubs(db, account.id),
     ]);
-    res.json({ robots, devices, hubs, total: robots.length + devices.length });
-  } catch (error) { res.status(500).json({ error: error.message || "The inventory couldn't be loaded." }); }
+    const items = [
+      ...robots.map((robot) => ({ id: robot.id, kind: "robot", name: robot.name, status: robot.status, connection: robot.connection, category: robot.profile?.category || "robot", manufacturer: robot.profile?.manufacturer || null, model: robot.profile?.model || null, simulated: robot.simulated === true, lastSeenAt: robot.lastSeenAt || null })),
+      ...hubs.map((hub) => ({ id: hub.id, kind: "hub", name: hub.name, status: hub.status, connection: hub.connection, category: "edge hub", manufacturer: null, model: hub.software || null, simulated: false, lastSeenAt: hub.lastSeenAt || null })),
+      ...devices.map((device) => ({ id: device.id, kind: "device", name: device.name, status: device.status, connection: device.connection, category: device.profile?.categoryLabel || device.profile?.category || "device", manufacturer: device.profile?.manufacturer || null, model: device.profile?.model || null, simulated: device.profile?.simulated === true, lastSeenAt: device.lastSeenAt || null, compatibility: device.compatibility?.level || "unsupported" })),
+    ];
+    const count = (kind) => items.filter((item) => item.kind === kind).length;
+    const online = (item) => item.connection === "online";
+    res.json({
+      items,
+      counts: {
+        total: items.length, online: items.filter(online).length,
+        robots: count("robot"), robotsOnline: items.filter((item) => item.kind === "robot" && online(item)).length,
+        hubs: count("hub"), hubsOnline: items.filter((item) => item.kind === "hub" && online(item)).length,
+        devices: count("device"), devicesOnline: items.filter((item) => item.kind === "device" && online(item)).length,
+      },
+    });
+  } catch { res.status(500).json({ error: "The inventory couldn't be loaded." }); }
 });
 app.use(express.json({ limit: "12mb" }));
 // HANNAH as an MCP server (streamable HTTP) at /mcp, for callers with their own

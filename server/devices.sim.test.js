@@ -7,6 +7,8 @@
 // No physical device is involved, and no broker or device HANNAH didn't write.
 // Nothing here says anything about any product.
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
+const http = require("node:http");
 const { spawn, spawnSync } = require("node:child_process");
 const { once } = require("node:events");
 const fs = require("node:fs");
@@ -23,6 +25,7 @@ process.env.HANNAH_RATE_LIMIT_HUB_SYNC_PER_5S = "100000";
 delete process.env.VERCEL;
 
 const { signRequest } = require("./devices/service");
+const { builtin: builtinProfiles } = require("./devices/profiles");
 const { onUserEvent } = require("./webhooks");
 const deviceHeard = [];
 onUserEvent((_userId, event, data) => { if (event.startsWith("device.")) deviceHeard.push({ event, data }); });
@@ -39,6 +42,8 @@ let server;
 let base;
 let simulator;
 let hub;
+let spareHub;
+let spareStateDir;
 let hubId;
 let sim;
 const asha = {};
@@ -75,6 +80,34 @@ function startHub() {
 }
 async function stopHub() {
   if (hub && hub.exitCode === null) { hub.kill("SIGTERM"); await Promise.race([once(hub, "exit"), sleep(4000)]); }
+}
+async function stopSpareHub() {
+  if (spareHub && spareHub.exitCode === null) { spareHub.kill("SIGTERM"); await Promise.race([once(spareHub, "exit"), sleep(4000)]); }
+}
+function makeUpdateBundle(version) {
+  const script = String.raw`import io, os, re, sys, tarfile
+source, version = sys.argv[1:]
+buffer = io.BytesIO()
+with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+    for root, dirs, files in os.walk(source):
+        dirs[:] = sorted(name for name in dirs if name != "__pycache__")
+        for name in sorted(files):
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(root, name)
+            relative = os.path.relpath(path, source).replace(os.sep, "/")
+            with open(path, "rb") as handle:
+                contents = handle.read()
+            if relative == "__init__.py":
+                contents = re.sub(rb'__version__\s*=\s*"[^"]+"', b'__version__ = "' + version.encode() + b'"', contents, count=1)
+            member = tarfile.TarInfo("hannah_edge/" + relative)
+            member.mode = 0o644
+            member.size = len(contents)
+            archive.addfile(member, io.BytesIO(contents))
+sys.stdout.buffer.write(buffer.getvalue())`;
+  const result = spawnSync("python3", ["-c", script, path.join(RUNTIME, "hannah_edge"), version], { maxBuffer: 24 * 1024 * 1024 });
+  if (result.status !== 0 || !result.stdout?.length) throw new Error(`Couldn't create update fixture: ${result.stderr?.toString() || "no output"}`);
+  return result.stdout;
 }
 /** Add, check and switch on one simulated device. */
 async function bring(name, profileId, settings, writable = []) {
@@ -129,6 +162,17 @@ test("looking at a broker lists its topics and publishes nothing", { skip }, asy
   for (const topic of ["sim/fan/state", "sim/lamp/state", "sim/thermo/reading", "sim/thermo/status"]) assert.ok(topics.has(topic), `${topic} missing from ${JSON.stringify([...topics])}`);
   const refused = await call("POST", `/hubs/${hubId}/discover`, { kind: "network-scan", settings: {} });
   assert.equal(refused.status, 400, JSON.stringify(refused.body));
+  const outsideLocalNetwork = await call("POST", `/hubs/${hubId}/discover`, { kind: "mdns", settings: { service: "_http._tcp.example.com" } });
+  assert.equal(outsideLocalNetwork.status, 400, JSON.stringify(outsideLocalNetwork.body));
+});
+
+test("listing USB devices is read-only and never opens a device", { skip }, async () => {
+  const found = await call("POST", `/hubs/${hubId}/discover`, { kind: "usb", settings: {} });
+  assert.equal(found.status, 200, JSON.stringify(found.body));
+  assert.ok(!found.body.pending);
+  assert.equal(found.body.discovered?.kind, "usb");
+  assert.ok(Array.isArray(found.body.discovered?.devices));
+  assert.match(String(found.body.discovered?.note || ""), /Listed only/);
 });
 
 test("device events reach the account's webhooks and workflow triggers", { skip }, async () => {
@@ -138,13 +182,96 @@ test("device events reach the account's webhooks and workflow triggers", { skip 
   for (const name of ["device.alert", "device.rule.fired"]) assert.ok(options.includes(name), name);
 });
 
+test("a staged rollout checks compatibility, advances one healthy cohort at a time, and can roll the fleet back", { skip, timeout: 120_000 }, async (t) => {
+  await sleep(10); // Keep the target order deterministic: the enrolled primary hub is the canary.
+  const created = await call("POST", "/hubs", { name: "Spare hub" });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const spareId = created.body.hub.id;
+  t.after(async () => {
+    await stopSpareHub();
+    await call("DELETE", `/hubs/${spareId}`).catch(() => undefined);
+    if (spareStateDir) fs.rmSync(spareStateDir, { recursive: true, force: true });
+  });
+  spareStateDir = fs.mkdtempSync(path.join(os.tmpdir(), "hannah-hub-rollout-"));
+  const enrolling = spawn("python3", ["-m", "hannah_edge", "enroll", "--state-dir", spareStateDir, "--server", base, "--code", created.body.enrollment.code], { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
+  const enrollmentLog = [];
+  lines(enrolling, enrollmentLog);
+  const [enrollmentCode] = await once(enrolling, "exit");
+  assert.equal(enrollmentCode, 0, JSON.stringify(enrollmentLog));
+  spareHub = spawn("python3", ["-m", "hannah_edge", "run", "--state-dir", spareStateDir, "--sync-interval", "0.3", "--tick", "0.15"], { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
+  lines(spareHub, log);
+  await until(async () => (await call("GET", `/hubs/${spareId}`)).body.hub, (value) => value?.online && value.software === "0.1.0", { what: "the second hub to report a compatible version" });
+
+  const bundle = makeUpdateBundle("0.1.1");
+  const digest = crypto.createHash("sha256").update(bundle).digest("hex");
+  const bundleServer = http.createServer((_request, response) => { response.writeHead(200, { "Content-Type": "application/gzip", "Content-Length": String(bundle.length) }); response.end(bundle); });
+  await new Promise((resolve, reject) => { bundleServer.once("error", reject); bundleServer.listen(0, "127.0.0.1", resolve); });
+  const bundleUrl = `http://127.0.0.1:${bundleServer.address().port}/hannah-edge.tar.gz`;
+  try {
+    const malformed = await call("POST", "/hubs/rollouts", { version: "0.1.1", size: bundle.length, sha256: "bad", url: bundleUrl, cohortSize: 1 });
+    assert.equal(malformed.status, 400);
+    assert.equal(malformed.body.reason, "bad-update-hash");
+
+    const staged = await call("POST", "/hubs/rollouts", { version: "0.1.1", size: bundle.length, sha256: digest, url: bundleUrl, cohortSize: 1 });
+    assert.equal(staged.status, 201, JSON.stringify(staged.body));
+    assert.equal(staged.body.rollout.targets.length, 2);
+    assert.deepEqual(staged.body.rollout.targets.map((target) => target.status), ["queued", "pending"]);
+    const rolloutId = staged.body.rollout.id;
+    assert.deepEqual((await call("GET", "/hubs/rollouts", null, ben)).body.rollouts, [], "rollouts are account scoped");
+
+    const paused = await call("POST", `/hubs/rollouts/${rolloutId}/pause`);
+    assert.equal(paused.status, 200, JSON.stringify(paused.body));
+    const canary = await until(async () => (await call("GET", "/hubs/rollouts")).body.rollouts.find((item) => item.id === rolloutId), (item) => item?.status === "paused" && item.targets[0]?.status === "confirmed", { what: "the paused canary to confirm healthy" });
+    assert.equal(canary.targets[1].status, "pending", "a paused rollout does not dispatch the next cohort");
+
+    const resumed = await call("POST", `/hubs/rollouts/${rolloutId}/resume`);
+    assert.equal(resumed.status, 200, JSON.stringify(resumed.body));
+    const completed = await until(async () => (await call("GET", "/hubs/rollouts")).body.rollouts.find((item) => item.id === rolloutId), (item) => item?.status === "completed", { ms: 40_000, what: "both update cohorts to confirm" });
+    assert.deepEqual(completed.targets.map((target) => target.status), ["confirmed", "confirmed"]);
+
+    const rollback = await call("POST", `/hubs/rollouts/${rolloutId}/rollback`);
+    assert.equal(rollback.status, 201, JSON.stringify(rollback.body));
+    assert.equal(rollback.body.rollout.kind, "rollback");
+    const recovered = await until(async () => (await call("GET", "/hubs/rollouts")).body.rollouts.find((item) => item.id === rollback.body.rollout.id), (item) => item?.status === "completed", { ms: 40_000, what: "both hubs to report the fleet rollback" });
+    assert.deepEqual(recovered.targets.map((target) => target.status), ["rolled-back", "rolled-back"]);
+    const updates = (await call("GET", "/hubs/updates")).body.hubs;
+    assert.ok(updates.filter((item) => [hubId, spareId].includes(item.id)).every((item) => item.updateStatus?.current === "0.1.0"));
+  } finally {
+    bundleServer.closeAllConnections?.();
+    await new Promise((resolve) => bundleServer.close(resolve));
+    await stopSpareHub();
+  }
+});
+
+test("the account inventory combines robots, hubs and devices without crossing accounts", { skip }, async () => {
+  const created = await call("POST", "/robots", { name: "Inventory rover", simulated: true });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  try {
+    const own = await call("GET", "/inventory");
+    assert.equal(own.status, 200, JSON.stringify(own.body));
+    const robot = own.body.items.find((item) => item.kind === "robot" && item.name === "Inventory rover");
+    assert.ok(robot, JSON.stringify(own.body.items));
+    assert.equal(robot.simulated, true);
+    assert.equal(own.body.items.some((item) => item.kind === "hub" && item.id === hubId), true);
+    assert.equal(own.body.counts.total, own.body.items.length);
+    assert.equal(own.body.counts.robots, 1);
+    assert.equal(own.body.counts.hubs, 1);
+    assert.deepEqual((await call("GET", "/inventory", null, ben)).body.items, []);
+    assert.equal(JSON.stringify(own.body).includes("commissioningRecord"), false, "the summary doesn't expose robot configuration");
+  } finally {
+    await call("DELETE", `/robots/${created.body.robot.id}`).catch(() => undefined);
+  }
+});
+
 after(async () => {
   if (skip) return;
+  await stopSpareHub();
   await stopHub();
   if (simulator && simulator.exitCode === null) { simulator.kill("SIGKILL"); await Promise.race([once(simulator, "exit"), sleep(2000)]); }
   server?.closeAllConnections?.();
   await new Promise((resolve) => server.close(resolve));
   await require("./db").closeDatabase?.();
+  if (spareStateDir) fs.rmSync(spareStateDir, { recursive: true, force: true });
   fs.rmSync(stateDir, { recursive: true, force: true });
 });
 
@@ -170,6 +297,22 @@ test("the catalogue says honestly what each profile is, and which protocols are 
   const protocols = (await call("GET", "/devices/protocols")).body;
   assert.deepEqual(protocols.available.map((item) => item.id), ["mqtt", "modbus-tcp", "http"]);
   for (const id of ["matter", "zigbee", "ble", "opcua", "modbus-rtu", "can"]) assert.ok(protocols.notBuilt.find((item) => item.id === id)?.reason.length > 20, id);
+});
+
+test("profile SDK preflight uses the server validator and never saves its input", { skip }, async () => {
+  const profile = builtinProfiles().find((item) => item.id === "org.hannah.sim.fan");
+  const before = (await call("GET", "/devices/profiles")).body.profiles.length;
+  const valid = await call("POST", "/devices/profiles/validate", { profile });
+  assert.equal(valid.status, 200, JSON.stringify(valid.body));
+  assert.deepEqual(valid.body, { valid: true, problems: [] });
+
+  const invalid = structuredClone(profile);
+  invalid.points[0].binding.command.topic = "sim/+/set";
+  const rejected = await call("POST", "/devices/profiles/validate", { profile: invalid });
+  assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
+  assert.equal(rejected.body.valid, false);
+  assert.match(rejected.body.problems.join(" "), /one exact topic/);
+  assert.equal((await call("GET", "/devices/profiles")).body.profiles.length, before, "preflight does not add a profile");
 });
 
 test("a device is added, checked by the hub and switched on by a person; then its readings are live", { skip }, async () => {
@@ -313,6 +456,188 @@ test("an automation is approved once, then the hub runs it by itself and reports
   await call("POST", "/devices/automations/resume");
   // A device an automation uses can't be removed from under it.
   assert.equal((await call("DELETE", `/devices/${ids.fan}`)).body.reason, "in-use");
+});
+
+test("a device alert reaches a signed webhook and workflow, whose hardware action waits for approval and readback", { skip, timeout: 30_000 }, async () => {
+  const webhook = await call("POST", "/account/webhooks", { url: "https://8.8.8.8/device-alert", events: ["device.alert"] });
+  assert.equal(webhook.status, 201, JSON.stringify(webhook.body));
+  const definition = {
+    format: "hannah-workflow", version: 2,
+    nodes: [
+      { id: "event", name: "When a device alerts", type: "trigger.event", params: { event: "device.alert" } },
+      { id: "record", name: "Record the device alert", type: "data.set", params: { fields: [{ name: "alertType", value: "{{ $json.data.type }}" }, { name: "deviceId", value: "{{ $json.data.deviceId }}" }] } },
+      { id: "switch", name: "Ask before switching the fan", type: "action.run", params: { action: "hardware.switch", params: { device: ids.fan, on: true }, waitIsOk: true } },
+    ],
+    connections: [{ source: "event", target: "record", sourceOutput: "main", targetInput: "main" }, { source: "record", target: "switch", sourceOutput: "main", targetInput: "main" }],
+    settings: { timezone: "Asia/Kolkata" },
+  };
+  const created = await call("POST", "/workflows", { name: "Device alert check", definition });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const workflowId = created.body.workflow.id;
+  const published = await call("POST", `/workflows/${workflowId}/publish`);
+  assert.equal(published.status, 200, JSON.stringify(published.body));
+  const activated = await call("POST", `/workflows/${workflowId}/activate`, { approvedPermissions: published.body.permissions });
+  assert.equal(activated.status, 200, JSON.stringify(activated.body));
+
+  const nativeFetch = globalThis.fetch;
+  const deliveries = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const address = typeof input === "string" ? input : input.url;
+    if (address === webhook.body.url) {
+      deliveries.push({ headers: new Headers(init.headers), body: String(init.body || "") });
+      return new Response(null, { status: 204 });
+    }
+    return nativeFetch(input, init);
+  };
+  try {
+    tell("drop sim-thermo");
+    const reported = await until(async () => ({
+      device: await device(ids.thermo),
+      events: (await call("GET", "/devices/events")).body.events,
+    }), (value) => value.events.find((event) => event.type === "device-offline" && event.deviceId === ids.thermo), { ms: 15_000, what: "the simulated thermometer to report offline" });
+    const alert = reported.events.find((event) => event.type === "device-offline" && event.deviceId === ids.thermo);
+    assert.equal(alert.severity, "warning");
+    const execution = await until(async () => {
+      const executions = (await call("GET", `/workflows/executions?workflowId=${workflowId}`)).body.executions.filter((item) => item.mode === "event");
+      for (const item of executions) {
+        const detail = (await call("GET", `/workflows/executions/${item.id}`)).body;
+        if (detail.execution.triggerData?.data?.type === "device-offline" && detail.execution.triggerData?.data?.deviceId === ids.thermo) return item;
+      }
+      return null;
+    }, Boolean, { ms: 15_000, what: "the device alert workflow to start" });
+    const runtime = require("./index").workflowRuntime;
+    const completed = await until(async () => {
+      await runtime.tick({ budgetMs: 8_000, only: execution.id, preempt: true });
+      return (await call("GET", `/workflows/executions/${execution.id}`)).body;
+    }, (item) => item?.execution.status === "completed", { ms: 15_000, what: "the device alert workflow to complete" });
+    assert.equal(completed.execution.triggerData.data.deviceId, ids.thermo);
+    const result = completed.nodes.find((node) => node.nodeId === "record");
+    assert.equal(result.output.main.items[0].alertType, "device-offline");
+    assert.equal(result.output.main.items[0].deviceId, ids.thermo);
+    const action = completed.nodes.find((node) => node.nodeId === "switch").output.main.items[0].action;
+    assert.equal(action.status, "waiting-approval");
+    assert.equal(action.waiting, true);
+    assert.equal(action.confirmed, undefined, "the workflow doesn't report a device change as confirmed before approval");
+    await sleep(1100); // The hub limits writes to a point to one per second.
+    const approved = await decide(action.id);
+    assert.equal(approved.body.record.status, "done", JSON.stringify(approved.body.record));
+    assert.equal(approved.body.record.response.readback.confirmed, true);
+    assert.equal(approved.body.record.response.readback.value, true);
+    await until(() => device(ids.fan), (value) => value.points.power.value === true, { what: "the approved workflow action to reach the fan" });
+
+    const sent = await until(() => deliveries.find((item) => {
+      const data = JSON.parse(item.body).data;
+      return data.type === "device-offline" && data.deviceId === ids.thermo;
+    }), Boolean, { ms: 10_000, what: "the signed thermometer offline webhook" });
+    assert.equal(sent.headers.get("x-hannah-event"), "device.alert");
+    const body = JSON.parse(sent.body);
+    assert.equal(body.data.type, "device-offline");
+    assert.equal(body.data.deviceId, ids.thermo);
+    assert.equal(sent.headers.get("x-hannah-signature"), require("./webhooks").sign(webhook.body.secret, sent.headers.get("x-hannah-timestamp"), sent.body));
+  } finally {
+    globalThis.fetch = nativeFetch;
+  }
+});
+
+test("a scheduled workflow carries trigger fields through a retried hardware action and routes its failure", { skip, timeout: 45_000 }, async () => {
+  const runtime = require("./index").workflowRuntime;
+  const db = await require("./db").getDatabase();
+  const schedule = async (name, nodes, connections) => {
+    const definition = { format: "hannah-workflow", version: 2, nodes, connections, settings: { timezone: "Asia/Kolkata" } };
+    const created = await call("POST", "/workflows", { name, definition });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const workflowId = created.body.workflow.id;
+    const published = await call("POST", `/workflows/${workflowId}/publish`);
+    assert.equal(published.status, 200, JSON.stringify(published.body));
+    const activated = await call("POST", `/workflows/${workflowId}/activate`, { approvedPermissions: published.body.permissions });
+    assert.equal(activated.status, 200, JSON.stringify(activated.body));
+    const { rows: [trigger] } = await db.query("SELECT id FROM hannah_workflow_triggers WHERE workflow_id = $1 AND kind = 'schedule'", [workflowId]);
+    assert.ok(trigger, `the schedule trigger for ${name} was saved`);
+    await db.query("UPDATE hannah_workflow_triggers SET next_run_at = $1 WHERE id = $2", [Date.now() - 60_000, trigger.id]);
+    await runtime.tick({ budgetMs: 8_000 });
+    const execution = await until(async () => (await call("GET", `/workflows/executions?workflowId=${workflowId}`)).body.executions.find((item) => item.mode === "schedule"), Boolean, { ms: 15_000, what: `${name} to be scheduled` });
+    const detail = await until(async () => (await call("GET", `/workflows/executions/${execution.id}`)).body, (item) => item.execution?.status === "completed", { ms: 15_000, what: `${name} to finish` });
+    return { workflowId, execution, detail };
+  };
+
+  assert.equal((await device(ids.lamp)).points.power.value, false, "the scheduled write starts from a known state");
+  const operator = runtime.operatorRef.current;
+  const originalRun = operator.engine.run.bind(operator.engine);
+  let actionCalls = 0;
+  let firstActionId = null;
+  operator.engine.run = async (database, userId, input) => {
+    const record = await originalRun(database, userId, input);
+    if (input.action !== "hardware.switch" || input.params?.device !== ids.lamp) return record;
+    actionCalls += 1;
+    if (actionCalls === 1) {
+      firstActionId = record.id;
+      throw Object.assign(new Error("Simulated lost response after the action was saved."), { retryable: true });
+    }
+    assert.equal(record.id, firstActionId, "the retry resolves to the same Action Engine record");
+    return record;
+  };
+
+  let success;
+  try {
+    success = await schedule("Scheduled hardware run", [
+      { id: "schedule", name: "At the scheduled time", type: "trigger.schedule", params: { mode: "daily", time: "07:30" } },
+      { id: "context", name: "Keep the schedule context", type: "data.set", params: { fields: [{ name: "targetDevice", value: ids.lamp }, { name: "scheduledFor", value: "{{ $json.scheduledFor }}" }] } },
+      { id: "switch", name: "Switch on the scheduled device", type: "action.run", params: { action: "hardware.switch", params: { device: "{{ $json.targetDevice }}", on: true }, waitIsOk: true }, settings: { retries: 2, retryDelayMs: 500 } },
+      { id: "waiting", name: "Check for approval", type: "logic.if", params: { conditions: [{ left: "{{ $json.action.waiting }}", operator: "isTrue", right: "" }] } },
+      { id: "pending", name: "Keep the pending action", type: "data.set", params: { fields: [{ name: "approvalState", value: "waiting-approval" }] } },
+    ], [
+      { source: "schedule", target: "context", sourceOutput: "main", targetInput: "main" },
+      { source: "context", target: "switch", sourceOutput: "main", targetInput: "main" },
+      { source: "switch", target: "waiting", sourceOutput: "main", targetInput: "main" },
+      { source: "waiting", target: "pending", sourceOutput: "true", targetInput: "main" },
+    ]);
+  } finally {
+    operator.engine.run = originalRun;
+  }
+
+  assert.equal(actionCalls, 2, "the transient response loss caused one safe workflow retry");
+  assert.equal(success.execution.mode, "schedule");
+  const scheduledFor = success.detail.execution.triggerData.scheduledFor;
+  const context = success.detail.nodes.find((node) => node.nodeId === "context").output.main.items[0];
+  assert.equal(context.scheduledFor, scheduledFor, "the trigger's scheduled slot reaches later steps");
+  assert.equal(context.targetDevice, ids.lamp);
+  const switchStep = success.detail.nodes.find((node) => node.nodeId === "switch");
+  assert.equal(switchStep.attempts, 2);
+  const pending = switchStep.output.main.items[0].action;
+  assert.deepEqual({ id: pending.id, status: pending.status, waiting: pending.waiting }, { id: firstActionId, status: "waiting-approval", waiting: true });
+  assert.equal(success.detail.nodes.find((node) => node.nodeId === "pending").output.main.items[0].approvalState, "waiting-approval");
+  const matches = (await call("GET", "/actions?service=hardware&limit=100")).body.actions.filter((record) => record.id === firstActionId);
+  assert.equal(matches.length, 1, "a retried schedule created exactly one Action Engine record");
+  assert.equal(matches[0].status, "waiting-approval");
+
+  await sleep(1100); // The hub limits writes to a point to one per second.
+  const approved = (await decide(firstActionId)).body.record;
+  assert.equal(approved.status, "done", JSON.stringify(approved));
+  assert.equal(approved.response.readback.confirmed, true);
+  assert.equal(approved.response.readback.value, true);
+  await until(() => device(ids.lamp), (value) => value.points.power.value === true, { what: "the scheduled, approved action to reach the lamp" });
+
+  const failure = await schedule("Scheduled hardware error branch", [
+    { id: "schedule", name: "At the scheduled time", type: "trigger.schedule", params: { mode: "daily", time: "07:30" } },
+    { id: "context", name: "Choose the requested device", type: "data.set", params: { fields: [{ name: "targetDevice", value: "device-that-does-not-exist" }, { name: "scheduledFor", value: "{{ $json.scheduledFor }}" }] } },
+    { id: "switch", name: "Try the device action", type: "action.run", params: { action: "hardware.switch", params: { device: "{{ $json.targetDevice }}", on: true }, waitIsOk: true }, settings: { retries: 2, retryDelayMs: 500, continueOnFail: true } },
+    { id: "error", name: "Was there an action error?", type: "logic.if", params: { conditions: [{ left: "{{ $json.error }}", operator: "notEmpty", right: "" }] } },
+    { id: "handled", name: "Record the error branch", type: "data.set", params: { fields: [{ name: "handled", value: true }, { name: "reason", value: "{{ $json.error }}" }] } },
+  ], [
+    { source: "schedule", target: "context", sourceOutput: "main", targetInput: "main" },
+    { source: "context", target: "switch", sourceOutput: "main", targetInput: "main" },
+    { source: "switch", target: "error", sourceOutput: "main", targetInput: "main" },
+    { source: "error", target: "handled", sourceOutput: "true", targetInput: "main" },
+  ]);
+  assert.equal(failure.execution.status, "completed");
+  const failedStep = failure.detail.nodes.find((node) => node.nodeId === "switch");
+  assert.equal(failedStep.status, "failed-continued");
+  assert.equal(failedStep.attempts, 1, JSON.stringify(failedStep));
+  const handled = failure.detail.nodes.find((node) => node.nodeId === "handled").output.main.items[0];
+  assert.equal(handled.handled, true);
+  assert.match(handled.reason, /no device called/);
+  const failureRecords = (await call("GET", "/actions?service=hardware&limit=100")).body.actions.filter((record) => record.action === "hardware.switch" && record.request.includes("Scheduled hardware error branch"));
+  assert.deepEqual(failureRecords, [], "an invalid target is refused during assessment before an Action Engine record or write exists");
 });
 
 test("a manual becomes a proposed profile with its evidence, and the proposal still has to prove itself against the device", { skip }, async () => {

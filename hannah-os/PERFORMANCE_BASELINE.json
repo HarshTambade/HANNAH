@@ -1,0 +1,52 @@
+{
+  "format": "hannah-sim-performance-v1",
+  "host": {
+    "logicalCpuCount": 8,
+    "machine": "arm64",
+    "os": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "processor": "arm",
+    "python": "3.14.6"
+  },
+  "limitations": [
+    "Both endpoints are written by HANNAH; this is not interoperability evidence.",
+    "The benchmark includes per-device process IPC during measured operations, but excludes process CPU used by child workers.",
+    "No physical devices, production hub image, server control plane or external network were measured.",
+    "Results depend on this host, Python build, background load and simulator implementation; there is no pass/fail target.",
+    "Latency includes simulator response and adapter readback, but excludes account authentication, Action Engine assessment, approval time and server-to-hub transport."
+  ],
+  "measuredAt": "2026-11-22T18:15:12.262318+00:00",
+  "results": {
+    "modbusTcp": {
+      "adapter": "HANNAH ModbusDevice",
+      "controllerCpuSeconds": 0.0082,
+      "maxMs": 0.321,
+      "meanMs": 0.24,
+      "medianMs": 0.227,
+      "minMs": 0.196,
+      "operationsPerSecond": 4169.74,
+      "p95Ms": 0.299,
+      "samples": 100,
+      "simulator": "HANNAH ModbusMeter",
+      "workerStartupMs": 84.832
+    },
+    "mqtt": {
+      "adapter": "HANNAH MqttDevice",
+      "controllerCpuSeconds": 0.0267,
+      "maxMs": 1.717,
+      "meanMs": 1.246,
+      "medianMs": 1.594,
+      "minMs": 0.199,
+      "operationsPerSecond": 802.42,
+      "p95Ms": 1.643,
+      "samples": 100,
+      "simulator": "HANNAH Broker + MqttRoom fan",
+      "workerStartupMs": 58.976
+    }
+  },
+  "workload": {
+    "iterationsPerProtocol": 100,
+    "network": "Loopback TCP sockets on the same development host.",
+    "operation": "Toggle one simulated boolean output and wait for the adapter child process to report the matching readback over its private pipe.",
+    "warmupPerProtocol": 5
+  }
+}

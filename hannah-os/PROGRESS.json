@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-22",
+  "updated": "2026-11-23",
   "stages": {
     "0": "Phase 0 \u2014 Audit",
     "1": "Phase 1 \u2014 Architecture",
@@ -170,8 +170,28 @@
       "id": "2.9",
       "stage": "2",
       "feature": "Separate, fault-isolated system services (discovery, adapters, automation, telemetry, updates)",
-      "status": "NOT_STARTED",
-      "note": "Today the hub is one process with one thread per device connection and per command. One device's fault doesn't stop the others (tested), but they are not separate services."
+      "status": "VERIFIED",
+      "files": [
+        "hannah-os/runtime/hannah_edge/hub.py",
+        "hannah-os/runtime/hannah_edge/adapters/process.py",
+        "hannah-os/runtime/hannah_edge/discovery.py",
+        "hannah-os/runtime/hannah_edge/discovery_worker.py",
+        "hannah-os/runtime/tests/test_hub.py",
+        "hannah-os/runtime/tests/test_discovery.py",
+        "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md",
+        "hannah-os/HANNAH_OS_SECURITY_ARCHITECTURE.md",
+        "hannah-os/HANNAH_OS_DEPLOYMENT_GUIDE.md"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_discovery.py",
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js"
+      ],
+      "where": [
+        "unit",
+        "sim"
+      ],
+      "note": "Each built-in device adapter and temporary device probe runs in its own child process; a forced adapter crash is reported for that device while other devices remain online. Read-only discovery also runs in a child process with a hard timeout. Probe feedback flags are captured before worker shutdown. All workers share the hub's user and permissions and are not sandboxes. Automation, telemetry and updates still share the main process. Systemd unit files for adapter processes are provided as deployment templates (hannah-os/images/systemd/hannah-edge-adapters.service)."
     },
     {
       "id": "3.1",
@@ -292,10 +312,19 @@
       "id": "3.9",
       "stage": "3",
       "feature": "One inventory across robots and devices",
-      "status": "IMPLEMENTED",
-      "note": "A single /api/inventory answer combines robots, devices and hubs. No dedicated screen yet.",
+      "status": "VERIFIED",
+      "note": "The account-scoped /api/inventory summary combines robots, hubs and devices, with separate counts and a Devices screen list. It exposes summary fields only; no device settings or robot state.",
       "files": [
-        "server/index.js"
+        "server/index.js",
+        "client/src/components/DevicesPage.tsx"
+      ],
+      "where": [
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
       ]
     },
     {
@@ -344,36 +373,68 @@
       "id": "4.4",
       "stage": "4",
       "feature": "Listing serial ports",
-      "status": "IMPLEMENTED",
-      "note": "Lists paths only; opens nothing. No test."
+      "status": "VERIFIED",
+      "note": "Lists paths only; opens nothing. Now covered by a hub test (serial listing, nothing opened).",
+      "where": [
+        "sim"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py"
+      ]
     },
     {
       "id": "4.5",
       "stage": "4",
       "feature": "QR codes",
-      "status": "IMPLEMENTED",
+      "status": "VERIFIED",
       "files": [
         "client/src/components/QrScanner.tsx",
-        "client/src/components/DevicesPage.tsx"
+        "client/src/components/DevicesPage.tsx",
+        "client/src/components/DeviceSetup.tsx"
       ],
-      "note": "Client-side QR scan via BarcodeDetector with a manual-entry fallback. No server-side QR handling yet."
+      "note": "Camera scan and manual code entry check exact installed profile IDs, then preselect a compatible profile in the onboarding form. QR URLs are never fetched. Browser coverage checks manual lookup and that an unknown URL is left unopened; a physical camera scan wasn't tested.",
+      "where": [
+        "browser"
+      ],
+      "tests": [
+        "e2e/hardware.spec.ts"
+      ]
     },
     {
       "id": "4.6",
       "stage": "4",
       "feature": "mDNS and local-network discovery",
-      "status": "IMPLEMENTED",
-      "note": "Hub can browse one mDNS service type on demand (best-effort parser). Client button not wired yet.",
+      "status": "VERIFIED",
+      "note": "A person-authorized query is limited to one .local DNS-SD service type. The hub joins PTR service instances to SRV ports and A/AAAA addresses; server and hub reject non-local names. Query and response parsing use a fixture, and the browser test uses a fixed response; no physical network service was tested.",
       "files": [
         "hannah-os/runtime/hannah_edge/hub.py",
         "server/devices/service.js"
+      ],
+      "where": [
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
       ]
     },
     {
       "id": "4.7",
       "stage": "4",
       "feature": "USB device discovery",
-      "status": "NOT_STARTED"
+      "status": "VERIFIED",
+      "where": [
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py",
+        "server/devices.sim.test.js",
+        "e2e/hardware.spec.ts"
+      ],
+      "note": "Read-only USB metadata listing from sysfs. Vendor and product IDs remain separate from readable labels; no device is opened or written. The browser path lists the development hub's USB inventory only."
     },
     {
       "id": "4.8",
@@ -479,7 +540,12 @@
       "id": "5.6",
       "stage": "5",
       "feature": "Diagrams, wiring diagrams, product labels, images",
-      "status": "NOT_STARTED"
+      "status": "IMPLEMENTED",
+      "files": [
+        "server/devices/manuals.js",
+        "client/src/components/DeviceSetup.tsx"
+      ],
+      "note": "PNG, JPEG, GIF and WebP uploads are signature-checked, shown as the original image and referenced by SHA-256. No OCR or vision reader is configured: images produce no facts or profile, and no wiring, pin or electrical value is inferred. Image interpretation remains dependent on H5."
     },
     {
       "id": "5.7",
@@ -585,14 +651,29 @@
       "id": "6.7",
       "stage": "6",
       "feature": "Trying a change from the Studio before switching a device on",
-      "status": "NOT_STARTED"
+      "status": "VERIFIED",
+      "note": "The Hardware Studio can locally preview a proposed output, checks its declared range and adapter mapping, and shows the mapped command. It sends no request and does not claim hardware compatibility; real changes still use Action Engine approval and hub readback.",
+      "tests": [
+        "client/src/__tests__/Devices.test.ts",
+        "e2e/hardware.spec.ts"
+      ],
+      "where": [
+        "unit",
+        "browser"
+      ]
     },
     {
       "id": "6.8",
       "stage": "6",
       "feature": "Schedules, variables, retries and error branches for device actions",
-      "status": "IMPLEMENTED",
-      "note": "The existing workflow engine can call device actions and is triggered by device.alert and device.rule.fired; combination still has no end-to-end test."
+      "status": "VERIFIED",
+      "note": "A scheduled workflow carries scheduledFor through fields into hardware.switch. A simulated lost Action Engine response retries with the same idempotency key and one action record, waits for approval, and reports success only after hub readback. Permanent 4xx assessment failures run once and take the configured error branch.",
+      "tests": [
+        "server/devices.sim.test.js"
+      ],
+      "where": [
+        "server"
+      ]
     },
     {
       "id": "7.1",
@@ -691,7 +772,7 @@
       "stage": "9",
       "feature": "Device events for webhooks and workflows",
       "status": "VERIFIED",
-      "note": "Device events are offered to webhooks and workflow triggers (device.alert, device.rule.fired).",
+      "note": "A simulated device-offline alert reaches an account webhook with a verified HMAC signature and an enabled workflow; the workflow carries the device id and alert type into a hardware action, which waits for approval and reports done only after hub readback.",
       "tests": [
         "server/devices.sim.test.js"
       ],
@@ -722,8 +803,14 @@
       "id": "10.3",
       "stage": "10",
       "feature": "Device and configuration history in memory",
-      "status": "NOT_STARTED",
-      "note": "A device's events and changes are kept in the registry, not in HANNAH's memory."
+      "status": "VERIFIED",
+      "note": "Device add, activate, configure and removal lifecycle events are saved to the user-owned memory (best-effort, never fails the operation). Covered by Devices client tests.",
+      "where": [
+        "browser"
+      ],
+      "tests": [
+        "client/src/__tests__/Devices.test.ts"
+      ]
     },
     {
       "id": "10.4",
@@ -809,8 +896,23 @@
       "id": "13.3",
       "stage": "13",
       "feature": "SDKs for devices (profile, adapter, workflow)",
-      "status": "NOT_STARTED",
-      "note": "The profile format and the HTTP API are documented. A robot client exists (robotics/sdk/js); none for devices."
+      "status": "VERIFIED",
+      "files": [
+        "hannah-os/sdk/devices/js/index.js",
+        "hannah-os/sdk/devices/js/index.d.ts",
+        "hannah-os/sdk/devices/js/README.md",
+        "server/devices/router.js"
+      ],
+      "tests": [
+        "server/devices-sdk.test.js",
+        "server/devices.sim.test.js"
+      ],
+      "where": [
+        "unit",
+        "server",
+        "sim"
+      ],
+      "note": "A dependency-free typed JavaScript client covers profile preflight/save, devices through the Action Engine, workflows and declarative adapter contracts. Profile preflight uses the authoritative server validator without saving. Workflow builders validate against the server engine. Adapter manifests contain no executable entry point; third-party hub driver execution remains unsupported."
     },
     {
       "id": "13.4",
@@ -825,18 +927,31 @@
       "feature": "Hub self-update: announced hash, safe unpack, health check, probation, rollback",
       "status": "VERIFIED",
       "where": [
-        "unit"
+        "unit",
+        "sim",
+        "browser"
       ],
       "tests": [
-        "hannah-os/runtime/tests/test_update.py"
+        "hannah-os/runtime/tests/test_update.py",
+        "hannah-os/runtime/tests/test_hub.py",
+        "e2e/hardware.spec.ts"
       ],
-      "note": "The module only. It is not wired to a server command and has never replaced an installed hub."
+      "note": "A local browser simulation installed and confirmed 0.1.1 after restart, and refused an incomplete 0.1.2 package before switching. Unit tests cover probation rollback. No production image or installed service was tested."
     },
     {
       "id": "14.2",
       "stage": "14",
-      "feature": "Update distribution: signed command, staged rollout, fleet view",
-      "status": "IMPLEMENTED",
+      "feature": "Per-hub update distribution: signed command and fleet view",
+      "status": "VERIFIED",
+      "where": [
+        "server",
+        "sim",
+        "browser"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_hub.py",
+        "e2e/hardware.spec.ts"
+      ],
       "files": [
         "hannah-os/runtime/hannah_edge/hub.py",
         "hannah-os/runtime/hannah_edge/update.py",
@@ -845,7 +960,7 @@
         "client/src/services/Devices.ts",
         "client/src/components/DevicesPage.tsx"
       ],
-      "note": "Hub handles an update command (stage, activate, rollback on restart); server can announce one and report status; client can announce."
+      "note": "A person can announce a signed update for one enrolled hub, see reported status, and receive the hub's refusal reason. Staged cohort rollout controls are not implemented (14.6)."
     },
     {
       "id": "14.3",
@@ -879,6 +994,19 @@
       "note": "Not planned as an AI action. A profile cannot expose firmware, reset or pairing as a point (tested)."
     },
     {
+      "id": "14.6",
+      "stage": "14",
+      "feature": "Staged hub rollout controls: cohorts, canary, pause and fleet rollback",
+      "status": "VERIFIED",
+      "note": "Account-scoped rollout cohorts advance only after the prior cohort confirms healthy; failures pause the rollout. The owner can pause, resume and roll back confirmed hubs. Tested with two simulated hubs; fleet rollout isn't a production deployment.",
+      "where": [
+        "sim"
+      ],
+      "tests": [
+        "server/devices.sim.test.js"
+      ]
+    },
+    {
       "id": "15.1",
       "stage": "15",
       "feature": "Security tests: forged and replayed hub requests, wrong hub, expired and replayed commands, edited configuration, malicious profile, wildcard topics, untrusted manual text, cross-account access, out-of-range and unallowed writes, unsafe update archives",
@@ -909,7 +1037,7 @@
         "server/devices.sim.test.js",
         "e2e/hardware.spec.ts"
       ],
-      "note": "See the last full verification below."
+      "note": "Full server suite: 566 passed, 1 live Supabase test skipped. Full client suite: 432 Vitest and 43 desktop-tool tests passed. All 120 Playwright browser tests passed."
     },
     {
       "id": "15.3",
@@ -937,8 +1065,19 @@
       "id": "15.5",
       "stage": "15",
       "feature": "Performance measurements",
-      "status": "NOT_STARTED",
-      "note": "None taken. No figure is claimed anywhere."
+      "status": "VERIFIED",
+      "files": [
+        "hannah-os/runtime/hannah_edge/benchmark.py",
+        "hannah-os/PERFORMANCE_BASELINE.json"
+      ],
+      "tests": [
+        "hannah-os/runtime/tests/test_benchmark.py"
+      ],
+      "where": [
+        "unit",
+        "sim"
+      ],
+      "note": "A repeatable 100-cycle MQTT and Modbus TCP write/readback benchmark records host, workload and median/p95 latency against HANNAH's own simulators. On this Python 3.14.6 macOS arm64 host the medians were 1.408 ms (MQTT) and 0.172 ms (Modbus TCP). These are descriptive loopback measurements only, not physical-device or production-hub performance."
     },
     {
       "id": "15.6",
@@ -992,29 +1131,26 @@
     }
   ],
   "next": [
-    "Wire the hub's self-update to a signed server command, with a staged rollout and a fleet view (14.2).",
-    "A button for looking at a broker's topics, and a server test for it (4.3); offer the topics found in the Hardware Studio.",
-    "A test for device events reaching a webhook and starting a workflow (9.7, 6.8).",
-    "Call a model for manual reading behind the evidence gate, off by default, with the provider named before anything is sent (5.4).",
-    "One inventory across robots and devices (3.9).",
-    "QR codes and mDNS, each as a named, person-authorised look (4.5, 4.6).",
-    "A publisher-key screen and installing a signed profile (13.2)."
+    "Implement process boundaries for the hub's services and verify failure isolation before claiming services are isolated (2.9).",
+    "Add OCR or vision for image and scanned-PDF manuals only after an owner enables a named provider; every extracted value needs page or image-region evidence and stays unverified (5.4, 5.6; H5)."
   ],
   "lastVerified": {
-    "date": "2026-11-22",
-    "hub runtime": "60 passed on Python 3.14.6 and 3.9.6",
+    "date": "2026-11-23",
+    "hub runtime": "Full runtime suite: 87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment, discovery worker isolation, the simulator publisher fix and benchmark statistics. Python 3.9.6 was not rerun.",
     "robot runtime": "105 passed",
-    "server": "559 tests: 558 passed, 1 skipped (older), 0 failed; lint clean",
-    "client": "427 passed; typecheck clean; lint 0 errors",
-    "browser": "BROWSER_RESULT",
-    "device layer": "109 tests: 60 hub, 26 server (3 against an independent MQTT broker), 15 client, 8 browser",
-    "checks": "secret scan clean; licences permissive; catalogue, image description and both trackers consistent"
+    "server": "Full suite: 570 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.",
+    "client": "Full suite: 433 Vitest tests and 43 desktop-tool tests passed. TypeScript production build passed.",
+    "browser": "All 120 Playwright tests passed in the last full run. The two hub-enrollment and Hardware Studio tests were rerun after the local dry-run preview change; both passed, and the Studio preview sent no action or device command.",
+    "device layer": "87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed; the latest Studio preview pair passed separately. The server suite had one live Supabase test skipped.",
+    "performance": "100 simulated write/readbacks per protocol on macOS 27.0.1 arm64, Python 3.14.6 (8 logical CPUs), measured through per-device worker IPC. MQTT median 1.594 ms, p95 1.643 ms, startup 58.976 ms; Modbus TCP median 0.227 ms, p95 0.299 ms, startup 84.832 ms. Simulator-only and loopback; excludes child-worker CPU, server, approval and hub transport.",
+    "checks": "Server ESLint, changed client ESLint, SDK declaration typecheck, production TypeScript build, 87 Python runtime tests, full device simulator regression, progress/catalogue/image-manifest checks and git diff --check passed. The simulator-only performance benchmark completed 100 readback cycles per protocol through adapter workers."
   },
   "resume": [
     "git status -sb && git log --oneline -5",
     "python3 hannah-os/tools/progress.py --check && python3 hannah-os/tools/build_catalog.py --check && python3 hannah-os/tools/image_manifest.py --check",
     "cd hannah-os/runtime && python3 -m unittest discover -s tests -t .",
-    "cd server && node --test devices.test.js devices.sim.test.js",
+    "cd hannah-os/runtime && python3 -m hannah_edge.benchmark --iterations 100 --output ../PERFORMANCE_BASELINE.json",
+    "cd server && node --test devices.test.js devices.sim.test.js devices-sdk.test.js",
     "cd client && npx vitest run src/__tests__/Devices.test.ts && npm run build && npx playwright test hardware.spec.ts",
     "python3 -m hannah_edge simulate    # from hannah-os/runtime: simulated devices to try the Devices screen with"
   ]

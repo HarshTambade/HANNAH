@@ -36,6 +36,6 @@ parts:
     plugin: nil
     override-build: |
       mkdir -p "$CRAFT_PART_INSTALL/bin"
-      printf '#!/bin/sh\nexport PYTHONPATH="$SNAP/lib"\nexec python3 -m hannah_edge run --state-dir "$SNAP_COMMON/state"\n' > "$CRAFT_PART_INSTALL/bin/hannah-edge-run"
+      printf '#!/bin/sh\nexport PYTHONPATH="$SNAP_COMMON/state/updates/current:$SNAP/lib"\nexec python3 -m hannah_edge run --state-dir "$SNAP_COMMON/state"\n' > "$CRAFT_PART_INSTALL/bin/hannah-edge-run"
       printf '#!/bin/sh\nexport PYTHONPATH="$SNAP/lib"\nexec python3 -m hannah_edge doctor --state-dir "$SNAP_COMMON/state"\n' > "$CRAFT_PART_INSTALL/bin/hannah-edge-doctor"
       chmod 755 "$CRAFT_PART_INSTALL/bin/hannah-edge-run" "$CRAFT_PART_INSTALL/bin/hannah-edge-doctor"

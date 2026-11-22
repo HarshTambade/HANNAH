@@ -9,6 +9,7 @@ SIMULATION. These are not models of any product.
 from __future__ import annotations
 
 import json
+import queue
 import threading
 import time
 
@@ -51,6 +52,12 @@ class MqttRoom:
             client.publish(f"sim/{name}/status", "online", qos=1, retain=True)
         self.fan.subscribe(["sim/fan/set"])
         self.lamp.subscribe(["sim/lamp/set", "sim/lamp/brightness/set"])
+        # Message callbacks run on each MQTT socket reader. Publishing QoS 1
+        # from there would wait for a PUBACK that the same reader must consume.
+        # Keep device replies on a separate worker so the reader can keep ACKing.
+        self._outgoing: queue.Queue = queue.Queue()
+        self._publisher = threading.Thread(target=self._publish_loop, name="sim-mqtt-publisher", daemon=True)
+        self._publisher.start()
         self._publish_fan()
         self._publish_lamp()
         self.thermo_muted = False
@@ -61,16 +68,32 @@ class MqttRoom:
         text = payload.decode("utf-8", "replace").strip()
         if text in ("ON", "OFF") and not self.fan_stuck:
             self.room.fan = text == "ON"
-            self._publish_fan()
+            self._outgoing.put((self.fan, "sim/fan/state", text))
 
     def _lamp_command(self, topic: str, payload: bytes, _retained: bool) -> None:
         text = payload.decode("utf-8", "replace").strip()
         if topic.endswith("brightness/set"):
             if text.isdigit() and 0 <= int(text) <= 100:
                 self.room.brightness = int(text)
+                reply = json.dumps({"state": "ON" if self.room.lamp else "OFF", "brightness": self.room.brightness})
+                self._outgoing.put((self.lamp, "sim/lamp/state", reply))
         elif text in ("ON", "OFF"):
             self.room.lamp = text == "ON"
-        self._publish_lamp()
+            reply = json.dumps({"state": "ON" if self.room.lamp else "OFF", "brightness": self.room.brightness})
+            self._outgoing.put((self.lamp, "sim/lamp/state", reply))
+
+    def _publish_loop(self) -> None:
+        while self._running:
+            message = self._outgoing.get()
+            if message is None:
+                return
+            client, topic, payload = message
+            try:
+                client.publish(topic, payload, qos=1, retain=True)
+            except Exception:
+                # The simulation should keep accepting commands after a dropped
+                # broker connection; the test owner observes the missing state.
+                continue
 
     def _publish_fan(self) -> None:
         self.fan.publish("sim/fan/state", "ON" if self.room.fan else "OFF", qos=1, retain=True)
@@ -90,6 +113,8 @@ class MqttRoom:
 
     def close(self) -> None:
         self._running = False
+        self._outgoing.put(None)
+        self._publisher.join(timeout=2.0)
         for client in (self.thermo, self.fan, self.lamp):
             client.close()
 

@@ -118,7 +118,7 @@ Version choices were made on 2026-11-22 from general knowledge of these projects
 
 ## 6. Decisions
 
-**One hub process, not many services yet.** The specification asks for separate services for discovery, adapters, automation, telemetry and updates. Today the hub is one process: each device has its own connection and thread, and one device's fault doesn't stop the others (tested). Splitting it is unstarted; it matters once a hub carries third-party adapters.
+**The hub has a control process, one child process per built-in device adapter, and a short-lived discovery worker.** Each adapter owns its device connection; a crash or timeout is reported for that device while the other adapter processes continue. Each discovery request also runs in a child process with a wall-clock limit, so a stuck network browse cannot hold the hub's main tick loop. Both worker types run as the hub's same user with the same permissions; neither is a sandbox. Automation, telemetry and updates still share the control process, and the workers are not separate systemd units. Per-device processes use more memory than the earlier thread model; no resource target has been measured on a production hub.
 
 **The hub opens the connection.** Works behind NAT, leaves no port open, and works with a serverless control plane. Cost: a command waits for the hub's next exchange (two seconds by default). That is fine for a lamp and wrong for anything that needs a fast reaction, which is why reactions are rules on the hub.
 
@@ -128,4 +128,4 @@ Version choices were made on 2026-11-22 from general knowledge of these projects
 
 **HMAC between hub and server.** The hub needs no cryptography library. The server holds each hub's key, sealed in the vault. Profiles, which are published by third parties, use Ed25519 signatures instead.
 
-**No network scan.** A hub looks only where a person points it: one broker's topics, the list of serial ports. A device joins an account because someone decided it should.
+**No unrestricted network scan.** A person can ask the hub to listen to one MQTT broker, browse one local mDNS service type, list serial ports, or read USB device metadata from sysfs. The hub sends no device writes during these looks. Scanning an arbitrary address range is not supported. A device joins an account because someone decided it should.

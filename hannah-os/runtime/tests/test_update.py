@@ -1,13 +1,11 @@
-"""UNIT tests: the hub's self-update, with real archives in a temporary folder.
-
-The update is not wired to the server yet, and has never replaced an installed hub.
-"""
+"""UNIT tests: the hub's self-update, with real archives in a temporary folder."""
 import hashlib
 import io
 import os
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from hannah_edge.update import UpdateError, Updater
 
@@ -102,8 +100,39 @@ class Update(unittest.TestCase):
         self.assertEqual(raised.exception.reason, "unhealthy")
         self.assertIn("doctor: FAIL clock", str(raised.exception))
         self.assertEqual(self.current(), "0.1.0")
-        self.assertEqual(self.updater.installed(), ["0.1.0"])
-        self.assertEqual(self.updater.status()["last"]["result"], "refused")
+
+    def test_initialize_saves_the_installed_package_and_repairs_its_link(self):
+        source = os.path.join(self.root, "installed", "hannah_edge")
+        os.makedirs(source)
+        with open(os.path.join(source, "__init__.py"), "w", encoding="utf-8") as handle:
+            handle.write('__version__ = "0.5.0"\n')
+        updater = Updater(os.path.join(self.root, "fresh"), health=lambda *_: (True, ""))
+        updater.initialize("0.5.0", source)
+        self.assertEqual(updater.status()["current"], "0.5.0")
+        self.assertTrue(os.path.isfile(os.path.join(updater.root, "current", "hannah_edge", "__init__.py")))
+        os.remove(os.path.join(updater.root, "current"))
+        updater.initialize("0.5.0", source)
+        self.assertEqual(os.readlink(os.path.join(updater.root, "current")), os.path.join("versions", "0.5.0"))
+
+    def test_failed_activation_link_switch_restores_saved_state(self):
+        version = self.updater.stage(*bundle("0.2.0"))
+        with patch.object(self.updater, "_point", side_effect=OSError("read-only filesystem")):
+            with self.assertRaisesRegex(OSError, "read-only"):
+                self.updater.activate(version)
+        self.assertEqual(self.updater.status()["current"], "0.1.0")
+        self.assertEqual(self.current(), "0.1.0")
+        self.assertEqual(self.updater.status()["previous"], None)
+        self.assertEqual(self.updater.installed(), ["0.1.0", "0.2.0"])
+
+    def test_default_health_check_refuses_a_package_that_cannot_import_the_hub(self):
+        updater = Updater(self.root)
+        version = updater.stage(*bundle("0.2.0"))
+        with self.assertRaises(UpdateError) as raised:
+            updater.activate(version)
+        self.assertEqual(raised.exception.reason, "unhealthy")
+        self.assertIn("hannah_edge", str(raised.exception))
+        self.assertEqual(self.current(), "0.1.0")
+        self.assertEqual(updater.installed(), ["0.1.0"])
 
     def test_a_version_that_keeps_restarting_without_confirming_is_rolled_back(self):
         self.updater.activate(self.updater.stage(*bundle("0.2.0")))

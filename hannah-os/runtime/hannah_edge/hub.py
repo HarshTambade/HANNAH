@@ -15,20 +15,19 @@ What it holds itself, whatever the server says:
 """
 from __future__ import annotations
 
-import glob
+import ipaddress
 import json
 import os
-import socket
-import struct
+import subprocess
 import threading
 import time
 
 from . import PROTOCOL, __version__, adapters
 from .adapters.base import AdapterError, check_value, writable
+from . import discovery
 from .link import LinkError
-from .mqtt import MqttClient, MqttError
 from .protocol import CONFIG_LABEL, CommandGuard, verified, write_private
-from .update import Updater
+from .update import MAX_BUNDLE, Updater
 from .rules import RuleEngine
 
 CONFIRM_S = 4.0
@@ -45,23 +44,30 @@ def same(wanted, got) -> bool:
 
 
 class Hub:
-    def __init__(self, hub_id: str, secret: str, state_dir: str | None = None, link=None, clock=time.time, sync_interval: float = 2.0, log=None):
+    def __init__(self, hub_id: str, secret: str, state_dir: str | None = None, link=None, clock=time.time, sync_interval: float = 2.0, log=None, isolate_adapters: bool = True):
         self.hub_id, self._secret, self.state_dir, self.link, self.clock = hub_id, secret, state_dir, link, clock
         self.sync_interval = sync_interval
+        # Fake clocks are used by deterministic unit tests and cannot be safely
+        # shared across process boundaries. Production uses one child per device.
+        self._isolate_adapters = bool(isolate_adapters and clock is time.time)
         self._log = log or (lambda **fields: None)
         self._guard = CommandGuard(secret, hub_id, os.path.join(state_dir, "guard.json") if state_dir else None)
         self._lock = threading.RLock()
         self._devices: dict = {}
         self._config: dict = {"version": 0, "devices": [], "rules": []}
         self._outbox: list = []
-        self._updater = Updater(os.path.join(state_dir or ".", "updates"))
         self._serial = 0
         self._last_write: dict = {}
         self._confirm: list = []
         self._next_sync = 0.0
+        self._restart_after_update: str | None = None
+        self._restart_requested = False
         self.link_up = None
         self.rules = RuleEngine(self._reading, self._rule_write, self._online, clock)
         self._stop = threading.Event()
+        self._updater = Updater(os.path.join(state_dir or ".", "updates"))
+        if state_dir:
+            self._updater.initialize(__version__, os.path.dirname(__file__))
         self._load_saved()
 
     # ---------- configuration ----------
@@ -103,7 +109,7 @@ class Hub:
                     continue
                 entry = {"config": device, "fingerprint": json.dumps(device, sort_keys=True), "adapter": None, "error": None}
                 try:
-                    entry["adapter"] = adapters.create(device, client_id=f"hannah-{self.hub_id[-6:]}-{device_id[-6:]}", clock=self.clock)
+                    entry["adapter"] = adapters.create(device, client_id=f"hannah-{self.hub_id[-6:]}-{device_id[-6:]}", clock=None if self._isolate_adapters else self.clock, isolated=self._isolate_adapters)
                     entry["adapter"].start()
                 except AdapterError as error:
                     entry["error"] = {"state": "error", "reason": error.reason, "message": str(error), "since": self.clock()}
@@ -212,14 +218,20 @@ class Hub:
         device = command.get("device") or {}
         seconds = max(1.0, min(MAX_PROBE_S, float(command.get("seconds") or 8)))
         try:
-            adapter = adapters.create(device, client_id=f"hannah-{self.hub_id[-6:]}-probe", clock=self.clock)
+            adapter = adapters.create(
+                device,
+                client_id=f"hannah-{self.hub_id[-6:]}-probe",
+                clock=None if self._isolate_adapters else self.clock,
+                isolated=self._isolate_adapters,
+            )
         except AdapterError as error:
             self._result(command, "failed", reason=error.reason, message=str(error))
             return
         try:
             adapter.start()
             end = time.monotonic() + seconds
-            wanted = [point_id for point_id in adapter.points if adapter.has_feedback(point_id)]
+            feedback = {point_id: adapter.has_feedback(point_id) for point_id in adapter.points}
+            wanted = [point_id for point_id, has_feedback in feedback.items() if has_feedback]
             while time.monotonic() < end and not self._stop.is_set():
                 adapter.poll()
                 if adapter.connection()["state"] == "online" and all(adapter.reading(point_id) for point_id in wanted):
@@ -230,191 +242,107 @@ class Hub:
             adapter.stop()
         self._result(command, "done", probe={
             "adapter": adapter.NAME, "connection": connection, "seconds": round(seconds, 1), "rejected": adapter.rejected,
-            "points": {point_id: {"heard": point_id in readings, **(readings.get(point_id) or {}), "expected": adapter.has_feedback(point_id)} for point_id in adapter.points},
+            "points": {point_id: {"heard": point_id in readings, **(readings.get(point_id) or {}), "expected": feedback[point_id]} for point_id in adapter.points},
         })
 
     def _run_discover(self, command: dict) -> None:
-        kind = command.get("kind")
-        if kind == "serial":
-            ports = sorted(set(sum((glob.glob(pattern) for pattern in ("/dev/ttyUSB*", "/dev/ttyACM*", "/dev/cu.usb*", "/dev/serial/by-id/*")), [])))[:40]
-            self._result(command, "done", discovered={"kind": "serial", "ports": [{"path": port} for port in ports], "note": "Listed only. Nothing was opened or written to."})
+        kind = str(command.get("kind") or "")
+        if kind not in ("serial", "usb", "mdns", "mqtt"):
+            self._result(command, "refused", reason="unknown-kind", message="This hub can look at an MQTT broker's topics, browse one local mDNS service type, list serial ports, or list USB devices.")
             return
-        if kind == "mdns":
-            service_type = str((command.get("settings") or {}).get("service") or "_http._tcp.local")
-            seconds = max(1.0, min(15.0, float((command.get("settings") or {}).get("seconds") or 5)))
-            try:
-                found = self._mdns_browse(service_type, seconds)
-            except Exception as error:
-                self._result(command, "failed", reason="mdns-error", message=str(error))
-                return
-            self._result(command, "done", discovered={"kind": "mdns", "service": service_type, "seconds": seconds, "services": found, "note": "Listened only. Nothing was published."})
-            return
-        if kind != "mqtt":
-            self._result(command, "refused", reason="unknown-kind", message="This hub can look at an MQTT broker's topics or list serial ports.")
-        settings = command.get("settings") or {}
-        seconds = max(1.0, min(15.0, float(command.get("seconds") or 5)))
-        seen: dict = {}
-
-        def heard(topic: str, payload: bytes, _retained: bool) -> None:
-            if len(seen) < 200 or topic in seen:
-                entry = seen.setdefault(topic, {"topic": topic, "messages": 0})
-                entry["messages"] += 1
-                entry["sample"] = payload[:160].decode("utf-8", "replace")
-
-        client = MqttClient(str(settings.get("host", "")), int(settings.get("port") or (8883 if settings.get("tls") else 1883)), client_id=f"hannah-{self.hub_id[-6:]}-look",
-                            username=settings.get("username") or None, password=settings.get("password") or None, tls=bool(settings.get("tls")), timeout=4.0, on_message=heard)
+        settings = command.get("settings") if isinstance(command.get("settings"), dict) else {}
         try:
-            client.connect()
-            client.subscribe(["#"])
-            self._stop.wait(seconds)
-        except MqttError as error:
-            self._result(command, "failed", reason=error.reason, message=str(error))
+            seconds = max(1.0, min(15.0, float(command.get("seconds") or settings.get("seconds") or 5)))
+        except (TypeError, ValueError):
+            self._result(command, "refused", reason="bad-request", message="Discovery duration must be a number between 1 and 15 seconds.")
             return
-        finally:
-            client.close()
-        self._result(command, "done", discovered={"kind": "mqtt", "seconds": seconds, "topics": sorted(seen.values(), key=lambda item: item["topic"])[:200], "note": "Listened only. Nothing was published."})
+        request = {"kind": kind, "settings": settings, "seconds": seconds, "clientId": f"hannah-{self.hub_id[-6:]}-look-{str(command.get('id') or '')[-6:]}"}
+        timeout = min(25.0, seconds + 10) if kind in ("mdns", "mqtt") else 5.0
+        try:
+            discovered = discovery.run_isolated(request, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            self._result(command, "failed", reason="worker-timeout", message="The discovery worker reached its time limit and was stopped.")
+            return
+        except discovery.DiscoveryError as error:
+            status = "refused" if error.reason in ("unknown-kind", "invalid-service-type") else "failed"
+            self._result(command, status, reason=error.reason, message=str(error))
+            return
+        discovered.pop("_workerPid", None)
+        self._result(command, "done", discovered=discovered)
 
     # ---------- the loop ----------
     def _mdns_browse(self, service_type: str, seconds: float) -> list:
-        """A named, person-authorised look for one service type. Best effort; parses PTR/SRV/A records."""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        try:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        except (AttributeError, OSError):
-            pass
-        sock.bind(("", 5353))
-        sock.settimeout(0.5)
-        group = "224.0.0.251"
-        # Build a DNS query for service_type PTR.
-        def encode_name(name: str) -> bytes:
-            out = b""
-            for label in name.strip(".").split("."):
-                raw = label.encode("utf-8")
-                out += bytes([len(raw)]) + raw
-            return out + b"\x00"
-
-        transaction = 0x1234
-        header = struct.pack("!HHHHHH", transaction, 0x0000, 1, 0, 0, 0)
-        question = encode_name(service_type) + struct.pack("!HH", 12, 0x0001)  # PTR, IN
-        packet = header + question
-        sock.sendto(packet, (group, 5353))
-        found: dict = {}
-        deadline = time.time() + seconds
-        while time.time() < deadline:
-            try:
-                data, _addr = sock.recvfrom(4096)
-            except socket.timeout:
-                # re-send query once midway
-                try:
-                    sock.sendto(packet, (group, 5353))
-                except OSError:
-                    pass
-                continue
-            self._parse_mdns(data, found)
-        sock.close()
-        return sorted(found.values(), key=lambda item: item.get("name", ""))[:200]
+        return discovery.mdns_browse(service_type, seconds)
 
     @staticmethod
-    def _parse_mdns(data: bytes, found: dict) -> None:
-        if len(data) < 12:
-            return
-        _id, flags, qd, an, ns, ar = struct.unpack("!HHHHHH", data[:12])
-        offset = 12
-        # skip questions
-        for _ in range(qd):
-            offset = Hub._skip_name(data, offset)
-            offset += 4
-        records = an + ns + ar
-        instances: list = []
-        for _ in range(records):
-            name, offset = Hub._read_name(data, offset)
-            if offset + 10 > len(data):
-                return
-            rtype, rclass, ttl, rdlength = struct.unpack("!HHIH", data[offset:offset+10])
-            offset += 10
-            rdata = data[offset:offset+rdlength]
-            offset += rdlength
-            if rtype == 12:  # PTR
-                target, _ = Hub._read_name(data, offset - rdlength)
-                # target is the instance name; resolve later by name
-                found.setdefault(target, {"name": target, "type": "ptr"})
-            elif rtype == 33:  # SRV
-                if rdlength >= 6:
-                    priority, weight, port = struct.unpack("!HHH", rdata[:6])
-                    target, _ = Hub._read_name(data, offset - rdlength + 6)
-                    # find matching instance by target host? store port under target host
-                    found.setdefault(target, {"name": target, "port": port})
-            elif rtype == 1:  # A
-                if rdlength == 4:
-                    addr = ".".join(str(b) for b in rdata)
-                    # associate with the name we read
-                    found.setdefault(name, {"name": name, "address": addr})
-                    found[name]["address"] = addr
-        # merge: if an instance name has a port/address, keep it; also keep ptr targets
-        # Flatten: move ptr-target entries that look like instances
-        for key, value in list(found.items()):
-            if "port" not in value and "address" not in value and key.count(".") >= 2:
-                found[key] = {"name": key}
+    def _parse_mdns(data: bytes, found: dict, hosts: dict | None = None, service_type: str | None = None) -> None:
+        discovery.parse_mdns(data, found, hosts, service_type)
+
+    @staticmethod
+    def _usb_devices(base: str = "/sys/bus/usb/devices") -> list:
+        return discovery.usb_devices(base)
 
     @staticmethod
     def _skip_name(data: bytes, offset: int) -> int:
-        while offset < len(data):
-            length = data[offset]
-            if length == 0:
-                return offset + 1
-            if (length & 0xC0) == 0xC0:
-                return offset + 2
-            offset += 1 + length
-        return offset
+        return discovery._skip_name(data, offset)
 
     @staticmethod
     def _read_name(data: bytes, offset: int):
-        labels = []
-        jumped = False
-        original_offset = offset
-        visited = set()
-        while offset < len(data):
-            if offset in visited:
-                break
-            visited.add(offset)
-            length = data[offset]
-            if length == 0:
-                offset += 1
-                break
-            if (length & 0xC0) == 0xC0:
-                if offset + 2 > len(data):
-                    break
-                ptr = ((length & 0x3F) << 8) | data[offset + 1]
-                if not jumped:
-                    original_offset = offset + 2
-                offset = ptr
-                jumped = True
-                continue
-            offset += 1
-            if offset + length > len(data):
-                break
-            labels.append(data[offset:offset+length].decode("utf-8", "replace"))
-            offset += length
-        name = ".".join(labels)
-        return name, (original_offset if jumped else offset)
+        return discovery._read_name(data, offset)
 
     def _run_update(self, command: dict) -> None:
+        if command.get("rollback") is True:
+            try:
+                state = self._updater.rollback("HANNAH received a signed fleet rollback command.")
+                self._restart_after_update = command["id"]
+                self._result(command, "done", update=state)
+            except Exception as error:
+                self._result(command, "failed", reason="rollback-error", message=str(error), update=self._updater.status())
+            return
         announced = {"version": command.get("version"), "size": command.get("size"), "sha256": command.get("sha256")}
-        url = command.get("url")
+        url = str(command.get("url") or "")
         if not url:
             self._result(command, "failed", reason="no-url", message="The update didn't say where to get it.")
             return
         try:
+            import urllib.error
+            import urllib.parse
             import urllib.request
-            with urllib.request.urlopen(str(url), timeout=120) as response:
-                bundle = response.read()
+            parsed = urllib.parse.urlsplit(url)
+            if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.username or parsed.password:
+                raise ValueError("The update address must be HTTPS (or HTTP on this computer for development).")
+            if parsed.scheme == "http":
+                try:
+                    loopback = parsed.hostname == "localhost" or ipaddress.ip_address(parsed.hostname).is_loopback
+                except ValueError:
+                    loopback = False
+                if not loopback:
+                    raise ValueError("Refusing to fetch an update over unencrypted HTTP from another computer.")
+
+            class Redirects(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, request, file, code, message, headers, new_url):
+                    old = urllib.parse.urlsplit(request.full_url)
+                    new = urllib.parse.urlsplit(new_url)
+                    if new.username or new.password or (old.scheme == "https" and new.scheme != "https"):
+                        raise urllib.error.URLError("The update redirect isn't secure.")
+                    if old.scheme == "http" and (new.scheme != "http" or new.hostname != old.hostname or new.port != old.port):
+                        raise urllib.error.URLError("A development update can't redirect to another address.")
+                    return super().redirect_request(request, file, code, message, headers, new_url)
+
+            opener = urllib.request.build_opener(Redirects())
+            with opener.open(url, timeout=120) as response:
+                length = response.headers.get("Content-Length")
+                if length and int(length) > MAX_BUNDLE:
+                    raise ValueError("The update is larger than the 20 MiB limit.")
+                bundle = response.read(MAX_BUNDLE + 1)
+            if len(bundle) > MAX_BUNDLE:
+                raise ValueError("The update is larger than the 20 MiB limit.")
             version = self._updater.stage(bundle, announced)
             self._updater.activate(version)
-            self._updater.on_start()
+            self._restart_after_update = command["id"]
             self._result(command, "done", update=self._updater.status())
         except Exception as error:
-            self._result(command, "failed", reason="update-error", message=str(error))
+            self._result(command, "failed", reason="update-error", message=str(error), update=self._updater.status())
 
     def tick(self) -> None:
         with self._lock:
@@ -462,8 +390,17 @@ class Hub:
         if self.link_up is False:
             self._log(event="link-restored")
         self.link_up = True
+        update = self._updater.status()
+        if update.get("current") == __version__ and update.get("pending"):
+            self._updater.confirm()
         received = set(answer.get("received") or [])
         with self._lock:
+            restart_acknowledged = bool(self._restart_after_update and any(
+                item.get("kind") == "result"
+                and item.get("commandId") == self._restart_after_update
+                and item.get("key") in received
+                for item in self._outbox
+            ))
             self._outbox = [item for item in self._outbox if item["key"] not in received]
         config = answer.get("config")
         if isinstance(config, dict) and not self.apply_config(config.get("payload"), config.get("signature")):
@@ -471,6 +408,9 @@ class Hub:
         for item in answer.get("commands") or []:
             if isinstance(item, dict):
                 self.handle(item.get("payload"), item.get("signature"))
+        if restart_acknowledged:
+            self._restart_requested = True
+            self._stop.set()
         return True
 
     def run(self, tick_s: float = 0.5) -> None:
@@ -481,6 +421,14 @@ class Hub:
 
     def stop(self) -> None:
         self._stop.set()
+
+    @property
+    def restart_requested(self) -> bool:
+        return self._restart_requested
+
+    @property
+    def update_version(self) -> str | None:
+        return self._updater.status().get("current")
 
     def close(self) -> None:
         self._stop.set()

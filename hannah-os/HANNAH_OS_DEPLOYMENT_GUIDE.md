@@ -42,6 +42,8 @@ The hub needs outbound HTTPS to the HANNAH server and access to the devices' net
 
 `doctor` checks the Python version, the adapters, that the state folder and the key file are readable only by the hub's user, the server address and the clock. It sends nothing and changes nothing. The service runs it before every start.
 
+Each built-in device adapter runs in a child process, and discovery commands use a short-lived child process with a bounded timeout. They inherit the hub service's account and permissions; they are not security sandboxes or separate systemd units. Automation, telemetry and updates still run in the main hub process. This process layout and the service unit have not been exercised on a Linux systemd host.
+
 ## 3. Images (described, not built)
 
 `hannah-os/images/profiles.json` describes five images that share one core:
@@ -76,7 +78,7 @@ No board is listed as supported. A board is added to `validatedHardware` only wi
 
 ## 5. Updates
 
-- **The hub's own software.** `hannah_edge/update.py` can replace it with a way back: it checks the announced size and SHA-256, unpacks safely, runs a health check before switching, and puts the previous version back if the new one restarts three times without reaching the server. It is tested by itself and **not wired to the server**: today you update a hub by replacing `/opt/hannah-edge` and restarting the service.
+- **The hub's own software.** Under Devices → Hub updates, a signed-in person can announce a version, byte size, SHA-256 and bundle URL for one enrolled hub. The server signs the command; the hub accepts HTTPS (HTTP is allowed only on loopback for development), checks size and hash, unpacks ordinary files, imports the staged package in a clean Python process, then switches versions and restarts after the server receives the result. It confirms the new version after the hub reaches the server. If it restarts three times without confirming, the next start restores the previous version. This per-hub path was exercised with a local test bundle; staged rollout controls and a production image or installed service have not been tested.
 - **The operating system.** Ubuntu Server: its own security updates (the first-boot configuration turns on unattended upgrades). Ubuntu Core: its own transactional updates. Neither has been run with HANNAH.
 - **A device's firmware.** HANNAH does not update it, and a profile cannot expose it.
 

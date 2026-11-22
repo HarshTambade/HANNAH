@@ -203,6 +203,16 @@ test("uploads are read with an honest account of what was and wasn't read", asyn
   await assert.rejects(() => readFile(Buffer.alloc(0), "empty.txt"), /empty/);
 });
 
+test("an image is recognised as an image and refused as a document, routed to the vision model instead of being misread", async () => {
+  const { kindOf } = require("./documents/read");
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00]);
+  assert.equal(kindOf("wiring.png", png), "image");
+  await assert.rejects(() => readFile(png, "wiring.png"), /vision model/);
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+  assert.equal(kindOf("label.jpg", jpeg), "image");
+  await assert.rejects(() => readFile(jpeg, "label.jpg"), /vision model/);
+});
+
 test("validation refuses a damaged file and a file whose content was changed after writing", async () => {
   assert.equal(wellFormed("<a><b x=\"1>2\"/></a>"), true);
   assert.equal(wellFormed("<a><b></a>"), false);
