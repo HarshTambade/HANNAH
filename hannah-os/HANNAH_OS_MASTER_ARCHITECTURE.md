@@ -79,7 +79,7 @@ HANNAH was already an AI companion with a server, web, desktop and phone clients
 | Action Engine and permission manager (`server/actions`) | Every device change and every automation: one permission system, one approval flow, one history |
 | Key vault (`server/vault.js`) | A hub's key and a device's passwords, sealed |
 | Webhooks and the workflow engine | `device.alert` and `device.rule.fired` as events; schedules calling device actions |
-| Model gateway (21 providers), agents, orchestrator, voice | A Devices agent and ten tools; nothing new in the model path |
+| Model gateway (23 providers), agents, orchestrator, voice | A Devices agent and ten tools; nothing new in the model path |
 | Document reader (`server/documents/read.js`) | Reading a manual, page by page |
 | The robot runtime's protocol design (`robotics/runtime`) | The hub's enrollment, signed requests and command guard |
 | Package signing (`server/robotics/packages.js`) | Signing and verifying device profiles |

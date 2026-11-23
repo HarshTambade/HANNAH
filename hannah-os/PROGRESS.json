@@ -823,7 +823,7 @@
       "files": [
         "server/providers/catalog.js"
       ],
-      "note": "Now lists 22 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM, Azure OpenAI, Amazon Bedrock and custom endpoints (server/gateway.test.js). Azure OpenAI is OpenAI-compatible; Amazon Bedrock got its own Converse API adapter with AWS Signature V4. MLX works through a custom endpoint.",
+      "note": "Now lists 23 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM, Azure OpenAI, Amazon Bedrock, Hugging Face and custom endpoints (server/gateway.test.js). Azure OpenAI and Hugging Face use the OpenAI-compatible wire protocol; Amazon Bedrock uses the Converse API with AWS Signature V4. MLX works through a custom endpoint.",
       "tests": [
         "server/gateway.test.js"
       ]
@@ -1138,12 +1138,12 @@
     "date": "2026-11-23",
     "hub runtime": "Full runtime suite: 87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment, discovery worker isolation, the simulator publisher fix and benchmark statistics. Python 3.9.6 was not rerun.",
     "robot runtime": "105 passed",
-    "server": "Full suite: 573 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. Includes the new Azure OpenAI and Amazon Bedrock provider tests and the repaired manual intelligence module. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.",
+    "server": "Full suite: 573 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. Includes the new Azure OpenAI, Amazon Bedrock and Hugging Face provider tests and the repaired manual intelligence module. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.",
     "client": "Full suite: 433 Vitest tests passed. TypeScript production build passed.",
     "browser": "All 120 Playwright tests passed in the last full run. The two hub-enrollment and Hardware Studio tests were rerun after the local dry-run preview change; both passed, and the Studio preview sent no action or device command.",
     "device layer": "87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed; the latest Studio preview pair passed separately. The server suite had one live Supabase test skipped.",
     "performance": "100 simulated write/readbacks per protocol on macOS 27.0.1 arm64, Python 3.14.6 (8 logical CPUs), measured through per-device worker IPC. MQTT median 1.594 ms, p95 1.643 ms, startup 58.976 ms; Modbus TCP median 0.227 ms, p95 0.299 ms, startup 84.832 ms. Simulator-only and loopback; excludes child-worker CPU, server, approval and hub transport.",
-    "checks": "Server full suite (573 passed, 1 live Supabase test skipped), gateway suite, full server suite regression, full client Vitest suite, TypeScript build, server and changed-file client ESLint, SDK declaration typecheck, progress/catalogue/image-manifest checks, Python runtime tests and git diff --check all passed."
+    "checks": "Server full suite (573 passed, 1 live Supabase test skipped), gateway suite (17 tests), full server suite regression, full client Vitest suite, TypeScript build, server and changed-file client ESLint, SDK declaration typecheck, progress/catalogue/image-manifest checks, Python runtime tests and git diff --check all passed."
   },
   "resume": [
     "git status -sb && git log --oneline -5",

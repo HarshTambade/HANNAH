@@ -101,6 +101,23 @@ const PROVIDERS = [
     ],
   },
   {
+    id: "huggingface",
+    label: "Hugging Face",
+    kind: "openai",
+    baseUrl: "https://api-inference.huggingface.co/v1",
+    envKey: "HF_API_KEY",
+    envBaseUrl: "HF_BASE_URL",
+    envModels: "HF_MODELS",
+    envDefaultModel: "HF_MODEL",
+    free: true,
+    docs: "https://huggingface.co/docs/api-inference",
+    models: [
+      { id: "meta-llama/Meta-Llama-3.3-70B-Instruct", label: "Llama 3.3 70B Instruct", tools: true, context: 131072 },
+      { id: "deepseek-ai/DeepSeek-V3", label: "DeepSeek V3", tools: true, context: 131072 },
+      { id: "Qwen/Qwen2.5-72B-Instruct", label: "Qwen2.5 72B Instruct", tools: true, context: 131072 },
+    ],
+  },
+  {
     id: "anthropic",
     label: "Anthropic",
     kind: "anthropic",

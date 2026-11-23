@@ -216,6 +216,24 @@ test("the Amazon Bedrock provider signs Converse requests and answers chat", asy
   }
 });
 
+test("the Hugging Face provider is a first-class OpenAI-compatible provider", async () => {
+  process.env.HF_API_KEY = "hf-test-token";
+  process.env.HF_BASE_URL = `http://127.0.0.1:${fake.address().port}/v1`;
+  process.env.HF_MODEL = "meta-llama/Meta-Llama-3.3-70B-Instruct";
+  const { resolveProvider, defaultModelFor } = require("./providers/catalog");
+  const huggingface = resolveProvider({ id: "huggingface" });
+  assert.equal(huggingface.id, "huggingface");
+  assert.equal(huggingface.label, "Hugging Face");
+  assert.equal(huggingface.kind, "openai");
+  assert.equal(huggingface.baseUrl, `http://127.0.0.1:${fake.address().port}/v1`);
+  assert.equal(defaultModelFor(huggingface), "meta-llama/Meta-Llama-3.3-70B-Instruct");
+  const response = await fetch(`${baseUrl}/api/agent`, { method: "POST", headers: auth, body: JSON.stringify({ provider: "huggingface", model: "meta-llama/Meta-Llama-3.3-70B-Instruct", messages: [{ role: "user", content: "ping from huggingface" }], tools: [] }) });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.providerId, "huggingface");
+  assert.equal(body.message.content, "echo:ping from huggingface");
+});
+
 test("visitor keys can use /v1 but only with Groq", async () => {
   const headers = { "X-Groq-API-Key": "gsk_" + "b".repeat(48), "Content-Type": "application/json" };
   const models = await (await fetch(`${baseUrl}/v1/models`, { headers })).json();

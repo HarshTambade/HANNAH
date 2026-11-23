@@ -123,7 +123,7 @@ export const AUTOMATION = {
     { type: "action.discord", name: "Discord", status: "available" },
     { type: "action.notion", name: "Notion", status: "available" },
     { type: "action.postgres", name: "PostgreSQL, Supabase, Neon", status: "beta" },
-    { type: "ai.prompt", name: "21+ AI providers", status: "available" },
+    { type: "ai.prompt", name: "23+ AI providers", status: "available" },
     { type: "ai.agent", name: "Specialist agents", status: "beta" },
     { type: "action.memory", name: "HANNAH memory", status: "available" },
     { type: "action.reminder", name: "HANNAH reminders", status: "available" },
@@ -137,7 +137,7 @@ export const AUTOMATION = {
 
 /** The model section: the providers HANNAH connects to (server/providers/catalog.js) and Auto's routing modes (services/ModelRouting.ts; LandingContent.test.ts keeps them in step). */
 export const MODEL_PROVIDERS = {
-  cloud: ["Groq", "OpenAI", "Azure OpenAI", "Amazon Bedrock", "Anthropic", "Google Gemini", "OpenRouter", "Together AI", "Cerebras", "DeepSeek", "Mistral AI", "xAI Grok", "Fireworks AI", "NVIDIA NIM", "SambaNova", "Perplexity", "Hyperbolic"],
+  cloud: ["Groq", "OpenAI", "Azure OpenAI", "Amazon Bedrock", "Hugging Face", "Anthropic", "Google Gemini", "OpenRouter", "Together AI", "Cerebras", "DeepSeek", "Mistral AI", "xAI Grok", "Fireworks AI", "NVIDIA NIM", "SambaNova", "Perplexity", "Hyperbolic"],
   local: ["Ollama", "LM Studio", "llama.cpp", "vLLM / LiteLLM", "WebLLM in the browser", "On-device on Android and iOS"],
 } as const;
 
