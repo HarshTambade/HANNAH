@@ -1,0 +1,19 @@
+[Unit]
+Description=HANNAH Robot OS Sensor Manager
+After=hannah-hardware-manager.service hannah-safety-gateway.service
+Requires=hannah-hardware-manager.service
+
+[Service]
+Type=simple
+User=hannah-ros
+Group=hannah-ros
+ExecStart=/usr/bin/python3 -m hannah_robot_os service sensor-manager --config /etc/hannah-robot-os/config.json
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hannah-robot-os /var/log/hannah-robot-os /run/hannah-robot-os
+
+[Install]
+WantedBy=multi-user.target

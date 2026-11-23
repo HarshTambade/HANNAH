@@ -33,14 +33,16 @@ const BYOK_PATHS = new Set(["/feedback", "/report-content", "/events", "/agent",
 const GUEST_PATHS = new Set(["/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc"]);
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
 // The calendar/email sign-in callbacks are opened by Google or Microsoft; the single-use state identifies the user.
-const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/workflows/catalog", "/workflows/tick", "/session/key", "/connectors/catalog"]);
+const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/workflows/catalog", "/workflows/tick", "/workforce/tick", "/session/key", "/connectors/catalog"]);
 // Workflow webhooks are called by other services. Each one authenticates
 // itself (a secret token or an HMAC signature) in server/workflows/router.js;
 // the cron tick checks CRON_SECRET. Nothing else under these paths is public.
 // A robot's own endpoints: enrollment is proven by a one-time code, every sync
 // by the robot's signature (server/robotics/service.js). No account session.
 // A device hub's endpoints work the same way (server/devices/service.js).
-const PUBLIC_PREFIXES = ["/hooks/", "/robots/device/", "/hubs/device/"];
+// A Robot OS bridge envelope authenticates itself with its own HMAC signature
+// (server/robotics/robot_os_auth.js); the router is opt-in and returns 404 when disabled.
+const PUBLIC_PREFIXES = ["/hooks/", "/robots/device/", "/hubs/device/", "/robotos/"];
 const ROBOT_ENROLL_PATH = "/robots/enroll";
 const HUB_ENROLL_PATH = "/hubs/enroll";
 function isPublic(path) {
@@ -57,7 +59,9 @@ function accountMayUse(path) {
     // An account's own robots, their missions and telemetry.
     || path === "/robots" || path.startsWith("/robots/")
     // An account's own hubs, the devices behind them and their automations.
-    || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/") || path === "/inventory";
+    || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/") || path === "/inventory"
+    // The AI workforce: teammates, computers, tasks, skills, routines, vault and approvals.
+    || path === "/workforce" || path.startsWith("/workforce/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 

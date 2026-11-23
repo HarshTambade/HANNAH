@@ -1,0 +1,9 @@
+FROM ros:jazzy-ros-base
+
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get install -y python3-pip python3-pytest && rm -rf /var/lib/apt/lists/*
+WORKDIR /ws
+COPY robot-os /ws/robot-os
+# Skeleton package build check. May require additional ros2_control deps in CI image.
+RUN source /opt/ros/jazzy/setup.bash && mkdir -p /ws/src && cp -r /ws/robot-os/ros2/hannah_robot_os_hardware /ws/src/ && colcon build --packages-select hannah_robot_os_hardware
+CMD ["bash", "-lc", "source /opt/ros/jazzy/setup.bash && cd /ws && colcon build --packages-select hannah_robot_os_hardware"]

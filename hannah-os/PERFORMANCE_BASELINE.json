@@ -14,33 +14,33 @@
     "Results depend on this host, Python build, background load and simulator implementation; there is no pass/fail target.",
     "Latency includes simulator response and adapter readback, but excludes account authentication, Action Engine assessment, approval time and server-to-hub transport."
   ],
-  "measuredAt": "2026-11-22T18:15:12.262318+00:00",
+  "measuredAt": "2026-11-23T04:30:23.942776+00:00",
   "results": {
     "modbusTcp": {
       "adapter": "HANNAH ModbusDevice",
-      "controllerCpuSeconds": 0.0082,
-      "maxMs": 0.321,
-      "meanMs": 0.24,
-      "medianMs": 0.227,
-      "minMs": 0.196,
-      "operationsPerSecond": 4169.74,
-      "p95Ms": 0.299,
+      "controllerCpuSeconds": 0.0089,
+      "maxMs": 0.465,
+      "meanMs": 0.244,
+      "medianMs": 0.23,
+      "minMs": 0.194,
+      "operationsPerSecond": 4091.22,
+      "p95Ms": 0.318,
       "samples": 100,
       "simulator": "HANNAH ModbusMeter",
-      "workerStartupMs": 84.832
+      "workerStartupMs": 85.045
     },
     "mqtt": {
       "adapter": "HANNAH MqttDevice",
-      "controllerCpuSeconds": 0.0267,
-      "maxMs": 1.717,
-      "meanMs": 1.246,
-      "medianMs": 1.594,
-      "minMs": 0.199,
-      "operationsPerSecond": 802.42,
-      "p95Ms": 1.643,
+      "controllerCpuSeconds": 0.0241,
+      "maxMs": 1.66,
+      "meanMs": 1.047,
+      "medianMs": 1.515,
+      "minMs": 0.187,
+      "operationsPerSecond": 954.67,
+      "p95Ms": 1.627,
       "samples": 100,
       "simulator": "HANNAH Broker + MqttRoom fan",
-      "workerStartupMs": 58.976
+      "workerStartupMs": 62.506
     }
   },
   "workload": {

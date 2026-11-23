@@ -23,7 +23,15 @@ export type AppScreen =
   | "marketplace"
   | "actions"
   | "robotics"
-  | "devices";
+  | "robot-os"
+  | "devices"
+  | "workforce"
+  | "computers"
+  | "routines"
+  | "skills"
+  | "vault"
+  | "teams"
+  | "artifacts";
 
 export type Screen = AppScreen | "not-found";
 
@@ -40,7 +48,15 @@ export const ROUTE_PATHS: Record<AppScreen, string> = {
   marketplace: "/marketplace",
   actions: "/actions",
   robotics: "/robotics",
+  "robot-os": "/robot-os",
   devices: "/devices",
+  workforce: "/bots",
+  computers: "/computers",
+  routines: "/routines",
+  skills: "/skills",
+  vault: "/vault",
+  teams: "/teams",
+  artifacts: "/artifacts",
 };
 
 export const ROUTE_TITLES: Record<Screen, string> = {
@@ -56,7 +72,15 @@ export const ROUTE_TITLES: Record<Screen, string> = {
   marketplace: "Marketplace · HANNAH",
   actions: "Actions · HANNAH",
   robotics: "Robots · HANNAH",
+  "robot-os": "Robot OS · HANNAH",
   devices: "Devices · HANNAH",
+  workforce: "AI Workforce · HANNAH",
+  computers: "Computer Center · HANNAH",
+  routines: "Routine Center · HANNAH",
+  skills: "Skill Library · HANNAH",
+  vault: "Secure Vault · HANNAH",
+  teams: "Team Center · HANNAH",
+  artifacts: "Artifact Library · HANNAH",
   "not-found": "Page not found · HANNAH",
 };
 

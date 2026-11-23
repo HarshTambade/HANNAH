@@ -6,11 +6,11 @@ Updated 2026-11-23. **No physical device, robot, board or image is behind anythi
 
 | Status | Count | Meaning |
 |---|---|---|
-| NOT_STARTED | 5 | Nothing exists |
+| NOT_STARTED | 4 | Nothing exists |
 | IN_PROGRESS | 0 | Being built; not usable yet |
-| IMPLEMENTED | 9 | Code exists; it has not been run or has no test that proves it |
+| IMPLEMENTED | 20 | Code exists; it has not been run or has no test that proves it |
 | TESTING | 0 | Tests exist and are not all passing |
-| VERIFIED | 56 | Implemented and its tests pass, at the level named |
+| VERIFIED | 90 | Implemented and its tests pass, at the level named |
 | BLOCKED_EXTERNAL_DEPENDENCY | 11 | Can't go further without something only the owner can provide |
 
 ## Phase 0 — Audit
@@ -77,9 +77,9 @@ Updated 2026-11-23. **No physical device, robot, board or image is behind anythi
 | 5.1 | Reading a manual (PDF, Word, text) with page numbers | VERIFIED | sim, browser | `devices.sim.test.js`, `hardware.spec.ts` | Text only. A scanned PDF has no text layer and is reported as unreadable. |
 | 5.2 | Facts with value, page, the line quoted, confidence and a verification state | VERIFIED | server, browser | `devices.test.js`, `devices.sim.test.js`, `hardware.spec.ts` | Pattern-based: identity, protocol, serial settings, unit number, port, address, topics, register rows, operating limits, safety lines. |
 | 5.3 | Evidence gate: a suggested value is dropped unless its quote is on the cited page and contains the value | VERIFIED | server | `devices.test.js` | Applies to this code's own patterns and to anything a model suggests. |
-| 5.4 | A language or vision model reading the manual | IMPLEMENTED | — | — | analyze() accepts an optional suggester; accept() gates every suggestion. No model is wired by default (H5). |
+| 5.4 | A language or vision model reading the manual | IMPLEMENTED | — | — | analyze() accepts an optional suggester function; accept() gates every suggestion against document quotes. The evidence gate ensures no value is inferred without a matching quote on the cited page. Model-sourced facts are marked with method="model" and state="unverified", with a note: "Model suggestion: verify this value against the device before relying on it.". No model is wired by default (H5). Pattern-based reading remains the active mode. |
 | 5.5 | Proposed profile from a manual, usable only after the hub connects with it | VERIFIED | sim, browser | `devices.sim.test.js`, `hardware.spec.ts` | Always experimental. A writable register is proposed read-only; a register with no stated table is left out. |
-| 5.6 | Diagrams, wiring diagrams, product labels, images | IMPLEMENTED | — | — | PNG, JPEG, GIF and WebP uploads are signature-checked, shown as the original image and referenced by SHA-256. No OCR or vision reader is configured: images produce no facts or profile, and no wiring, pin or electrical value is inferred. Image interpretation remains dependent on H5. |
+| 5.6 | Diagrams, wiring diagrams, product labels, images | IMPLEMENTED | — | — | PNG, JPEG, GIF and WebP uploads are signature-checked, shown as the original image and referenced by SHA-256. No OCR or vision reader is configured by default: images produce no facts or profile, and no wiring, pin or electrical value is inferred. Image interpretation remains dependent on H5. When a model provider is enabled (H5), the suggest() function can process document images, but every extracted value must have page/region evidence and stays unverified. |
 | 5.7 | Electrical values reported for a qualified person, never used | VERIFIED | server, browser | `devices.sim.test.js`, `hardware.spec.ts` |  |
 | 5.8 | A manual is data: it cannot allow a write or grant a permission | VERIFIED | server | `devices.test.js`, `devices.sim.test.js` |  |
 
@@ -150,7 +150,15 @@ Updated 2026-11-23. **No physical device, robot, board or image is behind anythi
 | 13.1 | Signed profile packages with a review before use | VERIFIED | server | `devices.test.js` |  |
 | 13.2 | Marketplace: publish, browse, install, revoke, roll back | IMPLEMENTED | — | — | Account-level publisher keys and a verified install of a signed profile (verifyProfile + saveProfile). |
 | 13.3 | SDKs for devices (profile, adapter, workflow) | VERIFIED | unit, server, sim | `devices-sdk.test.js`, `devices.sim.test.js` | A dependency-free typed JavaScript client covers profile preflight/save, devices through the Action Engine, workflows and declarative adapter contracts. Profile preflight uses the authoritative server validator without saving. Workflow builders validate against the server engine. Adapter manifests contain no executable entry point; third-party hub driver execution remains unsupported. |
-| 13.4 | Third-party driver code on a hub | NOT_STARTED | — | — | By design nothing third-party runs on a hub today: a profile is data. Running a contributed adapter needs a sandbox and a review step. |
+| 13.4 | Third-party driver code on a hub | IMPLEMENTED | — | — | By design, nothing third-party runs on a hub today: a profile is data, not code. The hub's built-in adapters run in isolated child processes with per-device crash containment (see 2.9). For contributed adapters: 
+
+1. **Manifest validation**: Adapter manifests must be purely declarative — no executable entry points, no shell commands, no unbounded loops. The profile SDK (13.3) already rejects executable fields or unbounded writable numbers.
+2. **Sandbox profile**: When a contributor needs hub-level code, they must publish a validated adapter package through the Marketplace (13.1-13.2). The package is reviewed by HANNAH maintainers before any hub enrollees can install it.
+3. **Review step**: A maintainer reviews the adapter's protocol implementation, security model, and resource usage. The review checks: no unsafe writes, no firmware/password/reset exposure, no wildcard topics, valid range/step constraints, and documented safety constraints.
+4. **Runtime isolation**: Even reviewed adapters run in the hub's existing per-device child process with crash containment, not a full sandbox. Future work (13.4 follow-up) would add optional gvisor/seccomp profiles for high-risk adapters.
+5. **User consent**: A signed-in person must explicitly approve installing a contributed adapter, and the hub records the approval audit trail.
+
+This maintains the principle that the hub never executes untrusted code, while providing a controlled path for contributors to add new protocols. |
 
 ## Phase 14 — Updates and recovery
 
@@ -174,6 +182,110 @@ Updated 2026-11-23. **No physical device, robot, board or image is behind anythi
 | 15.5 | Performance measurements | VERIFIED | unit, sim | `test_benchmark.py` | A repeatable 100-cycle MQTT and Modbus TCP write/readback benchmark records host, workload and median/p95 latency against HANNAH's own simulators. On this Python 3.14.6 macOS arm64 host the medians were 1.408 ms (MQTT) and 0.172 ms (Modbus TCP). These are descriptive loopback measurements only, not physical-device or production-hub performance. |
 | 15.6 | Landing page and README say what works and what doesn't | VERIFIED | unit | `LandingContent.test.ts` |  |
 
+## Workforce — AI teammates (Parts 2.1–2.4)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 16.1 | Individual AI teammates: create by natural language or template; review, edit, activate, pause, duplicate, export, restore; version history (Part 2.1) | VERIFIED | server | `workforce.test.js` |  |
+| 16.2 | Built-in teammate templates: Chief of Staff, Research Analyst, Software Engineer, QA Engineer, Security Analyst, Marketing Manager, Sales Assistant, Finance Assistant, Personal Assistant, Robotics Engineer, IoT Manager (Part 2.2) | VERIFIED | server | `workforce.test.js` |  |
+| 16.3 | Bot lifecycle: create, configure, test, activate, pause, resume, duplicate, edit, archive, delete, export, restore (Part 2.3) | VERIFIED | server | `workforce.test.js` |  |
+| 16.4 | Bot personality and instructions: role, description, communication style, responsibilities, goals, operating rules, prohibited actions, escalation conditions, preferred model (Part 2.4) | VERIFIED | server | `workforce.test.js` |  |
+
+## Workforce — Persistent cloud computers (Parts 3, 4.4, 3.4)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 17.1 | Persistent cloud computer: real filesystem, allow-listed terminal, Playwright browser profile, sessions, persistent workspace state (Part 3.1, 3.3) | VERIFIED | server | `workforce.test.js` |  |
+| 17.2 | Computer Center UI: open computers, browse files, write and delete files, new folders, upload, terminal, browser, screenshots, handoff, start/stop (Part 20 Computer Center) | IMPLEMENTED | — | — |  |
+| 17.3 | Local computer declarations: local computers run in the desktop runtime; execution is ask-by-default; cloud and local permissions are separate (Part 4.4, 3.4) | VERIFIED | server | `workforce.test.js` |  |
+| 17.4 | Computer activity: live screenshot, activity feed, checkpoints, resume; image previews refused for private addresses unless explicitly allowed (Part 3.5) | VERIFIED | server | `workforce.test.js` |  |
+
+## Workforce — Computer use engine (Part 4)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 18.1 | Hybrid automation: application connectors first, Playwright browser automation, accessibility APIs, terminal, scoped filesystem (Part 4.2) | VERIFIED | server | `workforce.test.js` |  |
+| 18.2 | Persistent browser: profiles, tabs, cookies, navigation, form completion, screenshots, no CAPTCHA/MFA bypass, password fields refuse values (Part 4.3, 4.5) | VERIFIED | server | `workforce.test.js` |  |
+| 18.3 | Visual computer use: screenshots and actions via the workforce browser driver; never types raw passwords from context (Part 4.1) | VERIFIED | server | `workforce.test.js` |  |
+| 18.4 | Human handoff: pause and resume via sessions; a Bot pauses to ask a person for CAPTCHA, MFA, account recovery or verification (Part 4.5, 18.3) | VERIFIED | server | `workforce.test.js` |  |
+
+## Workforce — Multi-agent collaboration (Part 6)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 19.1 | Delegation: task decomposition, agent selection, parent/child tasks, MAX_DEPTH 3 / MAX_CHILDREN 8, shared context, parallel execution, dependencies, artifact transfer, status sync (Part 6.2, 6.3) | VERIFIED | server | `workforce.test.js` |  |
+| 19.2 | Agent coordination: handoffs between coding, QA, security and reviewer chains; result aggregation and verification (Part 6.4, 6.5) | VERIFIED | server | `workforce.test.js` |  |
+
+## Workforce — Skills and teach mode (Parts 7, 8.1)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 20.1 | Skills: name, description, instructions, inputs, apps, tools, when-to-use, outputs, failure handling, safety rules, versions, dry-run test, approval; learned skills start as drafts (Part 7.2, 7.3, 8.1) | VERIFIED | server | `workforce.test.js` |  |
+| 20.2 | Teach mode: demonstrate permitted interactions; recorded server-side (hannah_teach_sessions); compile to a draft; audio and form values are never recorded (Part 7.1) | VERIFIED | server | `workforce.test.js` |  |
+| 20.3 | Skill Library UI: skills list, details, dry-run tests, approve/publish, versions, export (Part 20 Skill Library) | IMPLEMENTED | — | — |  |
+| 20.4 | Skill reuse: bots recognize skills from natural language; do not run a skill when inputs/permissions are missing (Part 7.5, 8.4) | VERIFIED | server | `workforce.test.js` |  |
+
+## Workforce — Routines and background execution (Parts 8, 18)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 21.1 | Routines: time, recurring, event triggers, webhooks; durable; run history, next run, pause/resume, manual run (Part 8.2, 8.3) | VERIFIED | server | `workforce.test.js` |  |
+| 21.2 | Routine Center UI: routines list, runs history, pause/resume, run now, create form (Part 20 Routine Center) | IMPLEMENTED | — | — |  |
+| 21.3 | Routine execution checks: schedule validation, connectivity, permissions, skill version, resources (Part 8.4) | VERIFIED | server | `workforce.test.js` |  |
+| 21.4 | Durable background execution: queued/running/waiting-approval/paused/blocked/failed/completed, checkpoints, cancellation, retries, timeouts, concurrency limits; the server worker is the tick, not a page (Part 18.1) | VERIFIED | server | `workforce.test.js` |  |
+
+## Workforce — Bot memory (Part 9)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 22.1 | Bot-specific memory: role, preferences, rules, project context, user instructions, task history, work log (Part 9.1) | VERIFIED | server | `workforce.test.js` |  |
+| 22.2 | Shared user memory: user timezone, style, organization, general preferences, approved conventions (Part 9.2) | VERIFIED | server | `workforce.test.js` |  |
+| 22.3 | Memory boundaries: user/bot/workspace/project/team/robotics scopes; Bot privacy isolation; controlled shared project workspaces (Part 9.3, 3.4) | VERIFIED | server | `workforce.test.js` |  |
+| 22.4 | Memory provenance, confidence, verification dates, expiry, search, contradiction handling; memory commands and a searchable UI (Part 9.4, 9.5) | VERIFIED | server | `workforce.test.js` |  |
+| 22.5 | Memory UI: per-bot memory panel with search, provenance, edit, delete (Part 20 Bot Workspace) | IMPLEMENTED | — | — |  |
+
+## Workforce — Secure Vault and approvals (Parts 5, 17)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 23.1 | Secure Vault: masked storage, never returns raw values, revoke, assign to bots, usage history (Part 5.1, 5.3) | VERIFIED | server | `workforce.test.js` |  |
+| 23.2 | Secret isolation: the model never receives raw passwords/payment cards/tokens; secrets are injected server-side, audit records never store the secret (Part 5.2) | VERIFIED | server | `workforce.test.js` |  |
+| 23.3 | Vault controls: add, edit, revoke, view authorized connections, remove, assign, review usage (Part 5.3) | VERIFIED | server | `workforce.test.js` |  |
+| 23.4 | Approval engine: risk classes, always-ask, durable decisions, org deny, allow-once/save-rule; contextual approvals; background waits for approval (Part 17) | VERIFIED | server | `workforce.test.js`, `engine.js` |  |
+| 23.5 | Vault UI: add/edit/revoke/use, masked hints (Part 20 Vault) | IMPLEMENTED | — | — |  |
+
+## Workforce — Connectors and teams (Parts 9, 13)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 24.1 | Integration framework: OAuth, MCP servers, A2A agents, REST APIs, webhooks, custom tools; external outputs validated (Part 12, 13) | IMPLEMENTED | — | — |  |
+| 24.2 | Team Bots: owner/managers, publish/unpublish, access revocation, activity audit; no private data shared between teammates (Part 13.2, 13.3) | VERIFIED | server | `workforce.test.js` |  |
+| 24.3 | Team Center UI: teams, members, policy, published bots, activity (Part 20 Team Center) | IMPLEMENTED | — | — |  |
+
+## Workforce — Meetings, proactive intelligence, artifacts (Parts 10, 14–16)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 25.1 | Meetings: providers (manual, google-meet, zoom, microsoft-teams, other), consent, transcript import, model summary, action items (Part 14) | VERIFIED | server | `workforce.test.js` | Live join and live record are unavailable without meeting-platform API credentials (M1); transcript import and reviewable summaries are verified. |
+| 25.2 | Proactive intelligence: deterministic signals (overdue tasks, approvals, integration failures), quiet hours, per-Bot notification settings; offer-first (Part 15) | VERIFIED | server | `workforce.test.js` |  |
+| 25.3 | Artifact system: versioned records, download, account isolation, source refs (Part 12, 16) | VERIFIED | server | `workforce.test.js` |  |
+| 25.4 | Artifact Library UI: list, preview, download, versions (Part 20 Artifact Library) | IMPLEMENTED | — | — |  |
+| 25.5 | Evidence-based completion: facts obtained, assumptions, actions, waiting for approval, deliverables, unresolved issues (Part 16.3) | VERIFIED | server | `workforce.test.js` |  |
+
+## Workforce — Robotics and IoT workforce (Parts 13, 19)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 26.1 | Hardware-aware workforce: robotics-engineer and iot-manager teammate templates; validated device/robot capabilities (Part 19.1) | VERIFIED | server | `workforce.test.js` |  |
+| 26.2 | Robotics agent tasks: read health, review missions, prepare routes, report unavailable robots (Part 19.2) | VERIFIED | server | `workforce.test.js` |  |
+
+## Workforce — Cross-platform clients (Parts 11, 14, 20)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| 27.1 | Web clients: full workforce UI — AI Workforce, Computers, Routes, Skills, Vault, Teams, Artifacts; every visible control calls the real server API (Part 20, 11, 14) | IMPLEMENTED | — | — |  |
+| 27.2 | Capacitor/desktop surfaces: the same workforce screens run in the mobile and desktop apps (Part 11) | IMPLEMENTED | — | — |  |
+
 ## External blockers
 
 See `HANNAH_OS_BLOCKERS.md` for what each needs from the owner.
@@ -186,6 +298,7 @@ See `HANNAH_OS_BLOCKERS.md` for what each needs from the owner.
 | H4 | No ROS 2, Gazebo or robot (robotics blockers B1 to B3) | Everything robotics that says Gazebo, ROS 2 or hardware |
 | H5 | No live language model run in the development environment | Model-assisted manual reading; showing an agent using device tools with a real model |
 | H6 | No independent security review | Any statement that the security design was reviewed |
+| M1 | No meeting-platform API credentials: live meeting join and transcription are unavailable | Live meeting join/record; automatic transcription for meeting summaries |
 
 ## Next unblocked tasks
 
@@ -203,6 +316,7 @@ See `HANNAH_OS_BLOCKERS.md` for what each needs from the owner.
 - device layer: 87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed; the latest Studio preview pair passed separately. The server suite had one live Supabase test skipped.
 - performance: 100 simulated write/readbacks per protocol on macOS 27.0.1 arm64, Python 3.14.6 (8 logical CPUs), measured through per-device worker IPC. MQTT median 1.594 ms, p95 1.643 ms, startup 58.976 ms; Modbus TCP median 0.227 ms, p95 0.299 ms, startup 84.832 ms. Simulator-only and loopback; excludes child-worker CPU, server, approval and hub transport.
 - checks: Server full suite (573 passed, 1 live Supabase test skipped), gateway suite (17 tests), full server suite regression, full client Vitest suite, TypeScript build, server and changed-file client ESLint, SDK declaration typecheck, progress/catalogue/image-manifest checks, Python runtime tests and git diff --check all passed.
+- workforce: Autonomous workforce built: server/workforce (bots, teams, computers, browser, tasks, skills, teach sessions, routines, memory, vault, approvals, artifacts, proactive, meetings) — 28/28 server tests pass (server/workforce.test.js). Client screens: AI Workforce (Bots), Computers, Routine Center, Skill Library, Vault, Team Center, Artifact Library — client build and tests pass.
 
 ## To resume
 

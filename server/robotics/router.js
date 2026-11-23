@@ -101,7 +101,7 @@ function createRobotDeviceRouter({ robotics, enrollLimiter = null }) {
   return router;
 }
 
-function createRobotAccountRouter({ robotics, engine }) {
+function createRobotAccountRouter({ robotics, engine, robotOSEnvelopes = null, robotOSCommands = null }) {
   const router = express.Router();
   const json = express.json({ limit: "200kb" });
   const guard = ({ session = false } = {}) => (handler) => async (req, res) => {
@@ -165,6 +165,16 @@ function createRobotAccountRouter({ robotics, engine }) {
     res.json({ record: { ...record, outcome: outcomeText(record) }, plan: await planView(db, account.id, await robotics.getPlan(db, account.id, req.params.id)) });
   }));
   router.get("/robots/events", anyAccount(async (req, res, db, account) => res.json({ events: await robotics.events(db, account.id, { robotId: req.query.robot, limit: req.query.limit }) })));
+  // Signed envelopes from onboard HANNAH Robot OS, scoped to this account.
+  router.get("/robots/os/envelopes", anyAccount(async (req, res, db, account) => {
+    if (!robotOSEnvelopes) return res.status(503).json({ error: "Robot OS envelope storage isn't available.", reason: "not-configured" });
+    res.json({ envelopes: await robotOSEnvelopes.listEnvelopes(db, account.id, { robotId: req.query.robot, kind: req.query.kind, limit: req.query.limit }) });
+  }));
+  router.get("/robots/os/commands", anyAccount(async (req, res, db, account) => {
+    if (!robotOSCommands) return res.status(503).json({ error: "Robot OS commands aren't available.", reason: "not-configured" });
+    const rows = await db.query("SELECT id, robot_id, capability, status, ack_reason, issued_at, expires_at FROM hannah_robot_os_commands WHERE user_id = $1 ORDER BY issued_at DESC LIMIT $2", [account.id, Math.max(1, Math.min(200, Number(req.query.limit) || 50))]);
+    res.json({ commands: (rows.rows || []).map((row) => ({ id: row.id, robotId: row.robot_id, capability: row.capability, status: row.status, ackReason: row.ack_reason || "", issuedAt: Number(row.issued_at), expiresAt: Number(row.expires_at) })) });
+  }));
 
   router.get("/robots/:id", anyAccount(async (req, res, db, account) => {
     const robot = await robotics.getRobot(db, account.id, req.params.id);

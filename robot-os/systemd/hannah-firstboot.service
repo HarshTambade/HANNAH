@@ -1,0 +1,12 @@
+[Unit]
+Description=HANNAH Robot OS First Boot
+After=network-online.target
+Before=hannah-robot-os.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/hannah-firstboot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

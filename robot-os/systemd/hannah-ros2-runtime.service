@@ -1,0 +1,21 @@
+[Unit]
+Description=HANNAH Robot OS ROS2 Runtime
+After=hannah-safety-gateway.service hannah-hardware-manager.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hannah-ros
+Group=hannah-ros
+Environment=ROS_DOMAIN_ID=0
+Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ExecStart=/opt/hannah-robot-os/scripts/start-ros2.sh /etc/hannah-robot-os/config.json
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hannah-robot-os /var/log/hannah-robot-os /run/hannah-robot-os
+
+[Install]
+WantedBy=hannah-robot-os.target

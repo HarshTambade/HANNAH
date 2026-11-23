@@ -1,0 +1,20 @@
+{
+  "robot_id": "robot-dev",
+  "profile": "robotos-dev-x86_64",
+  "data_dir": "/var/lib/hannah-robot-os",
+  "log_dir": "/var/log/hannah-robot-os",
+  "config_dir": "/etc/hannah-robot-os",
+  "safety": {
+    "max_linear_speed_mps": 0.5,
+    "max_angular_speed_rps": 1.5,
+    "max_acceleration_mps2": 0.8,
+    "command_ttl_ms": 500,
+    "watchdog_timeout_ms": 500,
+    "estop_latched": true
+  },
+  "required_services": ["safety-gateway", "hardware-manager", "motor-controller"],
+  "required_sensors": [],
+  "enable_ai_runtime": true,
+  "enable_remote_gateway": true,
+  "offline_allowed": true
+}

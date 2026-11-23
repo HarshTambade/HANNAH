@@ -58,6 +58,7 @@ class Hub:
         self._outbox: list = []
         self._serial = 0
         self._last_write: dict = {}
+        self._key_rotation_versions: dict = {}
         self._confirm: list = []
         self._next_sync = 0.0
         self._restart_after_update: str | None = None

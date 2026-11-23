@@ -1,0 +1,30 @@
+name: Robot OS CI
+
+on:
+  push:
+    paths:
+      - 'robot-os/**'
+      - '.github/workflows/robot-os-ci.yml'
+  pull_request:
+    paths:
+      - 'robot-os/**'
+      - '.github/workflows/robot-os-ci.yml'
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test deps
+        run: python -m pip install --upgrade pip pytest
+      - name: Validate manifests
+        run: python robot-os/tools/validate_manifests.py
+      - name: Run unit tests
+        run: PYTHONPATH=robot-os/src python -m pytest robot-os/tests/unit -q
+      - name: CLI smoke
+        run: |
+          PYTHONPATH=robot-os/src python -m hannah_robot_os doctor
+          PYTHONPATH=robot-os/src python -m hannah_robot_os sim

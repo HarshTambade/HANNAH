@@ -48,6 +48,7 @@ const { codeActions } = require("./catalog/code");
 const { deviceActions } = require("./catalog/device");
 const { robotActions } = require("./catalog/robots");
 const { hardwareActions } = require("./catalog/hardware");
+const { robotOSActions } = require("./catalog/robot_os");
 const { createDeviceService } = require("../devices/service");
 const { createRoboticsService } = require("../robotics/service");
 const { emitUserEvent } = require("../webhooks");
@@ -62,12 +63,12 @@ const { vaultConfigured } = require("../vault");
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 
 /** One engine, one coding service and one robot registry for the whole server: routes, workflows and MCP all use these. */
-function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs } = {}) {
+function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs, robotOSCommands = null } = {}) {
   const coding = createCodingService({ fetchImpl, now, ...(request ? { request } : {}), ...(roots ? { roots } : {}) });
   const robotics = createRoboticsService({ now, emit: emitUserEvent, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
   const devices = createDeviceService({ now, emit: emitUserEvent });
-  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics }), ...hardwareActions({ devices })] });
-  return { coding, devices, engine, robotics };
+  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands })] });
+  return { coding, devices, engine, robotics, robotOSCommands };
 }
 
 /** Every connection an account has, in one shape. */

@@ -39,7 +39,7 @@ describe("routes", () => {
   });
 
   it("gives every screen a title and every app path a built page", () => {
-    expect(APP_ROUTE_PATHS).toEqual(["/chat", "/dashboard", "/agents", "/models", "/memory", "/automations", "/settings", "/integrations", "/marketplace", "/actions", "/robotics", "/devices"]);
+    expect(APP_ROUTE_PATHS).toEqual(["/chat", "/dashboard", "/agents", "/models", "/memory", "/automations", "/settings", "/integrations", "/marketplace", "/actions", "/robotics", "/robot-os", "/devices", "/bots", "/computers", "/routines", "/skills", "/vault", "/teams", "/artifacts"]);
     for (const title of Object.values(ROUTE_TITLES)) expect(title).toMatch(/HANNAH/);
   });
 });

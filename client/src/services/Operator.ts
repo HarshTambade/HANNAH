@@ -127,7 +127,7 @@ export const Operator = {
   /** The engine belongs to an account: without a sign-in, HANNAH keeps asking on this device for every action, as before. */
   available: () => isAccountSession(),
 
-  run: async (action: string, params: Record<string, unknown>, context: { request?: string; intent?: string; agent?: string; taskId?: string; idempotencyKey?: string } = {}) =>
+  run: async (action: string, params: Record<string, unknown>, context: { request?: string; intent?: string; agent?: string; taskId?: string; source?: string; idempotencyKey?: string } = {}) =>
     (await accountRequest<{ record: ActionRecord }>("/api/actions", { method: "POST", body: json({ action, params, ...context }), signal: LONG() })).record,
   decide: async (id: string, approve: boolean) => {
     const { record } = await accountRequest<{ record: ActionRecord }>(`/api/actions/${encodeURIComponent(id)}/decision`, { method: "POST", body: json({ approve }), signal: LONG() });

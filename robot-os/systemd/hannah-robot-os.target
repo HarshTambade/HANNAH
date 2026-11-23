@@ -1,0 +1,7 @@
+[Unit]
+Description=HANNAH Robot OS
+Wants=hannah-safety-gateway.service hannah-hardware-manager.service hannah-motor-controller.service hannah-sensor-manager.service hannah-ros2-runtime.service hannah-telemetry.service hannah-update-manager.service
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target

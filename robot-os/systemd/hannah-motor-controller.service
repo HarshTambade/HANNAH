@@ -1,0 +1,23 @@
+[Unit]
+Description=HANNAH Robot OS Motor Controller Manager
+After=hannah-safety-gateway.service hannah-hardware-manager.service
+Requires=hannah-safety-gateway.service
+
+[Service]
+Type=simple
+User=hannah-ros
+Group=hannah-ros
+WorkingDirectory=/opt/hannah-robot-os
+ExecStart=/usr/bin/python3 -m hannah_robot_os service motor-controller --config /etc/hannah-robot-os/config.json
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hannah-robot-os /var/log/hannah-robot-os /run/hannah-robot-os
+DeviceAllow=/dev/ttyUSB* rw
+DeviceAllow=/dev/ttyACM* rw
+
+[Install]
+WantedBy=multi-user.target

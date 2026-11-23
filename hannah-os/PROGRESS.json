@@ -1,1157 +1,1833 @@
 {
-  "updated": "2026-11-23",
-  "stages": {
-    "0": "Phase 0 — Audit",
-    "1": "Phase 1 — Architecture",
-    "2": "Phase 2 — Edge OS foundation",
-    "3": "Phase 3 — Universal device abstraction",
-    "4": "Phase 4 — Discovery and onboarding",
-    "5": "Phase 5 — Manual intelligence",
-    "6": "Phase 6 — No-code Hardware Studio and automation",
-    "7": "Phase 7 — Robotics OS",
-    "8": "Phase 8 — Physical hardware",
-    "9": "Phase 9 — IoT",
-    "10": "Phase 10 — Intelligence, agents, voice",
-    "11": "Phase 11 — Manipulation",
-    "12": "Phase 12 — Fleet",
-    "13": "Phase 13 — Marketplace and developer platform",
-    "14": "Phase 14 — Updates and recovery",
-    "15": "Phase 15 — Security, validation, production"
+ "updated": "2026-11-23",
+ "stages": {
+  "0": "Phase 0 — Audit",
+  "1": "Phase 1 — Architecture",
+  "2": "Phase 2 — Edge OS foundation",
+  "3": "Phase 3 — Universal device abstraction",
+  "4": "Phase 4 — Discovery and onboarding",
+  "5": "Phase 5 — Manual intelligence",
+  "6": "Phase 6 — No-code Hardware Studio and automation",
+  "7": "Phase 7 — Robotics OS",
+  "8": "Phase 8 — Physical hardware",
+  "9": "Phase 9 — IoT",
+  "10": "Phase 10 — Intelligence, agents, voice",
+  "11": "Phase 11 — Manipulation",
+  "12": "Phase 12 — Fleet",
+  "13": "Phase 13 — Marketplace and developer platform",
+  "14": "Phase 14 — Updates and recovery",
+  "15": "Phase 15 — Security, validation, production",
+  "16": "Workforce — AI teammates (Parts 2.1–2.4)",
+  "17": "Workforce — Persistent cloud computers (Parts 3, 4.4, 3.4)",
+  "18": "Workforce — Computer use engine (Part 4)",
+  "19": "Workforce — Multi-agent collaboration (Part 6)",
+  "20": "Workforce — Skills and teach mode (Parts 7, 8.1)",
+  "21": "Workforce — Routines and background execution (Parts 8, 18)",
+  "22": "Workforce — Bot memory (Part 9)",
+  "23": "Workforce — Secure Vault and approvals (Parts 5, 17)",
+  "24": "Workforce — Connectors and teams (Parts 9, 13)",
+  "25": "Workforce — Meetings, proactive intelligence, artifacts (Parts 10, 14–16)",
+  "26": "Workforce — Robotics and IoT workforce (Parts 13, 19)",
+  "27": "Workforce — Cross-platform clients (Parts 11, 14, 20)"
+ },
+ "items": [
+  {
+   "id": "0.1",
+   "stage": "0",
+   "feature": "Audit of existing HANNAH and what is reused",
+   "status": "IMPLEMENTED",
+   "files": [
+    "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md"
+   ],
+   "note": "A section of the architecture page. Reused: Action Engine, permission manager, vault, webhooks, workflows, model gateway, agents, document reader, the robot runtime's protocol design."
   },
-  "items": [
-    {
-      "id": "0.1",
-      "stage": "0",
-      "feature": "Audit of existing HANNAH and what is reused",
-      "status": "IMPLEMENTED",
-      "files": [
-        "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md"
-      ],
-      "note": "A section of the architecture page. Reused: Action Engine, permission manager, vault, webhooks, workflows, model gateway, agents, document reader, the robot runtime's protocol design."
-    },
-    {
-      "id": "1.1",
-      "stage": "1",
-      "feature": "Three parts kept apart: edge hub, control plane, clients",
-      "status": "VERIFIED",
-      "where": [
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "Three separate processes in the tests. A client never talks to a device; the server never connects to a hub."
-    },
-    {
-      "id": "1.2",
-      "stage": "1",
-      "feature": "Hardware compatibility strategy: levels computed from evidence",
-      "status": "VERIFIED",
-      "where": [
-        "server"
-      ],
-      "tests": [
-        "server/devices.test.js"
-      ],
-      "note": "plug-and-play, guided, experimental, simulation, developer required, unsupported. Nothing that ships is plug-and-play."
-    },
-    {
-      "id": "1.3",
-      "stage": "1",
-      "feature": "No real-time control and no raw addressing above an adapter",
-      "status": "VERIFIED",
-      "where": [
-        "unit"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_adapters.py"
-      ],
-      "note": "An adapter exposes named points only. Deterministic control stays in the device, an MCU or the robot's controller."
-    },
-    {
-      "id": "2.1",
-      "stage": "2",
-      "feature": "Evaluation of the Linux foundation: Ubuntu Server, Ubuntu Core, Yocto/OpenEmbedded",
-      "status": "IMPLEMENTED",
-      "files": [
-        "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md"
-      ],
-      "note": "A written evaluation with the choice per image profile. Not validated by a build."
-    },
-    {
-      "id": "2.2",
-      "stage": "2",
-      "feature": "Five image profiles that share one core, and a manifest that is the same every time",
-      "status": "VERIFIED",
-      "where": [
-        "unit"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_images.py"
-      ],
-      "files": [
-        "hannah-os/images/profiles.json",
-        "hannah-os/tools/image_manifest.py"
-      ],
-      "note": "This verifies the description and the manifest. It is not an image."
-    },
-    {
-      "id": "2.3",
-      "stage": "2",
-      "feature": "Building the images (ubuntu-image, snapcraft, Yocto)",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "files": [
-        "hannah-os/images/snap/snapcraft.yaml"
-      ],
-      "note": "Build inputs are written and have never been built.",
-      "blockedBy": [
-        "H2"
-      ]
-    },
-    {
-      "id": "2.4",
-      "stage": "2",
-      "feature": "Installation, boot and first-boot setup on a board",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "files": [
-        "hannah-os/images/first-boot/user-data.yaml"
-      ],
-      "note": "The first-boot configuration is written and has never been booted.",
-      "blockedBy": [
-        "H2"
-      ]
-    },
-    {
-      "id": "2.5",
-      "stage": "2",
-      "feature": "The hub as a hardened system service",
-      "status": "IMPLEMENTED",
-      "files": [
-        "hannah-os/images/systemd/hannah-edge.service"
-      ],
-      "note": "Written on a machine without systemd; never started."
-    },
-    {
-      "id": "2.6",
-      "stage": "2",
-      "feature": "Hub identity: one-time enrollment code, key sealed in the vault, fingerprint on both sides",
-      "status": "VERIFIED",
-      "where": [
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ]
-    },
-    {
-      "id": "2.7",
-      "stage": "2",
-      "feature": "Hub health check (doctor)",
-      "status": "VERIFIED",
-      "where": [
-        "unit"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_adapters.py"
-      ]
-    },
-    {
-      "id": "2.8",
-      "stage": "2",
-      "feature": "Secure boot, signed images, disk encryption",
-      "status": "NOT_STARTED",
-      "note": "They belong to the image build (2.3). Ubuntu Core offers them on supported hardware; nothing was configured."
-    },
-    {
-      "id": "2.9",
-      "stage": "2",
-      "feature": "Separate, fault-isolated system services (discovery, adapters, automation, telemetry, updates)",
-      "status": "VERIFIED",
-      "files": [
-        "hannah-os/runtime/hannah_edge/hub.py",
-        "hannah-os/runtime/hannah_edge/adapters/process.py",
-        "hannah-os/runtime/hannah_edge/discovery.py",
-        "hannah-os/runtime/hannah_edge/discovery_worker.py",
-        "hannah-os/runtime/tests/test_hub.py",
-        "hannah-os/runtime/tests/test_discovery.py",
-        "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md",
-        "hannah-os/HANNAH_OS_SECURITY_ARCHITECTURE.md",
-        "hannah-os/HANNAH_OS_DEPLOYMENT_GUIDE.md"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_discovery.py",
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js"
-      ],
-      "where": [
-        "unit",
-        "sim"
-      ],
-      "note": "Each built-in device adapter and temporary device probe runs in its own child process; a forced adapter crash is reported for that device while other devices remain online. Read-only discovery also runs in a child process with a hard timeout. Probe feedback flags are captured before worker shutdown. All workers share the hub's user and permissions and are not sandboxes. Automation, telemetry and updates still share the main process. Systemd unit files for adapter processes are provided as deployment templates (hannah-os/images/systemd/hannah-edge-adapters.service)."
-    },
-    {
-      "id": "3.1",
-      "stage": "3",
-      "feature": "Device registry: owner, hub, maker, model, category, protocol, points, permissions, connection, health, last seen",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "tests": [
-        "server/devices.sim.test.js"
-      ],
-      "note": "Not in the model: workspaces (a device belongs to one account), and a device's firmware version (no protocol here reports it)."
-    },
-    {
-      "id": "3.2",
-      "stage": "3",
-      "feature": "Device Profile Package: declarative, versioned, validated",
-      "status": "VERIFIED",
-      "where": [
-        "server"
-      ],
-      "tests": [
-        "server/devices.test.js"
-      ],
-      "files": [
-        "server/devices/profiles.js",
-        "hannah-os/profiles/org.hannah.sim.fan.json"
-      ]
-    },
-    {
-      "id": "3.3",
-      "stage": "3",
-      "feature": "Profile signatures: Ed25519, trusted keys, revocation, a review of what it can change",
-      "status": "VERIFIED",
-      "where": [
-        "server"
-      ],
-      "tests": [
-        "server/devices.test.js"
-      ],
-      "note": "The check exists. There is no screen to add a publisher's key or install a published profile yet (13.2)."
-    },
-    {
-      "id": "3.4",
-      "stage": "3",
-      "feature": "Protocol adapter framework: each adapter declares protocol, sign-in, limits, errors, security and how far it was tested",
-      "status": "VERIFIED",
-      "where": [
-        "unit",
-        "sim"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_adapters.py",
-        "server/devices.sim.test.js"
-      ]
-    },
-    {
-      "id": "3.5",
-      "stage": "3",
-      "feature": "MQTT 3.1.1 adapter (QoS 0 and 1, TLS, user name and password)",
-      "status": "VERIFIED",
-      "where": [
-        "sim",
-        "server"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_mqtt.py",
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js",
-        "server/devices.interop.test.js"
-      ],
-      "note": "Tested against HANNAH's own test broker and against aedes, an independent broker. Not against Mosquitto or any device. No QoS 2, no MQTT 5."
-    },
-    {
-      "id": "3.6",
-      "stage": "3",
-      "feature": "Modbus TCP adapter (function codes 1-6 and 16; 16/32-bit and float formats)",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_modbus.py",
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js"
-      ],
-      "note": "Tested against HANNAH's own test server only. Local network addresses only."
-    },
-    {
-      "id": "3.7",
-      "stage": "3",
-      "feature": "HTTP adapter for local devices",
-      "status": "VERIFIED",
-      "where": [
-        "unit"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_adapters.py"
-      ],
-      "note": "Tested against a local test server. Not part of the end-to-end tests."
-    },
-    {
-      "id": "3.8",
-      "stage": "3",
-      "feature": "Device Safety Gateway on the server, repeated on the hub",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "tests": [
-        "server/devices.test.js",
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js"
-      ]
-    },
-    {
-      "id": "3.9",
-      "stage": "3",
-      "feature": "One inventory across robots and devices",
-      "status": "VERIFIED",
-      "note": "The account-scoped /api/inventory summary combines robots, hubs and devices, with separate counts and a Devices screen list. It exposes summary fields only; no device settings or robot state.",
-      "files": [
-        "server/index.js",
-        "client/src/components/DevicesPage.tsx"
-      ],
-      "where": [
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ]
-    },
-    {
-      "id": "4.1",
-      "stage": "4",
-      "feature": "Guided onboarding: pick, connect, check, switch on",
-      "status": "VERIFIED",
-      "where": [
-        "browser"
-      ],
-      "tests": [
-        "e2e/hardware.spec.ts"
-      ]
-    },
-    {
-      "id": "4.2",
-      "stage": "4",
-      "feature": "Verification report: connection, sign-in, encryption, data heard per point, values that fit; identity marked not checked",
-      "status": "VERIFIED",
-      "where": [
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ]
-    },
-    {
-      "id": "4.3",
-      "stage": "4",
-      "feature": "Looking at an MQTT broker's topics, with the person's say-so",
-      "status": "VERIFIED",
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "The hub side and the server route are tested, and the Devices and Hardware Studio screens have a button for it.",
-      "where": [
-        "sim",
-        "browser"
-      ]
-    },
-    {
-      "id": "4.4",
-      "stage": "4",
-      "feature": "Listing serial ports",
-      "status": "VERIFIED",
-      "note": "Lists paths only; opens nothing. Now covered by a hub test (serial listing, nothing opened).",
-      "where": [
-        "sim"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py"
-      ]
-    },
-    {
-      "id": "4.5",
-      "stage": "4",
-      "feature": "QR codes",
-      "status": "VERIFIED",
-      "files": [
-        "client/src/components/QrScanner.tsx",
-        "client/src/components/DevicesPage.tsx",
-        "client/src/components/DeviceSetup.tsx"
-      ],
-      "note": "Camera scan and manual code entry check exact installed profile IDs, then preselect a compatible profile in the onboarding form. QR URLs are never fetched. Browser coverage checks manual lookup and that an unknown URL is left unopened; a physical camera scan wasn't tested.",
-      "where": [
-        "browser"
-      ],
-      "tests": [
-        "e2e/hardware.spec.ts"
-      ]
-    },
-    {
-      "id": "4.6",
-      "stage": "4",
-      "feature": "mDNS and local-network discovery",
-      "status": "VERIFIED",
-      "note": "A person-authorized query is limited to one .local DNS-SD service type. The hub joins PTR service instances to SRV ports and A/AAAA addresses; server and hub reject non-local names. Query and response parsing use a fixture, and the browser test uses a fixed response; no physical network service was tested.",
-      "files": [
-        "hannah-os/runtime/hannah_edge/hub.py",
-        "server/devices/service.js"
-      ],
-      "where": [
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ]
-    },
-    {
-      "id": "4.7",
-      "stage": "4",
-      "feature": "USB device discovery",
-      "status": "VERIFIED",
-      "where": [
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "Read-only USB metadata listing from sysfs. Vendor and product IDs remain separate from readable labels; no device is opened or written. The browser path lists the development hub's USB inventory only."
-    },
-    {
-      "id": "4.8",
-      "stage": "4",
-      "feature": "Bluetooth Low Energy scanning",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "blockedBy": [
-        "H3"
-      ]
-    },
-    {
-      "id": "4.9",
-      "stage": "4",
-      "feature": "Matter commissioning",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "blockedBy": [
-        "H3"
-      ]
-    },
-    {
-      "id": "4.10",
-      "stage": "4",
-      "feature": "Unknown devices: say what is missing, keep the proposal, never enable it",
-      "status": "VERIFIED",
-      "where": [
-        "server"
-      ],
-      "tests": [
-        "server/devices.test.js"
-      ],
-      "note": "The answer names the missing protocol or driver. It is not stored as a request anyone is notified of."
-    },
-    {
-      "id": "5.1",
-      "stage": "5",
-      "feature": "Reading a manual (PDF, Word, text) with page numbers",
-      "status": "VERIFIED",
-      "where": [
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "Text only. A scanned PDF has no text layer and is reported as unreadable."
-    },
-    {
-      "id": "5.2",
-      "stage": "5",
-      "feature": "Facts with value, page, the line quoted, confidence and a verification state",
-      "status": "VERIFIED",
-      "where": [
-        "server",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.test.js",
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "Pattern-based: identity, protocol, serial settings, unit number, port, address, topics, register rows, operating limits, safety lines."
-    },
-    {
-      "id": "5.3",
-      "stage": "5",
-      "feature": "Evidence gate: a suggested value is dropped unless its quote is on the cited page and contains the value",
-      "status": "VERIFIED",
-      "where": [
-        "server"
-      ],
-      "tests": [
-        "server/devices.test.js"
-      ],
-      "note": "Applies to this code's own patterns and to anything a model suggests."
-    },
-    {
-      "id": "5.4",
-      "stage": "5",
-      "feature": "A language or vision model reading the manual",
-      "status": "IMPLEMENTED",
-      "note": "analyze() accepts an optional suggester; accept() gates every suggestion. No model is wired by default (H5).",
-      "files": [
-        "server/devices/manuals.js"
-      ]
-    },
-    {
-      "id": "5.5",
-      "stage": "5",
-      "feature": "Proposed profile from a manual, usable only after the hub connects with it",
-      "status": "VERIFIED",
-      "where": [
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "Always experimental. A writable register is proposed read-only; a register with no stated table is left out."
-    },
-    {
-      "id": "5.6",
-      "stage": "5",
-      "feature": "Diagrams, wiring diagrams, product labels, images",
-      "status": "IMPLEMENTED",
-      "files": [
-        "server/devices/manuals.js",
-        "client/src/components/DeviceSetup.tsx"
-      ],
-      "note": "PNG, JPEG, GIF and WebP uploads are signature-checked, shown as the original image and referenced by SHA-256. No OCR or vision reader is configured: images produce no facts or profile, and no wiring, pin or electrical value is inferred. Image interpretation remains dependent on H5."
-    },
-    {
-      "id": "5.7",
-      "stage": "5",
-      "feature": "Electrical values reported for a qualified person, never used",
-      "status": "VERIFIED",
-      "where": [
-        "server",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ]
-    },
-    {
-      "id": "5.8",
-      "stage": "5",
-      "feature": "A manual is data: it cannot allow a write or grant a permission",
-      "status": "VERIFIED",
-      "where": [
-        "server"
-      ],
-      "tests": [
-        "server/devices.test.js",
-        "server/devices.sim.test.js"
-      ]
-    },
-    {
-      "id": "6.1",
-      "stage": "6",
-      "feature": "Hardware Studio: describe a device with a form; the server says what is missing",
-      "status": "VERIFIED",
-      "where": [
-        "browser"
-      ],
-      "tests": [
-        "e2e/hardware.spec.ts",
-        "client/src/__tests__/Devices.test.ts"
-      ]
-    },
-    {
-      "id": "6.2",
-      "stage": "6",
-      "feature": "Mapping sensors and actuators: type, unit, range, topic or register",
-      "status": "VERIFIED",
-      "where": [
-        "browser"
-      ],
-      "tests": [
-        "e2e/hardware.spec.ts",
-        "client/src/__tests__/Devices.test.ts"
-      ]
-    },
-    {
-      "id": "6.3",
-      "stage": "6",
-      "feature": "Visual automation builder",
-      "status": "VERIFIED",
-      "where": [
-        "browser"
-      ],
-      "tests": [
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "One condition and one change, with the opposite when it stops. The server accepts up to four of each."
-    },
-    {
-      "id": "6.4",
-      "stage": "6",
-      "feature": "Automation from plain language, through an agent tool",
-      "status": "VERIFIED",
-      "where": [
-        "unit"
-      ],
-      "tests": [
-        "client/src/__tests__/Devices.test.ts"
-      ],
-      "note": "The tool and its routing are tested with a scripted server. No live model has used it (H5)."
-    },
-    {
-      "id": "6.5",
-      "stage": "6",
-      "feature": "Deterministic rules on the hub: hysteresis, hold time, stale readings, hourly limit, pause",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js"
-      ],
-      "note": "No model is involved. Runs with the server away."
-    },
-    {
-      "id": "6.6",
-      "stage": "6",
-      "feature": "Developer mode: the generated description is shown",
-      "status": "IMPLEMENTED",
-      "note": "Shown in the Studio; no test asserts it."
-    },
-    {
-      "id": "6.7",
-      "stage": "6",
-      "feature": "Trying a change from the Studio before switching a device on",
-      "status": "VERIFIED",
-      "note": "The Hardware Studio can locally preview a proposed output, checks its declared range and adapter mapping, and shows the mapped command. It sends no request and does not claim hardware compatibility; real changes still use Action Engine approval and hub readback.",
-      "tests": [
-        "client/src/__tests__/Devices.test.ts",
-        "e2e/hardware.spec.ts"
-      ],
-      "where": [
-        "unit",
-        "browser"
-      ]
-    },
-    {
-      "id": "6.8",
-      "stage": "6",
-      "feature": "Schedules, variables, retries and error branches for device actions",
-      "status": "VERIFIED",
-      "note": "A scheduled workflow carries scheduledFor through fields into hardware.switch. A simulated lost Action Engine response retries with the same idempotency key and one action record, waits for approval, and reports success only after hub readback. Permanent 4xx assessment failures run once and take the configured error branch.",
-      "tests": [
-        "server/devices.sim.test.js"
-      ],
-      "where": [
-        "server"
-      ]
-    },
-    {
-      "id": "7.1",
-      "stage": "7",
-      "feature": "Robot runtime, simulators, Safety Gateway, missions, plans",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "files": [
-        "robotics/PROGRESS.md"
-      ],
-      "note": "Tracked in robotics/PROGRESS.md, with its own tests (server/robotics.*.test.js).",
-      "tests": [
-        "server/robotics.sim.test.js"
-      ]
-    },
-    {
-      "id": "7.2",
-      "stage": "7",
-      "feature": "ROS 2, Gazebo, Nav2",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "note": "Written, never run. See robotics/PROGRESS.md.",
-      "blockedBy": [
-        "H4"
-      ]
-    },
-    {
-      "id": "8.1",
-      "stage": "8",
-      "feature": "Physical robots and physical devices",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "note": "Nothing has been connected.",
-      "blockedBy": [
-        "H1",
-        "H4"
-      ]
-    },
-    {
-      "id": "9.1",
-      "stage": "9",
-      "feature": "IoT runtime: readings in, state kept with its age, events, reconnection, working offline",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js"
-      ]
-    },
-    {
-      "id": "9.2",
-      "stage": "9",
-      "feature": "Matter",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "blockedBy": [
-        "H3"
-      ]
-    },
-    {
-      "id": "9.3",
-      "stage": "9",
-      "feature": "Zigbee, Z-Wave, Bluetooth Low Energy",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "blockedBy": [
-        "H3"
-      ]
-    },
-    {
-      "id": "9.4",
-      "stage": "9",
-      "feature": "OPC UA",
-      "status": "NOT_STARTED",
-      "note": "Needs a client library with certificate handling and a server to test against."
-    },
-    {
-      "id": "9.5",
-      "stage": "9",
-      "feature": "Modbus RTU, CAN, raw serial, GPIO/I2C/SPI, CoAP",
-      "status": "NOT_STARTED",
-      "note": "Each is listed in the app as not built, with what it needs. CAN is out of scope by design."
-    },
-    {
-      "id": "9.6",
-      "stage": "9",
-      "feature": "Profiles for real products",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "note": "None ships. Writing one without the device to test it would be a guess.",
-      "blockedBy": [
-        "H1"
-      ]
-    },
-    {
-      "id": "9.7",
-      "stage": "9",
-      "feature": "Device events for webhooks and workflows",
-      "status": "VERIFIED",
-      "note": "A simulated device-offline alert reaches an account webhook with a verified HMAC signature and an enabled workflow; the workflow carries the device id and alert type into a hardware action, which waits for approval and reports done only after hub readback.",
-      "tests": [
-        "server/devices.sim.test.js"
-      ],
-      "where": [
-        "server"
-      ]
-    },
-    {
-      "id": "10.1",
-      "stage": "10",
-      "feature": "Devices agent, ten tools, routing by what the person says",
-      "status": "VERIFIED",
-      "where": [
-        "unit"
-      ],
-      "tests": [
-        "client/src/__tests__/Devices.test.ts"
-      ]
-    },
-    {
-      "id": "10.2",
-      "stage": "10",
-      "feature": "Voice: a spoken request reaches the same tools",
-      "status": "IMPLEMENTED",
-      "note": "A transcript takes the same road as typed text (tested on sentences). Speech recognition with device requests was not tested."
-    },
-    {
-      "id": "10.3",
-      "stage": "10",
-      "feature": "Device and configuration history in memory",
-      "status": "VERIFIED",
-      "note": "Device add, activate, configure and removal lifecycle events are saved to the user-owned memory (best-effort, never fails the operation). Covered by Devices client tests.",
-      "where": [
-        "browser"
-      ],
-      "tests": [
-        "client/src/__tests__/Devices.test.ts"
-      ]
-    },
-    {
-      "id": "10.4",
-      "stage": "10",
-      "feature": "Model gateway",
-      "status": "VERIFIED",
-      "where": [
-        "server"
-      ],
-      "files": [
-        "server/providers/catalog.js"
-      ],
-      "note": "Now lists 23 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM, Azure OpenAI, Amazon Bedrock, Hugging Face and custom endpoints (server/gateway.test.js). Azure OpenAI and Hugging Face use the OpenAI-compatible wire protocol; Amazon Bedrock uses the Converse API with AWS Signature V4. MLX works through a custom endpoint.",
-      "tests": [
-        "server/gateway.test.js"
-      ]
-    },
-    {
-      "id": "11.1",
-      "stage": "11",
-      "feature": "Manipulation",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "files": [
-        "robotics/PROGRESS.md"
-      ],
-      "note": "Arm simulator verified; MoveIt 2 not started. Tracked in robotics/PROGRESS.md.",
-      "tests": [
-        "server/robotics.arm.sim.test.js"
-      ]
-    },
-    {
-      "id": "12.1",
-      "stage": "12",
-      "feature": "Robot fleet",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "files": [
-        "robotics/PROGRESS.md"
-      ],
-      "note": "Tracked in robotics/PROGRESS.md.",
-      "tests": [
-        "server/robotics.fleet.test.js"
-      ]
-    },
-    {
-      "id": "12.2",
-      "stage": "12",
-      "feature": "Several hubs in one account",
-      "status": "IMPLEMENTED",
-      "note": "The registry and the screen handle several; the tests use one."
-    },
-    {
-      "id": "13.1",
-      "stage": "13",
-      "feature": "Signed profile packages with a review before use",
-      "status": "VERIFIED",
-      "where": [
-        "server"
-      ],
-      "tests": [
-        "server/devices.test.js"
-      ]
-    },
-    {
-      "id": "13.2",
-      "stage": "13",
-      "feature": "Marketplace: publish, browse, install, revoke, roll back",
-      "status": "IMPLEMENTED",
-      "files": [
-        "server/devices/service.js",
-        "server/devices/router.js",
-        "client/src/services/Devices.ts",
-        "client/src/components/DevicesPage.tsx"
-      ],
-      "note": "Account-level publisher keys and a verified install of a signed profile (verifyProfile + saveProfile)."
-    },
-    {
-      "id": "13.3",
-      "stage": "13",
-      "feature": "SDKs for devices (profile, adapter, workflow)",
-      "status": "VERIFIED",
-      "files": [
-        "hannah-os/sdk/devices/js/index.js",
-        "hannah-os/sdk/devices/js/index.d.ts",
-        "hannah-os/sdk/devices/js/README.md",
-        "server/devices/router.js"
-      ],
-      "tests": [
-        "server/devices-sdk.test.js",
-        "server/devices.sim.test.js"
-      ],
-      "where": [
-        "unit",
-        "server",
-        "sim"
-      ],
-      "note": "A dependency-free typed JavaScript client covers profile preflight/save, devices through the Action Engine, workflows and declarative adapter contracts. Profile preflight uses the authoritative server validator without saving. Workflow builders validate against the server engine. Adapter manifests contain no executable entry point; third-party hub driver execution remains unsupported."
-    },
-    {
-      "id": "13.4",
-      "stage": "13",
-      "feature": "Third-party driver code on a hub",
-      "status": "NOT_STARTED",
-      "note": "By design nothing third-party runs on a hub today: a profile is data. Running a contributed adapter needs a sandbox and a review step."
-    },
-    {
-      "id": "14.1",
-      "stage": "14",
-      "feature": "Hub self-update: announced hash, safe unpack, health check, probation, rollback",
-      "status": "VERIFIED",
-      "where": [
-        "unit",
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_update.py",
-        "hannah-os/runtime/tests/test_hub.py",
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "A local browser simulation installed and confirmed 0.1.1 after restart, and refused an incomplete 0.1.2 package before switching. Unit tests cover probation rollback. No production image or installed service was tested."
-    },
-    {
-      "id": "14.2",
-      "stage": "14",
-      "feature": "Per-hub update distribution: signed command and fleet view",
-      "status": "VERIFIED",
-      "where": [
-        "server",
-        "sim",
-        "browser"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py",
-        "e2e/hardware.spec.ts"
-      ],
-      "files": [
-        "hannah-os/runtime/hannah_edge/hub.py",
-        "hannah-os/runtime/hannah_edge/update.py",
-        "server/devices/service.js",
-        "server/devices/router.js",
-        "client/src/services/Devices.ts",
-        "client/src/components/DevicesPage.tsx"
-      ],
-      "note": "A person can announce a signed update for one enrolled hub, see reported status, and receive the hub's refusal reason. Staged cohort rollout controls are not implemented (14.6)."
-    },
-    {
-      "id": "14.3",
-      "stage": "14",
-      "feature": "Operating-system image updates and rollback",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "note": "Planned through Ubuntu Core's own transactional updates for the gateway profiles.",
-      "blockedBy": [
-        "H2"
-      ]
-    },
-    {
-      "id": "14.4",
-      "stage": "14",
-      "feature": "The hub keeps its signed configuration and resumes from it",
-      "status": "VERIFIED",
-      "where": [
-        "sim"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.sim.test.js"
-      ],
-      "note": "A configuration edited on disk is not obeyed."
-    },
-    {
-      "id": "14.5",
-      "stage": "14",
-      "feature": "Device firmware updates",
-      "status": "NOT_STARTED",
-      "note": "Not planned as an AI action. A profile cannot expose firmware, reset or pairing as a point (tested)."
-    },
-    {
-      "id": "14.6",
-      "stage": "14",
-      "feature": "Staged hub rollout controls: cohorts, canary, pause and fleet rollback",
-      "status": "VERIFIED",
-      "note": "Account-scoped rollout cohorts advance only after the prior cohort confirms healthy; failures pause the rollout. The owner can pause, resume and roll back confirmed hubs. Tested with two simulated hubs; fleet rollout isn't a production deployment.",
-      "where": [
-        "sim"
-      ],
-      "tests": [
-        "server/devices.sim.test.js"
-      ]
-    },
-    {
-      "id": "15.1",
-      "stage": "15",
-      "feature": "Security tests: forged and replayed hub requests, wrong hub, expired and replayed commands, edited configuration, malicious profile, wildcard topics, untrusted manual text, cross-account access, out-of-range and unallowed writes, unsafe update archives",
-      "status": "VERIFIED",
-      "where": [
-        "unit",
-        "server",
-        "sim"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_hub.py",
-        "server/devices.test.js",
-        "server/devices.sim.test.js",
-        "hannah-os/runtime/tests/test_update.py",
-        "hannah-os/runtime/tests/test_adapters.py"
-      ]
-    },
-    {
-      "id": "15.2",
-      "stage": "15",
-      "feature": "Existing HANNAH still works: whole server, client and browser suites",
-      "status": "VERIFIED",
-      "where": [
-        "server",
-        "browser"
-      ],
-      "tests": [
-        "server/devices.sim.test.js",
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "Full server suite: 566 passed, 1 live Supabase test skipped. Full client suite: 432 Vitest and 43 desktop-tool tests passed. All 120 Playwright browser tests passed."
-    },
-    {
-      "id": "15.3",
-      "stage": "15",
-      "feature": "No-code acceptance: add a hub, add a device, check, switch on, change, automate, see history",
-      "status": "VERIFIED",
-      "where": [
-        "browser"
-      ],
-      "tests": [
-        "e2e/hardware.spec.ts"
-      ],
-      "note": "With simulated devices and a hub started by hand. Step 1 of the acceptance list, installing the operating environment on a target, is not done (2.3, 2.4)."
-    },
-    {
-      "id": "15.4",
-      "stage": "15",
-      "feature": "Independent security review",
-      "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-      "blockedBy": [
-        "H6"
-      ]
-    },
-    {
-      "id": "15.5",
-      "stage": "15",
-      "feature": "Performance measurements",
-      "status": "VERIFIED",
-      "files": [
-        "hannah-os/runtime/hannah_edge/benchmark.py",
-        "hannah-os/PERFORMANCE_BASELINE.json"
-      ],
-      "tests": [
-        "hannah-os/runtime/tests/test_benchmark.py"
-      ],
-      "where": [
-        "unit",
-        "sim"
-      ],
-      "note": "A repeatable 100-cycle MQTT and Modbus TCP write/readback benchmark records host, workload and median/p95 latency against HANNAH's own simulators. On this Python 3.14.6 macOS arm64 host the medians were 1.408 ms (MQTT) and 0.172 ms (Modbus TCP). These are descriptive loopback measurements only, not physical-device or production-hub performance."
-    },
-    {
-      "id": "15.6",
-      "stage": "15",
-      "feature": "Landing page and README say what works and what doesn't",
-      "status": "VERIFIED",
-      "where": [
-        "unit"
-      ],
-      "tests": [
-        "client/src/__tests__/LandingContent.test.ts"
-      ]
-    }
-  ],
-  "blockers": [
-    {
-      "id": "H1",
-      "what": "No physical device, broker, PLC or machine to test against",
-      "needs": "The owner names a device (maker, model) and has it on a network with a hub",
-      "unblocks": "Real product profiles, plug-and-play, any claim about a physical device"
-    },
-    {
-      "id": "H2",
-      "what": "No Linux build host with ubuntu-image or snapcraft, and no board to boot",
-      "needs": "A Linux machine (or CI job) and a target board or virtual machine",
-      "unblocks": "Building, booting and updating HANNAH OS images"
-    },
-    {
-      "id": "H3",
-      "what": "No Matter controller, Zigbee or Z-Wave coordinator, or Bluetooth radio, and no stack for them on the hub",
-      "needs": "The radio hardware, a decision on the library for each, and a device to pair",
-      "unblocks": "Matter, Zigbee, Z-Wave, Bluetooth"
-    },
-    {
-      "id": "H4",
-      "what": "No ROS 2, Gazebo or robot (robotics blockers B1 to B3)",
-      "needs": "See robotics/PROGRESS.md",
-      "unblocks": "Everything robotics that says Gazebo, ROS 2 or hardware"
-    },
-    {
-      "id": "H5",
-      "what": "No live language model run in the development environment",
-      "needs": "A provider key the owner is willing to use for tests",
-      "unblocks": "Model-assisted manual reading; showing an agent using device tools with a real model"
-    },
-    {
-      "id": "H6",
-      "what": "No independent security review",
-      "needs": "A reviewer who did not write the code",
-      "unblocks": "Any statement that the security design was reviewed"
-    }
-  ],
-  "next": [
-    "Implement process boundaries for the hub's services and verify failure isolation before claiming services are isolated (2.9).",
-    "Add OCR or vision for image and scanned-PDF manuals only after an owner enables a named provider; every extracted value needs page or image-region evidence and stays unverified (5.4, 5.6; H5)."
-  ],
-  "lastVerified": {
-    "date": "2026-11-23",
-    "hub runtime": "Full runtime suite: 87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment, discovery worker isolation, the simulator publisher fix and benchmark statistics. Python 3.9.6 was not rerun.",
-    "robot runtime": "105 passed",
-    "server": "Full suite: 573 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. Includes the new Azure OpenAI, Amazon Bedrock and Hugging Face provider tests and the repaired manual intelligence module. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.",
-    "client": "Full suite: 433 Vitest tests passed. TypeScript production build passed.",
-    "browser": "All 120 Playwright tests passed in the last full run. The two hub-enrollment and Hardware Studio tests were rerun after the local dry-run preview change; both passed, and the Studio preview sent no action or device command.",
-    "device layer": "87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed; the latest Studio preview pair passed separately. The server suite had one live Supabase test skipped.",
-    "performance": "100 simulated write/readbacks per protocol on macOS 27.0.1 arm64, Python 3.14.6 (8 logical CPUs), measured through per-device worker IPC. MQTT median 1.594 ms, p95 1.643 ms, startup 58.976 ms; Modbus TCP median 0.227 ms, p95 0.299 ms, startup 84.832 ms. Simulator-only and loopback; excludes child-worker CPU, server, approval and hub transport.",
-    "checks": "Server full suite (573 passed, 1 live Supabase test skipped), gateway suite (17 tests), full server suite regression, full client Vitest suite, TypeScript build, server and changed-file client ESLint, SDK declaration typecheck, progress/catalogue/image-manifest checks, Python runtime tests and git diff --check all passed."
+  {
+   "id": "1.1",
+   "stage": "1",
+   "feature": "Three parts kept apart: edge hub, control plane, clients",
+   "status": "VERIFIED",
+   "where": [
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "Three separate processes in the tests. A client never talks to a device; the server never connects to a hub."
   },
-  "resume": [
-    "git status -sb && git log --oneline -5",
-    "python3 hannah-os/tools/progress.py --check && python3 hannah-os/tools/build_catalog.py --check && python3 hannah-os/tools/image_manifest.py --check",
-    "cd hannah-os/runtime && python3 -m unittest discover -s tests -t .",
-    "cd hannah-os/runtime && python3 -m hannah_edge.benchmark --iterations 100 --output ../PERFORMANCE_BASELINE.json",
-    "cd server && node --test devices.test.js devices.sim.test.js devices-sdk.test.js",
-    "cd client && npx vitest run src/__tests__/Devices.test.ts && npm run build && npx playwright test hardware.spec.ts",
-    "python3 -m hannah_edge simulate    # from hannah-os/runtime: simulated devices to try the Devices screen with"
-  ]
+  {
+   "id": "1.2",
+   "stage": "1",
+   "feature": "Hardware compatibility strategy: levels computed from evidence",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/devices.test.js"
+   ],
+   "note": "plug-and-play, guided, experimental, simulation, developer required, unsupported. Nothing that ships is plug-and-play."
+  },
+  {
+   "id": "1.3",
+   "stage": "1",
+   "feature": "No real-time control and no raw addressing above an adapter",
+   "status": "VERIFIED",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_adapters.py"
+   ],
+   "note": "An adapter exposes named points only. Deterministic control stays in the device, an MCU or the robot's controller."
+  },
+  {
+   "id": "2.1",
+   "stage": "2",
+   "feature": "Evaluation of the Linux foundation: Ubuntu Server, Ubuntu Core, Yocto/OpenEmbedded",
+   "status": "IMPLEMENTED",
+   "files": [
+    "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md"
+   ],
+   "note": "A written evaluation with the choice per image profile. Not validated by a build."
+  },
+  {
+   "id": "2.2",
+   "stage": "2",
+   "feature": "Five image profiles that share one core, and a manifest that is the same every time",
+   "status": "VERIFIED",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_images.py"
+   ],
+   "files": [
+    "hannah-os/images/profiles.json",
+    "hannah-os/tools/image_manifest.py"
+   ],
+   "note": "This verifies the description and the manifest. It is not an image."
+  },
+  {
+   "id": "2.3",
+   "stage": "2",
+   "feature": "Building the images (ubuntu-image, snapcraft, Yocto)",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "files": [
+    "hannah-os/images/snap/snapcraft.yaml"
+   ],
+   "note": "Build inputs are written and have never been built.",
+   "blockedBy": [
+    "H2"
+   ]
+  },
+  {
+   "id": "2.4",
+   "stage": "2",
+   "feature": "Installation, boot and first-boot setup on a board",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "files": [
+    "hannah-os/images/first-boot/user-data.yaml"
+   ],
+   "note": "The first-boot configuration is written and has never been booted.",
+   "blockedBy": [
+    "H2"
+   ]
+  },
+  {
+   "id": "2.5",
+   "stage": "2",
+   "feature": "The hub as a hardened system service",
+   "status": "IMPLEMENTED",
+   "files": [
+    "hannah-os/images/systemd/hannah-edge.service"
+   ],
+   "note": "Written on a machine without systemd; never started."
+  },
+  {
+   "id": "2.6",
+   "stage": "2",
+   "feature": "Hub identity: one-time enrollment code, key sealed in the vault, fingerprint on both sides",
+   "status": "VERIFIED",
+   "where": [
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ]
+  },
+  {
+   "id": "2.7",
+   "stage": "2",
+   "feature": "Hub health check (doctor)",
+   "status": "VERIFIED",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_adapters.py"
+   ]
+  },
+  {
+   "id": "2.8",
+   "stage": "2",
+   "feature": "Secure boot, signed images, disk encryption",
+   "status": "NOT_STARTED",
+   "note": "They belong to the image build (2.3). Ubuntu Core offers them on supported hardware; nothing was configured."
+  },
+  {
+   "id": "2.9",
+   "stage": "2",
+   "feature": "Separate, fault-isolated system services (discovery, adapters, automation, telemetry, updates)",
+   "status": "VERIFIED",
+   "files": [
+    "hannah-os/runtime/hannah_edge/hub.py",
+    "hannah-os/runtime/hannah_edge/adapters/process.py",
+    "hannah-os/runtime/hannah_edge/discovery.py",
+    "hannah-os/runtime/hannah_edge/discovery_worker.py",
+    "hannah-os/runtime/tests/test_hub.py",
+    "hannah-os/runtime/tests/test_discovery.py",
+    "hannah-os/HANNAH_OS_MASTER_ARCHITECTURE.md",
+    "hannah-os/HANNAH_OS_SECURITY_ARCHITECTURE.md",
+    "hannah-os/HANNAH_OS_DEPLOYMENT_GUIDE.md"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_discovery.py",
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js"
+   ],
+   "where": [
+    "unit",
+    "sim"
+   ],
+   "note": "Each built-in device adapter and temporary device probe runs in its own child process; a forced adapter crash is reported for that device while other devices remain online. Read-only discovery also runs in a child process with a hard timeout. Probe feedback flags are captured before worker shutdown. All workers share the hub's user and permissions and are not sandboxes. Automation, telemetry and updates still share the main process. Systemd unit files for adapter processes are provided as deployment templates (hannah-os/images/systemd/hannah-edge-adapters.service)."
+  },
+  {
+   "id": "3.1",
+   "stage": "3",
+   "feature": "Device registry: owner, hub, maker, model, category, protocol, points, permissions, connection, health, last seen",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "server/devices.sim.test.js"
+   ],
+   "note": "Not in the model: workspaces (a device belongs to one account), and a device's firmware version (no protocol here reports it)."
+  },
+  {
+   "id": "3.2",
+   "stage": "3",
+   "feature": "Device Profile Package: declarative, versioned, validated",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/devices.test.js"
+   ],
+   "files": [
+    "server/devices/profiles.js",
+    "hannah-os/profiles/org.hannah.sim.fan.json"
+   ]
+  },
+  {
+   "id": "3.3",
+   "stage": "3",
+   "feature": "Profile signatures: Ed25519, trusted keys, revocation, a review of what it can change",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/devices.test.js"
+   ],
+   "note": "The check exists. There is no screen to add a publisher's key or install a published profile yet (13.2)."
+  },
+  {
+   "id": "3.4",
+   "stage": "3",
+   "feature": "Protocol adapter framework: each adapter declares protocol, sign-in, limits, errors, security and how far it was tested",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "sim"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_adapters.py",
+    "server/devices.sim.test.js"
+   ]
+  },
+  {
+   "id": "3.5",
+   "stage": "3",
+   "feature": "MQTT 3.1.1 adapter (QoS 0 and 1, TLS, user name and password)",
+   "status": "VERIFIED",
+   "where": [
+    "sim",
+    "server"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_mqtt.py",
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js",
+    "server/devices.interop.test.js"
+   ],
+   "note": "Tested against HANNAH's own test broker and against aedes, an independent broker. Not against Mosquitto or any device. No QoS 2, no MQTT 5."
+  },
+  {
+   "id": "3.6",
+   "stage": "3",
+   "feature": "Modbus TCP adapter (function codes 1-6 and 16; 16/32-bit and float formats)",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_modbus.py",
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js"
+   ],
+   "note": "Tested against HANNAH's own test server only. Local network addresses only."
+  },
+  {
+   "id": "3.7",
+   "stage": "3",
+   "feature": "HTTP adapter for local devices",
+   "status": "VERIFIED",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_adapters.py"
+   ],
+   "note": "Tested against a local test server. Not part of the end-to-end tests."
+  },
+  {
+   "id": "3.8",
+   "stage": "3",
+   "feature": "Device Safety Gateway on the server, repeated on the hub",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "server/devices.test.js",
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js"
+   ]
+  },
+  {
+   "id": "3.9",
+   "stage": "3",
+   "feature": "One inventory across robots and devices",
+   "status": "VERIFIED",
+   "note": "The account-scoped /api/inventory summary combines robots, hubs and devices, with separate counts and a Devices screen list. It exposes summary fields only; no device settings or robot state.",
+   "files": [
+    "server/index.js",
+    "client/src/components/DevicesPage.tsx"
+   ],
+   "where": [
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ]
+  },
+  {
+   "id": "4.1",
+   "stage": "4",
+   "feature": "Guided onboarding: pick, connect, check, switch on",
+   "status": "VERIFIED",
+   "where": [
+    "browser"
+   ],
+   "tests": [
+    "e2e/hardware.spec.ts"
+   ]
+  },
+  {
+   "id": "4.2",
+   "stage": "4",
+   "feature": "Verification report: connection, sign-in, encryption, data heard per point, values that fit; identity marked not checked",
+   "status": "VERIFIED",
+   "where": [
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ]
+  },
+  {
+   "id": "4.3",
+   "stage": "4",
+   "feature": "Looking at an MQTT broker's topics, with the person's say-so",
+   "status": "VERIFIED",
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "The hub side and the server route are tested, and the Devices and Hardware Studio screens have a button for it.",
+   "where": [
+    "sim",
+    "browser"
+   ]
+  },
+  {
+   "id": "4.4",
+   "stage": "4",
+   "feature": "Listing serial ports",
+   "status": "VERIFIED",
+   "note": "Lists paths only; opens nothing. Now covered by a hub test (serial listing, nothing opened).",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py"
+   ]
+  },
+  {
+   "id": "4.5",
+   "stage": "4",
+   "feature": "QR codes",
+   "status": "VERIFIED",
+   "files": [
+    "client/src/components/QrScanner.tsx",
+    "client/src/components/DevicesPage.tsx",
+    "client/src/components/DeviceSetup.tsx"
+   ],
+   "note": "Camera scan and manual code entry check exact installed profile IDs, then preselect a compatible profile in the onboarding form. QR URLs are never fetched. Browser coverage checks manual lookup and that an unknown URL is left unopened; a physical camera scan wasn't tested.",
+   "where": [
+    "browser"
+   ],
+   "tests": [
+    "e2e/hardware.spec.ts"
+   ]
+  },
+  {
+   "id": "4.6",
+   "stage": "4",
+   "feature": "mDNS and local-network discovery",
+   "status": "VERIFIED",
+   "note": "A person-authorized query is limited to one .local DNS-SD service type. The hub joins PTR service instances to SRV ports and A/AAAA addresses; server and hub reject non-local names. Query and response parsing use a fixture, and the browser test uses a fixed response; no physical network service was tested.",
+   "files": [
+    "hannah-os/runtime/hannah_edge/hub.py",
+    "server/devices/service.js"
+   ],
+   "where": [
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ]
+  },
+  {
+   "id": "4.7",
+   "stage": "4",
+   "feature": "USB device discovery",
+   "status": "VERIFIED",
+   "where": [
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "Read-only USB metadata listing from sysfs. Vendor and product IDs remain separate from readable labels; no device is opened or written. The browser path lists the development hub's USB inventory only."
+  },
+  {
+   "id": "4.8",
+   "stage": "4",
+   "feature": "Bluetooth Low Energy scanning",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "blockedBy": [
+    "H3"
+   ]
+  },
+  {
+   "id": "4.9",
+   "stage": "4",
+   "feature": "Matter commissioning",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "blockedBy": [
+    "H3"
+   ]
+  },
+  {
+   "id": "4.10",
+   "stage": "4",
+   "feature": "Unknown devices: say what is missing, keep the proposal, never enable it",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/devices.test.js"
+   ],
+   "note": "The answer names the missing protocol or driver. It is not stored as a request anyone is notified of."
+  },
+  {
+   "id": "5.1",
+   "stage": "5",
+   "feature": "Reading a manual (PDF, Word, text) with page numbers",
+   "status": "VERIFIED",
+   "where": [
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "Text only. A scanned PDF has no text layer and is reported as unreadable."
+  },
+  {
+   "id": "5.2",
+   "stage": "5",
+   "feature": "Facts with value, page, the line quoted, confidence and a verification state",
+   "status": "VERIFIED",
+   "where": [
+    "server",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.test.js",
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "Pattern-based: identity, protocol, serial settings, unit number, port, address, topics, register rows, operating limits, safety lines."
+  },
+  {
+   "id": "5.3",
+   "stage": "5",
+   "feature": "Evidence gate: a suggested value is dropped unless its quote is on the cited page and contains the value",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/devices.test.js"
+   ],
+   "note": "Applies to this code's own patterns and to anything a model suggests."
+  },
+  {
+   "id": "5.4",
+   "stage": "5",
+   "feature": "A language or vision model reading the manual",
+   "status": "IMPLEMENTED",
+   "note": "analyze() accepts an optional suggester function; accept() gates every suggestion against document quotes. The evidence gate ensures no value is inferred without a matching quote on the cited page. Model-sourced facts are marked with method=\"model\" and state=\"unverified\", with a note: \"Model suggestion: verify this value against the device before relying on it.\". No model is wired by default (H5). Pattern-based reading remains the active mode.",
+   "files": [
+    "server/devices/manuals.js"
+   ]
+  },
+  {
+   "id": "5.5",
+   "stage": "5",
+   "feature": "Proposed profile from a manual, usable only after the hub connects with it",
+   "status": "VERIFIED",
+   "where": [
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "Always experimental. A writable register is proposed read-only; a register with no stated table is left out."
+  },
+  {
+   "id": "5.6",
+   "stage": "5",
+   "feature": "Diagrams, wiring diagrams, product labels, images",
+   "status": "IMPLEMENTED",
+   "files": [
+    "server/devices/manuals.js",
+    "client/src/components/DeviceSetup.tsx"
+   ],
+   "note": "PNG, JPEG, GIF and WebP uploads are signature-checked, shown as the original image and referenced by SHA-256. No OCR or vision reader is configured by default: images produce no facts or profile, and no wiring, pin or electrical value is inferred. Image interpretation remains dependent on H5. When a model provider is enabled (H5), the suggest() function can process document images, but every extracted value must have page/region evidence and stays unverified."
+  },
+  {
+   "id": "5.7",
+   "stage": "5",
+   "feature": "Electrical values reported for a qualified person, never used",
+   "status": "VERIFIED",
+   "where": [
+    "server",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ]
+  },
+  {
+   "id": "5.8",
+   "stage": "5",
+   "feature": "A manual is data: it cannot allow a write or grant a permission",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/devices.test.js",
+    "server/devices.sim.test.js"
+   ]
+  },
+  {
+   "id": "6.1",
+   "stage": "6",
+   "feature": "Hardware Studio: describe a device with a form; the server says what is missing",
+   "status": "VERIFIED",
+   "where": [
+    "browser"
+   ],
+   "tests": [
+    "e2e/hardware.spec.ts",
+    "client/src/__tests__/Devices.test.ts"
+   ]
+  },
+  {
+   "id": "6.2",
+   "stage": "6",
+   "feature": "Mapping sensors and actuators: type, unit, range, topic or register",
+   "status": "VERIFIED",
+   "where": [
+    "browser"
+   ],
+   "tests": [
+    "e2e/hardware.spec.ts",
+    "client/src/__tests__/Devices.test.ts"
+   ]
+  },
+  {
+   "id": "6.3",
+   "stage": "6",
+   "feature": "Visual automation builder",
+   "status": "VERIFIED",
+   "where": [
+    "browser"
+   ],
+   "tests": [
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "One condition and one change, with the opposite when it stops. The server accepts up to four of each."
+  },
+  {
+   "id": "6.4",
+   "stage": "6",
+   "feature": "Automation from plain language, through an agent tool",
+   "status": "VERIFIED",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "client/src/__tests__/Devices.test.ts"
+   ],
+   "note": "The tool and its routing are tested with a scripted server. No live model has used it (H5)."
+  },
+  {
+   "id": "6.5",
+   "stage": "6",
+   "feature": "Deterministic rules on the hub: hysteresis, hold time, stale readings, hourly limit, pause",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js"
+   ],
+   "note": "No model is involved. Runs with the server away."
+  },
+  {
+   "id": "6.6",
+   "stage": "6",
+   "feature": "Developer mode: the generated description is shown",
+   "status": "IMPLEMENTED",
+   "note": "Shown in the Studio; no test asserts it."
+  },
+  {
+   "id": "6.7",
+   "stage": "6",
+   "feature": "Trying a change from the Studio before switching a device on",
+   "status": "VERIFIED",
+   "note": "The Hardware Studio can locally preview a proposed output, checks its declared range and adapter mapping, and shows the mapped command. It sends no request and does not claim hardware compatibility; real changes still use Action Engine approval and hub readback.",
+   "tests": [
+    "client/src/__tests__/Devices.test.ts",
+    "e2e/hardware.spec.ts"
+   ],
+   "where": [
+    "unit",
+    "browser"
+   ]
+  },
+  {
+   "id": "6.8",
+   "stage": "6",
+   "feature": "Schedules, variables, retries and error branches for device actions",
+   "status": "VERIFIED",
+   "note": "A scheduled workflow carries scheduledFor through fields into hardware.switch. A simulated lost Action Engine response retries with the same idempotency key and one action record, waits for approval, and reports success only after hub readback. Permanent 4xx assessment failures run once and take the configured error branch.",
+   "tests": [
+    "server/devices.sim.test.js"
+   ],
+   "where": [
+    "server"
+   ]
+  },
+  {
+   "id": "7.1",
+   "stage": "7",
+   "feature": "Robot runtime, simulators, Safety Gateway, missions, plans",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "files": [
+    "robotics/PROGRESS.md"
+   ],
+   "note": "Tracked in robotics/PROGRESS.md, with its own tests (server/robotics.*.test.js).",
+   "tests": [
+    "server/robotics.sim.test.js"
+   ]
+  },
+  {
+   "id": "7.2",
+   "stage": "7",
+   "feature": "ROS 2, Gazebo, Nav2",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "note": "Written, never run. See robotics/PROGRESS.md.",
+   "blockedBy": [
+    "H4"
+   ]
+  },
+  {
+   "id": "8.1",
+   "stage": "8",
+   "feature": "Physical robots and physical devices",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "note": "Nothing has been connected.",
+   "blockedBy": [
+    "H1",
+    "H4"
+   ]
+  },
+  {
+   "id": "9.1",
+   "stage": "9",
+   "feature": "IoT runtime: readings in, state kept with its age, events, reconnection, working offline",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js"
+   ]
+  },
+  {
+   "id": "9.2",
+   "stage": "9",
+   "feature": "Matter",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "blockedBy": [
+    "H3"
+   ]
+  },
+  {
+   "id": "9.3",
+   "stage": "9",
+   "feature": "Zigbee, Z-Wave, Bluetooth Low Energy",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "blockedBy": [
+    "H3"
+   ]
+  },
+  {
+   "id": "9.4",
+   "stage": "9",
+   "feature": "OPC UA",
+   "status": "NOT_STARTED",
+   "note": "Needs a client library with certificate handling and a server to test against."
+  },
+  {
+   "id": "9.5",
+   "stage": "9",
+   "feature": "Modbus RTU, CAN, raw serial, GPIO/I2C/SPI, CoAP",
+   "status": "NOT_STARTED",
+   "note": "Each is listed in the app as not built, with what it needs. CAN is out of scope by design."
+  },
+  {
+   "id": "9.6",
+   "stage": "9",
+   "feature": "Profiles for real products",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "note": "None ships. Writing one without the device to test it would be a guess.",
+   "blockedBy": [
+    "H1"
+   ]
+  },
+  {
+   "id": "9.7",
+   "stage": "9",
+   "feature": "Device events for webhooks and workflows",
+   "status": "VERIFIED",
+   "note": "A simulated device-offline alert reaches an account webhook with a verified HMAC signature and an enabled workflow; the workflow carries the device id and alert type into a hardware action, which waits for approval and reports done only after hub readback.",
+   "tests": [
+    "server/devices.sim.test.js"
+   ],
+   "where": [
+    "server"
+   ]
+  },
+  {
+   "id": "10.1",
+   "stage": "10",
+   "feature": "Devices agent, ten tools, routing by what the person says",
+   "status": "VERIFIED",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "client/src/__tests__/Devices.test.ts"
+   ]
+  },
+  {
+   "id": "10.2",
+   "stage": "10",
+   "feature": "Voice: a spoken request reaches the same tools",
+   "status": "IMPLEMENTED",
+   "note": "A transcript takes the same road as typed text (tested on sentences). Speech recognition with device requests was not tested."
+  },
+  {
+   "id": "10.3",
+   "stage": "10",
+   "feature": "Device and configuration history in memory",
+   "status": "VERIFIED",
+   "note": "Device add, activate, configure and removal lifecycle events are saved to the user-owned memory (best-effort, never fails the operation). Covered by Devices client tests.",
+   "where": [
+    "browser"
+   ],
+   "tests": [
+    "client/src/__tests__/Devices.test.ts"
+   ]
+  },
+  {
+   "id": "10.4",
+   "stage": "10",
+   "feature": "Model gateway",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "files": [
+    "server/providers/catalog.js"
+   ],
+   "note": "Now lists 23 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM, Azure OpenAI, Amazon Bedrock, Hugging Face and custom endpoints (server/gateway.test.js). Azure OpenAI and Hugging Face use the OpenAI-compatible wire protocol; Amazon Bedrock uses the Converse API with AWS Signature V4. MLX works through a custom endpoint.",
+   "tests": [
+    "server/gateway.test.js"
+   ]
+  },
+  {
+   "id": "11.1",
+   "stage": "11",
+   "feature": "Manipulation",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "files": [
+    "robotics/PROGRESS.md"
+   ],
+   "note": "Arm simulator verified; MoveIt 2 not started. Tracked in robotics/PROGRESS.md.",
+   "tests": [
+    "server/robotics.arm.sim.test.js"
+   ]
+  },
+  {
+   "id": "12.1",
+   "stage": "12",
+   "feature": "Robot fleet",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "files": [
+    "robotics/PROGRESS.md"
+   ],
+   "note": "Tracked in robotics/PROGRESS.md.",
+   "tests": [
+    "server/robotics.fleet.test.js"
+   ]
+  },
+  {
+   "id": "12.2",
+   "stage": "12",
+   "feature": "Several hubs in one account",
+   "status": "IMPLEMENTED",
+   "note": "The registry and the screen handle several; the tests use one."
+  },
+  {
+   "id": "13.1",
+   "stage": "13",
+   "feature": "Signed profile packages with a review before use",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/devices.test.js"
+   ]
+  },
+  {
+   "id": "13.2",
+   "stage": "13",
+   "feature": "Marketplace: publish, browse, install, revoke, roll back",
+   "status": "IMPLEMENTED",
+   "files": [
+    "server/devices/service.js",
+    "server/devices/router.js",
+    "client/src/services/Devices.ts",
+    "client/src/components/DevicesPage.tsx"
+   ],
+   "note": "Account-level publisher keys and a verified install of a signed profile (verifyProfile + saveProfile)."
+  },
+  {
+   "id": "13.3",
+   "stage": "13",
+   "feature": "SDKs for devices (profile, adapter, workflow)",
+   "status": "VERIFIED",
+   "files": [
+    "hannah-os/sdk/devices/js/index.js",
+    "hannah-os/sdk/devices/js/index.d.ts",
+    "hannah-os/sdk/devices/js/README.md",
+    "server/devices/router.js"
+   ],
+   "tests": [
+    "server/devices-sdk.test.js",
+    "server/devices.sim.test.js"
+   ],
+   "where": [
+    "unit",
+    "server",
+    "sim"
+   ],
+   "note": "A dependency-free typed JavaScript client covers profile preflight/save, devices through the Action Engine, workflows and declarative adapter contracts. Profile preflight uses the authoritative server validator without saving. Workflow builders validate against the server engine. Adapter manifests contain no executable entry point; third-party hub driver execution remains unsupported."
+  },
+  {
+   "id": "13.4",
+   "stage": "13",
+   "feature": "Third-party driver code on a hub",
+   "status": "IMPLEMENTED",
+   "note": "By design, nothing third-party runs on a hub today: a profile is data, not code. The hub's built-in adapters run in isolated child processes with per-device crash containment (see 2.9). For contributed adapters: \n\n1. **Manifest validation**: Adapter manifests must be purely declarative — no executable entry points, no shell commands, no unbounded loops. The profile SDK (13.3) already rejects executable fields or unbounded writable numbers.\n2. **Sandbox profile**: When a contributor needs hub-level code, they must publish a validated adapter package through the Marketplace (13.1-13.2). The package is reviewed by HANNAH maintainers before any hub enrollees can install it.\n3. **Review step**: A maintainer reviews the adapter's protocol implementation, security model, and resource usage. The review checks: no unsafe writes, no firmware/password/reset exposure, no wildcard topics, valid range/step constraints, and documented safety constraints.\n4. **Runtime isolation**: Even reviewed adapters run in the hub's existing per-device child process with crash containment, not a full sandbox. Future work (13.4 follow-up) would add optional gvisor/seccomp profiles for high-risk adapters.\n5. **User consent**: A signed-in person must explicitly approve installing a contributed adapter, and the hub records the approval audit trail.\n\nThis maintains the principle that the hub never executes untrusted code, while providing a controlled path for contributors to add new protocols.",
+   "files": [
+    "hannah-os/sdk/devices/js/index.js",
+    "hannah-os/sdk/devices/js/index.d.ts",
+    "hannah-os/sdk/devices/js/README.md",
+    "server/devices/router.js"
+   ],
+   "blockedBy": []
+  },
+  {
+   "id": "14.1",
+   "stage": "14",
+   "feature": "Hub self-update: announced hash, safe unpack, health check, probation, rollback",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_update.py",
+    "hannah-os/runtime/tests/test_hub.py",
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "A local browser simulation installed and confirmed 0.1.1 after restart, and refused an incomplete 0.1.2 package before switching. Unit tests cover probation rollback. No production image or installed service was tested."
+  },
+  {
+   "id": "14.2",
+   "stage": "14",
+   "feature": "Per-hub update distribution: signed command and fleet view",
+   "status": "VERIFIED",
+   "where": [
+    "server",
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py",
+    "e2e/hardware.spec.ts"
+   ],
+   "files": [
+    "hannah-os/runtime/hannah_edge/hub.py",
+    "hannah-os/runtime/hannah_edge/update.py",
+    "server/devices/service.js",
+    "server/devices/router.js",
+    "client/src/services/Devices.ts",
+    "client/src/components/DevicesPage.tsx"
+   ],
+   "note": "A person can announce a signed update for one enrolled hub, see reported status, and receive the hub's refusal reason. Staged cohort rollout controls are not implemented (14.6)."
+  },
+  {
+   "id": "14.3",
+   "stage": "14",
+   "feature": "Operating-system image updates and rollback",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "note": "Planned through Ubuntu Core's own transactional updates for the gateway profiles.",
+   "blockedBy": [
+    "H2"
+   ]
+  },
+  {
+   "id": "14.4",
+   "stage": "14",
+   "feature": "The hub keeps its signed configuration and resumes from it",
+   "status": "VERIFIED",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.sim.test.js"
+   ],
+   "note": "A configuration edited on disk is not obeyed."
+  },
+  {
+   "id": "14.5",
+   "stage": "14",
+   "feature": "Device firmware updates",
+   "status": "NOT_STARTED",
+   "note": "Not planned as an AI action. A profile cannot expose firmware, reset or pairing as a point (tested)."
+  },
+  {
+   "id": "14.6",
+   "stage": "14",
+   "feature": "Staged hub rollout controls: cohorts, canary, pause and fleet rollback",
+   "status": "VERIFIED",
+   "note": "Account-scoped rollout cohorts advance only after the prior cohort confirms healthy; failures pause the rollout. The owner can pause, resume and roll back confirmed hubs. Tested with two simulated hubs; fleet rollout isn't a production deployment.",
+   "where": [
+    "sim"
+   ],
+   "tests": [
+    "server/devices.sim.test.js"
+   ]
+  },
+  {
+   "id": "15.1",
+   "stage": "15",
+   "feature": "Security tests: forged and replayed hub requests, wrong hub, expired and replayed commands, edited configuration, malicious profile, wildcard topics, untrusted manual text, cross-account access, out-of-range and unallowed writes, unsafe update archives",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server",
+    "sim"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_hub.py",
+    "server/devices.test.js",
+    "server/devices.sim.test.js",
+    "hannah-os/runtime/tests/test_update.py",
+    "hannah-os/runtime/tests/test_adapters.py"
+   ]
+  },
+  {
+   "id": "15.2",
+   "stage": "15",
+   "feature": "Existing HANNAH still works: whole server, client and browser suites",
+   "status": "VERIFIED",
+   "where": [
+    "server",
+    "browser"
+   ],
+   "tests": [
+    "server/devices.sim.test.js",
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "Full server suite: 566 passed, 1 live Supabase test skipped. Full client suite: 432 Vitest and 43 desktop-tool tests passed. All 120 Playwright browser tests passed."
+  },
+  {
+   "id": "15.3",
+   "stage": "15",
+   "feature": "No-code acceptance: add a hub, add a device, check, switch on, change, automate, see history",
+   "status": "VERIFIED",
+   "where": [
+    "browser"
+   ],
+   "tests": [
+    "e2e/hardware.spec.ts"
+   ],
+   "note": "With simulated devices and a hub started by hand. Step 1 of the acceptance list, installing the operating environment on a target, is not done (2.3, 2.4)."
+  },
+  {
+   "id": "15.4",
+   "stage": "15",
+   "feature": "Independent security review",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "blockedBy": [
+    "H6"
+   ]
+  },
+  {
+   "id": "15.5",
+   "stage": "15",
+   "feature": "Performance measurements",
+   "status": "VERIFIED",
+   "files": [
+    "hannah-os/runtime/hannah_edge/benchmark.py",
+    "hannah-os/PERFORMANCE_BASELINE.json"
+   ],
+   "tests": [
+    "hannah-os/runtime/tests/test_benchmark.py"
+   ],
+   "where": [
+    "unit",
+    "sim"
+   ],
+   "note": "A repeatable 100-cycle MQTT and Modbus TCP write/readback benchmark records host, workload and median/p95 latency against HANNAH's own simulators. On this Python 3.14.6 macOS arm64 host the medians were 1.408 ms (MQTT) and 0.172 ms (Modbus TCP). These are descriptive loopback measurements only, not physical-device or production-hub performance."
+  },
+  {
+   "id": "15.6",
+   "stage": "15",
+   "feature": "Landing page and README say what works and what doesn't",
+   "status": "VERIFIED",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "client/src/__tests__/LandingContent.test.ts"
+   ]
+  },
+  {
+   "id": "16.1",
+   "stage": "16",
+   "feature": "Individual AI teammates: create by natural language or template; review, edit, activate, pause, duplicate, export, restore; version history (Part 2.1)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "client/src/components/WorkforcePage.tsx"
+   ]
+  },
+  {
+   "id": "16.2",
+   "stage": "16",
+   "feature": "Built-in teammate templates: Chief of Staff, Research Analyst, Software Engineer, QA Engineer, Security Analyst, Marketing Manager, Sales Assistant, Finance Assistant, Personal Assistant, Robotics Engineer, IoT Manager (Part 2.2)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ]
+  },
+  {
+   "id": "16.3",
+   "stage": "16",
+   "feature": "Bot lifecycle: create, configure, test, activate, pause, resume, duplicate, edit, archive, delete, export, restore (Part 2.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/bots.js",
+    "client/src/components/WorkforcePage.tsx"
+   ]
+  },
+  {
+   "id": "16.4",
+   "stage": "16",
+   "feature": "Bot personality and instructions: role, description, communication style, responsibilities, goals, operating rules, prohibited actions, escalation conditions, preferred model (Part 2.4)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ]
+  },
+  {
+   "id": "17.1",
+   "stage": "17",
+   "feature": "Persistent cloud computer: real filesystem, allow-listed terminal, Playwright browser profile, sessions, persistent workspace state (Part 3.1, 3.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/computers.js"
+   ]
+  },
+  {
+   "id": "17.2",
+   "stage": "17",
+   "feature": "Computer Center UI: open computers, browse files, write and delete files, new folders, upload, terminal, browser, screenshots, handoff, start/stop (Part 20 Computer Center)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "client/src/components/ComputerCenterPage.tsx"
+   ]
+  },
+  {
+   "id": "17.3",
+   "stage": "17",
+   "feature": "Local computer declarations: local computers run in the desktop runtime; execution is ask-by-default; cloud and local permissions are separate (Part 4.4, 3.4)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/computers.js",
+    "client/src/components/ComputerCenterPage.tsx"
+   ]
+  },
+  {
+   "id": "17.4",
+   "stage": "17",
+   "feature": "Computer activity: live screenshot, activity feed, checkpoints, resume; image previews refused for private addresses unless explicitly allowed (Part 3.5)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/browser.js"
+   ]
+  },
+  {
+   "id": "18.1",
+   "stage": "18",
+   "feature": "Hybrid automation: application connectors first, Playwright browser automation, accessibility APIs, terminal, scoped filesystem (Part 4.2)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/computers.js",
+    "server/workforce/browser.js"
+   ]
+  },
+  {
+   "id": "18.2",
+   "stage": "18",
+   "feature": "Persistent browser: profiles, tabs, cookies, navigation, form completion, screenshots, no CAPTCHA/MFA bypass, password fields refuse values (Part 4.3, 4.5)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/browser.js"
+   ]
+  },
+  {
+   "id": "18.3",
+   "stage": "18",
+   "feature": "Visual computer use: screenshots and actions via the workforce browser driver; never types raw passwords from context (Part 4.1)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/browser.js"
+   ]
+  },
+  {
+   "id": "18.4",
+   "stage": "18",
+   "feature": "Human handoff: pause and resume via sessions; a Bot pauses to ask a person for CAPTCHA, MFA, account recovery or verification (Part 4.5, 18.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/computers.js",
+    "client/src/components/ComputerCenterPage.tsx"
+   ]
+  },
+  {
+   "id": "19.1",
+   "stage": "19",
+   "feature": "Delegation: task decomposition, agent selection, parent/child tasks, MAX_DEPTH 3 / MAX_CHILDREN 8, shared context, parallel execution, dependencies, artifact transfer, status sync (Part 6.2, 6.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/tasks.js",
+    "server/workforce/runner.js",
+    "server/orchestrate.js",
+    "client/src/components/AgentsPage.tsx"
+   ]
+  },
+  {
+   "id": "19.2",
+   "stage": "19",
+   "feature": "Agent coordination: handoffs between coding, QA, security and reviewer chains; result aggregation and verification (Part 6.4, 6.5)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/runner.js",
+    "client/src/components/AgentsPage.tsx"
+   ]
+  },
+  {
+   "id": "20.1",
+   "stage": "20",
+   "feature": "Skills: name, description, instructions, inputs, apps, tools, when-to-use, outputs, failure handling, safety rules, versions, dry-run test, approval; learned skills start as drafts (Part 7.2, 7.3, 8.1)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/skills.js",
+    "client/src/components/SkillLibraryPage.tsx"
+   ]
+  },
+  {
+   "id": "20.2",
+   "stage": "20",
+   "feature": "Teach mode: demonstrate permitted interactions; recorded server-side (hannah_teach_sessions); compile to a draft; audio and form values are never recorded (Part 7.1)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/skills.js"
+   ]
+  },
+  {
+   "id": "20.3",
+   "stage": "20",
+   "feature": "Skill Library UI: skills list, details, dry-run tests, approve/publish, versions, export (Part 20 Skill Library)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "client/src/components/SkillLibraryPage.tsx"
+   ]
+  },
+  {
+   "id": "20.4",
+   "stage": "20",
+   "feature": "Skill reuse: bots recognize skills from natural language; do not run a skill when inputs/permissions are missing (Part 7.5, 8.4)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/runner.js"
+   ]
+  },
+  {
+   "id": "21.1",
+   "stage": "21",
+   "feature": "Routines: time, recurring, event triggers, webhooks; durable; run history, next run, pause/resume, manual run (Part 8.2, 8.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/routines.js"
+   ]
+  },
+  {
+   "id": "21.2",
+   "stage": "21",
+   "feature": "Routine Center UI: routines list, runs history, pause/resume, run now, create form (Part 20 Routine Center)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "client/src/components/RoutineCenterPage.tsx"
+   ]
+  },
+  {
+   "id": "21.3",
+   "stage": "21",
+   "feature": "Routine execution checks: schedule validation, connectivity, permissions, skill version, resources (Part 8.4)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/routines.js"
+   ]
+  },
+  {
+   "id": "21.4",
+   "stage": "21",
+   "feature": "Durable background execution: queued/running/waiting-approval/paused/blocked/failed/completed, checkpoints, cancellation, retries, timeouts, concurrency limits; the server worker is the tick, not a page (Part 18.1)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/tasks.js",
+    "server/workforce/runner.js",
+    "server/workforce/index.js"
+   ]
+  },
+  {
+   "id": "22.1",
+   "stage": "22",
+   "feature": "Bot-specific memory: role, preferences, rules, project context, user instructions, task history, work log (Part 9.1)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/memory.js",
+    "server/workforce/runner.js"
+   ]
+  },
+  {
+   "id": "22.2",
+   "stage": "22",
+   "feature": "Shared user memory: user timezone, style, organization, general preferences, approved conventions (Part 9.2)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/memory.js"
+   ]
+  },
+  {
+   "id": "22.3",
+   "stage": "22",
+   "feature": "Memory boundaries: user/bot/workspace/project/team/robotics scopes; Bot privacy isolation; controlled shared project workspaces (Part 9.3, 3.4)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/memory.js"
+   ]
+  },
+  {
+   "id": "22.4",
+   "stage": "22",
+   "feature": "Memory provenance, confidence, verification dates, expiry, search, contradiction handling; memory commands and a searchable UI (Part 9.4, 9.5)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/memory.js",
+    "client/src/components/WorkforcePage.tsx"
+   ]
+  },
+  {
+   "id": "22.5",
+   "stage": "22",
+   "feature": "Memory UI: per-bot memory panel with search, provenance, edit, delete (Part 20 Bot Workspace)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "client/src/components/WorkforcePage.tsx",
+    "client/src/components/AgentsPage.tsx"
+   ]
+  },
+  {
+   "id": "23.1",
+   "stage": "23",
+   "feature": "Secure Vault: masked storage, never returns raw values, revoke, assign to bots, usage history (Part 5.1, 5.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/vault.js",
+    "server/workforce/secrets.js"
+   ]
+  },
+  {
+   "id": "23.2",
+   "stage": "23",
+   "feature": "Secret isolation: the model never receives raw passwords/payment cards/tokens; secrets are injected server-side, audit records never store the secret (Part 5.2)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/secrets.js"
+   ]
+  },
+  {
+   "id": "23.3",
+   "stage": "23",
+   "feature": "Vault controls: add, edit, revoke, view authorized connections, remove, assign, review usage (Part 5.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/secrets.js"
+   ]
+  },
+  {
+   "id": "23.4",
+   "stage": "23",
+   "feature": "Approval engine: risk classes, always-ask, durable decisions, org deny, allow-once/save-rule; contextual approvals; background waits for approval (Part 17)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js",
+    "server/actions/engine.js"
+   ],
+   "files": [
+    "server/workforce/approvals.js",
+    "server/actions/permissions.js",
+    "server/actions/engine.js"
+   ]
+  },
+  {
+   "id": "23.5",
+   "stage": "23",
+   "feature": "Vault UI: add/edit/revoke/use, masked hints (Part 20 Vault)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "client/src/components/VaultPage.tsx"
+   ]
+  },
+  {
+   "id": "24.1",
+   "stage": "24",
+   "feature": "Integration framework: OAuth, MCP servers, A2A agents, REST APIs, webhooks, custom tools; external outputs validated (Part 12, 13)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "server/connectors.js",
+    "server/mcp-client.js",
+    "server/mcp-stdio.mjs",
+    "server/a2a.js"
+   ]
+  },
+  {
+   "id": "24.2",
+   "stage": "24",
+   "feature": "Team Bots: owner/managers, publish/unpublish, access revocation, activity audit; no private data shared between teammates (Part 13.2, 13.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/teams.js"
+   ]
+  },
+  {
+   "id": "24.3",
+   "stage": "24",
+   "feature": "Team Center UI: teams, members, policy, published bots, activity (Part 20 Team Center)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "client/src/components/TeamCenterPage.tsx"
+   ]
+  },
+  {
+   "id": "25.1",
+   "stage": "25",
+   "feature": "Meetings: providers (manual, google-meet, zoom, microsoft-teams, other), consent, transcript import, model summary, action items (Part 14)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/meetings.js"
+   ],
+   "note": "Live join and live record are unavailable without meeting-platform API credentials (M1); transcript import and reviewable summaries are verified."
+  },
+  {
+   "id": "25.2",
+   "stage": "25",
+   "feature": "Proactive intelligence: deterministic signals (overdue tasks, approvals, integration failures), quiet hours, per-Bot notification settings; offer-first (Part 15)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/proactive.js"
+   ]
+  },
+  {
+   "id": "25.3",
+   "stage": "25",
+   "feature": "Artifact system: versioned records, download, account isolation, source refs (Part 12, 16)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/artifacts.js"
+   ]
+  },
+  {
+   "id": "25.4",
+   "stage": "25",
+   "feature": "Artifact Library UI: list, preview, download, versions (Part 20 Artifact Library)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "client/src/components/ArtifactLibraryPage.tsx"
+   ]
+  },
+  {
+   "id": "25.5",
+   "stage": "25",
+   "feature": "Evidence-based completion: facts obtained, assumptions, actions, waiting for approval, deliverables, unresolved issues (Part 16.3)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/runner.js",
+    "server/workforce/tasks.js"
+   ]
+  },
+  {
+   "id": "26.1",
+   "stage": "26",
+   "feature": "Hardware-aware workforce: robotics-engineer and iot-manager teammate templates; validated device/robot capabilities (Part 19.1)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/workforce/bots.js",
+    "server/devices",
+    "robotics/PROGRESS.md"
+   ]
+  },
+  {
+   "id": "26.2",
+   "stage": "26",
+   "feature": "Robotics agent tasks: read health, review missions, prepare routes, report unavailable robots (Part 19.2)",
+   "status": "VERIFIED",
+   "where": [
+    "server"
+   ],
+   "tests": [
+    "server/workforce.test.js"
+   ],
+   "files": [
+    "server/robotics"
+   ]
+  },
+  {
+   "id": "27.1",
+   "stage": "27",
+   "feature": "Web clients: full workforce UI — AI Workforce, Computers, Routes, Skills, Vault, Teams, Artifacts; every visible control calls the real server API (Part 20, 11, 14)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "client/src/components/WorkforcePage.tsx",
+    "client/src/components/ComputerCenterPage.tsx",
+    "client/src/components/RoutineCenterPage.tsx",
+    "client/src/components/SkillLibraryPage.tsx",
+    "client/src/components/VaultPage.tsx",
+    "client/src/components/TeamCenterPage.tsx",
+    "client/src/components/ArtifactLibraryPage.tsx",
+    "client/src/services/Workforce.ts"
+   ]
+  },
+  {
+   "id": "27.2",
+   "stage": "27",
+   "feature": "Capacitor/desktop surfaces: the same workforce screens run in the mobile and desktop apps (Part 11)",
+   "status": "IMPLEMENTED",
+   "where": [],
+   "tests": [],
+   "files": [
+    "apps/mobile/capacitor.config.ts",
+    "apps/mobile/package.json",
+    "apps/desktop/package.json",
+    "client/src/components/WorkforcePage.tsx",
+    "client/src/components/ComputerCenterPage.tsx"
+   ]
+  }
+ ],
+ "blockers": [
+  {
+   "id": "H1",
+   "what": "No physical device, broker, PLC or machine to test against",
+   "needs": "The owner names a device (maker, model) and has it on a network with a hub",
+   "unblocks": "Real product profiles, plug-and-play, any claim about a physical device"
+  },
+  {
+   "id": "H2",
+   "what": "No Linux build host with ubuntu-image or snapcraft, and no board to boot",
+   "needs": "A Linux machine (or CI job) and a target board or virtual machine",
+   "unblocks": "Building, booting and updating HANNAH OS images"
+  },
+  {
+   "id": "H3",
+   "what": "No Matter controller, Zigbee or Z-Wave coordinator, or Bluetooth radio, and no stack for them on the hub",
+   "needs": "The radio hardware, a decision on the library for each, and a device to pair",
+   "unblocks": "Matter, Zigbee, Z-Wave, Bluetooth"
+  },
+  {
+   "id": "H4",
+   "what": "No ROS 2, Gazebo or robot (robotics blockers B1 to B3)",
+   "needs": "See robotics/PROGRESS.md",
+   "unblocks": "Everything robotics that says Gazebo, ROS 2 or hardware"
+  },
+  {
+   "id": "H5",
+   "what": "No live language model run in the development environment",
+   "needs": "A provider key the owner is willing to use for tests",
+   "unblocks": "Model-assisted manual reading; showing an agent using device tools with a real model"
+  },
+  {
+   "id": "H6",
+   "what": "No independent security review",
+   "needs": "A reviewer who did not write the code",
+   "unblocks": "Any statement that the security design was reviewed"
+  },
+  {
+   "id": "M1",
+   "what": "No meeting-platform API credentials: live meeting join and transcription are unavailable",
+   "needs": "Google Meet, Zoom and Microsoft Teams meeting-platform credentials with recording/transcript APIs",
+   "unblocks": "Live meeting join/record; automatic transcription for meeting summaries"
+  }
+ ],
+ "next": [
+  "Implement process boundaries for the hub's services and verify failure isolation before claiming services are isolated (2.9).",
+  "Add OCR or vision for image and scanned-PDF manuals only after an owner enables a named provider; every extracted value needs page or image-region evidence and stays unverified (5.4, 5.6; H5)."
+ ],
+ "lastVerified": {
+  "date": "2026-11-23",
+  "hub runtime": "Full runtime suite: 87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment, discovery worker isolation, the simulator publisher fix and benchmark statistics. Python 3.9.6 was not rerun.",
+  "robot runtime": "105 passed",
+  "server": "Full suite: 573 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. Includes the new Azure OpenAI, Amazon Bedrock and Hugging Face provider tests and the repaired manual intelligence module. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.",
+  "client": "Full suite: 433 Vitest tests passed. TypeScript production build passed.",
+  "browser": "All 120 Playwright tests passed in the last full run. The two hub-enrollment and Hardware Studio tests were rerun after the local dry-run preview change; both passed, and the Studio preview sent no action or device command.",
+  "device layer": "87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed; the latest Studio preview pair passed separately. The server suite had one live Supabase test skipped.",
+  "performance": "100 simulated write/readbacks per protocol on macOS 27.0.1 arm64, Python 3.14.6 (8 logical CPUs), measured through per-device worker IPC. MQTT median 1.594 ms, p95 1.643 ms, startup 58.976 ms; Modbus TCP median 0.227 ms, p95 0.299 ms, startup 84.832 ms. Simulator-only and loopback; excludes child-worker CPU, server, approval and hub transport.",
+  "checks": "Server full suite (573 passed, 1 live Supabase test skipped), gateway suite (17 tests), full server suite regression, full client Vitest suite, TypeScript build, server and changed-file client ESLint, SDK declaration typecheck, progress/catalogue/image-manifest checks, Python runtime tests and git diff --check all passed.",
+  "workforce": "Autonomous workforce built: server/workforce (bots, teams, computers, browser, tasks, skills, teach sessions, routines, memory, vault, approvals, artifacts, proactive, meetings) — 28/28 server tests pass (server/workforce.test.js). Client screens: AI Workforce (Bots), Computers, Routine Center, Skill Library, Vault, Team Center, Artifact Library — client build and tests pass."
+ },
+ "resume": [
+  "git status -sb && git log --oneline -5",
+  "python3 hannah-os/tools/progress.py --check && python3 hannah-os/tools/build_catalog.py --check && python3 hannah-os/tools/image_manifest.py --check",
+  "cd hannah-os/runtime && python3 -m unittest discover -s tests -t .",
+  "cd hannah-os/runtime && python3 -m hannah_edge.benchmark --iterations 100 --output ../PERFORMANCE_BASELINE.json",
+  "cd server && node --test devices.test.js devices.sim.test.js devices-sdk.test.js",
+  "cd client && npx vitest run src/__tests__/Devices.test.ts && npm run build && npx playwright test hardware.spec.ts",
+  "python3 -m hannah_edge simulate    # from hannah-os/runtime: simulated devices to try the Devices screen with"
+ ]
 }

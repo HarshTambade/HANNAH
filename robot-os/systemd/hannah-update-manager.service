@@ -1,0 +1,19 @@
+[Unit]
+Description=HANNAH Robot OS Update Manager
+After=network-online.target hannah-safety-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hannah-ros
+Group=hannah-ros
+ExecStart=/usr/bin/python3 -m hannah_robot_os service update-manager --config /etc/hannah-robot-os/config.json
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hannah-robot-os /var/log/hannah-robot-os /run/hannah-robot-os
+
+[Install]
+WantedBy=hannah-robot-os.target

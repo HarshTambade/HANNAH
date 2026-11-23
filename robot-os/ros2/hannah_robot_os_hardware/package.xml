@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>hannah_robot_os_hardware</name>
+  <version>0.1.0</version>
+  <description>HANNAH Robot OS ros2_control hardware interface skeleton (unvalidated).</description>
+  <maintainer email="dev@hannah.local">HANNAH</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <depend>rclpy</depend>
+  <depend>controller_manager</depend>
+  <depend>ros2_control</depend>
+  <depend>hardware_interface</depend>
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

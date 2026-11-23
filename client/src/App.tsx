@@ -4,6 +4,13 @@ import LandingPage from "./components/LandingPage";
 import MarketplacePage from "./components/MarketplacePage";
 import ModelsPage from "./components/ModelsPage";
 import AgentsPage from "./components/AgentsPage";
+import WorkforcePage from "./components/WorkforcePage";
+import ComputerCenterPage from "./components/ComputerCenterPage";
+import RoutineCenterPage from "./components/RoutineCenterPage";
+import SkillLibraryPage from "./components/SkillLibraryPage";
+import VaultPage from "./components/VaultPage";
+import TeamCenterPage from "./components/TeamCenterPage";
+import ArtifactLibraryPage from "./components/ArtifactLibraryPage";
 import AutomationsScreen from "./components/AutomationsScreen";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
 import ChatUI from "./components/ChatUI";
@@ -13,6 +20,7 @@ import Dashboard from "./components/Dashboard";
 import SettingsPage from "./components/SettingsPage";
 import OperatorPage from "./components/OperatorPage";
 import RoboticsPage from "./components/RoboticsPage";
+import RobotOSPage from "./components/RobotOSPage";
 import DevicesPage from "./components/DevicesPage";
 import { Robotics } from "./services/Robotics";
 import { Devices } from "./services/Devices";
@@ -37,7 +45,7 @@ import AppWelcome from "./components/AppWelcome";
 import { MarketplaceService } from "./services/MarketplaceService";
 import { IS_WEBSITE } from "./config/site";
 
-const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "robotics", "devices", "settings"]);
+const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "robotics", "robot-os", "devices", "settings", "workforce", "computers", "routines", "skills", "vault", "teams", "artifacts"]);
 const base = import.meta.env.BASE_URL;
 
 function currentScreen(): Screen {
@@ -280,6 +288,62 @@ export default function App() {
     );
   }
 
+  if (screen === "workforce") {
+    return (
+      <AppShell {...shellProps}>
+        <WorkforcePage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "computers") {
+    return (
+      <AppShell {...shellProps}>
+        <ComputerCenterPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "routines") {
+    return (
+      <AppShell {...shellProps}>
+        <RoutineCenterPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "skills") {
+    return (
+      <AppShell {...shellProps}>
+        <SkillLibraryPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "vault") {
+    return (
+      <AppShell {...shellProps}>
+        <VaultPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "teams") {
+    return (
+      <AppShell {...shellProps}>
+        <TeamCenterPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "artifacts") {
+    return (
+      <AppShell {...shellProps}>
+        <ArtifactLibraryPage />
+      </AppShell>
+    );
+  }
+
   if (screen === "models") {
     return (
       <AppShell {...shellProps}>
@@ -308,6 +372,14 @@ export default function App() {
     return (
       <AppShell {...shellProps}>
         <RoboticsPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "robot-os") {
+    return (
+      <AppShell {...shellProps}>
+        <RobotOSPage />
       </AppShell>
     );
   }

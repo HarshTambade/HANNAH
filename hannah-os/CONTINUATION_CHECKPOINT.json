@@ -1,13 +1,16 @@
 {
   "date": "2026-11-23",
-  "phase": "15 Security, validation, production complete",
+  "phase": "Autonomous AI workforce built (master prompt Parts 1–25); HANNAH OS device platform (Phases 0–15) unchanged",
   "status": {
     "hub_runtime": "87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment",
     "robot_runtime": "105 passed",
     "server": "Full suite: 574 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided (with the new Azure OpenAI, Amazon Bedrock and Hugging Face provider tests and the repaired manual intelligence module).",
     "client": "Full suite: 433 Vitest tests and 43 desktop-tool tests passed, TypeScript build passed",
     "browser": "All 120 Playwright tests passed",
-    "device_layer": "87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed"
+    "device_layer": "87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed",
+    "workforce_server": "server/workforce/* (bots, teams, computers, browser, tasks, skills, teach sessions, routines, memory, vault, approvals, artifacts, proactive, meetings) — 28/28 server tests pass (server/workforce.test.js, server/workforce.pglite.test.js)",
+    "workforce_client_screens": "AI Workforce (Bots), Computers, Routes, Skills, Vault, Teams, Artifacts — client build (tsc -b && vite build) passes, vitest + desktop-tool tests pass",
+    "workforce_progress": "hannah-os/PROGRESS.json — stages 16–27 (Workforce), 100+ items; tracker regenerated with python3 hannah-os/tools/progress.py (--check passes); blocker M1: meetings live join needs meeting-platform API credentials"
   },
   "completed": [
     "Repaired server/devices/manuals.js, which the last commit had left with invalid JavaScript: restored the known-good module from the previous commit and re-applied the intended enhancements (electrical power/voltage/current patterns, power factor, efficiency, inrush current, extended UNITS, register table hints, image source evidence) so the module parses, loads and passes its suite again.",
@@ -38,7 +41,12 @@
     "Phase 12: Robot fleet - fleet registry with per-account isolation, fleet monitoring from reported state, task allocation with capability/readiness checks, incompatible assignments refused",
     "Phase 13: Marketplace - signed profile packages with review, publish/browse/install/revoke/rollback, SDKs for device profiles/adapters/workflows, third-party driver sandboxing by design",
     "Phase 14: Updates and recovery - hub self-update with hash verification, safe unpack, health check, probation, rollback; per-hub signed update distribution with fleet view; hub keeps signed configuration and resumes from it; staged rollout controls with cohorts, canary, pause and fleet rollback",
-    "Phase 15: Security, validation, production - security tests (forged/replayed hub requests, wrong hub, expired/replayed commands, edited configuration, malicious profile, wildcard topics, untrusted manual text, cross-account access, out-of-range/unallowed writes, unsafe update archives); existing HANNAH still works (566 server suite, 432 client Vitest, 43 desktop-tool, 120 Playwright browser tests); no-code acceptance with simulated devices; performance measurements (MQTT median 1.408ms, Modbus TCP median 0.172ms); landing page/README say what works and what doesn't"
+    "Phase 15: Security, validation, production - security tests (forged/replayed hub requests, wrong hub, expired/replayed commands, edited configuration, malicious profile, wildcard topics, untrusted manual text, cross-account access, out-of-range/unallowed writes, unsafe update archives); existing HANNAH still works (566 server suite, 432 client Vitest, 43 desktop-tool, 120 Playwright browser tests); no-code acceptance with simulated devices; performance measurements (MQTT median 1.408ms, Modbus TCP median 0.172ms); landing page/README say what works and what doesn't",
+    "Autonomous workforce built on the HANNAH OS platform (master prompt Parts 1–25), reusing the model gateway, Action Engine, permission manager, vault, webhooks, workflows, agents and the robotics device layer. Server modules: server/workforce/ (bots.js, teams.js, computers.js, browser.js, tasks.js, skills.js, routines.js, memory.js, secrets.js, approvals.js, artifacts.js, proactive.js, meetings.js, runner.js, index.js). All 28 workforce server tests pass.",
+    "Workforce client UI: client/src/components/WorkforcePage.tsx (AI Workforce — bots, templates, teams, tasks, memories, versions), ComputerCenterPage.tsx (files, terminal, browser, screenshots, handoff), RoutineCenterPage.tsx (schedules, runs, pause/resume, run now), SkillLibraryPage.tsx (skills, dry-run, teach sessions, approve/publish), VaultPage.tsx (add/edit/revoke/use secrets), TeamCenterPage.tsx (members, policy, published bots, activity), ArtifactLibraryPage.tsx (preview, versions, download). client/src/services/Workforce.ts is the typed API client for /api/workforce/* (mounted at /api/workforce by server/index.js:512).",
+    "Workforce wired into HANNAH OS: routes.ts (7 new app screens: workforce /bots, computers, routines, skills, vault, teams, artifacts), AppShell (nav), App.tsx (renders). Every visible control calls the real server API.",
+    "hannah-os/PROGRESS.json updated: stages 16–27 with workforce items (Parts 1–25 of the master prompt), blocker M1 for meeting live join; tracker regenerated: python3 hannah-os/tools/progress.py (--check exits 0).",
+    "Verified: client npm run build (tsc -b && vite build) passes; client npm test passes; server workforce tests 28/28 pass; eslint clean on new files (pre-existing warnings only, in files untouched)."
   ],
   "blocked": [
     "H1: No physical device, broker, PLC or machine to test against",
@@ -46,15 +54,15 @@
     "H3: No Matter controller, Zigbee or Z-Wave coordinator, or Bluetooth radio, and no stack for them on the hub",
     "H4: No ROS 2, Gazebo or robot (robotics blockers B1 to B3)",
     "H5: No live language model run in the development environment",
-    "H6: No independent security review"
+    "H6: No independent security review",
+    "M1: No meeting-platform API credentials: live meeting join and live record are unavailable for Google Meet, Zoom, Microsoft Teams (transcript import and reviewable summaries work — 25.1 is VERIFIED)."
   ],
   "next_unblocked_tasks": [
-    "Add OCR or vision for image and scanned-PDF manuals after owner enables named provider (H5 blocked) - the remaining major implementable task",
-    "Pattern-based manual extraction fully enhanced (complete: electrical patterns, expanded UNITS, TABLE_HINT entries)",
-    "All HANNAH OS phases verified complete (0-15)",
-    "Blockers H1-H6 documented for owner resolution - no software work can resolve these without external dependencies"
+    "Meeting live join/transcription when meeting-platform API credentials become available (M1).",
+    "Browser-level acceptance tests for workforce screens (e2e/workforce.spec.ts) when a browser-test runner for the app is added.",
+    "Keep the workforce worker wired into production deployments: startWorkforceWorker() is called in server/index.js only when databaseConfigured(); verify it starts in the real deployment and the tick fires."
   ],
-  "next_phase_to_start": "Phase 3 — Universal device abstraction (all items VERIFIED; no immediate work needed; awaiting resolution of H1-H6 blockers)",
+  "next_phase_to_start": "Workforce — autonomous AI workforce, Parts 1–25, built through stage 27.",
   "enhancements_made": [
     "Added electrical.power and electrical.voltage.range pattern extraction to manuals.js",
     "Added electrical.power_factor, electrical.efficiency, electrical.inrush_current patterns",

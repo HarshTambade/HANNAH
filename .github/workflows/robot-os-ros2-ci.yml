@@ -1,0 +1,31 @@
+name: Robot OS ROS2 CI
+
+on:
+  push:
+    paths:
+      - 'robot-os/ros2/**'
+      - '.github/workflows/robot-os-ros2-ci.yml'
+  pull_request:
+    paths:
+      - 'robot-os/ros2/**'
+      - '.github/workflows/robot-os-ros2-ci.yml'
+
+jobs:
+  colcon-build:
+    runs-on: ubuntu-24.04
+    container:
+      image: ros:jazzy-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          apt-get update
+          apt-get install -y python3-pip python3-colcon-common-extensions
+      - name: Build skeleton package
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          mkdir -p /ws/src
+          cp -r robot-os/ros2/hannah_robot_os_hardware /ws/src/
+          cd /ws
+          colcon build --packages-select hannah_robot_os_hardware

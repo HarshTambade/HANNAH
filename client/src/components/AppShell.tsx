@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
-import { Bot, Brain, Cpu, LayoutDashboard, MessageSquare, Plug, Settings2, ShieldCheck, Users, Workflow } from "lucide-react";
+import { BellRing, BookOpen, Bot, Brain, Cpu, LayoutDashboard, Laptop, Lock, MessageSquare, Plug, Settings2, ShieldCheck, Users, Workflow } from "lucide-react";
 import { ReminderToasts } from "./Reminders";
 import { AutomationToasts } from "./AutomationToasts";
 import { RemoteApprovalToasts } from "./DeviceTasksPanel";
@@ -7,17 +7,23 @@ import { ScreenWatchIndicator } from "./DesktopControlSections";
 import { desktopFilesAvailable } from "../services/DesktopFiles";
 import { pathForScreen } from "../routes";
 
-export type AppSection = "conversation" | "companion" | "agents" | "models" | "accountability" | "automations" | "actions" | "robotics" | "devices" | "settings";
+export type AppSection = "conversation" | "companion" | "agents" | "models" | "accountability" | "automations" | "actions" | "robotics" | "robot-os" | "devices" | "settings" | "workforce" | "computers" | "routines" | "skills" | "vault";
 
 const navItems: Array<{ id: AppSection; label: string; shortLabel: string; Icon: typeof MessageSquare }> = [
   { id: "conversation", label: "Chat", shortLabel: "Chat", Icon: MessageSquare },
   { id: "companion", label: "Dashboard", shortLabel: "Home", Icon: LayoutDashboard },
   { id: "agents", label: "Agents", shortLabel: "Agents", Icon: Users },
+  { id: "workforce", label: "Workforce", shortLabel: "Teammates", Icon: Bot },
+  { id: "computers", label: "Computers", shortLabel: "Computers", Icon: Laptop },
+  { id: "routines", label: "Routines", shortLabel: "Routines", Icon: BellRing },
+  { id: "skills", label: "Skills", shortLabel: "Skills", Icon: BookOpen },
+  { id: "vault", label: "Vault", shortLabel: "Vault", Icon: Lock },
   { id: "models", label: "Models", shortLabel: "Models", Icon: Cpu },
   { id: "accountability", label: "Memory & style", shortLabel: "Memory", Icon: Brain },
   { id: "automations", label: "Automations", shortLabel: "Flows", Icon: Workflow },
   { id: "actions", label: "Actions", shortLabel: "Actions", Icon: ShieldCheck },
   { id: "robotics", label: "Robots", shortLabel: "Robots", Icon: Bot },
+  { id: "robot-os", label: "Robot OS", shortLabel: "Robot OS", Icon: Bot },
   { id: "devices", label: "Devices", shortLabel: "Devices", Icon: Plug },
   { id: "settings", label: "Settings", shortLabel: "Settings", Icon: Settings2 },
 ];

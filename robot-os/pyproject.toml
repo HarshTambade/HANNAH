@@ -1,0 +1,26 @@
+[project]
+name = "hannah-robot-os"
+version = "0.1.0"
+description = "HANNAH Robot OS - Linux-based AI-native robot operating environment services."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+hannah-robot-os = "hannah_robot_os.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

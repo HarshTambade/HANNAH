@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "robotos-dev-x86_64",
+      "name": "HANNAH Robot OS Developer (x86_64)",
+      "arch": "amd64",
+      "base": "ubuntu-server-24.04",
+      "target": "generic-x86_64",
+      "services": [
+        "hannah-safety-gateway",
+        "hannah-hardware-manager",
+        "hannah-motor-controller",
+        "hannah-sensor-manager",
+        "hannah-ros2-runtime",
+        "hannah-telemetry",
+        "hannah-update-manager"
+      ],
+      "packages": ["python3", "python3-venv", "ca-certificates", "openssh-server", "curl"],
+      "ros2": "jazzy",
+      "status": "experimental"
+    },
+    {
+      "id": "robotos-dev-arm64",
+      "name": "HANNAH Robot OS Developer (arm64)",
+      "arch": "arm64",
+      "base": "ubuntu-server-24.04",
+      "target": "generic-arm64",
+      "services": [
+        "hannah-safety-gateway",
+        "hannah-hardware-manager",
+        "hannah-motor-controller",
+        "hannah-sensor-manager",
+        "hannah-ros2-runtime",
+        "hannah-telemetry",
+        "hannah-update-manager"
+      ],
+      "packages": ["python3", "python3-venv", "ca-certificates", "openssh-server", "curl"],
+      "ros2": "jazzy",
+      "status": "experimental"
+    },
+    {
+      "id": "robotos-rpi5-arm64",
+      "name": "HANNAH Robot OS Raspberry Pi 5 (arm64)",
+      "arch": "arm64",
+      "base": "ubuntu-server-24.04",
+      "target": "raspberry-pi-5",
+      "services": [
+        "hannah-safety-gateway",
+        "hannah-hardware-manager",
+        "hannah-motor-controller",
+        "hannah-sensor-manager",
+        "hannah-telemetry",
+        "hannah-update-manager"
+      ],
+      "packages": ["python3", "ca-certificates"],
+      "ros2": "jazzy",
+      "status": "not_supported"
+    },
+    {
+      "id": "robotos-industrial-x86_64",
+      "name": "HANNAH Robot OS Industrial Edge (x86_64)",
+      "arch": "amd64",
+      "base": "ubuntu-core-24-eval",
+      "target": "industrial-x86_64",
+      "services": [
+        "hannah-safety-gateway",
+        "hannah-hardware-manager",
+        "hannah-motor-controller",
+        "hannah-sensor-manager",
+        "hannah-telemetry",
+        "hannah-update-manager"
+      ],
+      "packages": ["python3", "ca-certificates"],
+      "ros2": "jazzy",
+      "status": "not_supported"
+    },
+    {
+      "id": "robotos-jetson-orin-arm64",
+      "name": "HANNAH Robot OS Jetson Orin (arm64)",
+      "arch": "arm64",
+      "base": "ubuntu-jetson-l4t-eval",
+      "target": "nvidia-jetson-orin",
+      "services": [
+        "hannah-safety-gateway",
+        "hannah-hardware-manager",
+        "hannah-motor-controller",
+        "hannah-sensor-manager",
+        "hannah-ros2-runtime",
+        "hannah-telemetry",
+        "hannah-update-manager"
+      ],
+      "packages": ["python3", "ca-certificates"],
+      "ros2": "jazzy",
+      "status": "not_supported"
+    }
+  ]
+}

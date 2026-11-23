@@ -288,7 +288,16 @@ async function analyze({ name, buffer, suggest = null }) {
 /** The evidence kept beside a saved profile: where each value came from. */
 const evidenceOf = (analysis, confirmed = []) => ({
   document: analysis.document,
-  facts: analysis.facts.map(({ id, field, label, value, page, quote, confidence, hazardous }) => ({ field, label, value, page, quote, confidence, ...(hazardous ? { hazardous: true } : {}), state: confirmed.includes(id) ? "confirmed by you" : "unverified" })),
+  facts: analysis.facts.map(({ id, field, label, value, page, quote, confidence, method, hazardous, ...rest }) => {
+    const base = { field, label, value, page, quote, confidence, ...(hazardous ? { hazardous: true } : {}), state: confirmed.includes(id) ? "confirmed by you" : "unverified" };
+    // Preserve the source method (pattern or model) for transparency
+    if (method) { base.method = method; }
+    // Add a note if the fact came from a model and is still unverified
+    if (method === "model" && base.state === "unverified") {
+      base.note = "Model suggestion: verify this value against the device before relying on it. The evidence gate ensures the quote appears on the cited page, but the device has not been reached or switched on.";
+    }
+    return { ...base, ...rest };
+  }),
 });
 
 function decode(body) {

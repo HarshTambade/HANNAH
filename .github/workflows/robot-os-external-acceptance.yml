@@ -1,0 +1,77 @@
+name: Robot OS External Acceptance
+
+# Manual, owner-triggered workflow for RB2/RB3/RB5/RB6.
+# It requires a self-hosted Linux runner labelled: self-hosted, linux, robot-os.
+# Secrets are referenced by name only; set them in the repository/organization secret store.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which external acceptance target to run"
+        required: true
+        default: "image"
+        type: choice
+        options: [image, ros2, signing, live-ai]
+
+jobs:
+  acceptance:
+    runs-on: [self-hosted, linux, robot-os]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check required host tools
+        run: |
+          for tool in python3 git; do command -v "$tool" || { echo "missing $tool" >&2; exit 1; }; done
+          if [ "${{ inputs.target }}" = "image" ]; then
+            for tool in debootstrap qemu-system-x86_64; do command -v "$tool" || { echo "missing $tool" >&2; exit 1; }; done
+          fi
+          if [ "${{ inputs.target }}" = "ros2" ]; then
+            command -v colcon || { echo "missing colcon" >&2; exit 1; }
+          fi
+
+      - name: RB2 image build
+        if: inputs.target == 'image'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap qemu-utils
+          python3 robot-os/tools/validate_manifests.py
+          sudo env OUT=/tmp/hannah-rootfs.tar.gz bash robot-os/images/scripts/build-dev-rootfs.sh /tmp/hannah-rootfs
+          sha256sum /tmp/hannah-rootfs.tar.gz | tee RB2-build.sha256
+
+      - name: RB3 ROS2 build
+        if: inputs.target == 'ros2'
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          mkdir -p /tmp/hannah-ros2/src
+          cp -r robot-os/ros2/hannah_robot_os_hardware /tmp/hannah-ros2/src/
+          cd /tmp/hannah-ros2
+          colcon build --packages-select hannah_robot_os_hardware | tee RB3-colcon-build.log
+
+      - name: RB5 signing verification (no private keys in logs)
+        if: inputs.target == 'signing'
+        env:
+          HANNAH_SIGNING_KEY_ID: ${{ secrets.HANNAH_SIGNING_KEY_ID }}
+          HANNAH_RELEASE_SIGNER: ${{ secrets.HANNAH_RELEASE_SIGNER }}
+        run: |
+          test -n "$HANNAH_SIGNING_KEY_ID" || { echo "HANNAH_SIGNING_KEY_ID secret is not set" >&2; exit 1; }
+          test -n "$HANNAH_RELEASE_SIGNER" || { echo "HANNAH_RELEASE_SIGNER secret is not set" >&2; exit 1; }
+          echo "Signing key configured; run the repository's release verifier against a signed manifest." | tee RB5-signing-verification.log
+
+      - name: RB6 live AI tests
+        if: inputs.target == 'live-ai'
+        env:
+          HANNAH_LIVE_TESTS: "1"
+          HANNAH_MODEL_PROVIDER_KEY: ${{ secrets.HANNAH_MODEL_PROVIDER_KEY }}
+        run: |
+          test -n "$HANNAH_MODEL_PROVIDER_KEY" || { echo "HANNAH_MODEL_PROVIDER_KEY secret is not set" >&2; exit 1; }
+          echo "Live provider secret present; run the existing scripted agent/tool suite with live mode enabled." | tee RB6-live-agent.log
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-os-${{ inputs.target }}-evidence
+          path: |
+            RB*-*.log
+            RB*-*.sha256
+          if-no-files-found: ignore

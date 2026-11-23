@@ -1,0 +1,31 @@
+{
+  "id": "sim-diffdrive-v1",
+  "name": "Simulated Differential Drive",
+  "type": "mobile_robot",
+  "status": "experimental",
+  "controllers": [
+    {
+      "controller_id": "sim-motor-1",
+      "kind": "motor_controller",
+      "driver": "sim_serial_v1",
+      "interface": "sim",
+      "capabilities": ["velocity", "encoders", "estop", "watchdog"],
+      "transport": {
+        "kind": "sim",
+        "timeout_ms": 500,
+        "retries": 1
+      }
+    }
+  ],
+  "sensors": [],
+  "limits": {
+    "max_linear_speed_mps": 0.5,
+    "max_angular_speed_rps": 1.5,
+    "max_acceleration_mps2": 0.8
+  },
+  "safety": {
+    "requires_physical_estop": false,
+    "command_ttl_ms": 500,
+    "watchdog_timeout_ms": 500
+  }
+}

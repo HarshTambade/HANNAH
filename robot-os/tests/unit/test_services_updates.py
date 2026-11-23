@@ -1,0 +1,52 @@
+import json
+from pathlib import Path
+
+from hannah_robot_os.common import AuditLog, ServiceState, now_ms
+from hannah_robot_os.hardware.models import HardwareDevice
+from hannah_robot_os.hardware.registry import HardwareRegistry
+from hannah_robot_os.sensors.manager import SensorManager, SensorReading
+from hannah_robot_os.services.health import ServiceHealthManager
+from hannah_robot_os.updates.manifest import UpdateManifest, sha256_file, verify_manifest
+
+
+def test_service_health_ready_gate():
+    audit = AuditLog()
+    hm = ServiceHealthManager(audit=audit, required_services=["safety-gateway", "motor-controller"])
+    hm.set_state("safety-gateway", ServiceState.READY)
+    hm.set_state("motor-controller", ServiceState.STARTING)
+    snap = hm.snapshot()
+    assert snap["robot_ready"] is False
+    hm.set_state("motor-controller", ServiceState.READY)
+    snap = hm.snapshot()
+    assert snap["robot_ready"] is True
+
+
+def test_sensor_required_ok():
+    audit = AuditLog()
+    reg = HardwareRegistry(audit=audit)
+    sm = SensorManager(audit=audit, registry=reg, required_sensor_ids=["imu1"], stale_after_ms=1000)
+    sm.register_sensor(HardwareDevice(device_id="imu1", kind="imu"))
+    assert sm.required_sensors_ok(now=now_ms()) is False
+    sm.ingest(SensorReading(device_id="imu1", ts_ms=now_ms(), data={"z": 0.1}))
+    assert sm.required_sensors_ok(now=now_ms()) is True
+
+
+def test_update_manifest_verification(tmp_path: Path):
+    artifact = tmp_path / "robot-os.tar.gz"
+    artifact.write_bytes(b"test-artifact")
+    manifest = UpdateManifest.from_dict({
+        "version": "0.1.1",
+        "build": "20261123",
+        "artifact": artifact.name,
+        "sha256": sha256_file(artifact),
+        "size_bytes": artifact.stat().st_size,
+        "signature": "devsig",
+        "signer": "dev",
+    })
+    verify_manifest(manifest, artifact, trusted_signers={"dev"})
+    bad = UpdateManifest.from_dict({**manifest.__dict__, "sha256": "0" * 64})
+    try:
+        verify_manifest(bad, artifact, trusted_signers={"dev"})
+        assert False, "should fail"
+    except ValueError as e:
+        assert "hash" in str(e)

@@ -37,6 +37,10 @@ const { createConnectorsRouter } = require("./connectors");
 const { createStudioRouter } = require("./studio");
 const { createOperator, createOperatorRouter } = require("./actions/router");
 const { createRobotAccountRouter, createRobotDeviceRouter } = require("./robotics/router");
+const { createRobotOSBridgeRouter } = require("./robotics/robot_os_router");
+const { createAuthenticator: createRobotOSBridgeAuthenticator } = require("./robotics/robot_os_auth");
+const robotOSEnvelopes = require("./robotics/robot_os_envelopes");
+const { createRobotOSCommandService } = require("./robotics/robot_os_commands");
 const { createDeviceAccountRouter, createHubDeviceRouter } = require("./devices/router");
 const { manualRoutes } = require("./devices/manuals");
 const { createWebRouter } = require("./web");
@@ -51,6 +55,7 @@ const { createTaskRunRouter } = require("./task-runs");
 const { createConnectionsRouter, publicBaseUrl } = require("./connections");
 const { createRuntime } = require("./workflows/runtime");
 const { createHookRouter, createWorkflowRouter } = require("./workflows/router");
+const { createWorkforceRouter, startWorker: startWorkforceWorker } = require("./workforce");
 const serverVersion = require("./package.json").version;
 const { assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
 const router = require("./router");
@@ -426,6 +431,54 @@ app.use("/api", createRobotDeviceRouter({ robotics: () => operator.robotics, enr
 // A device hub's own requests, the same way.
 app.use("/api", createHubDeviceRouter({ devices: () => operator.devices, enrollLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "hub-enroll" }) }));
 
+// Opt-in onboard Robot OS bridge. Each envelope carries its own HMAC signature;
+// the route stays 404 unless explicitly enabled with configured robot secrets.
+let robotOSSecrets = {};
+let robotOSOwners = {};
+try {
+  robotOSSecrets = JSON.parse(process.env.HANNAH_ROBOT_OS_BRIDGE_SECRETS || "{}");
+} catch {
+  console.error("HANNAH_ROBOT_OS_BRIDGE_SECRETS is not valid JSON; the Robot OS bridge has no enrolled secrets.");
+}
+try {
+  robotOSOwners = JSON.parse(process.env.HANNAH_ROBOT_OS_BRIDGE_OWNERS || "{}");
+} catch {
+  console.error("HANNAH_ROBOT_OS_BRIDGE_OWNERS is not valid JSON; Robot OS owners will come from the robot registry.");
+}
+const robotOSCommands = createRobotOSCommandService({ secrets: robotOSSecrets });
+if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
+  app.use("/api", createRobotOSBridgeRouter({
+    enabled: true,
+    auth: createRobotOSBridgeAuthenticator({ secrets: robotOSSecrets }),
+    onEnvelope: async (env) => {
+      const db = await getDatabase().catch(() => null);
+      if (db) {
+        const result = await robotOSEnvelopes.saveEnvelope(db, env, { ownerMap: robotOSOwners }).catch((error) => {
+          console.error(`Robot OS envelope storage failed: ${error?.message || error}`);
+          return { stored: false };
+        });
+        if (!result.stored) return; // duplicate or unstoreable: never double-count
+      }
+      console.log(JSON.stringify({ robotOSBridge: { robot_id: env.robot_id, envelope_id: env.envelope_id, kind: env.kind, ts_ms: env.ts_ms } }));
+    },
+    pendingCommands: async (robotId) => {
+      const db = await getDatabase().catch(() => null);
+      if (!db) return [];
+      return robotOSCommands.pending(db, robotId).catch(() => []);
+    },
+    onCommandAck: async (env) => {
+      const db = await getDatabase().catch(() => null);
+      if (!db) return;
+      await robotOSCommands.ack(db, {
+        robotId: env.robot_id,
+        commandId: env.payload?.commandId,
+        ok: env.payload?.ok === true,
+        reason: env.payload?.reason || "",
+      }).catch((error) => console.error(`Robot OS command ack failed: ${error?.message || error}`));
+    },
+  }));
+}
+
 // One inventory across robots and devices: a single answer for the account's hardware.
 app.get("/api/inventory", async (req, res) => {
   const account = res.locals.hannahAccount;
@@ -506,6 +559,9 @@ app.use("/api", createDeviceTaskRouter());
 // Durable task runs: checkpoints, a one-device lease, resume on another device.
 app.use("/api", createTaskRunRouter());
 app.use("/api", createWorkflowRouter({ runtime: workflowRuntime, publicBaseUrl }));
+// The AI workforce: teammates, persistent computers, tasks, skills, routines,
+// vault, approvals, artifacts, proactive suggestions and meetings.
+app.use("/api", createWorkforceRouter());
 // Calendar and email: Google and Microsoft accounts connected with their own sign-in.
 app.use("/api", createConnectionsRouter({ allowedOrigins }));
 app.use("/api", createOrchestrateHandler({ getRequestProvider, preferredProviderId, timeoutMs: cloudRequestTimeout }));
@@ -519,11 +575,11 @@ app.use("/api", createConnectorsRouter({ publicBaseUrl, allowedOrigins, timeoutM
 // Research (search, read, cite) and Document Studio (PowerPoint, PDF, Word, Excel): server/studio.js.
 app.use("/api", createStudioRouter({ getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 // The Action Engine (permission, approval, execution, verification, audit), the integrations hub and the coding service: server/actions, server/coding.
-const operator = createOperator();
+const operator = createOperator({ robotOSCommands });
 // Workflows reach the same engine ("Do an action", "Check a repository").
 workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
-app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine }));
+app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands }));
 app.use("/api", createDeviceAccountRouter({ devices: operator.devices, engine: operator.engine, manuals: manualRoutes({ devices: operator.devices }) }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
 app.use("/api", createWebRouter({ getRequestProvider }));
@@ -1188,6 +1244,8 @@ async function startServer() {
 
   // A long-running server runs the workflow worker itself; serverless hosting uses /api/workflows/tick from a cron.
   if (databaseConfigured() && process.env.WORKFLOW_WORKER !== "off") workflowRuntime.startWorker();
+  // Routines and queued workforce tasks run here too; serverless uses /api/workforce/tick.
+  if (databaseConfigured() && process.env.WORKFORCE_WORKER !== "off") startWorkforceWorker();
   const server = app.listen(port, host, () => {
     console.log(`HANNAH API listening on http://${host}:${port}`);
     if (mcpEnabled) console.log(`HANNAH MCP endpoint at http://${host}:${port}/mcp`);

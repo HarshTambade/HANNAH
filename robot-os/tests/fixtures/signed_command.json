@@ -1,0 +1,16 @@
+{
+  "secret": "test-secret",
+  "command": {
+    "id": "rosc_fixture",
+    "robotId": "robot-dev",
+    "capability": "update.stage",
+    "params": {
+      "version": "0.2.0",
+      "artifact": "https://example.test/os.tar"
+    },
+    "issuedAt": 1000,
+    "expiresAt": 9000,
+    "nonce": "fixture-nonce",
+    "signature": "0ee78e1ab87596bf648b4bcfec191ca2aa30613c02aa950cbfa71e5675d1b6f8"
+  }
+}
