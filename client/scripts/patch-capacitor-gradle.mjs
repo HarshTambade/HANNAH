@@ -24,12 +24,27 @@ const moduleGradleFiles = [
   "node_modules/capacitor-native-agent/android/build.gradle",
 ];
 
+const kotlinClasspathPattern = /\s*classpath\s+["']org\.jetbrains\.kotlin:kotlin-gradle-plugin:[^"']+["']\s*\n?/g;
+const kotlinOnlyBuildscriptPattern = /^buildscript\s*\{[\s\S]*?\n\}\n\n(?=apply plugin:)/;
+
 for (const relativePath of moduleGradleFiles) {
   const filePath = resolve(projectRoot, relativePath);
   if (!existsSync(filePath)) continue;
 
   const source = readFileSync(filePath, "utf8");
   let patchedSource = source;
+
+  patchedSource = patchedSource.replace(kotlinClasspathPattern, "");
+
+  if (
+    relativePath === "node_modules/capacitor-lancedb/android/build.gradle" ||
+    relativePath === "node_modules/capacitor-mobile-claw/android/build.gradle" ||
+    relativePath === "node_modules/capacitor-mobilecron/android/build.gradle" ||
+    relativePath === "node_modules/capacitor-native-agent/android/build.gradle" ||
+    relativePath === "node_modules/@elizaos/capacitor-talkmode/android/build.gradle"
+  ) {
+    patchedSource = patchedSource.replace(kotlinOnlyBuildscriptPattern, "");
+  }
 
   if (
     /apply plugin:\s*['"](?:kotlin-android|org\.jetbrains\.kotlin\.android)['"]/.test(patchedSource) &&
