@@ -296,7 +296,8 @@ const evidenceOf = (analysis, confirmed = []) => ({
     if (method === "model" && base.state === "unverified") {
       base.note = "Model suggestion: verify this value against the device before relying on it. The evidence gate ensures the quote appears on the cited page, but the device has not been reached or switched on.";
     }
-    return { ...base, ...rest };
+    // `rest` carries the fact's own state, always "unverified"; whether the person confirmed it is in `base.state`.
+    return { ...base, ...rest, state: base.state };
   }),
 });
 

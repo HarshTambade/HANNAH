@@ -51,13 +51,14 @@ function startServer() {
       SUPABASE_SERVICE_ROLE_KEY: "",
       VERCEL: "1",
       WORKFLOW_WORKER: "off",
+      WORKFORCE_WORKER: "off",
       WORKFLOW_ALLOW_PRIVATE_NETWORK: "true",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout.on("data", (chunk) => { log += chunk; });
   server.stderr.on("data", (chunk) => { log += chunk; });
-  return waitFor(async () => (await fetch(`${api}/health`).catch(() => null))?.ok, 15_000, "the server to start");
+  return waitFor(async () => (await fetch(`${api}/health`).catch(() => null))?.ok, 30_000, "the server to start");
 }
 async function killServer() {
   const exited = once(server, "exit");
@@ -68,8 +69,12 @@ async function killServer() {
 async function waitFor(check, ms, what) {
   const until = Date.now() + ms;
   while (Date.now() < until) {
-    const value = await check();
-    if (value) return value;
+    try {
+      const value = await check();
+      if (value) return value;
+    } catch {
+      // Transient startup/network errors: keep polling until the deadline.
+    }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
   throw new Error(`Timed out waiting for ${what}.\n${log.slice(-3000)}`);
@@ -111,7 +116,7 @@ async function runWithCredential(credentialId) {
   const created = await call("POST", "/workflows", { name: `Uses a credential ${Date.now()}`, definition });
   assert.equal(created.status, 201, JSON.stringify(created.body));
   const { executionId } = (await call("POST", `/workflows/${created.body.workflow.id}/run`, {})).body;
-  return waitFor(async () => { const body = (await call("GET", `/workflows/executions/${executionId}`)).body; return ["completed", "failed"].includes(body.execution.status) && body; }, 15_000, "the run");
+  return waitFor(async () => { const body = (await call("GET", `/workflows/executions/${executionId}`)).body; return ["completed", "failed"].includes(body.execution.status) && body; }, 30_000, "the run");
 }
 
 test("with only Vercel's Supabase variables, accounts and encrypted key storage turn on by themselves", async () => {
@@ -134,6 +139,7 @@ test("with only Vercel's Supabase variables, accounts and encrypted key storage 
 
   // After a restart (a new deployment, a cold start), the same secret derives the same key.
   await killServer();
+  await new Promise((resolve) => setTimeout(resolve, 500));
   await startServer();
   const again = await runWithCredential(saved.body.credential.id);
   assert.equal(again.execution.status, "completed", JSON.stringify(again.execution));

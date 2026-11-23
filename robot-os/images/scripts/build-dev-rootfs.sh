@@ -23,7 +23,7 @@ rm -rf "${ROOTFS}"
 mkdir -p "${ROOTFS}"
 debootstrap --arch="${ARCH}" "${SUITE}" "${ROOTFS}" "${MIRROR}"
 
-mkdir -p "${ROOTFS}/opt/hannah-robot-os"
+mkdir -p "${ROOTFS}/opt/hannah-robot-os" "${ROOTFS}/etc/hannah-robot-os"
 cp -a "${SRC}/." "${ROOTFS}/opt/hannah-robot-os/"
 cp "${SRC}/config/default-config.json" "${ROOTFS}/etc/hannah-robot-os/config.json"
 
