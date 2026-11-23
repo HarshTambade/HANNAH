@@ -100,7 +100,7 @@ Rule: Never mark planned/mocked/untested features as VERIFIED. Physical commissi
 |---|---|---|---|---|---|
 | 13.1 | Signed image/update manifests | VERIFIED | unit | `updates/manifest.py`, tests | Prod signing infra pending |
 | 13.2 | A/B or transactional rollback strategy | VERIFIED | unit | `updates/state.py`, command dispatcher tests | Stage/activate/rollback commands applied to A/B state; activation requires local READY gate; bootloader/image integration pending |
-| 13.3 | Recovery mode | NOT_STARTED | — | — |  |
+| 13.3 | Recovery mode | IMPLEMENTED | unit | `updates/recovery.py`, `test_recovery.py`, `hannah-robot-os recovery` CLI | Entry/persistence/diagnostic bundle and READY-gated exit verified in unit tests; physical recovery boot remains external |
 
 ## Phase 14 — OS Images
 | # | Requirement | Status | Verification level | Evidence | Notes |

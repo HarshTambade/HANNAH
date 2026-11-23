@@ -21,6 +21,7 @@ Core Robot OS, bridge persistence/auth, signed command delivery, controller tran
 
 ### New coverage in this pass
 
+- **Recovery mode**: persistent recovery state, diagnostic bundle generation, recovery CLI entry/status/exit, and READY-gated exit are implemented and covered by Python unit tests.
 - **Signed admin commands**: migration 28, command signing/issue/pending/ack/get/wait service, Action Engine actions `robotos.stage_update` / `robotos.rollback_update` with `standing: false`, router delivery of pending commands on heartbeat and ack handling.
 - **Onboard command guard/dispatcher**: Python HMAC verifier (expiry, replay, tamper detection), cross-language JS->Python signed fixture, safety-state refusal on E-stop, stage/rollback applied to A/B update state.
 - **UI admin controls**: staged confirmation dialog before creating an action, action outcome text never claims the robot applied it, pure param builders tested.

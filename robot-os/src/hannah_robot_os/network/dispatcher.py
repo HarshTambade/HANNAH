@@ -6,6 +6,7 @@ from typing import Any
 from ..common import AuditLog, new_id, now_ms
 from ..safety.gateway import SafetyGateway
 from ..updates.state import UpdateState
+from ..updates.recovery import RecoveryManager
 from .bridge import BridgeEnvelope
 from .command_guard import CommandGuard
 
@@ -19,6 +20,7 @@ class RobotOSCommandDispatcher:
     safety: SafetyGateway
     update_state: UpdateState
     audit: AuditLog
+    recovery: RecoveryManager | None = None
     now: Any = now_ms
     health_snapshot: Any = field(default_factory=lambda: lambda: {"robot_ready": False})
     _applied: list[str] = field(default_factory=list)
@@ -56,6 +58,11 @@ class RobotOSCommandDispatcher:
             self.update_state.mark_healthy()
         elif capability == "update.rollback":
             self.update_state.rollback()
+            if self.recovery is not None:
+                self.recovery.enter(
+                    "approved update rollback",
+                    self.update_state.last_good_version,
+                )
         # diagnostics.run is a read/report capability; the report is the ack itself.
 
         self._applied.append(command_id)

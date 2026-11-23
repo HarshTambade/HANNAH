@@ -86,6 +86,52 @@ def cmd_ready(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_recovery(args: argparse.Namespace) -> int:
+    from .updates.recovery import RecoveryManager, RecoveryState
+
+    state_path = Path(args.state)
+    state = RecoveryState.load(state_path)
+    recovery = RecoveryManager(state=state)
+
+    if args.action == "enter":
+        recovery.enter(args.reason, args.last_good_version)
+        recovery.save(state_path)
+        print(json.dumps(recovery.state.__dict__, indent=2))
+        return 0
+    if args.action == "exit":
+        cfg = RobotOSConfig.load(args.config) if args.config else RobotOSConfig()
+        status_dir = Path(args.status_dir) if args.status_dir else Path(cfg.data_dir) / "status"
+        ready = True
+        for name in cfg.required_services:
+            path = status_dir / f"{name}.json"
+            if not path.exists():
+                ready = False
+                break
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                states = {
+                    service["name"]: service["state"]
+                    for service in data.get("health", {}).get("services", [])
+                    if isinstance(service, dict)
+                }
+            except (OSError, ValueError, TypeError):
+                ready = False
+                break
+            if data.get("service") != name or states.get(name) != "ready":
+                ready = False
+                break
+        try:
+            recovery.exit(robot_ready=ready)
+        except RuntimeError as exc:
+            print(str(exc))
+            return 1
+        recovery.save(state_path)
+        print(json.dumps(recovery.state.__dict__, indent=2))
+        return 0
+    print(json.dumps(recovery.state.__dict__, indent=2))
+    return 0
+
+
 def cmd_validate_profile(args: argparse.Namespace) -> int:
     from .profiles.schema import validate_hardware_profile
 
@@ -168,6 +214,15 @@ def build_parser() -> argparse.ArgumentParser:
     rd = sub.add_parser("ready", help="Print READY marker only when required services report ready")
     rd.add_argument("--config")
     rd.set_defaults(func=cmd_ready)
+
+    rec = sub.add_parser("recovery", help="Enter, exit, or inspect recovery mode")
+    rec.add_argument("action", choices=["enter", "exit", "status"])
+    rec.add_argument("--state", default="/var/lib/hannah-robot-os/recovery.json")
+    rec.add_argument("--config")
+    rec.add_argument("--status-dir")
+    rec.add_argument("--reason", default="operator requested recovery")
+    rec.add_argument("--last-good-version", default="")
+    rec.set_defaults(func=cmd_recovery)
 
     return p
 
