@@ -92,6 +92,13 @@ function requireApiToken(req, res, next) {
   }
 
   const authorization = req.get("authorization") || "";
+  if (!authorization && (req.path === "/workforce" || req.path.startsWith("/workforce/"))) {
+    res.setHeader("WWW-Authenticate", "Bearer");
+    return res.status(401).json({
+      error: "Sign in or create a HANNAH account to use AI Workforce. A Groq key alone can connect for chat.",
+      reason: "signin-required",
+    });
+  }
   if (!authorization) {
     const visitorKey = req.get("x-groq-api-key")?.trim();
     if (BYOK_PATHS.has(req.path) && isGroqKey(visitorKey)) {

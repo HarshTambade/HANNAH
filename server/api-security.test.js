@@ -171,6 +171,7 @@ test("a visitor Groq key cannot reach operator-only routes", async () => {
     ["POST", "/api/desktop/computer"],
     ["GET", "/api/sync/memory"],
     ["GET", "/api/health/agent"],
+    ["GET", "/api/workforce/bots"],
   ];
   for (const [method, path] of cases) {
     const response = await fetch(baseUrl + path, {

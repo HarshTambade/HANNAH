@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import { Bot as BotIcon, Copy, Eye, Pause as PauseIcon, Pencil, Play as PlayIcon, Plus, RefreshCw, Upload, Users, X } from "lucide-react";
 import workforce, { type Bot, type BotTemplate, type BotVersion, type Computer, type MemoryRecord, type Task, type WorkforceEvent } from "../services/Workforce";
+import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -256,6 +257,13 @@ export default function WorkforcePage() {
   const [detail, setDetail] = useState<Bot | null>(null);
   const [createDraft, setCreateDraft] = useState<FormDraft | null>(null);
   const [error, setError] = useState("");
+  const [signedIn, setSignedIn] = useState(isAccountSession);
+
+  useEffect(() => {
+    const syncSession = () => setSignedIn(isAccountSession());
+    window.addEventListener(ACCOUNT_EVENT, syncSession);
+    return () => window.removeEventListener(ACCOUNT_EVENT, syncSession);
+  }, []);
 
   const refresh = useCallback(async () => {
     const data = await workforce.bots();
@@ -263,11 +271,17 @@ export default function WorkforcePage() {
   }, []);
 
   useEffect(() => {
+    if (!signedIn) {
+      setBots([]);
+      setTemplates([]);
+      setError("");
+      return;
+    }
     void refresh().catch((e) => setError(e instanceof Error ? e.message : "That didn't work."));
     void workforce.templates().then((data) => setTemplates(data.templates)).catch(() => undefined);
     const timer = setInterval(() => void refresh().catch(() => undefined), 12_000);
     return () => clearInterval(timer);
-  }, [refresh]);
+  }, [refresh, signedIn]);
 
   const createBot = async () => {
     setError("");
@@ -308,8 +322,15 @@ export default function WorkforcePage() {
           <h1 className="display-title text-[clamp(2rem,5vw,3rem)]">AI Workforce</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">Your teammates. Each has a role, instructions, tools and its own workspace. Give them work — the <a className="font-semibold text-slate-900 underline" href="/chat">chat</a> dispatches to them, and they act in their computers, browsers and terminals.</p>
         </div>
-        <button type="button" onClick={() => setCreateDraft(newDraft({}))} className={primary} data-testid="create-bot"><Plus size={16} /> New teammate</button>
+        <button type="button" disabled={!signedIn} onClick={() => setCreateDraft(newDraft({}))} className={primary} data-testid="create-bot"><Plus size={16} /> New teammate</button>
       </div>
+      {!signedIn && (
+        <Notice tone="amber" role="alert">
+          <span>AI Workforce needs a signed-in HANNAH account. Your Groq key is still valid for chat, but it cannot own teammates or persistent workforce data.</span>
+          {" "}
+          <a className="font-semibold underline underline-offset-2" href="/settings">Open Settings → Account</a>
+        </Notice>
+      )}
       {error && <Notice tone="rose" role="alert">{error}</Notice>}
 
       <section className="mb-6" aria-label="Your teammates">
@@ -354,7 +375,7 @@ export default function WorkforcePage() {
             <div key={template.id} className={card} data-testid={`template-${template.id}`}>
               <p className="flex items-center gap-2 text-sm font-semibold text-slate-900"><BotIcon size={15} className="text-slate-900" /> {template.name}</p>
               <p className="mt-1 text-xs text-slate-600">{template.description}</p>
-              <button type="button" onClick={() => setCreateDraft(newDraft({
+              <button type="button" disabled={!signedIn} onClick={() => setCreateDraft(newDraft({
                 name: template.name, avatar: template.avatar, role: template.role, description: template.description,
                 personality: template.personality, instructions: template.instructions, responsibilities: template.responsibilities.join("\n"),
                 skills: template.skills.join("\n"), apps: template.apps.join("\n"), tools: template.tools.join("\n"), autonomy: template.autonomy,
@@ -386,4 +407,3 @@ export default function WorkforcePage() {
     </main>
   );
 }
-
