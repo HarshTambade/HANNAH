@@ -72,8 +72,9 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
                   className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-[13px] font-medium transition ${selected ? "bg-ink text-white shadow-sm" : "text-slate-500 hover:bg-white hover:text-ink"}`}
                 >
                   <Icon size={16} aria-hidden="true" />
-                  {/* Ten sections don't fit with their names on a narrow window: there, only the current one is named. */}
-                  <span className={selected ? "" : "hidden xl:inline"}>{label}</span>
+                  {/* Keep icon-only navigation in medium and wide windows until
+                      there is enough room for every section name. */}
+                  <span className={selected ? "" : "hidden 2xl:inline"}>{label}</span>
                 </a>
               );
             })}
