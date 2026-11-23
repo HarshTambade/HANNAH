@@ -20,7 +20,7 @@
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 
 /** @typedef {{id:string,label:string,tools?:boolean,vision?:boolean,context?:number,free?:boolean,notes?:string}} ModelPreset */
-/** @typedef {{id:string,label:string,kind:"openai"|"anthropic"|"ollama",baseUrl:string,envKey:string,envBaseUrl?:string,envModels?:string,envDefaultModel?:string,local?:boolean,free?:boolean,docs?:string,models:ModelPreset[]}} ProviderPreset */
+/** @typedef {{id:string,label:string,kind:"openai"|"anthropic"|"ollama"|"bedrock",baseUrl:string,envKey:string,envBaseUrl?:string,envModels?:string,envDefaultModel?:string,local?:boolean,free?:boolean,docs?:string,envSecretKey?:string,envSessionToken?:string,models:ModelPreset[]}} ProviderPreset */
 
 /** @type {ProviderPreset[]} */
 const PROVIDERS = [
@@ -81,6 +81,23 @@ const PROVIDERS = [
     models: [
       { id: "gpt-4.1", label: "GPT-4.1 deployment", tools: true, vision: true, context: 1047576 },
       { id: "gpt-4o", label: "GPT-4o deployment", tools: true, vision: true, context: 128000 },
+    ],
+  },
+  {
+    id: "bedrock",
+    label: "Amazon Bedrock",
+    kind: "bedrock",
+    baseUrl: "https://bedrock.us-east-1.amazonaws.com",
+    envKey: "AWS_ACCESS_KEY_ID",
+    envBaseUrl: "AWS_BEDROCK_BASE_URL",
+    envModels: "AWS_BEDROCK_MODELS",
+    envDefaultModel: "AWS_BEDROCK_MODEL",
+    envSecretKey: "AWS_SECRET_ACCESS_KEY",
+    envSessionToken: "AWS_SESSION_TOKEN",
+    docs: "https://docs.aws.amazon.com/bedrock/",
+    models: [
+      { id: "anthropic.claude-3-5-sonnet-20241022-v2:0", label: "Claude Sonnet 3.5 on Bedrock", tools: true, vision: true, context: 200000 },
+      { id: "amazon.nova-pro-v1:0", label: "Amazon Nova Pro", tools: true, vision: true, context: 300000 },
     ],
   },
   {

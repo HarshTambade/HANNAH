@@ -137,7 +137,7 @@ export const AUTOMATION = {
 
 /** The model section: the providers HANNAH connects to (server/providers/catalog.js) and Auto's routing modes (services/ModelRouting.ts; LandingContent.test.ts keeps them in step). */
 export const MODEL_PROVIDERS = {
-  cloud: ["Groq", "OpenAI", "Azure OpenAI", "Anthropic", "Google Gemini", "OpenRouter", "Together AI", "Cerebras", "DeepSeek", "Mistral AI", "xAI Grok", "Fireworks AI", "NVIDIA NIM", "SambaNova", "Perplexity", "Hyperbolic"],
+  cloud: ["Groq", "OpenAI", "Azure OpenAI", "Amazon Bedrock", "Anthropic", "Google Gemini", "OpenRouter", "Together AI", "Cerebras", "DeepSeek", "Mistral AI", "xAI Grok", "Fireworks AI", "NVIDIA NIM", "SambaNova", "Perplexity", "Hyperbolic"],
   local: ["Ollama", "LM Studio", "llama.cpp", "vLLM / LiteLLM", "WebLLM in the browser", "On-device on Android and iOS"],
 } as const;
 

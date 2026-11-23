@@ -13,6 +13,10 @@ const fake = http.createServer(async (req, res) => {
   for await (const chunk of req) raw += chunk;
   const body = raw ? JSON.parse(raw) : {};
   requests.push(body);
+  if (req.url.includes("/model/")) {
+    res.end(JSON.stringify({ output: { message: { role: "assistant", content: [{ text: `echo:${body.messages?.at(-1)?.content || "bedrock"}` }] } }, stopReason: "end_turn", usage: { inputTokens: 3, outputTokens: 2 } }));
+    return;
+  }
   if (req.url.endsWith("/models")) return res.end(JSON.stringify({ data: [{ id: "test-model" }, { id: "no-tools-model" }] }));
   if (body.model === "rate-limited") { res.statusCode = 429; return res.end(JSON.stringify({ error: { message: "slow down" } })); }
   if (body.model === "no-tools-model" && body.tools) { res.statusCode = 400; return res.end(JSON.stringify({ error: { message: "This model does not support tools." } })); }
@@ -23,9 +27,11 @@ const fake = http.createServer(async (req, res) => {
     return res.end("data: [DONE]\n\n");
   }
   const system = body.messages?.[0]?.role === "system" ? body.messages[0].content : "";
+  const last = body.messages?.at(-1);
+  const text = typeof last?.content === "string" ? last.content : Array.isArray(last?.content) ? last.content.filter((block) => typeof block?.text === "string").map((block) => block.text).join(" ") : "";
   const content = !body.tools && system.includes("You can use these tools")
     ? 'Sure. {"tool_call":{"name":"get_weather","arguments":{"city":"Pune"}}}'
-    : `echo:${body.messages.at(-1).content}`;
+    : `echo:${text || "hi"}`;
   res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content } }], usage: { prompt_tokens: 10, completion_tokens: 4, total_tokens: 14 } }));
 });
 
@@ -163,6 +169,51 @@ test("the Azure OpenAI provider is a first-class OpenAI-compatible provider", as
   const body = await response.json();
   assert.equal(body.providerId, "azure");
   assert.equal(body.message.content, "echo:ping from azure");
+});
+
+test("the Amazon Bedrock provider signs Converse requests and answers chat", async () => {
+  process.env.AWS_ACCESS_KEY_ID = "AKIDEXAMPLE";
+  process.env.AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+  process.env.AWS_REGION = "us-east-1";
+  process.env.AWS_BEDROCK_BASE_URL = `http://127.0.0.1:${fake.address().port}/bedrock`;
+  const seen = [];
+  const originalHandler = fake.listeners("request")[0];
+  const bedrockHandler = async (req, res) => {
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    const body = raw ? JSON.parse(raw) : {};
+    if (req.url.includes("/model/")) {
+      const last = body.messages?.at(-1);
+      const text = typeof last?.content === "string" ? last.content : Array.isArray(last?.content) ? last.content.filter((block) => typeof block?.text === "string").map((block) => block.text).join(" ") : "";
+      seen.push({ url: req.url, authorization: req.headers.authorization, amzDate: req.headers["x-amz-date"], contentType: req.headers["content-type"] });
+      res.end(JSON.stringify({ output: { message: { role: "assistant", content: [{ text: `echo:${text || "bedrock"}` }] } }, stopReason: "end_turn", usage: { inputTokens: 3, outputTokens: 2 } }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: { message: "not found" } }));
+  };
+  fake.off("request", originalHandler);
+  fake.on("request", bedrockHandler);
+  try {
+    const { resolveProvider, defaultModelFor } = require("./providers/catalog");
+    const bedrock = resolveProvider({ id: "bedrock" });
+    assert.equal(bedrock.id, "bedrock");
+    assert.equal(bedrock.label, "Amazon Bedrock");
+    assert.equal(bedrock.kind, "bedrock");
+    assert.equal(bedrock.baseUrl, `http://127.0.0.1:${fake.address().port}/bedrock`);
+    assert.equal(defaultModelFor(bedrock), "anthropic.claude-3-5-sonnet-20241022-v2:0");
+    const response = await fetch(`${baseUrl}/api/agent`, { method: "POST", headers: auth, body: JSON.stringify({ provider: "bedrock", model: "anthropic.claude-3-5-sonnet-20241022-v2:0", messages: [{ role: "user", content: "ping from bedrock" }], tools: [] }) });
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.providerId, "bedrock");
+    assert.equal(body.message.content, "echo:ping from bedrock");
+    assert.ok(seen.at(-1).authorization?.startsWith("AWS4-HMAC-SHA256"), "the Converse request is signed");
+    assert.ok(seen.at(-1).amzDate, "the request carries an x-amz-date");
+    assert.ok(seen.at(-1).contentType?.includes("application/json"), "the Converse request is JSON");
+  } finally {
+    fake.off("request", bedrockHandler);
+    fake.on("request", originalHandler);
+  }
 });
 
 test("visitor keys can use /v1 but only with Groq", async () => {

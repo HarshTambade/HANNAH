@@ -1,22 +1,22 @@
 {
   "updated": "2026-11-23",
   "stages": {
-    "0": "Phase 0 \u2014 Audit",
-    "1": "Phase 1 \u2014 Architecture",
-    "2": "Phase 2 \u2014 Edge OS foundation",
-    "3": "Phase 3 \u2014 Universal device abstraction",
-    "4": "Phase 4 \u2014 Discovery and onboarding",
-    "5": "Phase 5 \u2014 Manual intelligence",
-    "6": "Phase 6 \u2014 No-code Hardware Studio and automation",
-    "7": "Phase 7 \u2014 Robotics OS",
-    "8": "Phase 8 \u2014 Physical hardware",
-    "9": "Phase 9 \u2014 IoT",
-    "10": "Phase 10 \u2014 Intelligence, agents, voice",
-    "11": "Phase 11 \u2014 Manipulation",
-    "12": "Phase 12 \u2014 Fleet",
-    "13": "Phase 13 \u2014 Marketplace and developer platform",
-    "14": "Phase 14 \u2014 Updates and recovery",
-    "15": "Phase 15 \u2014 Security, validation, production"
+    "0": "Phase 0 — Audit",
+    "1": "Phase 1 — Architecture",
+    "2": "Phase 2 — Edge OS foundation",
+    "3": "Phase 3 — Universal device abstraction",
+    "4": "Phase 4 — Discovery and onboarding",
+    "5": "Phase 5 — Manual intelligence",
+    "6": "Phase 6 — No-code Hardware Studio and automation",
+    "7": "Phase 7 — Robotics OS",
+    "8": "Phase 8 — Physical hardware",
+    "9": "Phase 9 — IoT",
+    "10": "Phase 10 — Intelligence, agents, voice",
+    "11": "Phase 11 — Manipulation",
+    "12": "Phase 12 — Fleet",
+    "13": "Phase 13 — Marketplace and developer platform",
+    "14": "Phase 14 — Updates and recovery",
+    "15": "Phase 15 — Security, validation, production"
   },
   "items": [
     {
@@ -823,7 +823,7 @@
       "files": [
         "server/providers/catalog.js"
       ],
-      "note": "Now lists 21 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM, Azure OpenAI and custom endpoints (server/gateway.test.js). Amazon Bedrock is not built yet (it needs its own request signing protocol). MLX works through a custom endpoint.",
+      "note": "Now lists 22 providers including OpenAI, Anthropic, Gemini, xAI, DeepSeek, Mistral, Groq, Cerebras, OpenRouter, Ollama, LM Studio, llama.cpp, vLLM, Azure OpenAI, Amazon Bedrock and custom endpoints (server/gateway.test.js). Azure OpenAI is OpenAI-compatible; Amazon Bedrock got its own Converse API adapter with AWS Signature V4. MLX works through a custom endpoint.",
       "tests": [
         "server/gateway.test.js"
       ]
@@ -1138,12 +1138,12 @@
     "date": "2026-11-23",
     "hub runtime": "Full runtime suite: 87 passed on Python 3.14.6, including per-device adapter process isolation and crash containment, discovery worker isolation, the simulator publisher fix and benchmark statistics. Python 3.9.6 was not rerun.",
     "robot runtime": "105 passed",
-    "server": "Full suite: 571 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.",
+    "server": "Full suite: 573 passed, 1 live Supabase test skipped because HANNAH_LIVE_TESTS=1 and network credentials were not provided. Includes the new Azure OpenAI and Amazon Bedrock provider tests and the repaired manual intelligence module. The 19-test device simulator file passed after the per-device adapter and discovery worker changes. Includes 34 device unit/SDK/simulator tests for staged rollouts, cross-account inventory, signed device-alert workflow/webhook delivery, scheduled hardware action retry/error branches, image evidence, SDK contracts and side-effect-free profile preflight.",
     "client": "Full suite: 433 Vitest tests passed. TypeScript production build passed.",
     "browser": "All 120 Playwright tests passed in the last full run. The two hub-enrollment and Hardware Studio tests were rerun after the local dry-run preview change; both passed, and the Studio preview sent no action or device command.",
     "device layer": "87 hub runtime tests, 34 device unit/SDK/simulator tests, 433 client Vitest tests, 43 desktop-tool tests and all 120 browser tests passed; the latest Studio preview pair passed separately. The server suite had one live Supabase test skipped.",
     "performance": "100 simulated write/readbacks per protocol on macOS 27.0.1 arm64, Python 3.14.6 (8 logical CPUs), measured through per-device worker IPC. MQTT median 1.594 ms, p95 1.643 ms, startup 58.976 ms; Modbus TCP median 0.227 ms, p95 0.299 ms, startup 84.832 ms. Simulator-only and loopback; excludes child-worker CPU, server, approval and hub transport.",
-    "checks": "Server ESLint on the changed files, changed client ESLint, SDK declaration typecheck, production TypeScript build, 87 Python runtime tests, full device simulator regression, progress/catalogue/image-manifest checks, full server suite and full client Vitest suite passed. The simulator-only performance benchmark completed 100 readback cycles per protocol through adapter workers."
+    "checks": "Server full suite (573 passed, 1 live Supabase test skipped), gateway suite, full server suite regression, full client Vitest suite, TypeScript build, server and changed-file client ESLint, SDK declaration typecheck, progress/catalogue/image-manifest checks, Python runtime tests and git diff --check all passed."
   },
   "resume": [
     "git status -sb && git log --oneline -5",

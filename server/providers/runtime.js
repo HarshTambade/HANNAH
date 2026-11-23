@@ -9,6 +9,7 @@ const {
   validateBaseUrl,
 } = require("./catalog");
 const { createLlmTrace } = require("../observability/llm-tracing");
+const crypto = require("node:crypto");
 
 function withPath(baseUrl, suffix) {
   const url = new URL(baseUrl);
@@ -63,6 +64,52 @@ function ollamaUrl(baseUrl, resource) {
     return url.toString();
   }
   return withPath(baseUrl, `/api/${resource}`);
+}
+
+/** The Amazon Bedrock Converse API endpoint for one model. */
+function bedrockChatUrl(baseUrl, model) {
+  const base = String(baseUrl || "").replace(/\/+$/, "");
+  return `${base}/model/${String(model || "")}`;
+}
+
+function awsAmzDate() {
+  return new Date().toISOString().replace(/\.\d{3}/, "").replace(/[-:]/g, "");
+}
+
+/** AWS Signature V4 for the Amazon Bedrock Converse API. */
+function signAws({ method, url, body, headers, accessKey, secretKey, sessionToken, region, service }) {
+  const amzDate = awsAmzDate();
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = crypto.createHash("sha256").update(String(body || "")).digest("hex");
+  const parsed = new URL(url);
+  const entries = new Map();
+  for (const [key, value] of Object.entries(headers || {})) {
+    const name = String(key || "").trim().toLowerCase();
+    if (!value) continue;
+    if (["host", "content-length", "accept-encoding"].includes(name)) continue;
+    entries.set(name, String(value));
+  }
+  entries.set("host", parsed.host);
+  entries.set("x-amz-date", amzDate);
+  if (sessionToken) entries.set("x-amz-security-token", String(sessionToken));
+  const sorted = [...entries.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const canonicalHeaders = sorted.map(([key, value]) => `${key}:${value}`).join("\n") + "\n";
+  const signedHeaders = sorted.map(([key]) => key).join(";");
+  const canonicalRequest = [method, `${parsed.pathname}${parsed.search}`, "", canonicalHeaders, signedHeaders, payloadHash].join("\n");
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, crypto.createHash("sha256").update(canonicalRequest).digest("hex")].join("\n");
+  const kDate = crypto.createHmac("sha256", `AWS4${secretKey}`).update(dateStamp).digest();
+  const kRegion = crypto.createHmac("sha256", kDate).update(region).digest();
+  const kService = crypto.createHmac("sha256", kRegion).update(service).digest();
+  const kSigning = crypto.createHmac("sha256", kService).update("aws4_request").digest();
+  const signature = crypto.createHmac("sha256", kSigning).update(stringToSign).digest("hex");
+  return {
+    ...headers,
+    host: parsed.host,
+    "x-amz-date": amzDate,
+    ...(sessionToken ? { "x-amz-security-token": String(sessionToken) } : {}),
+    authorization: `AWS4-HMAC-SHA256 Credential=${accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+  };
 }
 
 function providerConfigured(provider, apiKey = providerKey(provider)) {
@@ -201,6 +248,16 @@ function providerHeaders(provider, apiKey) {
 /** Extract only numeric token counts; never retain provider response content. */
 function extractUsage(providerKind, data) {
   const usage = data?.usage && typeof data.usage === "object" ? data.usage : {};
+  if (providerKind === "bedrock") {
+    const usage = data?.output?.usage || {};
+    const promptTokens = usage.inputTokens;
+    const completionTokens = usage.outputTokens;
+    return {
+      promptTokens,
+      completionTokens,
+      totalTokens: Number.isFinite(promptTokens) && Number.isFinite(completionTokens) ? promptTokens + completionTokens : undefined,
+    };
+  }
   if (providerKind === "anthropic") {
     return {
       promptTokens: usage.input_tokens,
@@ -228,6 +285,43 @@ function extractUsage(providerKind, data) {
       Number.isFinite(promptTokens) && Number.isFinite(completionTokens) ? promptTokens + completionTokens : undefined
     ),
   };
+}
+
+/** Convert an OpenAI-style message list into the Amazon Bedrock Converse format. */
+function toConverseMessages(messages, system) {
+  const converse = [];
+  if (typeof system === "string" && system.trim()) converse.push({ system: [{ text: system.trim() }] });
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (message?.role === "system") {
+      if (typeof message.content === "string" && message.content.trim()) converse.push({ system: [{ text: message.content.trim() }] });
+      continue;
+    }
+    if (message?.role === "tool") {
+      converse.push({ role: "user", content: [{ toolResult: { toolUseId: String(message.tool_call_id || ""), content: [{ text: typeof message.content === "string" ? message.content : JSON.stringify(message.content || {}) }] } }] });
+      continue;
+    }
+    const role = message?.role === "assistant" ? "assistant" : "user";
+    const parts = typeof message?.content === "string" ? [{ type: "text", text: message.content }] : Array.isArray(message?.content) ? message.content.map((part) => (typeof part === "string" ? { type: "text", text: part } : part?.type === "text" ? part : { type: "text", text: String(part?.text || "") })) : [];
+    const blocks = [];
+    for (const part of parts) {
+      if (typeof part === "string") blocks.push({ text: part });
+      else if (part?.type === "text") blocks.push({ text: String(part.text || "") });
+      else if (part?.type === "image_url" && part.image_url?.url) {
+        const meta = String(part.image_url.url).match(/^data:([^;]+);base64,/);
+        blocks.push({ image: { source: { mediaType: meta?.[1] || "image/png", data: String(part.image_url.url).split("base64,")[1] || "" } } });
+      }
+    }
+    if (Array.isArray(message?.tool_calls) && message.tool_calls.length) {
+      for (const call of message.tool_calls) blocks.push({ toolUse: { toolUseId: String(call?.id || ""), tool: { name: String(call?.function?.name || ""), input: safeToolArguments(call?.function?.arguments) } } });
+    }
+    if (blocks.length) converse.push({ role, content: blocks });
+  }
+  return converse;
+}
+
+function safeToolArguments(raw) {
+  if (typeof raw === "string") { try { return JSON.parse(raw) || {}; } catch { return {}; } }
+  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
 }
 
 async function callProviderMeasured({ provider, apiKey, model, messages, tools, systemPrompt, timeoutMs, maxTokens, temperature }) {
@@ -307,6 +401,29 @@ async function callProviderMeasured({ provider, apiKey, model, messages, tools, 
       usage: extractUsage("anthropic", data),
       ...timing(),
     };
+  }
+
+  if (provider.kind === "bedrock") {
+    const accessKey = String(apiKey || "");
+    const secretKey = String(process.env[provider.envSecretKey || "AWS_SECRET_ACCESS_KEY"] || "");
+    const sessionToken = String(process.env[provider.envSessionToken || "AWS_SESSION_TOKEN"] || "");
+    if (!accessKey || !secretKey) {
+      throw new Error("Amazon Bedrock needs an AWS access key and secret access key (set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY).");
+    }
+    const url = bedrockChatUrl(provider.baseUrl, model);
+    const inferenceConfig = {};
+    if (Number.isFinite(maxTokens)) inferenceConfig.maxTokens = maxTokens;
+    if (Number.isFinite(temperature)) inferenceConfig.temperature = temperature;
+    const converseBody = { modelId: model, messages: toConverseMessages(messages, system) };
+    if (Object.keys(inferenceConfig).length) converseBody.inferenceConfig = inferenceConfig;
+    if (tools?.length) converseBody.toolConfig = { toolConfigurations: [{ type: "FUNCTION", function: tools.map((tool) => ({ name: tool.function.name, description: tool.function.description, parameters: tool.function.parameters })) }] };
+    const requestHeaders = signAws({ method: "POST", url, body: JSON.stringify(converseBody), headers: { "content-type": "application/json", accept: "application/json" }, accessKey, secretKey, sessionToken, region: process.env.AWS_REGION || "us-east-1", service: "bedrock" });
+    const data = await requestJson(url, { method: "POST", headers: requestHeaders, body: JSON.stringify(converseBody), signal: AbortSignal.timeout(timeoutMs) });
+    const blocks = Array.isArray(data?.output?.message?.content) ? data.output.message.content : [];
+    const text = blocks.filter((block) => typeof block?.text === "string").map((block) => block.text).join("\n").trim();
+    const message = { content: text };
+    if (blocks.some((block) => block?.toolUse)) message.tool_calls = blocks.filter((block) => block?.toolUse).map((block) => ({ id: String(block.toolUse.toolUseId || ""), type: "function", function: { name: String(block.toolUse.tool?.name || ""), arguments: JSON.stringify(block.toolUse.tool?.input || {}) } }));
+    return { message, usage: extractUsage("bedrock", data), ...timing() };
   }
 
   const url = openAiChatUrl(provider.baseUrl);
@@ -571,6 +688,7 @@ async function ensureServed(...targets) {
 module.exports = {
   ensureServed,
   anthropicUrl,
+  bedrockChatUrl,
   isChatModel,
   callProvider,
   callProviderMeasured,
@@ -583,6 +701,7 @@ module.exports = {
   providerHeaders,
   requestWithProviderFallback,
   resolveConfiguredProvider,
+  signAws,
   streamProvider,
   validateBaseUrl,
 };

@@ -12,7 +12,7 @@ const inputClass = "w-full rounded-xl border border-slate-200 bg-white px-3 py-2
 
 // Hosted providers a user can save a key for. Local runtimes and custom endpoints are excluded on the server too.
 const KEY_PROVIDERS = [
-  ["groq", "Groq"], ["openai", "OpenAI"], ["azure", "Azure OpenAI"], ["anthropic", "Anthropic"], ["gemini", "Google Gemini"], ["openrouter", "OpenRouter"],
+  ["groq", "Groq"], ["openai", "OpenAI"], ["azure", "Azure OpenAI"], ["bedrock", "Amazon Bedrock"], ["anthropic", "Anthropic"], ["gemini", "Google Gemini"], ["openrouter", "OpenRouter"],
   ["together", "Together AI"], ["cerebras", "Cerebras"], ["deepseek", "DeepSeek"], ["mistral", "Mistral"], ["xai", "xAI"],
   ["fireworks", "Fireworks"], ["nvidia", "NVIDIA NIM"], ["sambanova", "SambaNova"], ["perplexity", "Perplexity"], ["hyperbolic", "Hyperbolic"],
 ] as const;
