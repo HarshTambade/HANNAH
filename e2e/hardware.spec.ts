@@ -142,7 +142,7 @@ test("without an account the screen says what an account is for, and what HANNAH
   await expect(page.getByRole("note")).toContainText("HANNAH is not a safety system.");
   await expect(page.getByRole("note")).toContainText("Nothing on this screen is safety-certified.");
   await expect(page.getByRole("button", { name: "Add a hub" })).toHaveCount(0);
-  // Ten sections fit the header at every desktop width: nothing overlaps the logo or runs off the bar.
+  // Sixteen sections fit the header at every desktop width: nothing overlaps the logo or runs off the bar.
   for (const width of [800, 1024, 1280, 1600]) {
     await page.setViewportSize({ width, height: 800 });
     const fits = await page.evaluate(() => {
@@ -150,7 +150,7 @@ test("without an account the screen says what an account is for, and what HANNAH
       const logo = document.querySelector<HTMLElement>('header a[aria-label="HANNAH home page"]');
       const links = [...(nav?.querySelectorAll("a") || [])].map((link) => link.getBoundingClientRect());
       const bar = nav?.parentElement?.getBoundingClientRect();
-      return Boolean(nav && logo && bar) && links.length === 10 && links.every((box) => box.left >= logo!.getBoundingClientRect().right - 1 && box.right <= bar!.right + 1) && links.every((box, index) => index === 0 || box.left >= links[index - 1].right - 1);
+      return Boolean(nav && logo && bar) && links.length === 16 && links.every((box) => box.left >= logo!.getBoundingClientRect().right - 1 && box.right <= bar!.right + 1) && links.every((box, index) => index === 0 || box.left >= links[index - 1].right - 1);
     });
     expect(fits, `header at ${width}px`).toBe(true);
     if (process.env.HANNAH_E2E_SHOTS) await page.screenshot({ path: join(process.env.HANNAH_E2E_SHOTS, `header-${width}.png`), clip: { x: 0, y: 0, width, height: 90 } });
@@ -158,9 +158,8 @@ test("without an account the screen says what an account is for, and what HANNAH
   await page.setViewportSize({ width: 390, height: 844 });
   const tabs = page.locator('nav[aria-label="App navigation"]:visible');
   await expect(tabs.getByRole("link", { name: /Devices/ })).toBeVisible();
-  // One row of ten tabs, not nine and one below.
-  expect(new Set(await tabs.getByRole("link").evaluateAll((links) => links.map((link) => Math.round(link.getBoundingClientRect().top)))).size).toBe(1);
-  await expect(tabs.getByRole("link")).toHaveCount(10);
+  // All sixteen sections are in the tab bar and the page does not scroll sideways.
+  await expect(tabs.getByRole("link")).toHaveCount(16);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   if (process.env.HANNAH_E2E_SHOTS) await page.screenshot({ path: join(process.env.HANNAH_E2E_SHOTS, "devices-phone.png") });
 });

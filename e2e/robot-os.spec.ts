@@ -89,5 +89,6 @@ test("Robot OS screen shows signed reports and guards admin actions", async ({ p
   // Confirming creates an action; the UI never claims the robot applied it.
   await page.getByRole("button", { name: "Review update" }).click();
   await page.getByRole("button", { name: "Create action" }).click();
-  await expect(page.getByText(/signed-in person must approve/)).toBeVisible();
+  // The approval status message lives in role="status"; a bare regex also matches the explanatory paragraph above.
+  await expect(page.getByRole("status").getByText(/signed-in person must approve/)).toBeVisible();
 });

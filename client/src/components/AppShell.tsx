@@ -69,12 +69,11 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
                   aria-current={selected ? "page" : undefined}
                   title={label}
                   aria-label={label}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-[13px] font-medium transition ${selected ? "bg-ink text-white shadow-sm" : "text-slate-500 hover:bg-white hover:text-ink"}`}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2 py-2 text-[13px] font-medium transition ${selected ? "bg-ink text-white shadow-sm" : "text-slate-500 hover:bg-white hover:text-ink"}`}
                 >
                   <Icon size={16} aria-hidden="true" />
-                  {/* Keep icon-only navigation in medium and wide windows until
-                      there is enough room for every section name. */}
-                  <span className={selected ? "" : "hidden 2xl:inline"}>{label}</span>
+                  {/* Icon-only navigation: sixteen sections never fit alongside their names in the bar. */}
+                  <span className="hidden">{label}</span>
                 </a>
               );
             })}
