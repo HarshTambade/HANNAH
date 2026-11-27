@@ -107,6 +107,34 @@ def cmd_recovery(args: argparse.Namespace) -> int:
     return 0
 
 
+def _safety_dir(args: argparse.Namespace, cfg: RobotOSConfig) -> Path:
+    """--safety-dir, else beside --status-dir (both normally live in the data directory), else <data_dir>/safety."""
+    if getattr(args, "safety_dir", None):
+        return Path(args.safety_dir)
+    if getattr(args, "status_dir", None):
+        return Path(args.status_dir).parent / "safety"
+    return Path(cfg.data_dir) / "safety"
+
+
+def cmd_safety(args: argparse.Namespace) -> int:
+    """Ask the safety-gateway service to engage, release or reset the software stop, or show its state."""
+    from .safety import shared
+
+    cfg = RobotOSConfig.load(args.config) if args.config else RobotOSConfig()
+    safety_dir = _safety_dir(args, cfg)
+    if args.action == "status":
+        data = shared.read(safety_dir)
+        print(json.dumps(data or {"error": "the safety gateway hasn't published its state"}, indent=2))
+        return 0 if data else 1
+    try:
+        path = shared.submit(safety_dir, args.action, args.operator or "")
+    except ValueError as error:
+        print(str(error))
+        return 2
+    print(json.dumps({"requested": args.action, "file": path.name, "note": "The safety gateway applies it on its next tick. This is a software stop, not a safety-rated emergency stop."}, indent=2))
+    return 0
+
+
 def cmd_validate_profile(args: argparse.Namespace) -> int:
     from .profiles.schema import validate_hardware_profile
 
@@ -126,10 +154,27 @@ def cmd_service(args: argparse.Namespace) -> int:
     sensors = SensorManager(audit=audit, registry=hw, required_sensor_ids=cfg.required_sensors)
     status_dir = Path(args.status_dir) if args.status_dir else Path(cfg.data_dir) / "status"
     status_path = status_dir / f"{args.name}.json"
+    safety_dir = _safety_dir(args, cfg)
+    from .safety import shared
+    was_safe = {"value": True}
 
     def tick() -> None:
         safety.heartbeat()
+        if args.name == "safety-gateway":
+            # The one writer of the safety state every other service follows.
+            shared.drain(safety, safety_dir)
+            shared.publish(safety, safety_dir)
         if args.name == "motor-controller":
+            # Follow the safety gateway's state; a stale or missing state stops the motors.
+            # Stop on the change to unsafe, then again only if something still turns,
+            # so a long stop doesn't write an audit entry every tick.
+            safe = shared.mirror(safety, safety_dir, stale_after_ms=cfg.safety.watchdog_timeout_ms * 4)
+            if not safe:
+                for c in list(getattr(motors, "_controllers", {}).keys()):
+                    st = motors.status(c)
+                    if was_safe["value"] or (st.velocity_left_mps or 0) or (st.velocity_right_mps or 0):
+                        motors.stop(c, reason=f"safety: {safety.fault or safety.state.value}")
+            was_safe["value"] = safe
             for c in list(getattr(motors, "_controllers", {}).keys()):
                 motors.watchdog_check(c)
         if args.name == "sensor-manager":
@@ -178,6 +223,7 @@ def build_parser() -> argparse.ArgumentParser:
     svc.add_argument("name", choices=["safety-gateway", "hardware-manager", "motor-controller", "sensor-manager", "ros2-runtime", "telemetry", "update-manager", "ai-runtime", "remote-gateway"])
     svc.add_argument("--config")
     svc.add_argument("--status-dir")
+    svc.add_argument("--safety-dir")
     svc.add_argument("--interval", type=float, default=0.1)
     svc.add_argument("--max-ticks", type=int)
     svc.set_defaults(func=cmd_service)
@@ -190,6 +236,13 @@ def build_parser() -> argparse.ArgumentParser:
     rd.add_argument("--config")
     rd.add_argument("--status-dir")
     rd.set_defaults(func=cmd_ready)
+
+    sf = sub.add_parser("safety", help="Engage, release or reset the software stop through the safety gateway, or show its state")
+    sf.add_argument("action", choices=["engage", "release", "reset", "status"])
+    sf.add_argument("--operator", help="who is resetting (required for reset)")
+    sf.add_argument("--config")
+    sf.add_argument("--safety-dir")
+    sf.set_defaults(func=cmd_safety)
 
     rec = sub.add_parser("recovery", help="Enter, exit, or inspect recovery mode")
     rec.add_argument("action", choices=["enter", "exit", "status"])

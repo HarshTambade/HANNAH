@@ -204,6 +204,9 @@ test("commissioning is withdrawn when the robot reports different hardware or li
   for (const step of ["identity", "inventory", "software"]) assert.equal((await confirm(users.asha, robot, step)).status, 200);
   await robot.sync({ described: descriptor({ ...PHYSICAL, limits: { ...PHYSICAL.limits, maxLinearSpeed: 1.5 } }) });
   assert.equal((await call(users.asha, "GET", `/robots/${robot.robotId}/commissioning`)).body.commissioning.done, 3);
+  // A limit the signature used to leave out (here the acceleration) withdraws it too.
+  await robot.sync({ described: descriptor({ ...PHYSICAL, limits: { ...PHYSICAL.limits, maxLinearSpeed: 1.5, maxLinearAccel: 2.5 } }) });
+  assert.equal((await call(users.asha, "GET", `/robots/${robot.robotId}/commissioning`)).body.commissioning.done, 0);
   assert.equal((await call(users.key, "POST", `/robots/${robot.robotId}/commissioning/reset`, { reason: "moved to another hall" })).status, 403);
   const reset = await call(users.asha, "POST", `/robots/${robot.robotId}/commissioning/reset`, { reason: "moved to another hall" });
   assert.deepEqual([reset.body.commissioning.status, reset.body.commissioning.resetReason], ["required", "moved to another hall"]);

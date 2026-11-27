@@ -56,6 +56,14 @@ class RobotAdapter(ABC):
         """Stop and disconnect."""
 
     # ---- high-level operations: carried out by the robot's planner and controller ----
+    def tighten_limits(self, limits: dict) -> list[str]:
+        """Apply limits stricter than the robot's own for the next mission (for
+        example an owner's lower turning speed). An empty dict goes back to the
+        robot's own limits. Returns the names it could NOT apply; the runtime then
+        refuses the mission rather than move faster than the owner allowed.
+        An adapter that can't change its controller's limits applies none."""
+        return sorted(limits)
+
     @abstractmethod
     def navigate(self, goal: dict, max_speed: float, tolerance: float) -> None:
         """Give the navigation stack a goal ({x, y, yaw?}, map frame) and a speed ceiling."""

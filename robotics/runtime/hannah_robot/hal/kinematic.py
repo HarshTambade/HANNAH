@@ -439,10 +439,21 @@ class KinematicSimAdapter(RobotAdapter):
         if not any(item["code"] == code for item in self.faults):
             self.faults.append({"code": code, "message": message, "at": round(self.sim_time, 2)})
 
+    def _limit(self, key: str, default: float) -> float:
+        """The robot's own limit, lowered by a mission's tighter one. describe() keeps reporting the robot's own."""
+        own = float(self.limits.get(key, default))
+        tighter = getattr(self, "_tightened", {}).get(key)
+        return min(own, float(tighter)) if tighter is not None else own
+
+    def tighten_limits(self, limits: dict) -> list[str]:
+        supported = ("maxLinearSpeed", "maxAngularSpeed", "maxLinearAccel")
+        self._tightened = {key: float(value) for key, value in limits.items() if key in supported}
+        return sorted(key for key in limits if key not in supported)
+
     def _physics(self) -> None:
-        max_v = float(self.limits.get("maxLinearSpeed", 0.5))
-        max_w = float(self.limits.get("maxAngularSpeed", 1.5))
-        accel = float(self.limits.get("maxLinearAccel", 0.8))
+        max_v = self._limit("maxLinearSpeed", 0.5)
+        max_w = self._limit("maxAngularSpeed", 1.5)
+        accel = self._limit("maxLinearAccel", 0.8)
         accel_w = float(self.limits.get("maxAngularAccel", 3.0))
         want_v, want_w = self._command
         # The controller's own rules, whatever it is asked for.
@@ -542,7 +553,7 @@ class KinematicSimAdapter(RobotAdapter):
             self._path.pop(0)
         tx, ty = self._path[0]
         heading = wrap(math.atan2(ty - self.odom_y, tx - self.odom_x) - self.odom_yaw)
-        accel = float(self.limits.get("maxLinearAccel", 0.8))
+        accel = self._limit("maxLinearAccel", 0.8)
         clear = self._clear_ahead() - self.radius
         stop_distance = 0.12 + (self.v * self.v) / (2 * accel)
         blocked = clear < stop_distance and abs(heading) < 0.6
@@ -561,7 +572,7 @@ class KinematicSimAdapter(RobotAdapter):
 
     def navigate(self, goal: dict, max_speed: float, tolerance: float) -> None:
         self._goal = {"x": float(goal["x"]), "y": float(goal["y"]), **({"yaw": float(goal["yaw"])} if goal.get("yaw") is not None else {})}
-        self._nav_speed = min(float(max_speed), float(self.limits.get("maxLinearSpeed", max_speed)))
+        self._nav_speed = min(float(max_speed), self._limit("maxLinearSpeed", float(max_speed)))
         self._nav_tolerance = float(tolerance)
         self._path, self._replan_due, self._blocked_for = [], 0.0, 0.0
         self._lidar_due = self.sim_time   # plan with what the sensor sees now, not with the last scan

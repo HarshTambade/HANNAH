@@ -96,7 +96,7 @@ def main(argv=None) -> int:
             return 3
         safety = local_safety(adapter)
         guard = CommandGuard(credentials["secret"], credentials["robotId"], os.path.join(state_dir, "guard.json"))
-        runtime = Runtime(adapter, guard, safety, link_timeout=float(safety.limits.get("linkTimeoutS", 5)), log=log)
+        runtime = Runtime(adapter, guard, safety, link_timeout=float(safety.limits.get("linkTimeoutS", 5)), log=log, descriptor=descriptor(profile, adapter))
         for name in (signal.SIGINT, signal.SIGTERM):
             signal.signal(name, lambda *_: runtime.stop())
         log("running", robot=credentials["robotId"], adapter=adapter.name, simulation=(adapter.describe().get("simulation") or {}).get("kind"), server=server)

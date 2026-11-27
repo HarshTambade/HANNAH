@@ -55,12 +55,19 @@ class Mission:
 
 
 class Runtime:
-    def __init__(self, adapter: RobotAdapter, guard: CommandGuard, safety: LocalSafety, link_timeout: float = 5.0, clock=time.time, log=None):
+    def __init__(self, adapter: RobotAdapter, guard: CommandGuard, safety: LocalSafety, link_timeout: float = 5.0, clock=time.time, log=None, descriptor: dict | None = None):
         self.adapter = adapter
+        # Sent with the first exchange after each start, so a profile changed while
+        # the robot was off (a longer link timeout, a removed keep-out zone) reaches
+        # the server, which then asks for commissioning again.
+        self._descriptor = descriptor
+        self._descriptor_pending = descriptor is not None
         self.guard = guard
         self.safety = safety
         self.vision = provider(getattr(adapter, "vision_provider", None))
         self.link_timeout = float(link_timeout)
+        # The profile's own watchdog; a command can only shorten it, never lengthen it.
+        self._own_link_timeout = float(link_timeout)
         self.clock = clock
         self.log = log or (lambda event, **fields: None)
         self._lock = threading.RLock()
@@ -87,7 +94,10 @@ class Runtime:
         with self._lock:
             reports, events = self._reports, self._events
             self._reports, self._events = [], []
-            return {"runtime": {"version": __version__, "protocol": PROTOCOL, "adapter": self.adapter.name}, "state": dict(self._state), "reports": reports, "events": events}
+            body = {"runtime": {"version": __version__, "protocol": PROTOCOL, "adapter": self.adapter.name}, "state": dict(self._state), "reports": reports, "events": events}
+            if self._descriptor_pending:
+                body["descriptor"] = self._descriptor
+            return body
 
     def requeue(self, body: dict) -> None:
         with self._lock:
@@ -98,6 +108,7 @@ class Runtime:
         with self._lock:
             self._last_link_ok = self.clock()
             self._link_ever = True
+            self._descriptor_pending = False
             self._inbox.extend(item for item in response.get("commands", []) if isinstance(item, dict))
 
     def link_refused(self, reason: str) -> None:
@@ -161,6 +172,7 @@ class Runtime:
             return
         command = verdict.command
         mission_id = command["missionId"]
+        self._apply_link_limit(command.get("limits") or {})
         if command["type"] == "cancel":
             mission = self._missions.get(mission_id)
             if mission is self._active and mission is not None:
@@ -220,6 +232,12 @@ class Runtime:
             self._report(mission_id, "rejected", reason=f"Refused by the robot's own safety checks: {decision.reason}.")
             self._event("command-rejected", "warning", f"{capability} refused: {decision.reason}.")
             return
+        if capability not in ("stop_motion", "set_supported_device_state", "capture_image"):
+            refusal = self._apply_motion_limits(capability, command.get("limits") or {})
+            if refusal:
+                self._report(mission_id, "rejected", reason=f"Refused by the robot's own safety checks: {refusal}.")
+                self._event("command-rejected", "warning", f"{capability} refused: {refusal}.")
+                return
         timeout = float(command.get("timeoutS") or 60)
         mission = Mission(mission_id, capability, decision.params, decision.max_speed, now + timeout, started=now)
         self._missions[mission_id] = mission
@@ -254,6 +272,33 @@ class Runtime:
             mission.waypoints = decision.params.get("waypoints") or [decision.params]
             self._active = mission
             self._start_leg(mission)
+
+    # Limits a command carries: the owner's, already combined with this robot's own
+    # on the server. The robot applies whichever is stricter, and refuses a motion
+    # whose lower limit its controller can't apply rather than ignore it.
+    MOTION_LIMITS = {"arm": ("maxJointSpeed",), "base": ("maxAngularSpeed", "maxLinearAccel")}
+
+    def _apply_link_limit(self, limits: dict) -> None:
+        value = limits.get("linkTimeoutS")
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            self.link_timeout = min(self._own_link_timeout, float(value))
+
+    def _apply_motion_limits(self, capability: str, limits: dict) -> str:
+        own = (self.adapter.describe().get("limits") or {}) if not hasattr(self, "_own_limits") else self._own_limits
+        self._own_limits = own
+        keys = self.MOTION_LIMITS["arm" if capability in ARM else "base"]
+        stricter = {}
+        for key in keys:
+            value = limits.get(key)
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+                continue
+            mine = own.get(key)
+            if not isinstance(mine, (int, float)) or value < float(mine) - 1e-9:
+                stricter[key] = float(value)
+        unapplied = self.adapter.tighten_limits(stricter)
+        if unapplied:
+            return "the owner set a lower " + " and ".join(unapplied) + " than this robot's controller can apply"
+        return ""
 
     def _start_leg(self, mission: Mission) -> None:
         goal = mission.waypoints[mission.index]

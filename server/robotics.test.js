@@ -258,7 +258,8 @@ test("a mission: approved, signed, accepted by the robot, then verified from the
   assert.equal(command.capability, "navigate_to");
   assert.equal(command.robotId, robot.robotId);
   assert.deepEqual(command.params, { x: 3, y: 2, place: "workbench", tolerance: 0.25, maxSpeed: 0.3 });
-  assert.deepEqual(command.limits, { maxLinearSpeed: 0.5, maxAngularSpeed: 1.5 });
+  // Every limit in force goes with the command, so the robot can apply the owner's too.
+  assert.deepEqual(command.limits, { maxLinearSpeed: 0.5, maxAngularSpeed: 1.5, maxLinearAccel: 1, linkTimeoutS: 5 });
   assert.match(command.nonce, /^[0-9a-f]{32}$/);
   assert.ok(command.expiresAt - command.issuedAt === 20_000 && command.timeoutS === 180);
   const missionId = approved.body.record.response.missionId;
@@ -533,7 +534,7 @@ test("a person can tighten a robot's limits, switch capabilities off, and the ro
   robot.seen.clear();
   robot.state = state();
   assert.equal((await call(users.ashaKey, "PATCH", `/robots/${robot.robotId}`, { limits: { maxLinearSpeed: 0.2 } })).status, 403);
-  const changed = await call(users.asha, "PATCH", `/robots/${robot.robotId}`, { limits: { maxLinearSpeed: 0.2, maxAngularSpeed: 9, motionRequiresApproval: true }, disabled: ["inspect_area", "stop_motion"] });
+  const changed = await call(users.asha, "PATCH", `/robots/${robot.robotId}`, { limits: { maxLinearSpeed: 0.2, maxAngularSpeed: 9, maxLinearAccel: 0.3, linkTimeoutS: 2, motionRequiresApproval: true }, disabled: ["inspect_area", "stop_motion"] });
   assert.equal(changed.body.robot.limits.maxLinearSpeed, 0.2);
   assert.equal(changed.body.robot.limits.maxAngularSpeed, 1.5, "a looser number than the robot's own changes nothing");
   assert.deepEqual(changed.body.robot.disabled, ["inspect_area"], "stopping can't be switched off");
@@ -549,6 +550,9 @@ test("a person can tighten a robot's limits, switch capabilities off, and the ro
   const sent = live.received.find((command) => command.capability === "navigate_to");
   assert.equal(sent.params.maxSpeed, 0.2);
   assert.equal(sent.limits.maxLinearSpeed, 0.2);
+  // Before, only the two speeds went to the robot: these were saved and shown, never applied.
+  assert.equal(sent.limits.maxLinearAccel, 0.3);
+  assert.equal(sent.limits.linkTimeoutS, 2);
   await call(users.asha, "POST", `/robots/missions/${started.body.record.response.missionId}/cancel`);
   await live.stop();
   await call(users.asha, "PATCH", `/robots/${robot.robotId}`, { limits: {}, disabled: [] });

@@ -28,7 +28,9 @@ HAS_ROS = importlib.util.find_spec("rclpy") is not None
 class Contract(unittest.TestCase):
     def test_the_interface_has_no_way_to_command_an_actuator(self):
         names = {name for name, _ in inspect.getmembers(RobotAdapter, predicate=inspect.isfunction)}
-        self.assertEqual(names, {"describe", "state", "start", "step", "close", "navigate", "navigation_status", "cancel_navigation", "hold", "heartbeat", "set_device", "acknowledge_fault", "move_arm", "arm_status", "grasp", "release", "capture"})
+        self.assertEqual(names, {"describe", "state", "start", "step", "close", "navigate", "navigation_status", "cancel_navigation", "hold", "heartbeat", "set_device", "acknowledge_fault", "move_arm", "arm_status", "grasp", "release", "capture",
+                                 # Lowers the controller's limits for a mission (an owner's tighter ones); it can't raise them or move anything.
+                                 "tighten_limits"})
         for forbidden in ("velocity", "pwm", "torque", "effort", "wheel", "motor", "joint"):
             self.assertFalse(any(forbidden in name for name in names), forbidden)
 

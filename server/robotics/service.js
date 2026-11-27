@@ -47,6 +47,8 @@ const CODE_TTL_MS = 15 * 60_000;
 const SKEW_MS = 60_000;
 const LOST_GRACE_MS = 20_000;
 const SYNC_INTERVAL_MS = 1000;
+// Joint speed (rad/s) an arm may use during its supervised commissioning trial.
+const TRIAL_JOINT_SPEED = 0.3;
 const TELEMETRY_EVERY_MS = 3000;
 const TELEMETRY_KEEP_MS = 2 * 60 * 60_000;
 const EVENTS_KEEP_MS = 30 * 24 * 60 * 60_000;
@@ -405,12 +407,27 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return { row, secret };
   }
 
-  function commandFor(row, robotLimits) {
+  /**
+   * The signed mission. Its limits are every limit in force (the robot's own,
+   * tightened by the owner's), so the robot can apply them: before, only the
+   * two speeds went, and an owner's lower acceleration, joint speed or link
+   * timeout was shown but never applied. In the commissioning trial the robot
+   * also gets the trial's caps, not just a lower requested speed.
+   */
+  function commandFor(row, robotLimits, commissioned = null) {
     const params = parse(row.params, {});
+    const limits = {};
+    for (const name of ["maxLinearSpeed", "maxAngularSpeed", "maxLinearAccel", "maxJointSpeed", "linkTimeoutS"]) {
+      if (finite(robotLimits[name])) limits[name] = robotLimits[name];
+    }
+    if (commissioned?.status === "trial") {
+      if (finite(commissioned.trialSpeed)) limits.maxLinearSpeed = finite(limits.maxLinearSpeed) ? Math.min(limits.maxLinearSpeed, commissioned.trialSpeed) : commissioned.trialSpeed;
+      limits.maxJointSpeed = finite(limits.maxJointSpeed) ? Math.min(limits.maxJointSpeed, TRIAL_JOINT_SPEED) : TRIAL_JOINT_SPEED;
+    }
     return JSON.stringify({
       v: 1, type: "mission", robotId: row.robot_id, missionId: row.id, seq: Number(row.seq), nonce: row.nonce, capability: row.capability, params,
       issuedAt: Number(row.issued_at), expiresAt: Number(row.expires_at), timeoutS: Math.round((Number(row.deadline_at) - Number(row.expires_at)) / 1000),
-      limits: { ...(finite(robotLimits.maxLinearSpeed) ? { maxLinearSpeed: robotLimits.maxLinearSpeed } : {}), ...(finite(robotLimits.maxAngularSpeed) ? { maxAngularSpeed: robotLimits.maxAngularSpeed } : {}) },
+      limits,
     });
   }
 
@@ -588,7 +605,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
         const delivered = await db.query("UPDATE hannah_robot_missions SET status = 'sent', sent_at = $1, updated_at = $1 WHERE robot_id = $2 AND id = $3 AND status = 'queued'", [at, row.id, mission.id]);
         if (!delivered.rowCount) continue; // cancelled a moment ago
       }
-      const payload = commandFor(mission, robot.limits);
+      const payload = commandFor(mission, robot.limits, robot.commissioning);
       commands.push({ payload, sig: signCommand(secret, payload) });
     }
     return { serverTime: at, intervalMs: SYNC_INTERVAL_MS, commands };

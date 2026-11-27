@@ -176,6 +176,8 @@ function confirm(robot, record, stepId, { note = "", attest = false, now = Date.
 const signature = (profile, reported, capabilities) => JSON.stringify([
   (profile.sensors || []).map((item) => `${item.id}:${item.type}`), (profile.actuators || []).map((item) => `${item.id}:${item.type}`), capabilities,
   reported.maxLinearSpeed, reported.maxAngularSpeed, reported.workspace?.polygon, reported.environment, reported.estop?.hardware, reported.linkTimeoutS,
+  // Also part of what was checked: removing a keep-out zone or raising a joint speed means commissioning again.
+  reported.keepOut, reported.maxJointSpeed, reported.maxLinearAccel, reported.robotRadius, reported.workspace?.frame, reported.minBatteryPercent, reported.commandTtlS,
 ]);
 
 module.exports = { ORDER, STEPS, TRIAL_SPEED, confirm, evidence, signature, summary, view };

@@ -69,6 +69,15 @@ class SafetyGateway:
         self.audit.emit("safety-gateway", "estop_reset", operator=operator)
         return SafetyDecision(True, "reset", self._state, now)
 
+    def mirror(self, estop_active: bool, estop_latched: bool, fault: str | None) -> None:
+        """Take the state the safety-gateway service published (another process's gateway)."""
+        changed = (self.estop_active, self._estop_latch, self.fault) != (estop_active, estop_latched, fault)
+        self.estop_active, self._estop_latch, self.fault = estop_active, estop_latched, fault
+        self._recompute_state()
+        if changed:
+            self.audit.emit("safety-gateway", "mirrored", severity="warning" if (estop_active or estop_latched or fault) else "info",
+                            estop_active=estop_active, latched=estop_latched, fault=fault)
+
     def _recompute_state(self) -> None:
         if self.estop_active or self._estop_latch:
             self._state = SafetyState.ESTOP

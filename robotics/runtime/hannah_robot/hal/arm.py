@@ -155,7 +155,8 @@ class ArmSimAdapter(RobotAdapter):
         if not solutions:
             return None, "The arm can't reach that position without exceeding a joint limit or touching a fixture."
         travel = lambda joints: max(abs(target - current) for target, current in zip(joints, self.joints))  # noqa: E731
-        duration = lambda start, end: max(0.2, 1.5 * max(abs(e - s) for s, e in zip(start, end)) / self.max_speed)  # noqa: E731
+        speed = min(self.max_speed, float(getattr(self, "_tightened", {}).get("maxJointSpeed", self.max_speed)))
+        duration = lambda start, end: max(0.2, 1.5 * max(abs(e - s) for s, e in zip(start, end)) / speed)  # noqa: E731
         for joints in sorted(solutions, key=travel):
             if self._path_clear(self.joints, joints):
                 return [(list(self.joints), joints, duration(self.joints, joints))], ""
@@ -218,6 +219,10 @@ class ArmSimAdapter(RobotAdapter):
 
     def navigation_status(self) -> NavigationStatus:
         return self._status
+
+    def tighten_limits(self, limits: dict) -> list[str]:
+        self._tightened = {key: float(value) for key, value in limits.items() if key == "maxJointSpeed"}
+        return sorted(key for key in limits if key != "maxJointSpeed")
 
     def navigate(self, goal: dict, max_speed: float, tolerance: float) -> None:
         self._status = NavigationStatus("failed", "An arm doesn't drive.")
