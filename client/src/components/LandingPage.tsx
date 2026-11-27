@@ -827,7 +827,7 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
         {/* Closing call to action (the Download page is already the destination) */}
         {tab !== "download" && (
           <>
-          <section className="mx-auto max-w-7xl px-5 pb-14 sm:px-8 sm:pb-20 lg:px-12">
+          <section className={`mx-auto max-w-7xl px-5 pb-14 sm:px-8 sm:pb-20 lg:px-12 ${tab === "privacy" ? "pt-14 sm:pt-20" : ""}`}>
             <div className="landing-hero relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-[2rem] px-7 py-12 text-white sm:px-12 lg:flex-row lg:items-center">
               <div>
                 <h2 className="font-display text-[clamp(1.6rem,3vw,2.3rem)] font-medium tracking-tight">Say hello to HANNAH.</h2>
