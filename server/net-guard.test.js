@@ -83,3 +83,49 @@ test("with httpsOnly, a redirect to a plain http address isn't followed", async 
     if (previous === undefined) delete process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK; else process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK = previous;
   }
 });
+
+test("the browser's proxy refuses internal addresses for plain requests and tunnels alike", async () => {
+  const http = require("node:http");
+  const net = require("node:net");
+  const { once } = require("node:events");
+  const { createEgressProxy } = require("./workforce/egress-proxy");
+  const hits = [];
+  const target = http.createServer((req, res) => { hits.push(req.url); res.end("reached"); }).listen(0, "127.0.0.1");
+  await once(target, "listening");
+  const port = target.address().port;
+  // For the test, "127.0.0.1" stands for an internal host and "localhost" for a public one.
+  const proxy = await createEgressProxy({ check: async (host) => (host === "127.0.0.1" ? "internal" : "") });
+  const proxyPort = Number(new URL(proxy.url).port);
+  const viaProxy = (url) => new Promise((resolve, reject) => {
+    http.get({ host: "127.0.0.1", port: proxyPort, path: url, headers: { host: new URL(url).host } }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => resolve({ status: res.statusCode, body }));
+    }).on("error", reject);
+  });
+  const tunnel = (authority) => new Promise((resolve, reject) => {
+    const socket = net.connect(proxyPort, "127.0.0.1", () => socket.write(`CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n\r\n`));
+    socket.once("data", (chunk) => { resolve(String(chunk).split("\r\n")[0]); socket.destroy(); });
+    socket.on("error", reject);
+  });
+  try {
+    assert.deepEqual(await viaProxy(`http://localhost:${port}/ok`), { status: 200, body: "reached" });
+    assert.equal((await viaProxy(`http://127.0.0.1:${port}/secret`)).status, 403);
+    assert.match(await tunnel(`127.0.0.1:${port}`), /403/);
+    assert.match(await tunnel(`localhost:${port}`), /200 Connection Established/);
+    assert.deepEqual(hits, ["/ok"], "the internal address was never reached");
+  } finally {
+    await proxy.close();
+    target.close();
+  }
+});
+
+test("the proxy's rules: network setting, internal names and addresses", async () => {
+  const { egressRefusal, normalizePolicy } = require("./workforce/browser");
+  const open = normalizePolicy({});
+  assert.equal(await egressRefusal(open, "example.com", "93.184.215.14"), "");
+  assert.match(await egressRefusal(open, "rebound.example", "127.0.0.1"), /internal network address/);
+  assert.match(await egressRefusal(open, "rebound.example", "::ffff:a9fe:a9fe"), /internal network address/);
+  assert.match(await egressRefusal(open, "printer.local", "93.184.215.14"), /internal host name/);
+  assert.match(await egressRefusal(normalizePolicy({ network: "allowlist", allowedHosts: ["example.com"] }), "example.org", "93.184.215.15"), /network setting/);
+});

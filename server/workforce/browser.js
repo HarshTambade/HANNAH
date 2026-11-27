@@ -20,6 +20,7 @@ const dns = require("node:dns/promises");
 const crypto = require("node:crypto");
 const net = require("node:net");
 const { isBlockedAddress } = require("../net-guard");
+const { createEgressProxy } = require("./egress-proxy");
 const { clean, fail } = require("./common");
 
 let playwright = null;
@@ -29,7 +30,6 @@ const privateCache = new Map();
 const IDLE_MS = 10 * 60_000;
 const MAX_TEXT = 30_000;
 const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
-const MAX_REDIRECTS = 5;
 
 function loadPlaywright() {
   if (playwright || playwrightError) return playwright;
@@ -108,6 +108,15 @@ function networkAllows(policy, hostname) {
   return true;
 }
 
+/** Why the proxy must not connect to this address for this host, or "". */
+async function egressRefusal(policy, host, address) {
+  if (!networkAllows(policy, host)) return "outside this computer's network setting";
+  if (allowPrivateNetwork()) return "";
+  const name = String(host || "").toLowerCase().replace(/\.$/, "");
+  if (name === "localhost" || name.endsWith(".localhost") || name.endsWith(".local") || name.endsWith(".internal")) return "an internal host name";
+  return isPrivateAddress(address) ? "an internal network address" : "";
+}
+
 async function guardRoute(route, entry = null) {
   const policy = normalizePolicy(entry?.policy);
   const request = route.request();
@@ -121,30 +130,8 @@ async function guardRoute(route, entry = null) {
   if (!networkAllows(policy, url.hostname)) return route.abort("blockedbyclient");
   if (allowPrivateNetwork() && policy.network === "public") return route.continue();
   if (!allowPrivateNetwork() && (await refusedHost(url.hostname))) return route.abort("blockedbyclient");
-  // Playwright routes only the first request of a redirect chain, and a
-  // redirect handed back with route.fulfill is followed without routing either
-  // (checked with Chromium). So page and frame loads follow their redirects
-  // here, checking every hop before it is fetched.
-  if (request.isNavigationRequest()) {
-    try {
-      let target = request.url();
-      let method = request.method();
-      for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-        const response = await route.fetch({ url: target, method, maxRedirects: 0 });
-        const status = response.status();
-        const location = response.headers().location;
-        if (status < 300 || status >= 400 || !location) return route.fulfill({ response });
-        const next = new URL(location, target);
-        if ((next.protocol !== "http:" && next.protocol !== "https:") || !networkAllows(policy, next.hostname)) return route.abort("blockedbyclient");
-        if (!allowPrivateNetwork() && (await refusedHost(next.hostname))) return route.abort("blockedbyclient");
-        if (status === 301 || status === 302 || status === 303) method = method === "HEAD" ? "HEAD" : "GET";
-        target = next.toString();
-      }
-      return route.abort("failed");
-    } catch {
-      return route.abort("failed");
-    }
-  }
+  // Redirects and requests a page's scripts make don't all come back through
+  // this route; the proxy checks every connection, so they can't get past it.
   return route.continue();
 }
 
@@ -163,6 +150,10 @@ async function contextFor({ userId, computerId, workspace, profile = "default" }
   }
   const profileDir = path.join(workspace, ".hannah", "browser", clean(profile, 40) || "default");
   await fsp.mkdir(profileDir, { recursive: true });
+  // Every request leaves through this computer's own proxy, which checks the
+  // address it actually connects to (see egress-proxy.js). Chromium skips a
+  // proxy for loopback unless told not to: "<-loopback>" removes that exception.
+  const proxy = await createEgressProxy({ check: (host, address) => egressRefusal(normalizePolicy(entry?.policy), host, address) });
   let context;
   try {
     context = await library.chromium.launchPersistentContext(profileDir, {
@@ -170,11 +161,14 @@ async function contextFor({ userId, computerId, workspace, profile = "default" }
       viewport: { width: 1280, height: 800 },
       acceptDownloads: true,
       serviceWorkers: "block",
-      args: ["--disable-dev-shm-usage"],
+      proxy: { server: proxy.url },
+      args: ["--disable-dev-shm-usage", "--proxy-bypass-list=<-loopback>"],
     });
   } catch (error) {
+    await proxy.close();
     throw fail(503, `The browser couldn't start (${error?.message?.split("\n")[0] || "launch failed"}).`, "browser-unavailable");
   }
+  context.on("close", () => { proxy.close().catch(() => {}); });
   await context.route("**/*", (route) => guardRoute(route, entry)).catch(() => {});
   context.setDefaultTimeout(15_000);
   // A page can start a download without the download action: cancel it when downloads are off.
@@ -434,4 +428,4 @@ async function status() {
   }
 }
 
-module.exports = { networkAllows, normalizePolicy, act, browserAvailable, closeAll, closeComputer, latestScreenshot, normalizeUrl, status, isPrivateAddress, refusedHost };
+module.exports = { egressRefusal, networkAllows, normalizePolicy, act, browserAvailable, closeAll, closeComputer, latestScreenshot, normalizeUrl, status, isPrivateAddress, refusedHost };
