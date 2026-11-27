@@ -78,6 +78,7 @@ function createWorkforceRouter({ operator = null } = {}) {
     }
     const events = (await db.query("SELECT * FROM hannah_workforce_events WHERE user_id = $1 ORDER BY created_at DESC LIMIT 15", [account.id])).rows.map(publicEvent);
     const probe = await modelTarget(db, account.id, null).catch(() => null);
+    const held = await require("./sandbox").status();
     res.json({
       counts: { ...counts, teamBots },
       capabilities: {
@@ -87,8 +88,10 @@ function createWorkforceRouter({ operator = null } = {}) {
         model: probe ? { available: true, provider: probe.provider.label, model: probe.model, keySource: probe.keySource } : { available: false, reason: "No AI provider key is configured for this account." },
         meetings: { liveJoin: false, liveRecord: true, liveRecordFrom: "device", transcriptImport: true },
         tick: { configured: Boolean(process.env.CRON_SECRET), worker: process.env.WORKFORCE_WORKER !== "off" },
-        isolation: "workspace-directory",
-        computerIsolationNote: "A workspace is a directory under the server user, not a virtual machine. Run the server in a container for stronger isolation.",
+        isolation: held.driver ? `workspace-directory + ${held.driver}` : "workspace-directory",
+        computerIsolationNote: held.driver
+          ? `Terminal commands run under ${held.driver} (checked on this server). A workspace is still not a virtual machine.`
+          : "A workspace is a directory under the server user, not a virtual machine. Run the server in a container, or install bubblewrap on Linux, for stronger isolation.",
       },
       events,
       serverTime: Date.now(),

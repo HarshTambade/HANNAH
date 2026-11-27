@@ -28,6 +28,7 @@ const {
 } = require("./common");
 const { assertAction } = require("./approvals");
 const browser = require("./browser");
+const sandbox = require("./sandbox");
 const { resolveSecret } = require("./secrets");
 
 const KINDS = new Set(["cloud", "local"]);
@@ -282,16 +283,22 @@ async function runTerminal(workspace, { command, args, cwd, timeoutMs }) {
   if (!info?.isDirectory()) throw fail(400, "That working directory isn't in the workspace.", "bad-path");
   const limit = Math.min(60_000, Math.max(1000, Number(timeoutMs) || 15_000));
   const outputCap = 256 * 1024;
+  const home = path.join(workspace, ".hannah", "home");
+  const tmp = path.join(workspace, ".hannah", "tmp");
+  await fsp.mkdir(home, { recursive: true });
+  await fsp.mkdir(tmp, { recursive: true });
+  // The host's sandbox (sandbox.js) holds the command to this workspace when one is working.
+  const launch = await sandbox.wrap({
+    workspace, cwd: dir, program: parsed.name, args: parsed.list,
+    // The server's own Node comes last, so the extended "node" works where Node isn't in /usr; the allow-list still decides what runs.
+    env: { PATH: `/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${path.dirname(process.execPath)}`, LANG: "en_US.UTF-8", HOME: home, TMPDIR: tmp },
+    root: workforceRoot(), hidden: [path.resolve(__dirname, "..")],
+  });
   return new Promise((resolve) => {
-    const child = spawn(parsed.name, parsed.list, {
-      cwd: dir,
+    const child = spawn(launch.program, launch.args, {
+      cwd: launch.cwd,
       shell: false,
-      env: {
-        PATH: "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-        LANG: "en_US.UTF-8",
-        HOME: path.join(workspace, ".hannah", "home"),
-        TMPDIR: path.join(workspace, ".hannah", "tmp"),
-      },
+      env: launch.env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -302,14 +309,14 @@ async function runTerminal(workspace, { command, args, cwd, timeoutMs }) {
     child.stderr.on("data", (chunk) => { if (stderr.length < outputCap) stderr += chunk.toString("utf8"); });
     child.on("error", (error) => {
       clearTimeout(timer);
-      resolve({ command: parsed.name, args: parsed.list, exitCode: null, stdout: "", stderr: `Couldn't start the command (${error.code || "error"}).`, truncated: false, timedOut: false, readOnly: parsed.readOnly, cwd: path.relative(workspace, dir) || "." });
+      resolve({ command: parsed.name, args: parsed.list, exitCode: null, stdout: "", stderr: `Couldn't start the command (${error.code || "error"}).`, truncated: false, timedOut: false, readOnly: parsed.readOnly, cwd: path.relative(workspace, dir) || ".", sandbox: launch.driver });
     });
     child.on("close", (code) => {
       clearTimeout(timer);
       resolve({
         command: parsed.name, args: parsed.list, exitCode: code, stdout: stdout.slice(0, outputCap),
         stderr: stderr.slice(0, outputCap), truncated: stdout.length >= outputCap || stderr.length >= outputCap,
-        timedOut: killed, readOnly: parsed.readOnly, cwd: path.relative(workspace, dir) || ".",
+        timedOut: killed, readOnly: parsed.readOnly, cwd: path.relative(workspace, dir) || ".", sandbox: launch.driver,
       });
     });
   });
@@ -325,12 +332,16 @@ function createComputersRouter() {
   const router = express.Router();
 
   router.get("/workforce/computers/capabilities", withAccount(async (_req, res) => {
+    const held = await sandbox.status();
     res.json({
       root: "isolated workspace per person and computer",
-      isolation: "workspace-directory",
+      isolation: held.driver ? `workspace-directory + ${held.driver}` : "workspace-directory",
+      sandbox: held,
       terminal: terminalCapabilities(),
       browser: await browser.status(),
-      note: "A workspace is not a virtual machine. For high-risk work, run this server in a container with a read-only base image and a per-tenant volume.",
+      note: held.driver
+        ? `Terminal commands run under ${held.driver}, checked on this server: no network, writes only in the workspace, other workspaces and the server's folder unreadable. It's process isolation, not a virtual machine.`
+        : `Terminal commands aren't sandboxed on this server (${held.reason}). A workspace is not a virtual machine: run this server in a container, or install bubblewrap on Linux.`,
     });
   }));
 
