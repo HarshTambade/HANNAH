@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APP_ROUTE_PATHS, legacyHashRedirect, pathForScreen, ROUTE_TITLES, screenForLocation } from "../routes";
+import { APP_ROUTE_PATHS, LANDING_TAB_PATHS, landingTabForLocation, legacyHashRedirect, pathForLandingTab, pathForScreen, ROUTE_PATHS, ROUTE_TITLES, screenForLocation } from "../routes";
 
 const at = (pathname: string, hash = "", search = "") => ({ pathname, hash, search });
 
@@ -17,6 +17,23 @@ describe("routes", () => {
   it("keeps landing-page anchors on the landing page", () => {
     expect(screenForLocation(at("/", "#privacy"))).toBe("landing");
     expect(screenForLocation(at("/", "#faq"))).toBe("landing");
+  });
+
+  it("serves each website page from the landing screen at its own address", () => {
+    expect(screenForLocation(at("/features"))).toBe("landing");
+    expect(screenForLocation(at("/faq/"))).toBe("landing");
+    expect(landingTabForLocation(at("/robots-and-devices"))).toBe("hardware");
+    expect(landingTabForLocation(at("/downloads/index.html"))).toBe("download");
+    expect(landingTabForLocation(at("/"))).toBe("home");
+    expect(landingTabForLocation(at("/chat"))).toBe("home");
+    expect(pathForLandingTab("privacy", "/app/")).toBe("/app/privacy");
+    expect(landingTabForLocation(at("/app/privacy"), "/app/")).toBe("privacy");
+    // No website page shadows an app screen or the server's /download/ links.
+    const appPaths = new Set(Object.values(ROUTE_PATHS));
+    for (const path of Object.values(LANDING_TAB_PATHS)) {
+      if (path !== "/") expect(appPaths.has(path), path).toBe(false);
+      expect(path.startsWith("/download/")).toBe(false);
+    }
   });
 
   it("understands old #/ links and redirects them", () => {

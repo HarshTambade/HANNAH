@@ -114,6 +114,8 @@ test("the landing page shows the app version and working download links", async 
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Your Personal AI.");
   await expect(page.getByRole("link", { name: /HANNAH.*home/ })).toContainText(`v${appVersion}`);
+  await page.getByRole("link", { name: "Download the app" }).click();
+  await expect(page).toHaveURL(/\/downloads$/);
   await expect(page.getByRole("heading", { name: `HANNAH ${appVersion} for every device.` })).toBeVisible();
   const download = page.locator("#download");
   await expect(download.getByRole("link", { name: "Installer (64-bit)" })).toHaveAttribute("href", /\/download\/windows$/);
@@ -132,7 +134,7 @@ test.describe("with the offline service worker", () => {
       reachedServer = true;
       return route.fulfill({ status: 200, headers: { "content-type": "application/vnd.android.package-archive", "content-disposition": "attachment; filename=HANNAH-Android.apk" }, body: "APK" });
     });
-    await page.goto("/");
+    await page.goto("/downloads");
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await page.reload();
     expect(await page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
@@ -153,8 +155,13 @@ test("public pages arrive as real HTML, readable without running JavaScript", as
     expect(text).toContain(heading);
     expect(html.match(/<title>/g)).toHaveLength(1);
   }
+  // Each website page is its own HTML page.
+  for (const [path, heading] of [["/features/", "One companion. Every kind of intelligence."], ["/ai-agents/", "A team for the hard questions."], ["/robots-and-devices/", "Ask a robot."], ["/privacy/", "You stay in charge."], ["/downloads/", "for every device."], ["/faq/", "Frequently asked."]] as const) {
+    const html = await (await request.get(path)).text();
+    expect(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1].replace(/<[^>]+>/g, "")).toContain(heading);
+  }
+  expect(await (await request.get("/faq/")).text()).toContain("Is HANNAH open source?");
   const home = await (await request.get("/")).text();
-  expect(home).toContain("Is HANNAH open source?");
   expect(home).toContain('href="/integrations"');
   expect(home).toContain('href="/marketplace"');
   // App screens stay out of search results.
@@ -166,5 +173,5 @@ test("the apps' boot splash never shows on the website", async ({ page }) => {
   await expect(page.locator("html")).not.toHaveClass(/native-app/);
   // main.tsx removes it once the app has drawn.
   await expect(page.locator("#boot-splash")).toHaveCount(0);
-  await expect(page.getByText("One companion. Every kind of intelligence.")).toBeVisible();
+  await expect(page.getByText("Everything HANNAH does, one page at a time.")).toBeVisible();
 });

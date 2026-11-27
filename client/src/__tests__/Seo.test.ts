@@ -28,7 +28,9 @@ describe("search metadata", () => {
   });
 
   it("builds the FAQ rich result from the FAQ the page shows", () => {
-    const data = JSON.parse(structuredData(site, page("/")));
+    // The FAQ page carries it; the home page no longer shows the questions.
+    expect(JSON.parse(structuredData(site, page("/")))["@graph"].some((item: { "@type": string }) => item["@type"] === "FAQPage")).toBe(false);
+    const data = JSON.parse(structuredData(site, page("/faq")));
     const faq = data["@graph"].find((item: { "@type": string }) => item["@type"] === "FAQPage");
     expect(faq.mainEntity.map((item: { name: string }) => item.name)).toEqual(FAQS.map((item) => item.q));
     const app = data["@graph"].find((item: { "@type": string }) => item["@type"] === "SoftwareApplication");

@@ -28,6 +28,8 @@ async function connect(page: Page) {
 const screens: Array<{ path: string; ready: (page: Page) => Promise<void> }> = [
   // With a session already set, the landing page offers "Open HANNAH" instead of "Talk to HANNAH".
   { path: "/", ready: (page) => expect(page.getByRole("link", { name: /Open HANNAH/ }).or(page.getByRole("button", { name: /Open HANNAH|Talk to HANNAH/ })).first()).toBeVisible() },
+  // The website's other pages.
+  ...([["/features", "One companion. Every kind of intelligence."], ["/ai-agents", "A team for the hard questions."], ["/robots-and-devices", "Ask a robot. It is checked before it moves."], ["/privacy", "You stay in charge."], ["/downloads", /for every device/], ["/faq", "Frequently asked."]] as const).map(([path, heading]) => ({ path, ready: (page: Page) => expect(page.getByRole("heading", { level: 1 })).toHaveText(heading) })),
   { path: "/chat", ready: (page) => expect(page.getByRole("textbox", { name: "Message HANNAH" })).toBeVisible() },
   { path: "/dashboard", ready: (page) => expect(page.getByRole("heading", { name: "Where you left off" })).toBeVisible() },
   { path: "/agents", ready: (page) => expect(page.getByRole("heading", { name: "Agents" })).toBeVisible() },

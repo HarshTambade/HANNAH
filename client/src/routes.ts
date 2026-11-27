@@ -8,7 +8,10 @@
  * static hosts, Capacitor and Electron all serve the app at that URL.
  *
  * Old "#/chat"-style links still work: they're rewritten to the path on load.
- * Plain "#section" anchors on the landing page are left alone.
+ * Plain "#section" anchors open the website page that holds that section.
+ *
+ * The website itself is several pages (Home, Features, Agents, …), all served
+ * by the landing screen: LANDING_TAB_PATHS maps each to its address.
  */
 export type AppScreen =
   | "landing"
@@ -87,6 +90,30 @@ export const ROUTE_TITLES: Record<Screen, string> = {
   "not-found": "Page not found · HANNAH",
 };
 
+/** The website's pages, each a tab of the landing screen with its own address. */
+export type LandingTab = "home" | "features" | "agents" | "hardware" | "privacy" | "download" | "faq";
+
+export const LANDING_TAB_PATHS: Record<LandingTab, string> = {
+  home: "/",
+  features: "/features",
+  // /agents, /devices, /robots and /download are taken by app screens and the server.
+  agents: "/ai-agents",
+  hardware: "/robots-and-devices",
+  privacy: "/privacy",
+  download: "/downloads",
+  faq: "/faq",
+};
+
+export const LANDING_TAB_TITLES: Record<LandingTab, string> = {
+  home: "HANNAH — Your Personal AI",
+  features: "Features · HANNAH",
+  agents: "AI agents · HANNAH",
+  hardware: "Robots and devices · HANNAH",
+  privacy: "Memory and privacy · HANNAH",
+  download: "Download · HANNAH",
+  faq: "FAQ and support · HANNAH",
+};
+
 /** App paths other than "/", for the build to emit an index.html each. */
 export const APP_ROUTE_PATHS = Object.values(ROUTE_PATHS).filter((path) => path !== "/");
 
@@ -114,7 +141,22 @@ export function screenForLocation(location: Pick<Location, "pathname" | "hash">,
   return screenForPath(normalizePath(location.pathname, base)) ?? "not-found";
 }
 
+/** Which website page a location shows ("home" for anything that isn't one). */
+export function landingTabForLocation(location: Pick<Location, "pathname">, base = "/"): LandingTab {
+  const path = normalizePath(location.pathname, base);
+  const match = (Object.entries(LANDING_TAB_PATHS) as Array<[LandingTab, string]>).find(([, value]) => value === path);
+  return match?.[0] ?? "home";
+}
+
+/** Full URL path for a website page, including the deployment base. */
+export function pathForLandingTab(tab: LandingTab, base = "/") {
+  const prefix = base.endsWith("/") ? base.slice(0, -1) : base;
+  const path = LANDING_TAB_PATHS[tab];
+  return path === "/" ? `${prefix}/` : `${prefix}${path}`;
+}
+
 function screenForPath(path: string): AppScreen | null {
+  if (Object.values(LANDING_TAB_PATHS).includes(path)) return "landing";
   const match = (Object.entries(ROUTE_PATHS) as Array<[AppScreen, string]>).find(([, value]) => value === path);
   return match?.[0] ?? ALIASES[path] ?? null;
 }

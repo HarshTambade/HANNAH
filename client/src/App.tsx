@@ -103,7 +103,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    document.title = ROUTE_TITLES[screen];
+    // The website's pages (Home, Features, …) set their own titles.
+    if (screen !== "landing" || !IS_WEBSITE) document.title = ROUTE_TITLES[screen];
   }, [screen]);
 
   // Reminders fire while the app is open, on any screen.

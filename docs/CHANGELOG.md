@@ -20,6 +20,7 @@ Devices (beta): HANNAH can work with lights, plugs, fans, sensors and meters thr
 
 ### Changed
 
+- **The website is separate pages.** Each tab in the navigation opens its own page with its own address: Features, Agents (now with the AI Workforce), Robots & devices, Privacy, Download and FAQ, with Home linking to each. Back and forward move between them, every page is pre-rendered for search engines, and an old `/#section` link opens the page that holds that section.
 - The app has ten sections. On a narrow window the header shows icons, with the current section named.
 - The account's emergency stop also pauses device automations.
 

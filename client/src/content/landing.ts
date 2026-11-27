@@ -162,6 +162,19 @@ export const AGENTS = {
   ] as { name: string; text: string; status: Status }[],
 } as const;
 
+/** AI Workforce: teammates that work on the server (README, "AI Workforce"). Beta: needs a signed-in account. */
+export const WORKFORCE = {
+  status: "beta" as Status,
+  parts: [
+    ["Teammates with a role", "Start from 11 templates, such as Research Analyst, Software Engineer or Personal Assistant, or describe your own. Each has instructions, its own memory and an autonomy level you set."],
+    ["Tasks that keep going", "Tasks run on the server, so they continue when HANNAH is closed. A teammate can plan, hand work to another and have a different one check the result."],
+    ["A cloud computer", "Files, a sandboxed terminal and a real browser. Watch the browser live and take control at any time."],
+    ["Skills and routines", "Teach a skill by showing it. Once you've tested and approved it, run it on a schedule, when something happens, or from a signed webhook."],
+    ["A vault, not a prompt", "Credentials are encrypted and never shown to the model. A teammate uses one only on the sites you name, and only if you assign it."],
+    ["You approve what matters", "Sending, publishing, deleting and changing access always ask first. Payments and robot motion aren't available to teammates at all."],
+  ] as const,
+} as const;
+
 /**
  * What works where, from docs/PLATFORM_SUPPORT.md (simplified: “yes”, a short
  * note, or “—” for not available).

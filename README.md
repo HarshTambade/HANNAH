@@ -104,7 +104,7 @@ What changed in each version is in [CHANGELOG.md](./docs/CHANGELOG.md). [Platfor
 
 ## What you can do
 
-Every screen has its own address, so refresh, bookmarks and the back button work, and older `#/chat`-style links redirect. The build writes an `index.html` for each route, so any static host serves them without rewrite rules. Every screen except the landing page, Marketplace and Integrations needs a connection first; opening one signed out asks you to connect, then takes you there. Unknown addresses show a "Page not found" screen.
+Every screen has its own address, so refresh, bookmarks and the back button work, and older `#/chat`-style links redirect. The build writes an `index.html` for each route, so any static host serves them without rewrite rules. The website is several pages, one per tab in its navigation: Home (`/`), Features (`/features`), Agents (`/ai-agents`), Robots & devices (`/robots-and-devices`), Privacy (`/privacy`), Download (`/downloads`) and FAQ (`/faq`). Each is pre-rendered for search engines, and an old `/#section` link opens the page that holds that section. Every screen except the website's pages, Marketplace and Integrations needs a connection first; opening one signed out asks you to connect, then takes you there. Unknown addresses show a "Page not found" screen.
 
 | Screen | Route | What it does |
 | --- | --- | --- |

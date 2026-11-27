@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { Plugin } from "vite";
 import { CAPABILITIES, FAQS } from "../src/content/landing";
 
@@ -10,7 +10,7 @@ import { CAPABILITIES, FAQS } from "../src/content/landing";
  *   Graph and X card (PNG image), and schema.org data built from the same
  *   words the page shows (src/content/landing.ts), so the FAQ rich result
  *   always matches the visible FAQ.
- * - The public pages (/, /integrations, /marketplace) are rendered to HTML at
+ * - The public pages (the website's pages, /integrations, /marketplace) are rendered to HTML at
  *   build time, so crawlers, link previews and the first paint get the real
  *   headings and text without running JavaScript. The app then renders over it.
  * - robots.txt, sitemap.xml and llms.txt (a plain summary for AI search tools).
@@ -43,6 +43,60 @@ export const PUBLIC_PAGES: PublicPage[] = [
     description: "Free AI companion with voice chat, AI agents, visual workflow automation, memory you control and a live 3D avatar. Use any cloud or local model; approve every action.",
     component: "/src/components/LandingPage.tsx",
     props: { onStart() {}, onIntegrations() {}, onMarketplace() {} },
+  },
+  {
+    path: "/features",
+    file: "features/index.html",
+    name: "Features",
+    title: "HANNAH Features: AI Models, Workflows and Connectors",
+    description: "Everything HANNAH does: 23 AI providers with automatic model choice, visual workflow automation, connectors for the tools you use, and an OpenAI-compatible API.",
+    component: "/src/components/LandingPage.tsx",
+    props: { onStart() {}, onIntegrations() {}, onMarketplace() {}, page: "features" },
+  },
+  {
+    path: "/ai-agents",
+    file: "ai-agents/index.html",
+    name: "AI agents",
+    title: "HANNAH AI Agents and AI Workforce Teammates",
+    description: "A team of specialist AI agents that plan, work in parallel and check results, and AI teammates that work on a cloud computer. Anything risky waits for you.",
+    component: "/src/components/LandingPage.tsx",
+    props: { onStart() {}, onIntegrations() {}, onMarketplace() {}, page: "agents" },
+  },
+  {
+    path: "/robots-and-devices",
+    file: "robots-and-devices/index.html",
+    name: "Robots and devices",
+    title: "HANNAH for Robots and Smart Devices",
+    description: "Ask a robot or a smart device in plain words. HANNAH checks every request against safety limits and asks you first. Tested with simulators today.",
+    component: "/src/components/LandingPage.tsx",
+    props: { onStart() {}, onIntegrations() {}, onMarketplace() {}, page: "hardware" },
+  },
+  {
+    path: "/privacy",
+    file: "privacy/index.html",
+    name: "Memory and privacy",
+    title: "HANNAH Memory and Privacy: You Stay in Charge",
+    description: "Memory you can see, edit and delete, a Private mode that never leaves your hardware, encrypted keys, and approval before any action changes your data.",
+    component: "/src/components/LandingPage.tsx",
+    props: { onStart() {}, onIntegrations() {}, onMarketplace() {}, page: "privacy" },
+  },
+  {
+    path: "/downloads",
+    file: "downloads/index.html",
+    name: "Download",
+    title: "Download HANNAH for Windows, macOS, Linux, Android",
+    description: "Get HANNAH for every device: the web app, and installers for Windows, macOS, Linux and Android with SHA-256 checksums. Free, with your own key or local models.",
+    component: "/src/components/LandingPage.tsx",
+    props: { onStart() {}, onIntegrations() {}, onMarketplace() {}, page: "download" },
+  },
+  {
+    path: "/faq",
+    file: "faq/index.html",
+    name: "FAQ and support",
+    title: "HANNAH FAQ, Roadmap and Support",
+    description: "Answers to common questions about HANNAH, what's on the roadmap, and where to report a problem, read the documentation or ask for a security contact.",
+    component: "/src/components/LandingPage.tsx",
+    props: { onStart() {}, onIntegrations() {}, onMarketplace() {}, page: "faq" },
   },
   {
     path: "/about/",
@@ -152,13 +206,14 @@ export function structuredData(siteOrigin: string, page: PublicPage) {
       inLanguage: "en",
     },
   ];
-  if (page.path === "/") {
+  if (page.path === "/faq") {
     graph.push({
       "@type": "FAQPage",
       "@id": `${canonical}#faq`,
       mainEntity: FAQS.map((item) => ({ "@type": "Question", name: item.q, acceptedAnswer: { "@type": "Answer", text: item.a } })),
     });
-  } else {
+  }
+  if (page.path !== "/") {
     graph.push({
       "@type": "BreadcrumbList",
       "@id": `${canonical}#breadcrumbs`,
@@ -308,6 +363,7 @@ export function hannahSeoPlugin({ mode }: SeoOptions): Plugin {
         const body = rendered[page.path];
         if (body) html = html.replace('<div id="root"></div>', `<div id="root">${body}</div>`);
         else this.warn(`${page.path} wasn't pre-rendered; it still works, rendered in the browser.`);
+        mkdirSync(dirname(file), { recursive: true });
         writeFileSync(file, html);
       }
     },
