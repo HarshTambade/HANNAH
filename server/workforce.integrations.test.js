@@ -317,7 +317,7 @@ test("desktop jobs: a local computer's rule decides what may be queued; the desk
   // The teammate is told about the laptop and suggests a job; nothing is queued until a person sends it.
   const task = await api("POST", "/workforce/tasks", { botId: state.pip.id, title: "Status check", objective: "Check the status page." });
   const ran = await api("POST", `/workforce/tasks/${task.body.task.id}/run`, {});
-  assert.match(prompts.at(-1).prompt, /THE PERSON'S OWN COMPUTER[\s\S]*"My laptop": any job, asked every time/);
+  assert.match(prompts.at(-1).prompt, /THE PERSON'S OWN COMPUTER[\s\S]*"My laptop": browser, coding, open and notify jobs, asked every time/);
   const stepIndex = ran.body.task.result.nextSteps.findIndex((step) => step.action === "local.browser");
   assert.ok(stepIndex >= 0);
   assert.equal(ran.body.task.result.nextSteps[stepIndex].local, true);
@@ -368,6 +368,60 @@ test("desktop jobs: a local computer's rule decides what may be queued; the desk
   assert.equal(failed.body.job.status, "failed");
   await flush();
   assert.match(sent.slice(before).find((item) => item.to === "slack")?.body.text || "", /A coding job for "Status check" didn't run on Harsh's Mac: You declined/);
+});
+
+test("desktop jobs: terminal commands and desktop control are off until the person turns them on for that computer", async () => {
+  const laptop = (await api("GET", "/workforce/computers")).body.computers.find((computer) => computer.name === "My laptop");
+  const task = await api("POST", "/workforce/tasks", { botId: state.pip.id, title: "Repo check", objective: "Check the repo." });
+  const terminal = { kind: "terminal", input: { command: "git status --short", folder: "hannah-app" } };
+  const control = { kind: "control", input: { request: "Open the release notes in TextEdit", plan: ["Switch to TextEdit", "Open the file"] } };
+
+  // Ask every time is the default rule, and still doesn't cover these two.
+  await api("PUT", `/workforce/computers/${laptop.id}/local-permissions`, { mode: "ask" });
+  const off = await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, terminal);
+  assert.equal(off.status, 403);
+  assert.match(off.body.error, /Terminal commands from teammates are off/);
+  assert.match((await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, control)).body.error, /Desktop control from teammates is off/);
+
+  // Inputs the desktop would refuse are refused here too.
+  await api("PUT", `/workforce/computers/${laptop.id}/local-permissions`, { mode: "ask", elevated: ["terminal", "control"] });
+  for (const bad of [
+    { kind: "terminal", input: { command: "git status\nrm -rf x", folder: "hannah-app" } },
+    { kind: "terminal", input: { command: "git status" } },
+    { kind: "terminal", input: { command: "ls", folder: "hannah-app", path: "../.." } },
+    { kind: "control", input: { request: "Do it", plan: [] } },
+  ]) assert.equal((await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, bad)).status, 400, JSON.stringify(bad));
+
+  const queuedTerminal = await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, terminal);
+  assert.equal(queuedTerminal.status, 201, JSON.stringify(queuedTerminal.body));
+  assert.equal(queuedTerminal.body.job.input.command, "git status --short");
+  const queuedControl = await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, control);
+  assert.equal(queuedControl.status, 201);
+  assert.equal(queuedControl.body.job.input.minutes, 10);
+
+  // The teammate is told what it may suggest.
+  await api("POST", `/workforce/tasks/${task.body.task.id}/run`, {});
+  assert.match(prompts.at(-1).prompt, /also terminal and control \(turned on by the person\)[\s\S]*terminal \{command, folder, path\?\}[\s\S]*control \{request, plan/);
+
+  // Workspaces: terminal only in the listed folders; no desktop control.
+  await api("PUT", `/workforce/computers/${laptop.id}/local-permissions`, { mode: "workspaces", folders: ["hannah-app"], elevated: ["terminal", "control"] });
+  assert.equal((await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, terminal)).status, 201);
+  assert.equal((await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, { ...terminal, input: { ...terminal.input, folder: "secrets" } })).status, 403);
+  assert.equal((await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, control)).status, 403);
+
+  // Never clears them.
+  const never = await api("PUT", `/workforce/computers/${laptop.id}/local-permissions`, { mode: "never", elevated: ["terminal"] });
+  assert.deepEqual(never.body.permissions.elevated, []);
+  await api("PUT", `/workforce/computers/${laptop.id}/local-permissions`, { mode: "ask" });
+  assert.equal((await api("POST", `/workforce/tasks/${task.body.task.id}/local-jobs`, terminal)).status, 403);
+
+  // The command's output comes back as an artifact on the task.
+  const desktop = { deviceId: "desktop-device-0001", deviceName: "Harsh's Mac" };
+  assert.equal((await api("POST", `/workforce/local-jobs/${queuedTerminal.body.job.id}/claim`, desktop)).status, 200);
+  const done = await api("POST", `/workforce/local-jobs/${queuedTerminal.body.job.id}/complete`, { ...desktop, ok: true, output: { command: "git status --short", exitCode: 0, text: "$ git status --short\n M README.md" } });
+  assert.equal(done.body.job.status, "done");
+  assert.ok(done.body.artifact);
+  for (const job of (await api("GET", "/workforce/local-jobs")).body.jobs) await api("POST", `/workforce/local-jobs/${job.id}/cancel`, {});
 });
 
 test("routine webhooks: verified per provider, once per delivery, filtered by event, and the secret is shown once", async () => {

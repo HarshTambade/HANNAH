@@ -84,15 +84,17 @@ const LOCAL_KINDS: Array<[string, string]> = [["browser", "Read a web page"], ["
 
 /** What a local computer takes from teammates. The desktop app still asks before every job. */
 function LocalComputerPanel({ computer }: { computer: Computer }) {
-  const stored = computer.permissions as { localMode?: string; localKinds?: string[]; localFolders?: string[] };
+  const stored = computer.permissions as { localMode?: string; localKinds?: string[]; localFolders?: string[]; localElevated?: Array<"terminal" | "control"> };
   const [mode, setMode] = useState<LocalPermissions["mode"]>((["ask", "tasks", "workspaces", "never"].includes(String(stored.localMode)) ? stored.localMode : stored.localMode === "allow" ? "tasks" : "ask") as LocalPermissions["mode"]);
   const [kinds, setKinds] = useState<string[]>(stored.localKinds ?? []);
   const [folders, setFolders] = useState((stored.localFolders ?? []).join("\n"));
+  const [elevated, setElevated] = useState<Array<"terminal" | "control">>(stored.localElevated ?? []);
   const [note, setNote] = useState("");
   const save = async () => {
     setNote("");
     try {
-      await workforce.localPermissions(computer.id, { mode, kinds, folders: folders.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) });
+      const saved = await workforce.localPermissions(computer.id, { mode, kinds, folders: folders.split(/\r?\n/).map((line) => line.trim()).filter(Boolean), elevated });
+      setElevated(saved.permissions.elevated ?? []);
       setNote("Saved.");
     } catch (error) { setNote(error instanceof Error ? error.message : "That didn't work."); }
   };
@@ -101,7 +103,7 @@ function LocalComputerPanel({ computer }: { computer: Computer }) {
       <p className="text-sm text-slate-600">This is your own computer. Teammates can't reach it directly: from a teammate's task you send a job here, the HANNAH desktop app (signed in, with “Run workflow tasks” on in Settings → Desktop access) shows its own system dialog naming the teammate, and runs it only if you say yes. These settings decide which jobs may be sent at all; they're separate from any cloud computer's permissions.</p>
       <fieldset className="space-y-1.5">
         <legend className={heading}>Teammate jobs</legend>
-        {([["ask", "Ask every time — any kind of job (default)"], ["tasks", "Only some kinds of job"], ["workspaces", "Only coding, in some shared folders"], ["never", "Never"]] as const).map(([value, label]) => (
+        {([["ask", "Ask every time — web pages, coding, opening apps and notifications (default)"], ["tasks", "Only some kinds of job"], ["workspaces", "Only coding, in some shared folders"], ["never", "Never"]] as const).map(([value, label]) => (
           <label key={value} className="flex items-center gap-2 text-sm text-slate-700"><input type="radio" name={`local-mode-${computer.id}`} checked={mode === value} onChange={() => setMode(value)} /> {label}</label>
         ))}
       </fieldset>
@@ -112,6 +114,17 @@ function LocalComputerPanel({ computer }: { computer: Computer }) {
       )}
       {mode === "workspaces" && (
         <label className="block"><span className={heading}>Shared folder names (one per line, as shown in Settings → Desktop access)</span><textarea className={`${input} min-h-20`} value={folders} onChange={(event) => setFolders(event.target.value)} /></label>
+      )}
+      {mode !== "never" && (
+        <fieldset className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <legend className={heading}>Also allow (off unless you turn it on)</legend>
+          {([
+            ["terminal", "Terminal commands", "One exact command in a shared folder, run without a shell. The desktop shows the command and asks every time; “always allow” never applies to a teammate."],
+            ["control", "Desktop control", "Using your apps for a task. You allow a timed session in a system dialog; it reads the screen before every action, asks before anything that sends, deletes or buys, never types passwords, and stops at once from the menu bar."],
+          ] as const).filter(([value]) => mode !== "workspaces" || value === "terminal").map(([value, label, help]) => (
+            <label key={value} className="flex items-start gap-2 text-sm text-slate-700"><input type="checkbox" className="mt-1" checked={elevated.includes(value)} onChange={() => setElevated((list) => (list.includes(value) ? list.filter((item) => item !== value) : [...list, value]))} data-testid={`local-elevated-${value}`} /> <span><span className="font-medium">{label}</span><span className="block text-xs text-slate-600">{help}</span></span></label>
+          ))}
+        </fieldset>
       )}
       <div className="flex items-center gap-2"><button type="button" className={primary} onClick={() => void save()} data-testid="local-permissions-save">Save</button>{note && <span className="text-sm text-slate-600" role="status">{note}</span>}</div>
     </div>

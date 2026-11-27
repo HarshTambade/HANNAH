@@ -220,7 +220,8 @@ export interface LocalJob {
   id: string; taskId: string; botId: string | null; computerId: string; kind: "browser" | "coding" | "open" | "notify";
   input: Record<string, unknown>; status: string; device: string | null; result: unknown; error: string | null; createdAt: number; updatedAt: number; expiresAt: number;
 }
-export interface LocalPermissions { mode: "ask" | "tasks" | "workspaces" | "never"; kinds: string[]; folders: string[] }
+/** `elevated` holds terminal and control: off on every computer until turned on here, whatever the mode. */
+export interface LocalPermissions { mode: "ask" | "tasks" | "workspaces" | "never"; kinds: string[]; folders: string[]; elevated?: Array<"terminal" | "control"> }
 
 export interface NotificationSettings { categories: { approvals: boolean; completions: boolean; failures: boolean }; channelIds: string[]; webhooks: boolean; quietHours: boolean }
 export interface NotificationChannel { id: string; kind: string; name: string; paired: boolean; pairedName: string | null; canNotify: boolean; reachable: boolean; teammateId: string | null }

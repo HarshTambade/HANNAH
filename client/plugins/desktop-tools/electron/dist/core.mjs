@@ -470,6 +470,52 @@ export function createDesktopTools(deps) {
     return `Wait ${step.seconds} second${step.seconds === 1 ? "" : "s"}`;
   }
 
+  /** Run an approved command: in the folder, without a shell, or in its Docker sandbox. */
+  async function execute(folder, { cwd, clean, text, program, args, label = "" }) {
+    const started = now();
+    // Sandboxed folders run the command in a throwaway Docker container (see sandboxCommand).
+    const sandbox = folder.sandbox?.enabled ? sandboxCommand({ folder, root: (await resolveInside(folder, "")).target, clean, program, args }) : null;
+    const result = await new Promise((resolve) => {
+      let stdout = "";
+      let stderr = "";
+      let truncated = false;
+      let timedOut = false;
+      let child;
+      try {
+        child = sandbox
+          ? spawn("docker", sandbox.args, { shell: false, windowsHide: true, env: minimalEnv(process.env, platform) })
+          : spawn(program, args, { cwd, shell: false, windowsHide: true, env: minimalEnv(process.env, platform) });
+      } catch (error) {
+        resolve({ exitCode: null, stdout: "", stderr: String(error?.message ?? error), truncated: false, timedOut: false });
+        return;
+      }
+      const take = (current, chunk) => {
+        const next = current + chunk.toString("utf8");
+        if (next.length > LIMITS.outputBytes) { truncated = true; return next.slice(0, LIMITS.outputBytes); }
+        return next;
+      };
+      child.stdout?.on("data", (chunk) => { stdout = take(stdout, chunk); });
+      child.stderr?.on("data", (chunk) => { stderr = take(stderr, chunk); });
+      const timer = setTimeout(() => {
+        timedOut = true;
+        child.kill("SIGKILL");
+        // Killing the docker client doesn't stop the container; stop it by name.
+        if (sandbox) spawn("docker", ["kill", sandbox.name], { shell: false, windowsHide: true, stdio: "ignore" }).on("error", () => {});
+      }, LIMITS.commandMs);
+      child.on("error", (error) => {
+        clearTimeout(timer);
+        const missing = error?.code === "ENOENT";
+        resolve({ exitCode: null, stdout, stderr: missing ? (sandbox ? "Docker wasn't found. Install Docker Desktop (or turn the sandbox off for this folder)." : `“${program}” wasn't found. Check it's installed and on your PATH.`) : String(error?.message ?? error), truncated, timedOut });
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ exitCode: code, stdout, stderr, truncated, timedOut });
+      });
+    });
+    await record({ kind: "command", folder: folder.name, detail: text, ...(label ? { by: label } : {}), exitCode: result.exitCode, ...(sandbox ? { sandbox: folder.sandbox.image } : {}) });
+    return { folder: folder.name, command: text, cwd: clean || ".", durationMs: now() - started, ...(sandbox ? { sandbox: { image: folder.sandbox.image, network: folder.sandbox.network === true } } : {}), ...result };
+  }
+
   return {
     ...control,
     ...localChannels,
@@ -606,48 +652,34 @@ export function createDesktopTools(deps) {
           await save();
         }
       }
-      const started = now();
-      // Sandboxed folders run the command in a throwaway Docker container (see sandboxCommand).
-      const sandbox = folder.sandbox?.enabled ? sandboxCommand({ folder, root: (await resolveInside(folder, "")).target, clean, program, args }) : null;
-      const result = await new Promise((resolve) => {
-        let stdout = "";
-        let stderr = "";
-        let truncated = false;
-        let timedOut = false;
-        let child;
-        try {
-          child = sandbox
-            ? spawn("docker", sandbox.args, { shell: false, windowsHide: true, env: minimalEnv(process.env, platform) })
-            : spawn(program, args, { cwd, shell: false, windowsHide: true, env: minimalEnv(process.env, platform) });
-        } catch (error) {
-          resolve({ exitCode: null, stdout: "", stderr: String(error?.message ?? error), truncated: false, timedOut: false });
-          return;
-        }
-        const take = (current, chunk) => {
-          const next = current + chunk.toString("utf8");
-          if (next.length > LIMITS.outputBytes) { truncated = true; return next.slice(0, LIMITS.outputBytes); }
-          return next;
-        };
-        child.stdout?.on("data", (chunk) => { stdout = take(stdout, chunk); });
-        child.stderr?.on("data", (chunk) => { stderr = take(stderr, chunk); });
-        const timer = setTimeout(() => {
-          timedOut = true;
-          child.kill("SIGKILL");
-          // Killing the docker client doesn't stop the container; stop it by name.
-          if (sandbox) spawn("docker", ["kill", sandbox.name], { shell: false, windowsHide: true, stdio: "ignore" }).on("error", () => {});
-        }, LIMITS.commandMs);
-        child.on("error", (error) => {
-          clearTimeout(timer);
-          const missing = error?.code === "ENOENT";
-          resolve({ exitCode: null, stdout, stderr: missing ? (sandbox ? "Docker wasn't found. Install Docker Desktop (or turn the sandbox off for this folder)." : `“${program}” wasn't found. Check it's installed and on your PATH.`) : String(error?.message ?? error), truncated, timedOut });
-        });
-        child.on("close", (code) => {
-          clearTimeout(timer);
-          resolve({ exitCode: code, stdout, stderr, truncated, timedOut });
-        });
+      return execute(folder, { cwd, clean, text, program, args });
+    },
+
+    /**
+     * One command a person sent from an AI Workforce teammate's task. Workflow
+     * tasks must be on; it always asks, naming the teammate and the task, with
+     * no "always allow": a teammate's command never runs on an earlier yes.
+     */
+    async runTeammateCommand({ teammate, task, folderId, path: relative, command } = {}) {
+      const state = await load();
+      if (!state.workflowTasks) fail("WORKFLOW_TASKS_OFF", "Workflow tasks are off on this computer. Turn on “Run workflow tasks” in Settings → Desktop access.");
+      const folder = await folderById(folderId);
+      const { program, args } = parseCommand(command);
+      const { target: cwd, relative: clean } = await resolveInside(folder, relative);
+      if (!(await fsp.stat(cwd)).isDirectory()) fail("NOT_DIRECTORY", "Commands run in a folder, not a file.");
+      const text = String(command).trim();
+      const who = String(teammate || "A teammate").replace(/\s+/g, " ").slice(0, 80);
+      const choice = await deps.confirm({
+        title: "A teammate's command",
+        message: `${who} (task “${String(task || "a task").replace(/\s+/g, " ").slice(0, 120)}”) wants to run this command in ${folder.name}${clean ? `/${clean}` : ""}:`,
+        detail: `${text}\n\nFolder: ${cwd}\n${folder.sandbox?.enabled ? `It runs in a Docker sandbox (${folder.sandbox.image}${folder.sandbox.network ? ", with network" : ", offline"}) that sees only this folder` : "It runs without a shell"}, for up to ${LIMITS.commandMs / 1000} seconds. Its output goes back to the task.`,
+        buttons: ["Run it", "Don't run"],
       });
-      await record({ kind: "command", folder: folder.name, detail: text, exitCode: result.exitCode, ...(sandbox ? { sandbox: folder.sandbox.image } : {}) });
-      return { folder: folder.name, command: text, cwd: clean || ".", durationMs: now() - started, ...(sandbox ? { sandbox: { image: folder.sandbox.image, network: folder.sandbox.network === true } } : {}), ...result };
+      if (choice !== 0) {
+        await record({ kind: "teammate-command-denied", folder: folder.name, detail: `${who}: ${text}`.slice(0, 300) });
+        return { approved: false };
+      }
+      return { approved: true, ...(await execute(folder, { cwd, clean, text, program, args, label: `teammate ${who}` })) };
     },
 
     /**
@@ -1298,7 +1330,7 @@ export function createDesktopTools(deps) {
 /** Methods the web page may call. Everything else stays in the main process. */
 export const BRIDGED_METHODS = Object.freeze([
   "listFolders", "addFolder", "removeFolder", "setAccess", "revealFolder",
-  "listDirectory", "readFile", "writeFile", "runCommand", "forgetCommand", "recentActivity", "setFolderSandbox",
+  "listDirectory", "readFile", "writeFile", "runCommand", "runTeammateCommand", "forgetCommand", "recentActivity", "setFolderSandbox",
   "workflowTaskSettings", "setWorkflowTasks", "approveWorkflowTask", "readWebPage", "runWorkflowOpen", "workflowNotify", "setWakeListening",
   "screenStatus", "captureScreen", "pauseScreenSession", "stopScreenSession", "openScreenSettings",
   "listApps", "openApp", "forgetApp",

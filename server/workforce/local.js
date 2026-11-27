@@ -16,6 +16,16 @@
  *   open     open apps and links
  *   notify   a desktop notification
  *
+ * Two more kinds are off on every computer until the person turns them on for
+ * it ("elevated"), whatever its rule:
+ *   terminal one exact command in a shared folder, run without a shell; the
+ *            desktop shows the command and asks every time, with no
+ *            "always allow"
+ *   control  a desktop-control task: the person allows a timed control
+ *            session in a system dialog, every action is taken on a fresh
+ *            look at the screen and checked afterwards, risky presses and
+ *            terminals ask again, and it stops at once from the menu bar
+ *
  * Each local computer has its own rule for what may even be queued, separate
  * from any cloud computer's permissions:
  *   ask         any kind; the desktop asks every time (the default)
@@ -34,7 +44,12 @@ const KINDS = {
   coding: "A coding task in one shared folder",
   open: "Open apps and links",
   notify: "Show a desktop notification",
+  terminal: "Run one command in a shared folder (you approve the exact command)",
+  control: "Use apps on your desktop (you allow a timed session and can stop it at any moment)",
 };
+/** Kinds a computer takes only when the person turned them on for it. */
+const ELEVATED = new Set(["terminal", "control"]);
+const PLAIN_KINDS = Object.keys(KINDS).filter((kind) => !ELEVATED.has(kind));
 const MODES = new Set(["ask", "tasks", "workspaces", "never"]);
 const JOB_TTL_MS = 24 * 60 * 60_000;
 const DEVICE_ID = /^[A-Za-z0-9_-]{8,80}$/;
@@ -45,8 +60,9 @@ function permissionsOf(computer) {
   const mode = MODES.has(raw.localMode) ? raw.localMode : raw.localMode === "allow" ? "tasks" : "ask";
   return {
     mode,
-    kinds: asArray(raw.localKinds, 4).filter((kind) => Object.hasOwn(KINDS, kind)),
+    kinds: asArray(raw.localKinds, 4).filter((kind) => PLAIN_KINDS.includes(kind)),
     folders: asArray(raw.localFolders, 20),
+    elevated: asArray(raw.localElevated, 2).filter((kind) => ELEVATED.has(kind)),
   };
 }
 
@@ -74,12 +90,37 @@ function normalizeInput(kind, raw) {
     if (!title) throw fail(400, "A notification needs a title.", "invalid");
     return { title, body: clean(input.body, 400) };
   }
+  if (kind === "terminal") {
+    const command = String(input.command ?? "").trim();
+    if (!command || command.length > 1000 || /[\r\n\0]/.test(command)) throw fail(400, "A terminal job needs one command on one line (up to 1,000 characters).", "invalid");
+    const folder = clean(input.folder, 120);
+    if (!folder) throw fail(400, "Name the shared folder the command runs in.", "invalid");
+    const path = clean(input.path, 400);
+    if (path.split(/[\\/]/).includes("..")) throw fail(400, "The command's path must stay inside the shared folder.", "invalid");
+    return { command, folder, path };
+  }
+  if (kind === "control") {
+    const request = cleanMultiline(input.request, 1000);
+    if (!request) throw fail(400, "Say what the desktop task is.", "invalid");
+    const plan = (Array.isArray(input.plan) ? input.plan : String(input.plan || "").split(/\n+/)).map((step) => clean(step, 200)).filter(Boolean).slice(0, 15);
+    if (!plan.length) throw fail(400, "A desktop task needs a plan: a few short steps.", "invalid");
+    const minutes = Math.max(1, Math.min(30, Math.round(Number(input.minutes) || 10)));
+    return { request, plan, app: clean(input.app, 120), minutes };
+  }
   throw fail(400, `kind must be one of ${Object.keys(KINDS).join(", ")}.`, "invalid");
 }
 
 /** Whether this computer's rule lets the job be queued. The desktop still asks. */
 function allowed(permissions, kind, input) {
   if (permissions.mode === "never") return { ok: false, reason: "This computer is set to never run teammate tasks." };
+  if (ELEVATED.has(kind)) {
+    if (!permissions.elevated.includes(kind)) return { ok: false, reason: kind === "terminal" ? "Terminal commands from teammates are off for this computer. Turn them on in the Computer Center." : "Desktop control from teammates is off for this computer. Turn it on in the Computer Center." };
+    if (permissions.mode === "workspaces") {
+      if (kind !== "terminal") return { ok: false, reason: "This computer only takes work in the shared folders you listed, so desktop control isn't allowed." };
+      if (!permissions.folders.some((folder) => folder.toLowerCase() === String(input.folder || "").toLowerCase())) return { ok: false, reason: `The folder “${input.folder || "(none)"}” isn't one of this computer's allowed workspaces.` };
+    }
+    return { ok: true };
+  }
   if (permissions.mode === "tasks" && !permissions.kinds.includes(kind)) return { ok: false, reason: `This computer only takes ${permissions.kinds.length ? permissions.kinds.join(", ") : "no"} teammate tasks.` };
   if (permissions.mode === "workspaces") {
     if (kind !== "coding") return { ok: false, reason: "This computer only takes coding tasks in the shared folders you listed." };
@@ -104,8 +145,8 @@ async function localContext(db, userId, bot) {
   if (!usable.length) return "";
   return [
     "THE PERSON'S OWN COMPUTER (through the HANNAH desktop app; you can suggest a job, a person sends it, and the desktop asks them before running it):",
-    ...usable.map(({ row, permissions }) => `- "${row.name}": ${permissions.mode === "ask" ? "any job, asked every time" : permissions.mode === "tasks" ? `only ${permissions.kinds.join(", ") || "no"} jobs` : `coding only, in: ${permissions.folders.join(", ")}`}`),
-    `To suggest one, add it to nextSteps as {"action": "local.<kind>", "title": "...", "reason": "...", "params": {...}} with kind one of: browser {url}, coding {task, folder}, open {app?, urls?}, notify {title, body}.`,
+    ...usable.map(({ row, permissions }) => `- "${row.name}": ${permissions.mode === "ask" ? "browser, coding, open and notify jobs, asked every time" : permissions.mode === "tasks" ? `only ${permissions.kinds.join(", ") || "no"} jobs` : `coding only, in: ${permissions.folders.join(", ")}`}${permissions.elevated.length ? `; also ${permissions.elevated.join(" and ")} (turned on by the person)` : ""}`),
+    `To suggest one, add it to nextSteps as {"action": "local.<kind>", "title": "...", "reason": "...", "params": {...}} with kind one of: browser {url}, coding {task, folder}, open {app?, urls?}, notify {title, body}${usable.some(({ permissions }) => permissions.elevated.includes("terminal")) ? ", terminal {command, folder, path?} (one program with its arguments, no shell: no pipes, redirects, && or variables)" : ""}${usable.some(({ permissions }) => permissions.elevated.includes("control")) ? ", control {request, plan: [short steps], app?, minutes?} (using apps on the desktop; it can't type passwords, pay, or touch security prompts)" : ""}.`,
   ].join("\n");
 }
 
@@ -157,13 +198,14 @@ function createLocalRouter() {
     const body = readBody(req);
     const mode = String(body.mode || "");
     if (!MODES.has(mode)) throw fail(400, "mode must be ask, tasks, workspaces or never.", "invalid");
-    const kinds = asArray(body.kinds, 4).filter((kind) => Object.hasOwn(KINDS, kind));
+    const kinds = asArray(body.kinds, 4).filter((kind) => PLAIN_KINDS.includes(kind));
     const folders = asArray(body.folders, 20);
-    if (mode === "tasks" && !kinds.length) throw fail(400, "Choose at least one kind of task, or use never.", "invalid");
+    const elevated = asArray(body.elevated, 2).filter((kind) => ELEVATED.has(kind));
+    if (mode === "tasks" && !kinds.length && !elevated.length) throw fail(400, "Choose at least one kind of task, or use never.", "invalid");
     if (mode === "workspaces" && !folders.length) throw fail(400, "Name at least one shared folder, or use never.", "invalid");
-    const permissions = { ...(parse(row.permissions, {}) || {}), localMode: mode, localKinds: kinds, localFolders: folders };
+    const permissions = { ...(parse(row.permissions, {}) || {}), localMode: mode, localKinds: kinds, localFolders: folders, localElevated: mode === "never" ? [] : elevated };
     await db.query("UPDATE hannah_computers SET permissions = $1, updated_at = $2 WHERE user_id = $3 AND id = $4", [JSON.stringify(permissions), Date.now(), account.id, row.id]);
-    await recordEvent(db, account.id, "local.permissions_changed", { computerId: row.id, detail: { mode, kinds, folders: folders.length } });
+    await recordEvent(db, account.id, "local.permissions_changed", { computerId: row.id, severity: elevated.length ? "medium" : "info", detail: { mode, kinds, folders: folders.length, elevated: permissions.localElevated } });
     res.json({ computerId: row.id, permissions: permissionsOf({ permissions: JSON.stringify(permissions) }), kinds: KINDS });
   }));
 
@@ -272,4 +314,4 @@ function createLocalRouter() {
   return router;
 }
 
-module.exports = { KINDS, MODES, allowed, createLocalRouter, isLocalAction, localContext, normalizeInput, permissionsOf };
+module.exports = { ELEVATED, KINDS, MODES, allowed, createLocalRouter, isLocalAction, localContext, normalizeInput, permissionsOf };

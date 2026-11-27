@@ -21,7 +21,7 @@
     "models:draco": "node scripts/compress-avatar.mjs",
     "cap:run:ios": "npm run build && cap sync ios && npm run cap:patch:ios && cap run ios",
     "cap:run:android": "npm run build && cap sync android && npm run cap:patch:android && cap run android",
-    "test": "vitest run && node --test plugins/desktop-tools/core.test.mjs plugins/desktop-tools/actions.test.mjs plugins/desktop-tools/browser.test.mjs plugins/desktop-tools/control.test.mjs plugins/desktop-tools/messages.test.mjs",
+    "test": "vitest run && node --test plugins/desktop-tools/core.test.mjs plugins/desktop-tools/actions.test.mjs plugins/desktop-tools/browser.test.mjs plugins/desktop-tools/control.test.mjs plugins/desktop-tools/messages.test.mjs plugins/desktop-tools/teammate.test.mjs",
     "test:chaos": "vitest run src/__tests__/Phase25Chaos.test.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test --config playwright.config.ts",

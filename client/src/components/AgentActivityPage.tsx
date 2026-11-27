@@ -270,6 +270,8 @@ function TaskResultView({ result, taskId, onChanged }: { result: TaskResult; tas
               {step.hardware && (step.actionId
                 ? <span className="mt-1 block text-xs text-slate-600">Sent to the Action Engine: {step.actionStatus === "waiting-approval" ? <>waiting for your approval in <a className="underline" href="/actions">Actions</a></> : step.actionStatus}.</span>
                 : <button type="button" className={`${button} mt-1`} disabled={busy !== -1} onClick={() => void send(index, "hardware")} data-testid={`send-hardware-${index}`}>Send for approval (robots and devices)</button>)}
+              {step.local && step.action === "local.terminal" && <span className="mt-1 block text-xs text-slate-700">Command: <code className="rounded bg-slate-100 px-1">{String(step.params?.command ?? "")}</code> in the shared folder “{String(step.params?.folder ?? "")}”{step.params?.path ? `/${String(step.params.path)}` : ""}</span>}
+              {step.local && step.action === "local.control" && <span className="mt-1 block text-xs text-slate-700">Uses your apps: {String(step.params?.request ?? "")}{Array.isArray(step.params?.plan) ? ` (${(step.params.plan as unknown[]).map(String).join(" → ")})` : ""}</span>}
               {step.local && (step.localJobId
                 ? <span className="mt-1 block text-xs text-slate-600">Sent to your computer: {step.localStatus === "pending" ? "waiting for the desktop app to ask you" : step.localStatus}.</span>
                 : <button type="button" className={`${button} mt-1`} disabled={busy !== -1} onClick={() => void send(index, "local")} data-testid={`send-local-${index}`}><Laptop size={13} /> Send to my computer</button>)}

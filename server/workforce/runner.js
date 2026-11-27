@@ -34,7 +34,7 @@ const { ensureWorkspace, safePath } = require("./computers");
 const browser = require("./browser");
 const { resolveSecret } = require("./secrets");
 const { hardwareContext, isHardwareAction } = require("./hardware");
-const { isLocalAction, localContext } = require("./local");
+const { ELEVATED, isLocalAction, localContext } = require("./local");
 
 const MAX_STEPS = 100;
 const MAX_MEMORY_ITEMS = 40;
@@ -559,7 +559,9 @@ async function runTask(db, userId, taskId) {
     // it is still only a suggestion until they do, and the engine asks for approval.
     if (isLocalAction(action)) {
       const params = step?.params && typeof step.params === "object" && !Array.isArray(step.params) ? step.params : {};
-      return { action, title: clean(step?.title, 200), reason: clean(step?.reason, 400), risk: "medium", refused: false, local: true, params: JSON.stringify(params).length <= 4000 ? params : {} };
+      // A terminal command or desktop control is high risk; the computer must also have it turned on.
+      const elevated = ELEVATED.has(action.slice("local.".length));
+      return { action, title: clean(step?.title, 200), reason: clean(step?.reason, 400), risk: elevated ? "high" : "medium", refused: false, local: true, params: JSON.stringify(params).length <= 4000 ? params : {} };
     }
     if (isHardwareAction(action)) {
       const params = step?.params && typeof step.params === "object" && !Array.isArray(step.params) ? step.params : {};

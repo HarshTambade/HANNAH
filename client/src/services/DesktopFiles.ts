@@ -28,6 +28,8 @@ export interface HannahDesktopPlugin {
   readFile(options: { folderId: string; path: string }): Promise<{ folder: string; path: string; content: string; bytes: number }>;
   writeFile(options: { folderId: string; path: string; content: string }): Promise<{ folder: string; path: string; bytesWritten: number; created: boolean }>;
   runCommand(options: { folderId: string; path?: string; command: string }): Promise<CommandResult>;
+  /** A command a person sent from an AI Workforce teammate's task: always asks, naming the teammate; no "always allow". */
+  runTeammateCommand(options: { teammate: string; task: string; folderId: string; path?: string; command: string }): Promise<{ approved: false } | ({ approved: true } & CommandResult & { sandbox?: { image: string; network: boolean } })>;
   forgetCommand(options: { folderId: string; command: string }): Promise<{ allowedCommands: AllowedCommand[] }>;
   /** Run this folder's commands in a Docker sandbox; turning it off or adding network asks in a system dialog. */
   setFolderSandbox(options: { id: string; enabled: boolean; image?: string; network?: boolean }): Promise<{ folder: SharedFolder }>;
