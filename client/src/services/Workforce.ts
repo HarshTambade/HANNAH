@@ -15,7 +15,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const anyData = data as { error?: unknown; message?: unknown } | null;
     const message = (typeof anyData?.error === "string" ? anyData.error : typeof anyData?.message === "string" ? anyData.message : "") || `That call failed (${response.status}).`;
-    throw new Error(message);
+    // The status lets a caller tell a passing failure (429, 5xx) from a refusal.
+    throw Object.assign(new Error(message), { status: response.status });
   }
   return (data ?? {}) as T;
 }
@@ -164,7 +165,7 @@ export interface Meeting {
 export interface MeetingNotes { summary?: string; decisions?: string[]; risks?: string[]; followUps?: string[]; model?: string; provider?: string }
 export interface MeetingAction { id: string; title: string; owner?: string; due?: string; details?: string; accepted?: boolean; taskId?: string }
 
-export interface MeetingsCapabilities { liveJoin: boolean; liveRecord: boolean; transcriptImport: boolean }
+export interface MeetingsCapabilities { liveJoin: boolean; liveRecord: boolean; liveRecordFrom?: "device"; transcriptImport: boolean }
 
 export interface Approval {
   id: string; botId: string | null; taskId: string | null; teamId: string | null; action: string; title: string;
@@ -431,6 +432,12 @@ export const workforce = {
   meetingSummarize: (id: string) => post(`/meetings/${id}/summarize`, {}),
   meetingAcceptAction: (id: string, actionId: string, botId?: string) => post<{ ok: boolean; task: { id: string; title: string; status: string; botId: string } }>(`/meetings/${id}/actions/${actionId}/accept`, botId ? { botId } : {}),
   meetingCancel: (id: string) => post(`/meetings/${id}/cancel`, {}),
+  meeting: (id: string) => get<{ meeting: Meeting & { transcript: string } }>(`/meetings/${id}`),
+  /** Live notes from this device: needs the meeting's consent and a fresh "everyone agreed". */
+  meetingLiveStart: (id: string, body: { everyoneAgreed: boolean; language?: string }) => post<{ meeting: Meeting; pieceSeconds: number }>(`/meetings/${id}/live/start`, body),
+  /** One recorded piece, in order. The server transcribes it and keeps only the text. */
+  meetingLiveAudio: (id: string, seq: number, atMs: number, piece: Blob) => call<{ ok: boolean; seq: number; text: string; duplicate?: boolean }>(`/api/workforce/meetings/${id}/live/audio?seq=${seq}&at=${Math.max(0, Math.round(atMs))}`, { method: "POST", headers: { "content-type": (piece.type || "audio/webm").split(";")[0] }, body: piece }),
+  meetingLiveEnd: (id: string) => post<{ meeting: Meeting }>(`/meetings/${id}/live/end`, {}),
 };
 
 export default workforce;

@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Bell, Check, ChevronDown, ChevronRight, ClipboardList, Laptop, Lightbulb, Pause, Play, Plus, RefreshCw, ShieldAlert, Users, Video, X } from "lucide-react";
+import LiveMeetingNotes from "./LiveMeetingNotes";
 import workforce, {
   shortDate, shortTime,
   type Approval, type Bot, type Meeting, type NotificationChannel, type NotificationItem, type NotificationSettings, type PolicyRule, type ProactiveOffer, type Task, type TaskDetail, type WorkforceUsage,
@@ -413,22 +414,23 @@ function MeetingsSection({ bots, meetings, onChanged }: { bots: Bot[]; meetings:
 
   return (
     <div>
-      <p className="text-sm text-slate-600">HANNAH can't join or record a live meeting here: no meeting-platform credentials are configured. Add a meeting, record that the participants agreed, paste its transcript, and a teammate writes the notes and action items for you to review.</p>
-      <form className="mt-3 grid gap-2 sm:grid-cols-[2fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); void act("create", async () => { await workforce.meetingCreate({ title: title.trim(), botId: botId || undefined, provider: "manual", consent: { transcript: consent, record: false } }); setTitle(""); setConsent(false); return "Meeting added. Paste its transcript when it ends."; }); }}>
+      <p className="text-sm text-slate-600">HANNAH can't join a Zoom, Meet or Teams call as a participant: no meeting-platform credentials are configured. Add a meeting with everyone's agreement, then take live notes from this device's microphone or paste the transcript, and a teammate writes the notes and action items for you to review.</p>
+      <form className="mt-3 grid gap-2 sm:grid-cols-[2fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); void act("create", async () => { await workforce.meetingCreate({ title: title.trim(), botId: botId || undefined, provider: "manual", consent: { transcript: consent, record: consent } }); setTitle(""); setConsent(false); return "Meeting added. Take live notes, or paste its transcript when it ends."; }); }}>
         <input className={input} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Meeting title" aria-label="Meeting title" required />
         <select className={input} value={botId} onChange={(event) => setBotId(event.target.value)} aria-label="Notes by">
           <option value="">Notes by HANNAH</option>
           {bots.map((bot) => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
         </select>
         <button type="submit" className={primary} disabled={!!busy || !title.trim()}><Plus size={14} /> Add</button>
-        <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-3"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /> Everyone in this meeting agreed that its transcript may be processed</label>
+        <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-3"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} data-testid="meeting-consent" /> Everyone in this meeting agreed that it may be recorded and transcribed</label>
       </form>
       <ul className="mt-3 space-y-2">
         {meetings.slice(0, 10).map((meeting) => (
           <li key={meeting.id} className="rounded-xl border border-slate-200 p-3" data-testid={`meeting-${meeting.id}`}>
             <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-slate-900">{meeting.title}</p><Pill tone={taskTones.queued}>{meeting.status}</Pill></div>
             {meeting.consent?.transcript !== true && <Notice tone="amber">No consent recorded, so a transcript can't be added for this meeting.</Notice>}
-            {meeting.consent?.transcript === true && !meeting.notes && (
+            {meeting.consent?.transcript === true && !meeting.notes && meeting.status !== "cancelled" && <LiveMeetingNotes meeting={meeting} onChanged={onChanged} />}
+            {meeting.consent?.transcript === true && !meeting.notes && meeting.status !== "live" && (
               <div className="mt-2">
                 <textarea className={textarea} rows={3} placeholder="Paste the transcript" aria-label={`Transcript for ${meeting.title}`} value={transcripts[meeting.id] ?? ""} onChange={(event) => setTranscripts((value) => ({ ...value, [meeting.id]: event.target.value }))} />
                 <div className="mt-2 flex flex-wrap gap-2">

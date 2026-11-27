@@ -30,6 +30,7 @@ const SERVICE_URL = "https://smba.trafficmanager.net/emea/";
 const msKeys = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
 const sent = [];
 const prompts = [];
+const transcribed = [];
 const realFetch = globalThis.fetch;
 
 globalThis.fetch = async (input, init = {}) => {
@@ -45,6 +46,11 @@ globalThis.fetch = async (input, init = {}) => {
   if (url === "https://login.botframework.com/v1/.well-known/openidconfiguration") return Response.json({ jwks_uri: "https://login.botframework.com/v1/.well-known/keys" });
   if (url === "https://login.botframework.com/v1/.well-known/keys") return Response.json({ keys: [{ ...msKeys.publicKey.export({ format: "jwk" }), kid: "ms1", endorsements: ["msteams"] }] });
   if (url.startsWith(SERVICE_URL)) { sent.push({ to: "teams", url, body }); return Response.json({ id: "reply1" }); }
+  if (url === "https://api.groq.com/openai/v1/audio/transcriptions") {
+    const file = init.body.get("file");
+    transcribed.push({ auth, model: init.body.get("model"), bytes: file.size, type: file.type });
+    return Response.json({ text: transcribed.length === 1 ? "We agreed to ship on Friday." : "Priya will update the docs by Thursday." });
+  }
   if (url.startsWith("https://api.groq.com/")) {
     const request = JSON.parse(init.body);
     const system = request.messages.find((message) => message.role === "system")?.content || "";
@@ -474,4 +480,48 @@ test("routine webhooks: verified per provider, once per delivery, filtered by ev
   assert.equal((await api("PATCH", `/workforce/routines/${generic.body.routine.id}`, { trigger: { provider: "generic", event: "deploy.*" } })).status, 200);
   const later = seconds() + 1;
   assert.equal((await sendGeneric(signGeneric(event, later))).status, 202);
+});
+
+test("live meeting notes: only with consent and everyone's agreement; each piece is transcribed once and the audio isn't kept", async () => {
+  const noRecord = (await api("POST", "/workforce/meetings", { title: "Standup", consent: { transcript: true } })).body.meeting;
+  assert.equal((await api("POST", `/workforce/meetings/${noRecord.id}/live/start`, { everyoneAgreed: true })).status, 403, "recording consent is required");
+
+  const meeting = (await api("POST", "/workforce/meetings", { title: "Release sync", botId: state.pip.id, consent: { record: true, transcript: true } })).body.meeting;
+  const unconfirmed = await api("POST", `/workforce/meetings/${meeting.id}/live/start`, {});
+  assert.equal(unconfirmed.status, 403);
+  assert.match(unconfirmed.body.error, /everyone in the meeting/);
+  const started = await api("POST", `/workforce/meetings/${meeting.id}/live/start`, { everyoneAgreed: true, language: "en" });
+  assert.equal(started.status, 200, JSON.stringify(started.body));
+  assert.equal(started.body.meeting.status, "live");
+  assert.equal((await api("POST", `/workforce/meetings/${meeting.id}/live/start`, { everyoneAgreed: true })).status, 409);
+
+  const piece = (seq, at, type = "audio/webm") => realFetch(`${base}/workforce/meetings/${meeting.id}/live/audio?seq=${seq}&at=${at}`, { method: "POST", headers: { "Content-Type": type, Authorization: `Bearer ${session}` }, body: Buffer.alloc(4096, seq + 1) }).then(async (response) => ({ status: response.status, body: await response.json() }));
+  const first = await piece(0, 0);
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.text, "[0:00] We agreed to ship on Friday.");
+  assert.equal((await piece(0, 0)).body.duplicate, true, "a retried piece isn't transcribed twice");
+  const second = await piece(1, 20_000);
+  assert.equal(second.body.text, "[0:20] Priya will update the docs by Thursday.");
+  assert.equal(transcribed.length, 2);
+  assert.deepEqual(transcribed.map((item) => [item.bytes, item.type]), [[4096, "audio/webm"], [4096, "audio/webm"]]);
+  assert.equal(transcribed[0].auth, "Bearer gsk_integrationsTestKey0123456789abcdefg", "the account's own key");
+  assert.equal((await piece(2, 40_000, "audio/flac")).status, 415);
+
+  // While live, nothing else rewrites the transcript or writes notes.
+  assert.equal((await api("POST", `/workforce/meetings/${meeting.id}/transcript`, { transcript: "x".repeat(60) })).status, 409);
+  assert.equal((await api("POST", `/workforce/meetings/${meeting.id}/summarize`, {})).status, 409);
+
+  const ended = await api("POST", `/workforce/meetings/${meeting.id}/live/end`, {});
+  assert.equal(ended.body.meeting.status, "ready");
+  assert.equal((await piece(2, 40_000)).status, 409, "no pieces after the end");
+  const saved = (await api("GET", `/workforce/meetings/${meeting.id}`)).body.meeting;
+  assert.equal(saved.transcript, "[0:00] We agreed to ship on Friday.\n[0:20] Priya will update the docs by Thursday.");
+  assert.equal(saved.consent.live.pieces, 2);
+  assert.ok(saved.consent.live.everyoneAgreedAt);
+  // Only text is stored: no audio column, no audio in the record.
+  const row = (await db.query("SELECT * FROM hannah_meetings WHERE user_id = $1 AND id = $2", [userId, meeting.id])).rows[0];
+  assert.doesNotMatch(JSON.stringify(row), /AQEBAQ|\\u0001/);
+  const caps = (await api("GET", "/workforce/meetings/capabilities")).body;
+  assert.equal(caps.liveJoin, false);
+  assert.equal(caps.liveRecordFrom, "device");
 });

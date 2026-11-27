@@ -85,7 +85,7 @@ function createWorkforceRouter({ operator = null } = {}) {
         vault: vaultConfigured(),
         browser: (await browser.status()).available,
         model: probe ? { available: true, provider: probe.provider.label, model: probe.model, keySource: probe.keySource } : { available: false, reason: "No AI provider key is configured for this account." },
-        meetings: { liveJoin: false, transcriptImport: true },
+        meetings: { liveJoin: false, liveRecord: true, liveRecordFrom: "device", transcriptImport: true },
         tick: { configured: Boolean(process.env.CRON_SECRET), worker: process.env.WORKFORCE_WORKER !== "off" },
         isolation: "workspace-directory",
         computerIsolationNote: "A workspace is a directory under the server user, not a virtual machine. Run the server in a container for stronger isolation.",
