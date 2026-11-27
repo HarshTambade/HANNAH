@@ -9,19 +9,19 @@ Code: `server/workforce/*` (API under `/api/workforce`), screens in `client/src/
 | Part | Module | What it does |
 | --- | --- | --- |
 | Teammates | `bots.js` | Create from a template or from scratch, configure, activate, pause, duplicate, export, version history and restore. A teammate is a configuration, not a process. |
-| Conversations | `conversations.js` | A private conversation per person per teammate. Answers use the account's own provider. Asking for work returns a proposed task that is queued only when the person accepts it. An instruction sent to an open task is added to its brief for the next run. Memory is written only when the person asks. |
+| Conversations | `conversations.js`, `TeammateCall.ts` | A private conversation per person per teammate, typed or spoken (**Talk**). Answers use the account's own provider. Asking for work returns a proposed task that is queued only when the person accepts it. An instruction sent to an open task is added to its brief for the next run. Memory is written only when the person asks. |
 | Tasks and delegation | `tasks.js`, `runner.js` | Tasks run on the server with the account's provider and produce artifacts, memory and suggested next steps. Plans split work across teammates, with prerequisites, a depth cap of 3 and at most 8 children per task. A different teammate can verify a result. |
 | Agent Activity | `AgentActivityPage.tsx` | The approval queue, giving work, the task board (run, pause, resume, cancel, verify, hand off), suggestions, meeting notes, notifications and usage. |
 | Approvals and policy | `approvals.js` | Low, medium, high and critical risk. High always asks; critical isn't available here at all. Organization rules can only tighten. A decision covers one request. |
-| Computers | `computers.js`, `browser.js` | A cloud workspace per computer with files, an allow-listed terminal and a Playwright browser with a persistent profile, network rules and a live preview. A local computer is the person's own desktop (section 4). |
+| Computers | `computers.js`, `browser.js`, `sandbox.js` | A cloud workspace per computer with files, an allow-listed terminal under the host's sandbox, and a Playwright browser with a persistent profile, network rules and a live stream the person can take control of (section 4). A local computer is the person's own desktop (section 5). |
 | Skills and Teach Mode | `skills.js` | Reviewed procedures; learned workflows start as drafts; tests are dry runs. |
-| Routines | `routines.js`, `routine-hooks.js` | Schedules, workforce events, manual runs and signed webhooks (section 6). Durable on the server. |
+| Routines | `routines.js`, `routine-hooks.js` | Schedules, workforce events, manual runs and signed webhooks (section 7). Durable on the server. |
 | Memory | `memory.js`, `TeammateMemory.tsx` | Teammate, shared, project, team and device scopes, with provenance, confidence, last checked and expiry. Credentials are refused. |
 | Secure Vault | `secrets.js` | Values are sealed with the vault and never returned or put in a prompt. |
 | Hardware | `hardware.js` | Read-only robot and device state for teammates with the `robots` or `devices` tool (section 3). |
-| Notifications and chat apps | `notify.js`, `channel-bridge.js` | In the app, account webhooks, and Slack, Microsoft Teams, Telegram or WhatsApp (section 5). |
+| Notifications and chat apps | `notify.js`, `channel-bridge.js` | In the app, account webhooks, and Slack, Microsoft Teams, Telegram or WhatsApp (section 6). |
 | Usage limits | `usage.js` | Tasks and messages per teammate per 24 hours, under an account ceiling. |
-| Meetings | `meetings.js` | Notes and action items from a consented, pasted transcript. |
+| Meetings | `meetings.js`, `LiveMeetingNotes.tsx` | Live notes from the person's own device, or a pasted transcript, with consent; then notes and action items (section 8). |
 | Teams | `teams.js` | Published team teammates; each member's conversation, memory and files stay private. |
 
 ## 2. Rules that hold everywhere
@@ -44,7 +44,22 @@ It also sees the robot and device actions it may suggest, taken from the Action 
 
 The cloud never sends motor commands. Physical execution stays in the onboard runtime and the hub, which keep their own limits if this server, the model provider or the client disconnects.
 
-## 4. The person's own computer
+## 4. Cloud computers: live view and isolation
+
+**Live view.** Computer Center → a session → **Live view** streams the session's browser: Chromium's own screencast, sent as Server-Sent Events (`GET /api/workforce/sessions/<id>/stream`). Everyone watching a computer shares one screencast. A stream lasts up to 10 minutes and the viewer reconnects.
+
+**Take control.** Watching is read-only. **Take control** (`POST /api/workforce/sessions/<id>/handoff`) puts the session in "waiting for a person" and holds the browser: teammate and skill browser actions are refused until the person chooses **Hand back**. While they hold it, their clicks, scrolling, keys and typing go to the page (`POST /api/workforce/sessions/<id>/input`, coordinates as fractions of the page). Only a signed-in person can send input. Input is rate limited, and the session's activity records that input happened, never what was typed. The stream and the hold live in the server process, so they need a long-running server (they don't work on serverless functions).
+
+**Terminal isolation.** Terminal commands run under the host's sandbox when one passes a check:
+
+| Host | Driver | What a command can't do |
+| --- | --- | --- |
+| macOS | `sandbox-exec` | open any network connection; write outside its workspace; read or list other workspaces; read the server's folder |
+| Linux | bubblewrap (`bwrap`) | the same, with new user, process, network, IPC and host namespaces; only the system folders (read-only) and its workspace are visible |
+
+Before a driver is used, the server runs a real program under it with the same rules. The program must be able to write in its workspace, and writing outside, reading another workspace, listing them, reading the server's folder and connecting to the network must all fail. A driver that fails the check isn't used. The Computer Center's capabilities (`GET /api/workforce/computers/capabilities`) show the driver and the check's results, or why there's none. `HANNAH_WORKFORCE_SANDBOX` is `auto` (default), `off`, or a driver's name. Naming a driver makes it required: if it's missing or fails the check, commands are refused, not run unsandboxed. This is process isolation in the host's kernel, not a virtual machine (section 11).
+
+## 5. The person's own computer
 
 Teammates can't reach a desktop directly. A local computer (Computer Center → add → Local) has its own rule for what teammates may send it:
 
@@ -55,9 +70,16 @@ Teammates can't reach a desktop directly. A local computer (Computer Center → 
 | Only some workspaces | Only coding jobs, in the named shared folders |
 | Never | Nothing is queued |
 
+Two more kinds are off on every local computer until the person turns them on for it (**Also allow** in the Computer Center), whatever its rule:
+
+- **Terminal commands:** one exact command in a named shared folder, run without a shell (no pipes, redirects, `&&` or variables). The desktop shows the command and the teammate every time. "Always allow" never applies to a teammate's command. Under "Only some workspaces", only in the listed folders.
+- **Desktop control:** using the person's apps for a task with a short plan. The desktop asks the person to allow a timed control session. Every action is taken on a fresh look at the screen and checked afterwards. Anything that sends, deletes, buys or posts asks again, and so does every action in a terminal or System Settings. It never types passwords, never pays, and stops at once from the menu bar or its shortcut. The job counts as done only when the screen confirmed the last action. The session always ends with the job. Desktop control is available in the macOS desktop app.
+
+A teammate is told about these kinds only on computers where they're on, and a suggested terminal or control step is high risk. The person sees the exact command or the plan before sending it.
+
 Whatever the rule, the HANNAH desktop app asks before each job. It must be signed in with **Run workflow tasks** on (Settings → Desktop access). It claims the job (one device wins), shows its own system dialog naming the teammate and the task, and runs the job with the desktop plugin's folder and address rules, which live in Electron's main process (`client/plugins/desktop-tools`). It then reports the result. Page text or a coding report becomes an artifact on the task. A declined dialog is reported as a failure. These permissions are separate from a cloud computer's.
 
-## 5. Notifications and chat apps
+## 6. Notifications and chat apps
 
 Three categories: approvals waiting, finished tasks, and blocked or failed work (including routines that couldn't run and desktop jobs that failed). The person chooses the categories and the destinations in Agent Activity → Notifications:
 
@@ -69,7 +91,7 @@ A teammate's own notification settings can mute it. Quiet hours (Proactive setti
 
 A chat app can also be **bound to a teammate**. The paired owner's messages there then go to that teammate's conversation, with the same limits and memory rules. Replying `queue` queues its latest proposed task, `approve apv_…` or `deny apv_…` decides one approval, and `status` lists its open tasks. Anyone else the owner approved on that bot still talks to HANNAH, never to the owner's teammate.
 
-## 6. Routine webhooks
+## 7. Routine webhooks
 
 A webhook routine gets a server-made secret, shown once and stored sealed with the vault (bound to the account and the routine). Deliveries go to `POST /api/hooks/routine/<id>` and are verified the provider's own way, against the exact bytes:
 
@@ -83,7 +105,20 @@ A webhook routine gets a server-made secret, shown once and stored sealed with t
 
 A routine can filter by event (for example `issues.opened` or `issue.*`). Each delivery id runs once. Pings are acknowledged without running. Runs are capped at 30 per routine per hour and count against the teammate's usage limits. The payload reaches the teammate in the task's brief, labelled as untrusted data and cut at 12,000 characters. **New secret** in the Routine Center rotates it; the old one stops working at once.
 
-## 7. Deployment
+## 8. Meetings
+
+HANNAH doesn't join a Zoom, Google Meet or Microsoft Teams call as a participant (section 11). A meeting's notes come from one of two places:
+
+- **Live notes from this device.** The meeting must have been added with consent to record and transcribe. Starting needs a fresh confirmation that everyone present knows and agreed. The browser asks for the microphone. It records complete pieces of about 20 seconds and sends them in order. The server transcribes each piece with the account's own Groq key (Whisper), appends a timestamped line, and keeps only the text: the audio is never stored. A retried piece isn't transcribed twice. A refused piece (the meeting ended, no key) stops the recording. While live, the transcript can't be pasted over or summarized. Live notes stop after 4 hours.
+- **A pasted transcript,** with the same consent.
+
+Then a model writes a summary, decisions, risks and action items from the transcript only. An action item becomes a task when the person chooses a teammate for it.
+
+## 9. Talking with a teammate
+
+**Talk** in a teammate's chat is a spoken conversation using HANNAH's voice service. After a pause, what the person said is sent as an ordinary conversation message, with the same limits and memory rules. The answer is spoken with the microphone off, so the teammate never hears itself. Long answers are cut short with a pointer to the chat. A proposed task is mentioned but never queued by voice; it waits in the chat. Saying "end call" hangs up without sending anything. A refused message, such as one over the usage limit, is said aloud and ends the call.
+
+## 10. Deployment
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
@@ -96,13 +131,14 @@ A routine can filter by event (for example `issues.opened` or `issue.*`). Each d
 | `WORKFORCE_ACCOUNT_TASKS_PER_DAY` / `WORKFORCE_ACCOUNT_MESSAGES_PER_DAY` | 300 / 600 | The account ceiling no teammate can exceed. |
 | `WORKFORCE_BOT_TASKS_PER_DAY` / `WORKFORCE_BOT_MESSAGES_PER_DAY` | 60 / 200 | A teammate's default when it sets none. |
 | `HANNAH_WORKFORCE_DIR` | under the server | Where cloud computer workspaces and artifacts live. |
-| `HANNAH_WORKFORCE_EXTENDED_COMMANDS` | off | Lets the cloud terminal run node, git, npm and similar. Only inside a container. |
+| `HANNAH_WORKFORCE_EXTENDED_COMMANDS` | off | Lets the cloud terminal run node, git, npm and similar. Only with a working sandbox or inside a container. |
+| `HANNAH_WORKFORCE_SANDBOX` | auto | The terminal's sandbox driver: `auto`, `off`, `sandbox-exec` or `bwrap`. Naming one makes it required (section 4). |
 | `HANNAH_ACCOUNTS_USE_SERVER_KEYS` | off | When on, accounts may use the server's provider keys and an operator-configured local runtime (for example `OLLAMA_BASE_URL`). When off, a teammate answers only with the account's own key. |
 
-## 8. Not built, and why
+## 11. Not built, and why
 
-- **Virtual machine isolation for cloud computers.** A cloud computer is a workspace directory under the server's user with an allow-listed terminal, not a VM or microVM. Run the server in a container for stronger isolation. A microVM driver (for example Firecracker) needs a Linux host with KVM; none was available for this work.
-- **Remote desktop streaming.** The live preview is a browser screenshot every two seconds, not a video stream of a full desktop.
-- **Live meeting join and recording.** This needs Zoom, Google Meet or Microsoft Teams meeting APIs and app credentials. Notes come from a consented, pasted transcript.
-- **Voice calls with a teammate.** Dictation into a teammate's chat uses HANNAH's voice service; a live spoken conversation with a teammate isn't built.
-- **Desktop control and terminal jobs from teammates.** Teammates can send the four job kinds the desktop app already runs for workflows. Clicking in other apps or running arbitrary terminal commands on the desktop isn't offered to teammates.
+- **Virtual machine isolation for cloud computers.** The terminal runs under the host's sandbox (section 4), which is process isolation, not a VM or microVM. A microVM driver (for example Firecracker) needs a Linux host with KVM; none was available for this work. The bubblewrap driver was written and its arguments are tested, but it wasn't run on a Linux host. The server's own check decides whether it's used there, and it isn't used if the check fails.
+- **Joining a call as a participant.** Joining or recording Zoom, Google Meet or Microsoft Teams from their side needs those platforms' meeting APIs and app credentials. Live notes record the person's own device instead (section 8).
+- **A whole remote desktop.** A cloud computer has a browser and a terminal, not a desktop, so the live view streams the browser.
+- **Full-duplex voice.** Talk takes turns: the microphone is off while the teammate speaks, and interrupting is a button, not speech. Speech recognition is the browser's or the device's own.
+- **Desktop control outside macOS.** The desktop app's control tools have a macOS adapter only.
