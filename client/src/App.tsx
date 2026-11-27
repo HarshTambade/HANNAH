@@ -11,6 +11,7 @@ import SkillLibraryPage from "./components/SkillLibraryPage";
 import VaultPage from "./components/VaultPage";
 import TeamCenterPage from "./components/TeamCenterPage";
 import ArtifactLibraryPage from "./components/ArtifactLibraryPage";
+import AgentActivityPage from "./components/AgentActivityPage";
 import AutomationsScreen from "./components/AutomationsScreen";
 import AgentAccountabilityDashboard from "./components/AgentAccountabilityDashboard";
 import ChatUI from "./components/ChatUI";
@@ -45,7 +46,7 @@ import AppWelcome from "./components/AppWelcome";
 import { MarketplaceService } from "./services/MarketplaceService";
 import { IS_WEBSITE } from "./config/site";
 
-const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "robotics", "robot-os", "devices", "settings", "workforce", "computers", "routines", "skills", "vault", "teams", "artifacts"]);
+const appSections = new Set<Screen>(["conversation", "companion", "agents", "models", "accountability", "automations", "actions", "robotics", "robot-os", "devices", "settings", "workforce", "computers", "routines", "skills", "vault", "teams", "artifacts", "activity"]);
 const base = import.meta.env.BASE_URL;
 
 function currentScreen(): Screen {
@@ -340,6 +341,14 @@ export default function App() {
     return (
       <AppShell {...shellProps}>
         <ArtifactLibraryPage />
+      </AppShell>
+    );
+  }
+
+  if (screen === "activity") {
+    return (
+      <AppShell {...shellProps}>
+        <AgentActivityPage />
       </AppShell>
     );
   }

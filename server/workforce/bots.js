@@ -14,6 +14,7 @@ const {
   BOT_STATUSES, asArray, asObject, canUseBot, clean, cleanMultiline, fail, id, membership,
   parse, readBody, recordEvent, requireId, sha256, withAccount,
 } = require("./common");
+const { normalizeLimits } = require("./usage");
 
 const AUTONOMY = new Set(["observe", "suggest", "approval", "scoped", "autonomous"]);
 const VISIBILITY = new Set(["private", "team"]);
@@ -164,7 +165,7 @@ function normalizeConfig(input, base = {}) {
     permissions: asObject(input.permissions ?? base.permissions),
     autonomy: String(input.autonomy ?? base.autonomy ?? "approval"),
     notifications: asObject(input.notifications ?? base.notifications),
-    limits: asObject(input.limits ?? base.limits),
+    limits: normalizeLimits(input.limits ?? base.limits),
     visibility: String(input.visibility ?? base.visibility ?? "private"),
   };
   if (!config.name) throw fail(400, "Give the teammate a name.", "invalid");

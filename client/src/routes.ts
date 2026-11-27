@@ -31,7 +31,8 @@ export type AppScreen =
   | "skills"
   | "vault"
   | "teams"
-  | "artifacts";
+  | "artifacts"
+  | "activity";
 
 export type Screen = AppScreen | "not-found";
 
@@ -57,6 +58,7 @@ export const ROUTE_PATHS: Record<AppScreen, string> = {
   vault: "/vault",
   teams: "/teams",
   artifacts: "/artifacts",
+  activity: "/activity",
 };
 
 export const ROUTE_TITLES: Record<Screen, string> = {
@@ -81,6 +83,7 @@ export const ROUTE_TITLES: Record<Screen, string> = {
   vault: "Secure Vault · HANNAH",
   teams: "Team Center · HANNAH",
   artifacts: "Artifact Library · HANNAH",
+  activity: "Agent Activity · HANNAH",
   "not-found": "Page not found · HANNAH",
 };
 

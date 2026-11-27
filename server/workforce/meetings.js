@@ -17,6 +17,7 @@ const express = require("express");
 const {
   asArray, asObject, canUseBot, clean, cleanMultiline, fail, id, parse, readBody, recordEvent, requireId, withAccount,
 } = require("./common");
+const { assertTaskAllowance } = require("./usage");
 const { complete } = require("./runner");
 
 const PROVIDERS = new Set(["manual", "google-meet", "zoom", "microsoft-teams", "other"]);
@@ -202,6 +203,7 @@ function createMeetingsRouter() {
     const body = readBody(req);
     const bot = await canUseBot(db, account.id, clean(body.botId, 80) || row.bot_id);
     if (!bot) throw fail(400, "Choose a teammate to own this task.", "bot-required");
+    await assertTaskAllowance(db, account.id, bot);
     const at = Date.now();
     const taskId = id("task");
     await db.query(

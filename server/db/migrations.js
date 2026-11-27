@@ -1408,6 +1408,31 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_robot_os_commands_owner ON hannah_robot_os_commands (user_id, created_at)",
     ],
   },
+  {
+    version: 29,
+    name: "AI workforce: teammate conversations",
+    // One person's conversation with one teammate. Rows are keyed by the person,
+    // so a published team teammate never shows one member's chat to another.
+    // Additive; no existing row is changed.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_workforce_messages (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        bot_id TEXT NOT NULL,
+        task_id TEXT,
+        reply_to TEXT,
+        role TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        content TEXT NOT NULL,
+        data TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_workforce_messages_thread ON hannah_workforce_messages (user_id, bot_id, created_at)",
+      "CREATE INDEX IF NOT EXISTS hannah_workforce_messages_task ON hannah_workforce_messages (user_id, task_id, created_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

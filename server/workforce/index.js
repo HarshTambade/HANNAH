@@ -24,6 +24,8 @@ const { createRoutinesRouter, tick } = require("./routines");
 const { createArtifactsRouter } = require("./artifacts");
 const { createProactiveRouter } = require("./proactive");
 const { createMeetingsRouter } = require("./meetings");
+const { createConversationsRouter } = require("./conversations");
+const { createUsageRouter } = require("./usage");
 const { modelTarget } = require("./runner");
 const browser = require("./browser");
 
@@ -127,6 +129,8 @@ function createWorkforceRouter() {
   router.use(createArtifactsRouter());
   router.use(createProactiveRouter());
   router.use(createMeetingsRouter());
+  router.use(createConversationsRouter());
+  router.use(createUsageRouter());
 
   return router;
 }

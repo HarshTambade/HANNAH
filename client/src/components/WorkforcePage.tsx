@@ -6,9 +6,10 @@
  * server's records; they refresh on a timer and after every action.
  */
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
-import { Bot as BotIcon, Copy, Eye, Pause as PauseIcon, Pencil, Play as PlayIcon, Plus, RefreshCw, Upload, Users, X } from "lucide-react";
+import { Activity, Bot as BotIcon, Copy, Eye, MessageSquare, Pause as PauseIcon, Pencil, Play as PlayIcon, Plus, RefreshCw, Settings2, Upload, Users, X } from "lucide-react";
 import workforce, { type Bot, type BotTemplate, type BotVersion, type Computer, type MemoryRecord, type Task, type WorkforceEvent } from "../services/Workforce";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
+import TeammateChat from "./TeammateChat";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -46,7 +47,20 @@ type FormDraft = {
   name: string; avatar: string; role: string; description: string; personality: string; instructions: string;
   responsibilities: string; skills: string; apps: string; tools: string;
   autonomy: string; visibility: string; memoryScopes: string[]; model: string; computerIds: string[];
+  /** Daily limits as typed; empty means the server default. */
+  tasksPerDay: string; messagesPerDay: string;
 };
+
+/** The limits object to save: typed values replace the old ones, empty fields fall back to the default. */
+function limitsFrom(draft: FormDraft, previous: Record<string, unknown> = {}) {
+  const next: Record<string, unknown> = { ...previous };
+  for (const key of ["tasksPerDay", "messagesPerDay"] as const) {
+    const value = Number(draft[key]);
+    if (draft[key].trim() && Number.isFinite(value) && value >= 1) next[key] = Math.floor(value);
+    else delete next[key];
+  }
+  return next;
+}
 
 function draftFromBot(bot: Bot): FormDraft {
   const scopes = (bot.memoryConfig?.scopes as string[] | undefined) || ["user", "bot"];
@@ -58,6 +72,8 @@ function draftFromBot(bot: Bot): FormDraft {
     tools: toText(bot.tools), autonomy: bot.autonomy || "approval", visibility: bot.visibility || "private",
     memoryScopes: scopes.filter((scope) => ["user", "bot", "project", "team", "device"].includes(scope)),
     model: (bot.modelPrefs?.model as string) || "", computerIds,
+    tasksPerDay: bot.limits?.tasksPerDay ? String(bot.limits.tasksPerDay) : "",
+    messagesPerDay: bot.limits?.messagesPerDay ? String(bot.limits.messagesPerDay) : "",
   };
 }
 
@@ -99,6 +115,8 @@ function ConfigForm({ draft, setDraft, onSave, onCancel, submitting }: {
         <label className="block sm:col-span-2"><span className={heading}>Apps it works with (one per line)</span><textarea value={draft.apps} onChange={(event) => setDraft({ ...draft, apps: event.target.value })} className={textarea} rows={2} /></label>
         <label className="block sm:col-span-2"><span className={heading}>Tools it may use (one per line, e.g. browser, terminal, files)</span><textarea value={draft.tools} onChange={(event) => setDraft({ ...draft, tools: event.target.value })} className={textarea} rows={2} /></label>
         <label className="block"><span className={heading}>Preferred model (optional)</span><input value={draft.model} onChange={(event) => setDraft({ ...draft, model: event.target.value })} className={input} placeholder="e.g. claude-sonnet-4-5" /></label>
+        <label className="block"><span className={heading}>Tasks per day (empty = default)</span><input type="number" min={1} value={draft.tasksPerDay} onChange={(event) => setDraft({ ...draft, tasksPerDay: event.target.value })} className={input} placeholder="Default" /></label>
+        <label className="block"><span className={heading}>Messages per day (empty = default)</span><input type="number" min={1} value={draft.messagesPerDay} onChange={(event) => setDraft({ ...draft, messagesPerDay: event.target.value })} className={input} placeholder="Default" /></label>
         <label className="block"><span className={heading}>Memory scopes</span>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
             {["user", "bot", "project", "team", "device"].map((id) => (
@@ -137,6 +155,7 @@ function BotPanel({ bot, onClose, onOpenChange, refresh }: {
   const [draft, setDraft] = useState<FormDraft>(() => draftFromBot(bot));
   const [saving, setSaving] = useState("");
   const [status, setStatus] = useState("");
+  const [tab, setTab] = useState<"chat" | "configure">(bot.status === "active" ? "chat" : "configure");
 
   const loadDetail = useCallback(async () => {
     const [v, t, m, e] = await Promise.all([
@@ -165,6 +184,7 @@ function BotPanel({ bot, onClose, onOpenChange, refresh }: {
         fileAccess: { read: [], write: [] },
         autonomy: draft.autonomy, visibility: draft.visibility,
         modelPrefs: { ...(draft.model ? { model: draft.model } : {}) },
+        limits: limitsFrom(draft, bot.limits),
       });
       onOpenChange(updated); setStatus("Saved."); await loadDetail(); await refresh();
     } catch (error) { setStatus(error instanceof Error ? error.message : "That didn't work."); }
@@ -201,7 +221,15 @@ function BotPanel({ bot, onClose, onOpenChange, refresh }: {
           <div><span className={heading}>Autonomy</span><p className={`rounded-full px-2 py-0.5 text-xs font-semibold ${autonomyTones[bot.autonomy] || ""}`}>{autonomyLabel[bot.autonomy] || bot.autonomy}</p></div>
           <div><span className={heading}>Status</span><p className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusTones[bot.status] || ""}`}>{statusLabel[bot.status] || bot.status} · version {bot.version}</p></div>
         </div>
-        <ConfigForm draft={draft} setDraft={setDraft} onSave={save} onCancel={onClose} submitting={saving !== "" || status !== ""} />
+        <div className="mt-3 flex rounded-lg border border-slate-200 p-0.5 text-sm" role="tablist" aria-label={`${bot.name} views`}>
+          {([["chat", "Chat", MessageSquare], ["configure", "Configure and history", Settings2]] as const).map(([id, label, Icon]) => (
+            <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} data-testid={`bot-tab-${id}`}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 ${tab === id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}><Icon size={14} /> {label}</button>
+          ))}
+        </div>
+        {tab === "chat" && <TeammateChat bot={bot} />}
+        {tab === "configure" && <>
+        <ConfigForm draft={draft} setDraft={setDraft} onSave={save} onCancel={onClose} submitting={saving !== ""} />
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div>
             <span className={heading}>Tasks</span>
@@ -237,6 +265,7 @@ function BotPanel({ bot, onClose, onOpenChange, refresh }: {
             {!events.length && <li className="text-xs text-slate-500">No activity yet.</li>}
           </ul>
         </div>
+        </>}
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="button" onClick={() => void change("active")} className={button} data-testid="bot-activate">{bot.status === "active" ? "Activate" : "Activate"}</button>
           <button type="button" onClick={() => void change("paused")} className={button} data-testid="bot-pause">{bot.status === "paused" ? "Resume" : "Pause"}</button>
@@ -296,6 +325,7 @@ export default function WorkforcePage() {
         fileAccess: { read: [], write: [] },
         autonomy: draft.autonomy, visibility: draft.visibility,
         modelPrefs: { ...(draft.model ? { model: draft.model } : {}) },
+        limits: limitsFrom(draft),
       });
       setCreateDraft(null);
       setDetail(bot);
@@ -313,7 +343,7 @@ export default function WorkforcePage() {
     } catch (e) { setError(e instanceof Error ? e.message : "That didn't work."); }
   };
 
-  const newDraft = (draft: Partial<FormDraft>): FormDraft => ({ name: "", avatar: "", role: "", description: "", personality: "", instructions: "", responsibilities: "", skills: "", apps: "", tools: "", autonomy: "approval", visibility: "private", memoryScopes: ["user", "bot"], model: "", computerIds: [], ...draft });
+  const newDraft = (draft: Partial<FormDraft>): FormDraft => ({ name: "", avatar: "", role: "", description: "", personality: "", instructions: "", responsibilities: "", skills: "", apps: "", tools: "", autonomy: "approval", visibility: "private", memoryScopes: ["user", "bot"], model: "", computerIds: [], tasksPerDay: "", messagesPerDay: "", ...draft });
 
   return (
     <main className="mx-auto max-w-6xl px-3 pb-12 pt-5 sm:px-6 sm:pt-8" data-testid="workforce-page">
@@ -322,7 +352,10 @@ export default function WorkforcePage() {
           <h1 className="display-title text-[clamp(2rem,5vw,3rem)]">AI Workforce</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">Your teammates. Each has a role, instructions, tools and its own workspace. Give them work — the <a className="font-semibold text-slate-900 underline" href="/chat">chat</a> dispatches to them, and they act in their computers, browsers and terminals.</p>
         </div>
-        <button type="button" disabled={!signedIn} onClick={() => setCreateDraft(newDraft({}))} className={primary} data-testid="create-bot"><Plus size={16} /> New teammate</button>
+        <div className="flex flex-wrap gap-2">
+          <a href="/activity" className={button} data-testid="open-activity"><Activity size={16} /> Agent Activity</a>
+          <button type="button" disabled={!signedIn} onClick={() => setCreateDraft(newDraft({}))} className={primary} data-testid="create-bot"><Plus size={16} /> New teammate</button>
+        </div>
       </div>
       {!signedIn && (
         <Notice tone="amber" role="alert">

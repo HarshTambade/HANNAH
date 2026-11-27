@@ -15,6 +15,7 @@ const {
   TASK_STATUSES, asArray, asObject, canUseBot, clean, cleanMultiline, fail, id, parse, readBody,
   recordEvent, requireId, withAccount,
 } = require("./common");
+const { assertTaskAllowance } = require("./usage");
 
 const MAX_DEPTH = 3;
 const MAX_CHILDREN = 8;
@@ -122,6 +123,7 @@ function createTasksRouter() {
       const found = await db.query(`SELECT id FROM hannah_workforce_tasks WHERE user_id = $1 AND id IN (${dependsOn.map((_, index) => `$${index + 2}`).join(", ")})`, [account.id, ...dependsOn]);
       if (found.rows.length !== dependsOn.length) throw fail(400, "A dependency isn't one of your tasks.", "invalid-dependency");
     }
+    await assertTaskAllowance(db, account.id, bot);
     const at = Date.now();
     const taskId = id("task");
     await insertTask(db, account.id, {
@@ -150,6 +152,10 @@ function createTasksRouter() {
     const rootId = id("task");
     const resolvedBots = [];
     for (const step of steps) resolvedBots.push(await assertBot(db, account.id, step.botId));
+    // Check each teammate once for all of its steps, so a plan can't slip past a limit step by step.
+    const perBot = new Map();
+    for (const bot of resolvedBots) perBot.set(bot.id, { bot, count: (perBot.get(bot.id)?.count || 0) + 1 });
+    for (const { bot, count } of perBot.values()) await assertTaskAllowance(db, account.id, bot, count);
     const plan = await db.transaction(async (query) => {
       await insertTask(query, account.id, { id: rootId, botId: null, title, objective, depth: 0, dependsOn: [], priority: "normal" }, at);
       const created = [];
@@ -203,6 +209,7 @@ function createTasksRouter() {
     const body = readBody(req);
     if (Number(parent.depth) >= MAX_DEPTH) throw fail(400, `Delegation is limited to ${MAX_DEPTH} levels.`, "depth-limit");
     const bot = await assertBot(db, account.id, body.botId);
+    await assertTaskAllowance(db, account.id, bot);
     const at = Date.now();
     const taskId = id("task");
     await insertTask(db, account.id, {
@@ -269,4 +276,4 @@ function createTasksRouter() {
   return router;
 }
 
-module.exports = { MAX_CHILDREN, MAX_DEPTH, createTasksRouter, publicTask };
+module.exports = { FINAL, MAX_CHILDREN, MAX_DEPTH, createTasksRouter, insertTask, loadTask, publicTask };

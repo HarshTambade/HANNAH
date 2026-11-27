@@ -19,6 +19,7 @@ const {
 } = require("./common");
 const { runQueuedTasks, runTask } = require("./runner");
 const { publicTask } = require("./tasks");
+const { assertTaskAllowance } = require("./usage");
 const { scan: proactiveScan } = require("./proactive");
 
 const MODES = new Set(["schedule", "event", "manual"]);
@@ -145,6 +146,23 @@ async function fireRoutine(db, routine, { trigger = "schedule", plannedFor = Dat
     return null;
   }
   const runId = id("run");
+  // A routine counts against its teammate's task limit like any other work. Over
+  // the limit, the run is recorded as failed with the reason; no task is created.
+  const bot = routine.bot_id ? await canUseBot(db, routine.user_id, routine.bot_id) : null;
+  if (bot) {
+    try {
+      await assertTaskAllowance(db, routine.user_id, bot, 1, at);
+    } catch (error) {
+      if (error.reason !== "usage-limit") throw error;
+      await db.query(
+        "INSERT INTO hannah_routine_runs (user_id, id, routine_id, status, trigger, planned_for, started_at, finished_at, result, error, task_id, created_at) VALUES ($1, $2, $3, 'failed', $4, $5, $6, $6, NULL, $7, NULL, $5)",
+        [routine.user_id, runId, routine.id, trigger, plannedFor, at, clean(error.message, 2000)],
+      );
+      await db.query("UPDATE hannah_routines SET last_run_at = $1, failure_count = failure_count + 1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, routine.user_id, routine.id]);
+      await recordEvent(db, routine.user_id, "routine.limit_reached", { botId: routine.bot_id, severity: "medium", detail: { routineId: routine.id, runId, ...error.details } });
+      return { runId, taskId: null, limited: true, error: error.message };
+    }
+  }
   const taskId = id("task");
   const triggerConfig = parse(routine.trigger, {});
   const objective = skill
@@ -333,6 +351,7 @@ function createRoutinesRouter() {
     if (!row.bot_id) throw fail(400, "Assign a teammate before running this routine.", "no-bot");
     const run = await fireRoutine(db, row, { trigger: "manual", plannedFor: Date.now() });
     if (!run) throw fail(409, "The routine's skill is missing, so it was paused instead of run.", "skill-missing");
+    if (run.limited) throw fail(429, run.error, "usage-limit");
     const outcome = await runTask(db, account.id, run.taskId);
     const task = outcome.task;
     if (task) {

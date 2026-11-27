@@ -156,10 +156,62 @@ export interface ProactiveOffer {
 export interface Meeting {
   id: string; provider: string; title: string; status: string; botId: string | null; teamId: string | null;
   consent: Record<string, unknown>; participants: Array<Record<string, unknown>>; hasTranscript: boolean;
-  transcriptChars: number; actions: Array<Record<string, unknown>>; notes: string; startsAt: number; endsAt: number;
+  transcriptChars: number; actions: MeetingAction[]; notes: MeetingNotes | null; startsAt: number | null; endsAt: number | null;
+  createdAt: number; updatedAt: number;
 }
 
+export interface MeetingNotes { summary?: string; decisions?: string[]; risks?: string[]; followUps?: string[]; model?: string; provider?: string }
+export interface MeetingAction { id: string; title: string; owner?: string; due?: string; details?: string; accepted?: boolean; taskId?: string }
+
 export interface MeetingsCapabilities { liveJoin: boolean; liveRecord: boolean; transcriptImport: boolean }
+
+export interface Approval {
+  id: string; botId: string | null; taskId: string | null; teamId: string | null; action: string; title: string;
+  target: string; risk: "low" | "medium" | "high" | "critical"; status: string;
+  payload: {
+    inputs?: unknown; expected?: string; reversible?: boolean | null; dataShared?: string[];
+    agent?: { id: string; name: string } | null; taskId?: string | null; requestedAt?: number; detail?: Record<string, unknown>;
+  };
+  decision: string | null; reason: string; requestedAt: number; decidedAt: number | null; expiresAt: number | null; decidedBy: string | null;
+}
+
+export interface PolicyRule { action: string; effect: "allow" | "ask" | "deny"; note?: string }
+
+export interface TaskDetail {
+  task: Task; children: Task[];
+  handoffs: Array<{ id: string; fromBotId: string | null; toBotId: string | null; note: string; status: string; createdAt: number }>;
+  events: Array<{ id: string; kind: string; severity: string; botId: string | null; detail: Record<string, unknown> | null; createdAt: number }>;
+}
+
+export interface TaskProposal { title: string; objective: string; deliverable: string; acceptance: string; status: "proposed" | "accepted" | "dismissed"; taskId?: string }
+
+export interface ConversationMessage {
+  id: string; botId: string; taskId: string | null; replyTo: string | null;
+  role: "person" | "teammate" | "system"; kind: "message" | "proposal" | "instruction" | "notice";
+  content: string; reactions: string[]; createdAt: number; updatedAt: number;
+  data: {
+    model?: string; provider?: string; unparsed?: boolean; cutShort?: boolean; outcome?: string;
+    proposal?: TaskProposal; remembered?: Array<{ id: string; kind: string; content: string }>; memoryRefused?: string[];
+    context?: { memoryIds: string[]; attachmentIds: string[]; openTaskIds: string[] };
+    attachments?: Array<{ id: string; name: string; type: string; size: number }>;
+    taskTitle?: string; receivedWhile?: string; applied?: string;
+  };
+}
+
+export interface ConversationThread {
+  bot: { id: string; name: string; role: string; status: string };
+  messages: ConversationMessage[]; openTasks: Task[];
+  usage: { messages: { used: number; limit: number } };
+  model: { available: boolean; provider?: string; model?: string; reason?: string };
+  reactions: string[];
+}
+
+export interface UsageCount { used: number; limit: number }
+export interface WorkforceUsage {
+  window: string; since: number; account: { tasks: UsageCount; messages: UsageCount };
+  bots: Array<{ botId: string; name: string; tasks: UsageCount; messages: UsageCount }>;
+  defaults: { tasksPerDay: number; messagesPerDay: number };
+}
 
 // ------------------------------------------------------------------ api
 
@@ -221,8 +273,8 @@ export const workforce = {
     if (!response.ok) throw new Error("No screenshot has been taken yet.");
     return response.blob();
   },
-  computerHandoff: (sessionId: string, body: { reason?: string; instructions?: string }) => post<{ ok: boolean; status: string; reason: string; instructions: string }>(`/api/workforce/sessions/${sessionId}/handoff`, body),
-  computerResume: (sessionId: string) => post(`/api/workforce/sessions/${sessionId}/resume`, {}),
+  computerHandoff: (sessionId: string, body: { reason?: string; instructions?: string }) => post<{ ok: boolean; status: string; reason: string; instructions: string }>(`/sessions/${sessionId}/handoff`, body),
+  computerResume: (sessionId: string) => post(`/sessions/${sessionId}/resume`, {}),
   computerBrowserAction: (id: string, action: Record<string, unknown>, sessionId?: string) => post(`/computers/${id}/browser`, { sessionId, action }),
   computerTerminal: (id: string, body: { botId?: string; command: string; args?: string[]; cwd?: string }) => post<{ result: Record<string, unknown> }>(`/computers/${id}/terminal`, body),
 
@@ -270,16 +322,29 @@ export const workforce = {
   memoryRecall: (query: string) => post("/memory/recall", { query }),
 
   // -- tasks
-  tasks: (params?: Record<string, string>) => get<{ tasks: Task[] }>("/tasks", params),
-  taskPlan: (body: Record<string, unknown>) => post<{ plan: Task[]; message?: string }>("/tasks/plan", body),
+  tasks: (params?: Record<string, string>) => get<{ tasks: Task[]; counts: Record<string, number> }>("/tasks", params),
+  task: (id: string) => get<TaskDetail>(`/tasks/${id}`),
+  taskPlan: (body: Record<string, unknown>) => post<{ task: Task; children: Task[] }>("/tasks/plan", body),
   taskCreate: (body: Record<string, unknown>) => post<{ task: Task }>("/tasks", body),
   taskDelegate: (id: string, body: Record<string, unknown>) => post(`/tasks/${id}/delegate`, body),
   taskHandoff: (id: string, body: Record<string, unknown>) => post(`/tasks/${id}/handoff`, body),
   taskVerify: (id: string, body?: Record<string, unknown>) => post(`/tasks/${id}/verify`, body || {}),
-  taskRun: (id: string) => post(`/tasks/${id}/run`, {}),
+  taskRun: (id: string) => post<{ task: Task; outcome: unknown; note: string | null }>(`/tasks/${id}/run`, {}),
+  taskSetStatus: (id: string, status: string, result?: string) => post<{ task: Task }>(`/tasks/${id}/status`, { status, ...(result ? { result } : {}) }),
 
-  // -- approvals
-  approvals: () => get("/approvals"),
+  // -- approvals and policy
+  approvals: (status = "pending") => get<{ approvals: Approval[]; serverTime: number }>("/approvals", { status }),
+  approvalDecide: (id: string, decision: "allow" | "deny", reason?: string) => post<{ approval: Approval; resume: boolean }>(`/approvals/${id}/decide`, { decision, reason }),
+  policies: () => get<{ rules: PolicyRule[]; organization: Array<{ teamId: string; rules: PolicyRule[] }>; risks: Record<string, string> }>("/policies"),
+  policiesSet: (rules: PolicyRule[]) => put<{ rules: PolicyRule[] }>("/policies", { rules }),
+
+  // -- conversations and usage
+  conversation: (botId: string) => get<ConversationThread>(`/bots/${botId}/messages`),
+  conversationSend: (botId: string, body: { content: string; replyTo?: string; taskId?: string; attachments?: string[] }) => post<{ messages: ConversationMessage[]; outcome?: string }>(`/bots/${botId}/messages`, body),
+  conversationProposal: (botId: string, messageId: string, decision: "accept" | "dismiss", edits?: { title?: string; objective?: string }) => post<{ message: ConversationMessage; task: Task | null }>(`/bots/${botId}/messages/${messageId}/proposal`, { decision, ...(edits || {}) }),
+  conversationReact: (botId: string, messageId: string, emoji: string) => post<{ message: ConversationMessage }>(`/bots/${botId}/messages/${messageId}/reactions`, { emoji }),
+  conversationClear: (botId: string) => remove<{ ok: boolean; deleted: number }>(`/bots/${botId}/messages`),
+  usage: () => get<WorkforceUsage>("/usage"),
 
   // -- proactive
   proactive: () => get<{ settings: ProactiveSettings; categories: string[]; offers: ProactiveOffer[] }>("/proactive"),
@@ -287,7 +352,7 @@ export const workforce = {
   proactiveScan: (force?: boolean) => post("/proactive/scan", { force: force === true }),
   proactiveOffers: (status?: string) => get("/proactive/offers", { status: status || "pending" }),
   proactiveDismiss: (id: string) => post(`/proactive/offers/${id}/dismiss`, {}),
-  proactiveAct: (id: string) => post(`/proactive/offers/${id}/act`, {}),
+  proactiveAct: (id: string) => post<{ ok: boolean; open: { screen: string; ids: string[] } }>(`/proactive/offers/${id}/act`, {}),
 
   // -- meetings
   meetings: () => get<{ meetings: Meeting[] }>("/meetings"),
@@ -295,7 +360,7 @@ export const workforce = {
   meetingCreate: (input: Record<string, unknown>) => post<{ meeting: Meeting }>("/meetings", input),
   meetingTranscript: (id: string, transcript: string) => post(`/meetings/${id}/transcript`, { transcript }),
   meetingSummarize: (id: string) => post(`/meetings/${id}/summarize`, {}),
-  meetingAcceptAction: (id: string, actionId: string) => post(`/meetings/${id}/actions/${actionId}/accept`, {}),
+  meetingAcceptAction: (id: string, actionId: string, botId?: string) => post<{ ok: boolean; task: { id: string; title: string; status: string; botId: string } }>(`/meetings/${id}/actions/${actionId}/accept`, botId ? { botId } : {}),
   meetingCancel: (id: string) => post(`/meetings/${id}/cancel`, {}),
 };
 
