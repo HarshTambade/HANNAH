@@ -248,6 +248,7 @@ async function act({ userId, computerId, workspace, action, secrets = null, poli
   const kind = clean(action?.action || action?.type, 40);
   if (kind === "download" && policy && !normalizePolicy(policy).downloads) throw fail(403, "Downloads are turned off for this computer.", "downloads-off");
   const entry = await contextFor({ userId, computerId, workspace });
+  if (entry.held) throw fail(409, "A person has control of this computer's browser right now. It continues when they hand it back.", "person-has-control");
   // The computer's settings are read on every action, so a change applies at once.
   if (policy) entry.policy = policy;
   const page = entry.page;
@@ -418,6 +419,102 @@ async function latestScreenshot({ userId, computerId, workspace, live = false })
   return entry.page.screenshot({ type: "png" }).catch(() => null);
 }
 
+/**
+ * Live view: Chromium's own screencast of the open page, shared by everyone
+ * watching that computer. `onFrame(jpegBase64, { width, height, at })` is
+ * called for each new frame. Returns a stop function, or null when the
+ * computer has no open browser. Frames are acknowledged only after delivery,
+ * so a slow viewer slows the stream instead of queueing frames.
+ */
+async function watchScreen({ userId, computerId, onFrame }) {
+  const entry = sessions.get(sessionKey(userId, computerId));
+  if (!entry || entry.page.isClosed()) return null;
+  entry.lastUse = Date.now();
+  if (!entry.cast || entry.cast.page !== entry.page) {
+    if (entry.cast) await entry.cast.stop();
+    const page = entry.page;
+    const cdp = await page.context().newCDPSession(page);
+    const cast = { page, cdp, viewers: new Set(), stop: null };
+    cdp.on("Page.screencastFrame", ({ data, sessionId, metadata }) => {
+      const frame = { width: Math.round(metadata?.deviceWidth || 0), height: Math.round(metadata?.deviceHeight || 0), at: Date.now() };
+      entry.lastUse = Date.now();
+      for (const viewer of cast.viewers) {
+        try { viewer(data, frame); } catch { /* a viewer that went away */ }
+      }
+      cdp.send("Page.screencastFrameAck", { sessionId }).catch(() => {});
+    });
+    cast.stop = async () => {
+      if (entry.cast === cast) entry.cast = null;
+      cast.viewers.clear();
+      await cdp.send("Page.stopScreencast").catch(() => {});
+      await cdp.detach().catch(() => {});
+    };
+    await cdp.send("Page.startScreencast", { format: "jpeg", quality: 60, maxWidth: 1280, maxHeight: 800, everyNthFrame: 1 });
+    entry.cast = cast;
+  }
+  const cast = entry.cast;
+  cast.viewers.add(onFrame);
+  return async () => {
+    cast.viewers.delete(onFrame);
+    if (!cast.viewers.size) await cast.stop();
+  };
+}
+
+/**
+ * A person takes the browser (true) or hands it back (false). While held,
+ * teammate and skill actions are refused and only the person's input runs.
+ * Returns whether a browser was open to hold.
+ */
+function setHeld(userId, computerId, held) {
+  const entry = sessions.get(sessionKey(userId, computerId));
+  if (!entry) return false;
+  entry.held = held === true;
+  return true;
+}
+
+const INPUT_KEYS = new Set(["Enter", "Tab", "Backspace", "Delete", "Escape", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Space"]);
+
+/**
+ * One input from the person who took over the computer (a verification step,
+ * a sign-in only they can do). Coordinates are fractions of the page (0..1),
+ * so they don't depend on how big the person's view is. Returns nothing about
+ * what was typed; the caller logs only the kind of input.
+ */
+async function humanInput({ userId, computerId, input }) {
+  const entry = sessions.get(sessionKey(userId, computerId));
+  if (!entry || entry.page.isClosed()) throw fail(409, "The browser on this computer isn't open.", "browser-closed");
+  if (!entry.held) throw fail(409, "Take control first: the teammate keeps the browser until you do.", "not-waiting");
+  entry.lastUse = Date.now();
+  const page = entry.page;
+  const viewport = page.viewportSize() || { width: 1280, height: 800 };
+  const point = () => {
+    const x = Number(input.x);
+    const y = Number(input.y);
+    if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) throw fail(400, "x and y are fractions of the page, from 0 to 1.", "invalid");
+    return { x: Math.round(x * viewport.width), y: Math.round(y * viewport.height) };
+  };
+  const kind = clean(input.type, 20);
+  if (kind === "click") {
+    const { x, y } = point();
+    await page.mouse.click(x, y, { button: input.button === "right" ? "right" : "left", clickCount: input.double === true ? 2 : 1 });
+  } else if (kind === "scroll") {
+    const { x, y } = point();
+    await page.mouse.move(x, y);
+    await page.mouse.wheel(Math.max(-2000, Math.min(2000, Number(input.dx) || 0)), Math.max(-2000, Math.min(2000, Number(input.dy) || 0)));
+  } else if (kind === "key") {
+    const key = String(input.key || "");
+    if (!INPUT_KEYS.has(key)) throw fail(400, `key must be one of ${[...INPUT_KEYS].join(", ")}.`, "invalid");
+    await page.keyboard.press(key === "Space" ? " " : key);
+  } else if (kind === "text") {
+    const text = String(input.text ?? "");
+    if (!text || text.length > 500) throw fail(400, "Type 1 to 500 characters at a time.", "invalid");
+    await page.keyboard.type(text);
+  } else {
+    throw fail(400, "type must be click, scroll, key or text.", "invalid");
+  }
+  return { type: kind, ...(await pageState(page)) };
+}
+
 async function status() {
   const library = loadPlaywright();
   if (!library?.chromium) return { available: false, reason: "Playwright isn't installed on this server." };
@@ -428,4 +525,4 @@ async function status() {
   }
 }
 
-module.exports = { egressRefusal, networkAllows, normalizePolicy, act, browserAvailable, closeAll, closeComputer, latestScreenshot, normalizeUrl, status, isPrivateAddress, refusedHost };
+module.exports = { egressRefusal, networkAllows, normalizePolicy, act, browserAvailable, closeAll, closeComputer, humanInput, latestScreenshot, setHeld, normalizeUrl, status, isPrivateAddress, refusedHost, watchScreen };

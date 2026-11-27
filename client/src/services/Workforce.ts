@@ -220,6 +220,12 @@ export interface LocalJob {
   id: string; taskId: string; botId: string | null; computerId: string; kind: "browser" | "coding" | "open" | "notify";
   input: Record<string, unknown>; status: string; device: string | null; result: unknown; error: string | null; createdAt: number; updatedAt: number; expiresAt: number;
 }
+export type LiveEvent =
+  | { kind: "live"; status: string; viewport: { width: number; height: number } }
+  | { kind: "frame"; jpeg: string; width: number; height: number; at: number }
+  | { kind: "idle"; reason: string }
+  | { kind: "end"; reason: string };
+
 /** `elevated` holds terminal and control: off on every computer until turned on here, whatever the mode. */
 export interface LocalPermissions { mode: "ask" | "tasks" | "workspaces" | "never"; kinds: string[]; folders: string[]; elevated?: Array<"terminal" | "control"> }
 
@@ -294,6 +300,33 @@ export const workforce = {
     const response = await apiFetch(apiUrl(`/api/workforce/sessions/${sessionId}/screenshot${live ? "?live=1" : ""}`));
     if (!response.ok) throw new Error("No screenshot has been taken yet.");
     return response.blob();
+  },
+  /** The person's own input on a session they took control of: x and y are fractions of the page. */
+  computerInput: (sessionId: string, input: { type: "click"; x: number; y: number; double?: boolean } | { type: "scroll"; x: number; y: number; dx?: number; dy?: number } | { type: "key"; key: string } | { type: "text"; text: string }) => post<{ ok: boolean; url: string; title: string }>(`/sessions/${sessionId}/input`, input),
+  /**
+   * The live view: Server-Sent Events from Chromium's screencast. Calls
+   * `onEvent` per event until the stream ends or `signal` aborts.
+   */
+  computerStream: async (sessionId: string, onEvent: (event: LiveEvent) => void, signal: AbortSignal): Promise<void> => {
+    const response = await apiFetch(apiUrl(`/api/workforce/sessions/${sessionId}/stream`), { signal, headers: { Accept: "text/event-stream" } });
+    if (!response.ok || !response.body) throw new Error(response.status === 404 ? "That session doesn't exist." : "The live view isn't available.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      let index;
+      while ((index = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, index);
+        buffer = buffer.slice(index + 2);
+        const kind = /^event: (.+)$/m.exec(block)?.[1];
+        const data = /^data: (.+)$/m.exec(block)?.[1];
+        if (!kind || !data) continue;
+        try { onEvent({ kind, ...JSON.parse(data) } as LiveEvent); } catch { /* a malformed event */ }
+      }
+    }
   },
   computerHandoff: (sessionId: string, body: { reason?: string; instructions?: string }) => post<{ ok: boolean; status: string; reason: string; instructions: string }>(`/sessions/${sessionId}/handoff`, body),
   computerResume: (sessionId: string) => post(`/sessions/${sessionId}/resume`, {}),

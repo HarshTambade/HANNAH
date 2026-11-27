@@ -317,6 +317,10 @@ async function runTerminal(workspace, { command, args, cwd, timeoutMs }) {
 
 // ------------------------------------------------------------------ router
 
+const STREAM_MS = 10 * 60_000;
+const INPUTS_PER_MINUTE = 600;
+const inputRate = new Map();
+
 function createComputersRouter() {
   const router = express.Router();
 
@@ -576,6 +580,7 @@ function createComputersRouter() {
     const session = await loadSession(db, account.id, req.params.id);
     const at = Date.now();
     await db.query("UPDATE hannah_computer_sessions SET status = 'ended', ended_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, account.id, session.id]);
+    browser.setHeld(account.id, session.computer_id, false);
     await recordEvent(db, account.id, "computer.session_ended", { botId: session.bot_id, computerId: session.computer_id, detail: { sessionId: session.id } });
     res.json({ ok: true, ended: true });
   }));
@@ -647,25 +652,108 @@ function createComputersRouter() {
     res.end(image);
   }));
 
+  /**
+   * The live view as a stream (Server-Sent Events): each "frame" event is a
+   * JPEG from Chromium's screencast. It ends after STREAM_MS; the viewer opens
+   * a new one. "idle" means no browser is open on this computer right now.
+   */
+  router.get("/workforce/sessions/:id/stream", withAccount(async (req, res, db, account) => {
+    const session = await loadSession(db, account.id, req.params.id);
+    const row = await loadComputer(db, account.id, session.computer_id);
+    if (row.kind !== "cloud") throw fail(400, "Only a cloud computer has a live browser here.", "local-runtime");
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive", "X-Accel-Buffering": "no" });
+    res.flushHeaders?.();
+    const send = (event, data) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
+    let stop = null;
+    let busy = false;
+    const end = async () => {
+      clearInterval(heartbeat);
+      clearTimeout(limit);
+      const current = stop;
+      stop = null;
+      if (current) await current().catch(() => {});
+      if (!res.writableEnded) res.end();
+    };
+    const heartbeat = setInterval(() => { if (!res.writableEnded) res.write(": keep-alive\n\n"); }, 15_000);
+    const limit = setTimeout(() => { send("end", { reason: "time" }); void end(); }, STREAM_MS);
+    req.on("close", () => void end());
+    try {
+      stop = await browser.watchScreen({
+        userId: account.id, computerId: row.id,
+        onFrame: (jpeg, frame) => {
+          // Skip a frame while the last one is still being written to a slow connection.
+          if (busy || res.writableEnded) return;
+          busy = !res.write(`event: frame\ndata: ${JSON.stringify({ ...frame, jpeg })}\n\n`);
+          if (busy) res.once("drain", () => { busy = false; });
+        },
+      });
+    } catch (error) {
+      send("idle", { reason: clean(error.message, 200) || "The live view couldn't start." });
+      return end();
+    }
+    if (!stop) {
+      send("idle", { reason: "No browser is open on this computer right now." });
+      return end();
+    }
+    send("live", { status: session.status, viewport: { width: 1280, height: 800 } });
+  }));
+
+  /**
+   * The person's own input on the live view: only after they took over (the
+   * session is waiting for a person), only from a signed-in person, and never
+   * logged with what was typed.
+   */
+  router.post("/workforce/sessions/:id/input", withAccount(async (req, res, db, account) => {
+    if (account.via !== "session") throw fail(403, "Only a signed-in person can use the live view.", "person-required");
+    const session = await loadSession(db, account.id, req.params.id);
+    if (session.status !== "waiting-human") throw fail(409, "Take control first: the teammate keeps the browser until you do.", "not-waiting");
+    const row = await loadComputer(db, account.id, session.computer_id);
+    if (row.kind !== "cloud") throw fail(400, "Only a cloud computer has a live browser here.", "local-runtime");
+    const key = `${account.id}:${session.id}`;
+    const at = Date.now();
+    const recent = (inputRate.get(key) || []).filter((stamp) => stamp > at - 60_000);
+    if (recent.length >= INPUTS_PER_MINUTE) throw fail(429, "That's a lot of input in a minute. Slow down a little.", "rate-limited");
+    inputRate.set(key, [...recent, at]);
+    const result = await browser.humanInput({ userId: account.id, computerId: row.id, input: readBody(req) });
+    // Inputs are summarized once per minute in the activity, by kind only.
+    if (recent.length === 0) await appendActivity(db, session, { kind: "human.input", url: result.url });
+    res.json({ ok: true, url: result.url, title: result.title });
+  }));
+
   router.post("/workforce/computers/:id/handoff", withAccount(async (req, res, db, account) => {
     const row = await loadComputer(db, account.id, req.params.id);
     const body = readBody(req);
     const session = body.sessionId ? await loadSession(db, account.id, body.sessionId) : null;
     if (!session || session.computer_id !== row.id) throw fail(404, "Start a session before asking for takeover.", "not-found");
+    res.json(await handOff(db, account, row, session, body));
+  }));
+
+  /** The same, by session: the Computer Center's "Take control" and "Handoff to a human". */
+  router.post("/workforce/sessions/:id/handoff", withAccount(async (req, res, db, account) => {
+    const session = await loadSession(db, account.id, req.params.id);
+    if (session.status === "ended") throw fail(409, "That session has ended.", "ended");
+    const row = await loadComputer(db, account.id, session.computer_id);
+    res.json(await handOff(db, account, row, session, readBody(req)));
+  }));
+
+  async function handOff(db, account, row, session, body) {
     const reason = clean(body.reason, 500) || "The task needs a person to complete a verification step.";
     const instructions = clean(body.instructions, 1000) || "Complete the step in the live preview, then choose Resume.";
-    await db.query("UPDATE hannah_computer_sessions SET status = 'waiting-human', updated_at = $1, checkpoint = $2 WHERE user_id = $3 AND id = $4",
-      [Date.now(), JSON.stringify({ ...parse(session.checkpoint, {}), handoff: { reason, instructions, at: Date.now() } }).slice(0, 50_000), account.id, session.id]);
-    await appendActivity(db, session, { kind: "handoff", reason });
+    await db.query("UPDATE hannah_computer_sessions SET status = 'waiting-human', updated_at = $1 WHERE user_id = $2 AND id = $3", [Date.now(), account.id, session.id]);
+    // The handoff goes in with the activity entry: writing it separately was overwritten by the entry's checkpoint.
+    await appendActivity(db, session, { kind: "handoff", reason, checkpoint: { handoff: { reason, instructions, at: Date.now() } } });
+    // The person now holds the browser: teammate actions wait until they resume.
+    browser.setHeld(account.id, row.id, true);
     await recordEvent(db, account.id, "computer.handoff", { botId: session.bot_id, computerId: row.id, detail: { sessionId: session.id, reason } });
-    res.json({ ok: true, status: "waiting-human", reason, instructions });
-  }));
+    return { ok: true, status: "waiting-human", reason, instructions };
+  }
 
   router.post("/workforce/sessions/:id/resume", withAccount(async (req, res, db, account) => {
     const session = await loadSession(db, account.id, req.params.id);
     if (session.status !== "waiting-human") throw fail(409, "That session isn't waiting for a person.", "not-waiting");
     await db.query("UPDATE hannah_computer_sessions SET status = 'active', updated_at = $1 WHERE user_id = $2 AND id = $3", [Date.now(), account.id, session.id]);
     await appendActivity(db, session, { kind: "resumed" });
+    browser.setHeld(account.id, session.computer_id, false);
     await recordEvent(db, account.id, "computer.resumed", { botId: session.bot_id, computerId: session.computer_id, detail: { sessionId: session.id } });
     res.json({ ok: true, session: publicSession((await db.query("SELECT * FROM hannah_computer_sessions WHERE user_id = $1 AND id = $2", [account.id, session.id])).rows[0]) });
   }));

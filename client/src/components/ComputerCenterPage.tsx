@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Folder, FolderOpen, FileText, Image as ImageIcon, Laptop, PlayCircle, RefreshCw, RotateCcw, Trash2, Upload, X, Zap } from "lucide-react";
 import workforce, { type Computer, type ComputerSession, type LocalPermissions } from "../services/Workforce";
+import ComputerLiveView from "./ComputerLiveView";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -182,18 +183,11 @@ export default function ComputerCenterPage() {
     setScreenshotAt(Date.now());
   }, []);
 
-  // Live view: a fresh capture of the session's browser every two seconds while it's on.
+  // Live view: the session's browser streamed from the server (ComputerLiveView).
   const [liveSession, setLiveSession] = useState<string | null>(null);
   const [screenshotAt, setScreenshotAt] = useState<number | null>(null);
-  useEffect(() => {
-    if (!liveSession) return;
-    let stopped = false;
-    const tick = () => void pollScreenshot(liveSession, true).catch(() => { if (!stopped) setLiveSession(null); });
-    tick();
-    const timer = window.setInterval(tick, 2_000);
-    return () => { stopped = true; window.clearInterval(timer); };
-  }, [liveSession, pollScreenshot]);
   useEffect(() => { if (!detail) setLiveSession(null); }, [detail]);
+  const refreshSessions = useCallback(async () => { if (detail) setSessions((await workforce.computerSessions(detail.id)).sessions); }, [detail]);
 
   const viewFile = async (file: FileEntry) => {
     if (file.type === "folder") { setCurrentPath(file.path); setContentFile(null); setContent(""); return; }
@@ -206,8 +200,8 @@ export default function ComputerCenterPage() {
   const runTerminal = async () => { setTerminalRunning(true); setError(""); setTerminalOutput((output) => [...output, `$ ${terminalInput.trim()}`]); try { const { result } = await workforce.computerTerminal(detail!.id, { command: terminalInput.trim(), args: [] }); setTerminalOutput((output) => [...output, ...(result.stdout ? [String(result.stdout)] : []), ...(result.stderr ? [String(result.stderr)] : [])]); setTerminalInput(""); } catch (e) { setTerminalOutput((output) => [...output, `error: ${(e as Error).message}`]); } finally { setTerminalRunning(false); } };
   const browserAction = async (action: Record<string, unknown>, label: string) => { setError(""); try { await workforce.computerBrowserAction(detail!.id, action); setError(`${label} done.`); } catch (e) { fail(e); } };
   const startSession = async () => { setError(""); try { await workforce.computerStartSession(detail!.id); setError("Session started."); } catch (e) { fail(e); } };
-  const handoff = async (sessionId: string) => { setError(""); try { const r = await workforce.computerHandoff(sessionId, {}); setError(`Handoff started: ${r.reason}. Resume when you're done.`); } catch (e) { fail(e); } };
-  const resumeSession = async (sessionId: string) => { setError(""); try { await workforce.computerResume(sessionId); setError("Session resumed."); } catch (e) { fail(e); } };
+  const handoff = async (sessionId: string) => { setError(""); try { const r = await workforce.computerHandoff(sessionId, {}); setError(`Handoff started: ${r.reason} Resume when you're done.`); await refreshSessions(); } catch (e) { fail(e); } };
+  const resumeSession = async (sessionId: string) => { setError(""); try { await workforce.computerResume(sessionId); setError("Session resumed."); await refreshSessions(); } catch (e) { fail(e); } };
 
   return (
     <main className="mx-auto max-w-6xl px-3 pb-12 pt-5 sm:px-6 sm:pt-8" data-testid="computer-center">
@@ -357,8 +351,11 @@ export default function ComputerCenterPage() {
               ))}
               {sessions.length === 0 && <li className="text-sm text-slate-500">No sessions recorded.</li>}
             </ul>
-            {screenshotUrl && <img src={screenshotUrl} alt="Browser session screenshot" className="mt-3 max-h-96 w-full rounded-xl border border-slate-200 shadow-sm" data-testid="browser-screenshot-preview" />}
-            {screenshotUrl && screenshotAt && <p className="mt-1 text-[11px] text-slate-500">{liveSession ? "Live: " : ""}captured {new Date(screenshotAt).toLocaleTimeString()}</p>}
+            {liveSession && detail.kind === "cloud" && sessions.some((session) => session.id === liveSession) && (
+              <ComputerLiveView sessionId={liveSession} status={sessions.find((session) => session.id === liveSession)?.status || "active"} onChanged={(note) => { setError(note); void refreshSessions().catch(() => undefined); }} />
+            )}
+            {!liveSession && screenshotUrl && <img src={screenshotUrl} alt="Browser session screenshot" className="mt-3 max-h-96 w-full rounded-xl border border-slate-200 shadow-sm" data-testid="browser-screenshot-preview" />}
+            {!liveSession && screenshotUrl && screenshotAt && <p className="mt-1 text-[11px] text-slate-500">Captured {new Date(screenshotAt).toLocaleTimeString()}</p>}
             {detail.kind === "cloud" && (
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <input value={navUrl} onChange={(event) => setNavUrl(event.target.value)} placeholder="Navigate to a URL" className={input} data-testid="browser-nav-url" />
