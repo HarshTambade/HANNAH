@@ -313,6 +313,7 @@ module.exports = {
   BYOK_PATHS,
   addressKey,
   clientAddress,
+  countInDatabase,
   createAddressRateLimiter,
   createRateLimiter,
   isGroqKey,

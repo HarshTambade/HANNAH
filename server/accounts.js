@@ -192,9 +192,16 @@ function clientKey(req) {
   return addressKey(clientAddress(req));
 }
 
-function attemptLimiter(limit, windowMs) {
+/**
+ * Counts attempts per key. With a database the count is shared by every server
+ * instance (a serverless deployment runs many, each with its own memory, so an
+ * in-memory count let an attacker multiply the limit); keys are hashed so the
+ * table never holds an email address. Without one, or if the write fails, it
+ * counts in this process. Resolves to 0, or the seconds to wait.
+ */
+function attemptLimiter(limit, windowMs, name = "signin") {
   const buckets = new Map();
-  return (key) => {
+  const inMemory = (key) => {
     const now = Date.now();
     let bucket = buckets.get(key);
     if (!bucket || now >= bucket.resetAt) {
@@ -204,6 +211,19 @@ function attemptLimiter(limit, windowMs) {
     if (buckets.size > 10_000) for (const [name, item] of buckets) if (now >= item.resetAt) buckets.delete(name);
     bucket.count += 1;
     return bucket.count <= limit ? 0 : Math.ceil((bucket.resetAt - now) / 1000);
+  };
+  return async (key, db = null) => {
+    if (db) {
+      try {
+        const { countInDatabase } = require("./api-security");
+        const now = Date.now();
+        const counted = await countInDatabase(db, `${name}:${sha256(key)}`, windowMs, now);
+        return counted.count <= limit ? 0 : Math.ceil((counted.resetAt - now) / 1000);
+      } catch {
+        // Fall back to this process's count rather than let the attempt through uncounted.
+      }
+    }
+    return inMemory(key);
   };
 }
 
@@ -243,10 +263,10 @@ async function databaseStatus() {
 function createAccountRouter({ isOperator, verifyProviderKey }) {
   const router = express.Router();
   // Per email and address: ten tries, so a stranger's guesses can't lock the owner out.
-  const signInLimit = attemptLimiter(10, 15 * 60 * 1000);
+  const signInLimit = attemptLimiter(10, 15 * 60 * 1000, "signin-email-address");
   // Per email from everywhere: a ceiling on guesses spread across many addresses.
-  const emailCap = attemptLimiter(100, 15 * 60 * 1000);
-  const ipLimit = attemptLimiter(60, 15 * 60 * 1000);
+  const emailCap = attemptLimiter(100, 15 * 60 * 1000, "signin-email");
+  const ipLimit = attemptLimiter(60, 15 * 60 * 1000, "signin-address");
 
   const withDb = (handler) => async (req, res) => {
     if (!databaseConfigured()) return res.status(503).json({ error: "Accounts need a database. The operator can connect one in Integrations → Database.", reason: "database-unconfigured" });
@@ -318,7 +338,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
     const displayName = typeof req.body?.displayName === "string" ? req.body.displayName.trim().replace(/[\r\n]+/g, " ").slice(0, 60) : "";
     if (!EMAIL_PATTERN.test(email) || email.length > 254) return res.status(400).json({ error: "Enter a valid email address." });
     if (password.length < 10 || password.length > 200) return res.status(400).json({ error: "Use a password of at least 10 characters." });
-    if (ipLimit(`ip:${clientKey(req)}`)) return res.status(429).json({ error: "Too many attempts. Try again later." });
+    if (await ipLimit(`ip:${clientKey(req)}`, db)) return res.status(429).json({ error: "Too many attempts. Try again later." });
     const existing = await db.query("SELECT id FROM hannah_users WHERE email = $1", [email]);
     if (existing.rows.length) return res.status(409).json({ error: "An account with that email already exists. Sign in instead." });
     const now = Date.now();
@@ -333,7 +353,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     if (!email || !password || password.length > 200) return res.status(400).json({ error: "Enter your email and password." });
     const client = clientKey(req);
-    const wait = ipLimit(`ip:${client}`) || signInLimit(`email:${email}|${client}`) || emailCap(`email:${email}`);
+    const wait = (await ipLimit(`ip:${client}`, db)) || (await signInLimit(`email:${email}|${client}`, db)) || (await emailCap(`email:${email}`, db));
     if (wait) {
       res.setHeader("Retry-After", String(wait));
       return res.status(429).json({ error: "Too many sign-in attempts. Wait a few minutes and try again." });

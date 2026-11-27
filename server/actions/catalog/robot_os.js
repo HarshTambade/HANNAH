@@ -10,7 +10,9 @@
  * an agent key can never stage or roll back a Robot OS update by itself.
  */
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
-const clip = (value, max) => String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
+// toWellFormed: cutting at a length can split an emoji; a lone surrogate then
+// broke the robot's signature check (UTF-8 can't encode it).
+const clip = (value, max) => String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max).toWellFormed();
 const ROBOT = { type: "string", description: "The Robot OS robot's name or id." };
 
 function robotOSActions({ robotics, robotOSCommands }) {

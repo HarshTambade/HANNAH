@@ -613,9 +613,16 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
 
   // ---------- missions (the Action Engine calls these) ----------
   let lastSeq = 0;
-  function nextSeq() {
-    // Only ever goes up, across restarts and server instances: milliseconds, then a counter.
-    lastSeq = Math.max(lastSeq + 1, now() * 1000);
+  /**
+   * A number above every mission this robot was sent (the robot refuses one
+   * that isn't). It starts above the highest already stored, so a clock that
+   * stepped back can't go below it, and adds a random part within the
+   * millisecond so two server instances rarely pick the same one. A per-robot
+   * counter column would make it certain; that needs a migration.
+   */
+  async function nextSeq(db, robotId) {
+    const stored = Number((await db.query("SELECT MAX(seq) AS seq FROM hannah_robot_missions WHERE robot_id = $1", [robotId])).rows[0]?.seq) || 0;
+    lastSeq = Math.max(lastSeq + 1, now() * 1000 + crypto.randomInt(1000), stored + 1);
     return lastSeq;
   }
   async function activeMotion(db, userId, robotId) {
@@ -649,7 +656,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     await db.query(
       `INSERT INTO hannah_robot_missions (user_id, id, robot_id, capability, params, status, action_id, requested_by, seq, nonce, issued_at, expires_at, deadline_at, created_at, updated_at, plan_id)
        VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11, $12, $10, $10, $13)`,
-      [userId, id, robot.id, definition.id, JSON.stringify(params), actionId, clean(requestedBy, 80), nextSeq(), crypto.randomBytes(16).toString("hex"), at, at + ttl, at + ttl + timeoutS * 1000, planId],
+      [userId, id, robot.id, definition.id, JSON.stringify(params), actionId, clean(requestedBy, 80), await nextSeq(db, robot.id), crypto.randomBytes(16).toString("hex"), at, at + ttl, at + ttl + timeoutS * 1000, planId],
     );
     return getMission(db, userId, id);
   }

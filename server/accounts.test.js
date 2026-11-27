@@ -317,3 +317,34 @@ test("a signed-in browser's change from another site is refused; the same reques
   // Reading is unaffected, and a developer key (no cookie) isn't a browser session.
   assert.equal((await fetch(`${baseUrl}/api/account/status`, { headers: { Cookie: cookie, Origin: "https://evil.example" } })).status, 200);
 });
+
+test("sign-in attempts are counted across server instances that share a database", async () => {
+  const express = require("express");
+  const { createAccountRouter } = require("./accounts");
+  // Two instances: each router has its own memory, as two serverless functions would.
+  const instance = async () => {
+    const app = express();
+    app.use(express.json());
+    app.use("/api", createAccountRouter({ isOperator: () => false, verifyProviderKey: async () => ({ ok: true }) }));
+    const server = app.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    return { server, url: `http://127.0.0.1:${server.address().port}/api/account/login` };
+  };
+  const first = await instance();
+  const second = await instance();
+  const attempt = (target) => fetch(target.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: "shared-limit@example.com", password: "wrong password here" }) });
+  try {
+    for (let index = 0; index < 6; index += 1) assert.equal((await attempt(first)).status, 401);
+    for (let index = 0; index < 4; index += 1) assert.equal((await attempt(second)).status, 401);
+    // The eleventh attempt for this email from this address is refused, on either instance.
+    assert.equal((await attempt(second)).status, 429);
+    assert.equal((await attempt(first)).status, 429);
+    const db = await require("./db").getDatabase();
+    const keys = (await db.query("SELECT key FROM hannah_rate_limits WHERE key LIKE 'signin-%'")).rows.map((row) => row.key);
+    assert.ok(keys.length > 0);
+    assert.equal(keys.some((key) => key.includes("shared-limit@example.com")), false, "no email address is stored in the limits table");
+  } finally {
+    first.server.close();
+    second.server.close();
+  }
+});
