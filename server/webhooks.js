@@ -7,7 +7,9 @@
  * Events: reminder.fired, team.completed (reported by the user's own app),
  * budget.exceeded and approval.requested (from the server), robot.mission.finished,
  * robot.plan.finished and robot.alert (from the robot registry), device.alert and
- * device.rule.fired (from the device registry), and webhook.test.
+ * device.rule.fired (from the device registry), workforce.approval.requested,
+ * workforce.task.completed and workforce.task.failed (from AI Workforce
+ * teammates, per the person's notification settings), and webhook.test.
  *
  * Each delivery carries
  *   X-HANNAH-Event, X-HANNAH-Delivery, X-HANNAH-Timestamp and
@@ -26,7 +28,7 @@ const { isBlockedAddress } = require("./net-guard");
 const { createHmac, randomBytes, randomUUID } = require("node:crypto");
 const { getDatabase } = require("./db");
 
-const EVENTS = new Set(["reminder.fired", "team.completed", "budget.exceeded", "approval.requested", "workflow.completed", "workflow.failed", "workflow.notification", "robot.mission.finished", "robot.plan.finished", "robot.alert", "device.alert", "device.rule.fired", "webhook.test"]);
+const EVENTS = new Set(["reminder.fired", "team.completed", "budget.exceeded", "approval.requested", "workflow.completed", "workflow.failed", "workflow.notification", "robot.mission.finished", "robot.plan.finished", "robot.alert", "device.alert", "device.rule.fired", "workforce.approval.requested", "workforce.task.completed", "workforce.task.failed", "webhook.test"]);
 // In-process listeners (the workflow engine's event triggers) hear every event too.
 const listeners = new Set();
 function onUserEvent(listener) {
@@ -61,7 +63,19 @@ function sign(secret, timestamp, body) {
   return `sha256=${createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex")}`;
 }
 
-async function deliver(db, hook, event, data, { fetchImpl = fetch } = {}) {
+/**
+ * POST through the SSRF-safe client: the address is checked again when the
+ * socket connects, so a name that resolved to a public address for
+ * assertPublicUrl can't switch to an internal one for the delivery (DNS
+ * rebinding). No redirects are followed.
+ */
+async function guardedPost(url, init) {
+  const { safeRequest } = require("./workflows/http");
+  const result = await safeRequest(url, { method: "POST", headers: init.headers, body: init.body, timeoutMs: 8_000, maxBytes: 64 * 1024, httpsOnly: true, maxRedirects: 0 });
+  return { status: result.status, body: null };
+}
+
+async function deliver(db, hook, event, data, { fetchImpl = guardedPost } = {}) {
   const body = JSON.stringify({ id: randomUUID(), event, createdAt: new Date().toISOString(), data });
   const timestamp = String(Math.floor(Date.now() / 1000));
   let status = 0;

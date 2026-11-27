@@ -662,6 +662,58 @@ test("a teammate leaves its team when the person who published it is removed", a
   assert.ok(await canUseBot(db, state.carolId, botId), "Carol keeps her own teammate");
 });
 
+test("event routines fire once per event, never on their own activity, and aren't starved", async () => {
+  const { tick } = require("./workforce/routines");
+  const { recordEvent } = require("./workforce/common");
+  const runsOf = async (routineId) => Number((await db.query("SELECT COUNT(*) AS n FROM hannah_routine_runs WHERE user_id = $1 AND routine_id = $2", [state.aliceId, routineId])).rows[0].n);
+  const make = async (name, kind) => {
+    const created = await state.alice.post("/workforce/routines", { name, description: `React to ${kind}.`, botId: state.aliceBot.id, mode: "event", status: "active", trigger: { kind } });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    return created.body.routine.id;
+  };
+  // Pause every other routine so only these react.
+  await db.query("UPDATE hannah_routines SET status = 'paused' WHERE user_id = $1", [state.aliceId]);
+
+  // 1. A routine listening to routine.* must not fire on the events its own runs produce.
+  const loop = await make("Watch routines", "routine.*");
+  await recordEvent(db, state.aliceId, "routine.external_signal", { detail: { from: "outside" } });
+  await tick({ onlyUserId: state.aliceId });
+  assert.equal(await runsOf(loop), 1);
+  await tick({ onlyUserId: state.aliceId });
+  await tick({ onlyUserId: state.aliceId });
+  assert.equal(await runsOf(loop), 1, "it fired again on its own routine.fired event");
+  await db.query("UPDATE hannah_routines SET status = 'paused' WHERE id = $1", [loop]);
+
+  // 2. Sixty unrelated events don't hide the one that matches.
+  const watcher = await make("Watch a signal", "signal.ready");
+  for (let index = 0; index < 60; index += 1) await recordEvent(db, state.aliceId, "noise.event", {});
+  await recordEvent(db, state.aliceId, "signal.ready", {});
+  await tick({ onlyUserId: state.aliceId });
+  assert.equal(await runsOf(watcher), 1, "the matching event was starved by unrelated ones");
+
+  // 3. Two ticks at once fire one run for one event.
+  await recordEvent(db, state.aliceId, "signal.ready", {});
+  await Promise.all([tick({ onlyUserId: state.aliceId }), tick({ onlyUserId: state.aliceId })]);
+  assert.equal(await runsOf(watcher), 2, "two concurrent ticks fired the same event twice");
+  await db.query("UPDATE hannah_routines SET status = 'paused' WHERE id = $1", [watcher]);
+});
+
+test("a vault credential reaches only the teammates it is assigned to", async () => {
+  const { resolveSecret } = require("./workforce/secrets");
+  const unassigned = await state.alice.post("/workforce/secrets", { name: "Shared login", application: "site.example.com", kind: "password", value: "unassigned-value-123", botIds: [] });
+  assert.equal(unassigned.status, 201, JSON.stringify(unassigned.body));
+  const ref = `secret:${unassigned.body.secret.id}`;
+  await assert.rejects(() => resolveSecret(db, state.aliceId, ref, { botId: state.aliceBot.id }), (error) => error.reason === "not-assigned");
+  assert.equal(await resolveSecret(db, state.aliceId, ref, {}), "unassigned-value-123", "the person can still use their own credential");
+
+  const assigned = await state.alice.post("/workforce/secrets", { name: "Atlas login", application: "site.example.com", kind: "password", value: "assigned-value-456", botIds: [state.aliceBot.id] });
+  const assignedRef = `secret:${assigned.body.secret.id}`;
+  assert.equal(await resolveSecret(db, state.aliceId, assignedRef, { botId: state.aliceBot.id }), "assigned-value-456");
+  await assert.rejects(() => resolveSecret(db, state.aliceId, assignedRef, { botId: state.secondBot.id }), (error) => error.reason === "not-assigned");
+  await state.alice.delete(`/workforce/secrets/${unassigned.body.secret.id}`);
+  await state.alice.delete(`/workforce/secrets/${assigned.body.secret.id}`);
+});
+
 test("the workforce API is closed to signed-out callers", async () => {
   const response = await realFetch(`${baseUrl}/api/workforce/overview`);
   assert.equal(response.status, 401);

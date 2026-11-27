@@ -90,7 +90,26 @@ function normalizeUrl(input) {
   return url.toString();
 }
 
-async function guardRoute(route) {
+/** The computer's network and download settings, as the browser applies them. */
+function normalizePolicy(policy) {
+  const value = policy && typeof policy === "object" ? policy : {};
+  return {
+    network: ["public", "allowlist", "none"].includes(value.network) ? value.network : "public",
+    allowedHosts: Array.isArray(value.allowedHosts) ? value.allowedHosts.map((host) => String(host).toLowerCase()) : [],
+    downloads: value.downloads !== false,
+  };
+}
+
+/** "none" reaches nothing; "allowlist" reaches the listed hosts and their subdomains. */
+function networkAllows(policy, hostname) {
+  const host = String(hostname || "").toLowerCase().replace(/\.$/, "").replace(/^\[|\]$/g, "");
+  if (policy.network === "none") return false;
+  if (policy.network === "allowlist") return policy.allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  return true;
+}
+
+async function guardRoute(route, entry = null) {
+  const policy = normalizePolicy(entry?.policy);
   const request = route.request();
   let url;
   try {
@@ -99,8 +118,9 @@ async function guardRoute(route) {
     return route.abort("blockedbyclient");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return route.abort("blockedbyclient");
-  if (allowPrivateNetwork()) return route.continue();
-  if (await refusedHost(url.hostname)) return route.abort("blockedbyclient");
+  if (!networkAllows(policy, url.hostname)) return route.abort("blockedbyclient");
+  if (allowPrivateNetwork() && policy.network === "public") return route.continue();
+  if (!allowPrivateNetwork() && (await refusedHost(url.hostname))) return route.abort("blockedbyclient");
   // Playwright routes only the first request of a redirect chain, and a
   // redirect handed back with route.fulfill is followed without routing either
   // (checked with Chromium). So page and frame loads follow their redirects
@@ -115,7 +135,8 @@ async function guardRoute(route) {
         const location = response.headers().location;
         if (status < 300 || status >= 400 || !location) return route.fulfill({ response });
         const next = new URL(location, target);
-        if ((next.protocol !== "http:" && next.protocol !== "https:") || (await refusedHost(next.hostname))) return route.abort("blockedbyclient");
+        if ((next.protocol !== "http:" && next.protocol !== "https:") || !networkAllows(policy, next.hostname)) return route.abort("blockedbyclient");
+        if (!allowPrivateNetwork() && (await refusedHost(next.hostname))) return route.abort("blockedbyclient");
         if (status === 301 || status === 302 || status === 303) method = method === "HEAD" ? "HEAD" : "GET";
         target = next.toString();
       }
@@ -154,10 +175,16 @@ async function contextFor({ userId, computerId, workspace, profile = "default" }
   } catch (error) {
     throw fail(503, `The browser couldn't start (${error?.message?.split("\n")[0] || "launch failed"}).`, "browser-unavailable");
   }
-  await context.route("**/*", guardRoute).catch(() => {});
+  await context.route("**/*", (route) => guardRoute(route, entry)).catch(() => {});
   context.setDefaultTimeout(15_000);
+  // A page can start a download without the download action: cancel it when downloads are off.
+  const watchDownloads = (tab) => tab.on("download", (download) => {
+    if (entry && !normalizePolicy(entry.policy).downloads) download.cancel().catch(() => {});
+  });
+  context.pages().forEach(watchDownloads);
+  context.on("page", watchDownloads);
   const page = context.pages()[0] || (await context.newPage());
-  entry = { context, page, lastUse: Date.now(), userId, computerId };
+  entry = { context, page, lastUse: Date.now(), userId, computerId, policy: {} };
   sessions.set(key, entry);
   return entry;
 }
@@ -223,11 +250,14 @@ async function saveScreenshot(page, workspace) {
  * Run one browser action. `secrets.resolve(ref)` returns a secret value for a
  * vault reference, or throws. It is called here, never returned to the caller.
  */
-async function act({ userId, computerId, workspace, action, secrets = null }) {
+async function act({ userId, computerId, workspace, action, secrets = null, policy = null }) {
+  const kind = clean(action?.action || action?.type, 40);
+  if (kind === "download" && policy && !normalizePolicy(policy).downloads) throw fail(403, "Downloads are turned off for this computer.", "downloads-off");
   const entry = await contextFor({ userId, computerId, workspace });
+  // The computer's settings are read on every action, so a change applies at once.
+  if (policy) entry.policy = policy;
   const page = entry.page;
   entry.lastUse = Date.now();
-  const kind = clean(action?.action || action?.type, 40);
   const result = { action: kind, at: Date.now(), masked: false };
   const state = async () => Object.assign(result, await pageState(page));
 
@@ -395,4 +425,4 @@ async function status() {
   }
 }
 
-module.exports = { act, browserAvailable, closeAll, closeComputer, latestScreenshot, normalizeUrl, status, isPrivateAddress, refusedHost };
+module.exports = { networkAllows, normalizePolicy, act, browserAvailable, closeAll, closeComputer, latestScreenshot, normalizeUrl, status, isPrivateAddress, refusedHost };

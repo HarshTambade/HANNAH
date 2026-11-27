@@ -31,6 +31,7 @@ function clientKey(req) {
  */
 const express = require("express");
 const { McpHttpClient } = require("./mcp-client");
+const { createHash } = require("node:crypto");
 const { RequestBlockedError, checkUrl, safeRequest } = require("./workflows/http");
 
 /**
@@ -106,7 +107,7 @@ function safeFetch(timeoutMs) {
     const url = checkUrl(String(rawUrl));
     if (url.protocol !== "https:" && process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK !== "true") throw new RequestBlockedError("Connectors must use https.");
     const headers = { "User-Agent": "HANNAH-connectors/1.0", ...(init.headers || {}) };
-    const result = await safeRequest(url.toString(), { method: init.method || "GET", headers, body: init.body, timeoutMs, maxBytes: MAX_BYTES });
+    const result = await safeRequest(url.toString(), { method: init.method || "GET", headers, body: init.body, timeoutMs, maxBytes: MAX_BYTES, httpsOnly: process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK !== "true" });
     const flat = new Headers();
     for (const [name, value] of Object.entries(result.headers || {})) if (value !== undefined) flat.set(name, Array.isArray(value) ? value.join(", ") : String(value));
     const status = result.status >= 200 && result.status <= 599 ? result.status : 502;
@@ -172,7 +173,29 @@ async function discover(fetchImpl, rawUrl) {
   };
 }
 
-function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs = 30_000, fetchImpl = safeFetch(Math.min(timeoutMs, 30_000)) } = {}) {
+/**
+ * Whether Groq accepts this key. Only a shape check happens before the route,
+ * so a made-up "gsk_..." string could use connectors as a relay to any https
+ * server. Answers are cached for ten minutes; an unreachable Groq counts as no.
+ */
+const keyAnswers = new Map();
+async function groqKeyAccepted(key) {
+  const digest = createHash("sha256").update(String(key)).digest("hex");
+  const cached = keyAnswers.get(digest);
+  if (cached && Date.now() - cached.at < 10 * 60_000) return cached.ok;
+  let ok = false;
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/models", { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+    ok = response.ok;
+  } catch {
+    ok = false;
+  }
+  if (keyAnswers.size > 1000) keyAnswers.clear();
+  keyAnswers.set(digest, { ok, at: Date.now() });
+  return ok;
+}
+
+function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs = 30_000, fetchImpl = safeFetch(Math.min(timeoutMs, 30_000)), verifyKey = groqKeyAccepted } = {}) {
   const router = express.Router();
   const json = express.json({ limit: "512kb" });
   const discovered = new Map();
@@ -196,14 +219,18 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
     discovered.set(key, { at: Date.now(), value });
     return value;
   }
-  function serverUrl(raw, res) {
+  async function serverUrl(raw, req, res) {
     const value = typeof raw === "string" ? raw.trim() : "";
     if (!value || value.length > 2048) throw fail(400, "Enter the connector's URL.", "invalid-url");
     let url;
     try { url = checkUrl(value); } catch (error) { throw fail(400, error.message, "blocked"); }
     if (url.protocol !== "https:" && process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK !== "true") throw fail(400, "Connectors must use https.", "invalid-url");
     url.hash = "";
-    if (res?.locals?.hannahGuest && !CATALOG_URLS.has(sameServer(url.toString()))) throw fail(401, "Sign in, or add your key, to use a connector that isn't in the directory.", "sign-in-required");
+    const listed = CATALOG_URLS.has(sameServer(url.toString()));
+    if (res?.locals?.hannahGuest && !listed) throw fail(401, "Sign in, or add your key, to use a connector that isn't in the directory.", "sign-in-required");
+    if (res?.locals?.hannahByok && !listed && !(await verifyKey(String(req.get("x-groq-api-key") || "").trim()))) {
+      throw fail(401, "Groq didn't accept that key, so only the directory's connectors are available.", "key-not-accepted");
+    }
     return url.toString();
   }
   /** The redirect URI must be this site's callback, on an origin this server serves. */
@@ -236,12 +263,12 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
   });
 
   router.post("/connectors/discover", json, handle(async (req, res) => {
-    const found = await discoverCached(serverUrl(req.body?.url, res));
+    const found = await discoverCached((await serverUrl(req.body?.url, req, res)));
     res.json({ auth: found.auth, registration: Boolean(found.registrationEndpoint), scope: found.scope || "" });
   }));
 
   router.post("/connectors/register", json, handle(async (req, res) => {
-    const url = serverUrl(req.body?.url, res);
+    const url = (await serverUrl(req.body?.url, req, res));
     const redirectUri = checkRedirect(req, req.body?.redirectUri);
     const found = await discoverCached(url);
     if (found.auth !== "oauth") throw fail(400, "This connector doesn't need a sign-in.", "no-auth");
@@ -265,7 +292,7 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
   }));
 
   router.post("/connectors/token", json, handle(async (req, res) => {
-    const url = serverUrl(req.body?.url, res);
+    const url = (await serverUrl(req.body?.url, req, res));
     const found = await discoverCached(url);
     if (found.auth !== "oauth") throw fail(400, "This connector doesn't need a sign-in.", "no-auth");
     const clientId = String(req.body?.clientId || "").slice(0, 512);
@@ -298,7 +325,7 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
   }));
 
   router.post("/connectors/rpc", json, handle(async (req, res) => {
-    const url = serverUrl(req.body?.url, res);
+    const url = (await serverUrl(req.body?.url, req, res));
     const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
     if (token && (token.length > 8192 || /[\r\n]/.test(token))) throw fail(400, "That token isn't valid.", "invalid-token");
     const name = String(req.body?.name || new URL(url).host).slice(0, 60);

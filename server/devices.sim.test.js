@@ -479,15 +479,16 @@ test("a device alert reaches a signed webhook and workflow, whose hardware actio
   const activated = await call("POST", `/workflows/${workflowId}/activate`, { approvedPermissions: published.body.permissions });
   assert.equal(activated.status, 200, JSON.stringify(activated.body));
 
-  const nativeFetch = globalThis.fetch;
+  // Webhooks are delivered through the SSRF-safe client; catch this one there.
+  const httpClient = require("./workflows/http");
+  const nativeRequest = httpClient.safeRequest;
   const deliveries = [];
-  globalThis.fetch = async (input, init = {}) => {
-    const address = typeof input === "string" ? input : input.url;
+  httpClient.safeRequest = async (address, init = {}) => {
     if (address === webhook.body.url) {
       deliveries.push({ headers: new Headers(init.headers), body: String(init.body || "") });
-      return new Response(null, { status: 204 });
+      return { status: 204, headers: {}, body: Buffer.alloc(0), truncated: false, url: address };
     }
-    return nativeFetch(input, init);
+    return nativeRequest(address, init);
   };
   try {
     tell("drop sim-thermo");
@@ -535,7 +536,7 @@ test("a device alert reaches a signed webhook and workflow, whose hardware actio
     assert.equal(body.data.deviceId, ids.thermo);
     assert.equal(sent.headers.get("x-hannah-signature"), require("./webhooks").sign(webhook.body.secret, sent.headers.get("x-hannah-timestamp"), sent.body));
   } finally {
-    globalThis.fetch = nativeFetch;
+    httpClient.safeRequest = nativeRequest;
   }
 });
 

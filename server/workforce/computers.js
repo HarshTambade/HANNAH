@@ -354,6 +354,10 @@ function createComputersRouter() {
       browser: body.permissions?.browser !== false,
       downloads: body.permissions?.downloads !== false,
       network: ["public", "allowlist", "none"].includes(body.permissions?.network) ? body.permissions.network : "public",
+      // For network "allowlist": the hosts the browser may reach (and their subdomains).
+      allowedHosts: (Array.isArray(body.permissions?.allowedHosts) ? body.permissions.allowedHosts : [])
+        .map((host) => String(host).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/:].*$/, ""))
+        .filter((host) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(host)).slice(0, 50),
       localMode: ["ask", "allow", "never"].includes(body.permissions?.localMode) ? body.permissions.localMode : "ask",
     };
     const limits = {
@@ -602,6 +606,7 @@ function createComputersRouter() {
         computerId: row.id,
         workspace,
         action,
+        policy: parse(row.permissions, {}),
         secrets: {
           resolve: async (ref, { host } = {}) => {
             const secret = await resolveSecret(db, account.id, ref, { botId: bot?.id || session?.bot_id || null, host });

@@ -137,7 +137,7 @@ async function assertSkill(db, userId, skillId) {
   return row;
 }
 
-async function fireRoutine(db, routine, { trigger = "schedule", plannedFor = Date.now(), eventId = null } = {}) {
+async function fireRoutine(db, routine, { trigger = "schedule", plannedFor = Date.now(), eventId = null, advanceLastRun = true } = {}) {
   const at = Date.now();
   const skill = routine.skill_id ? (await db.query("SELECT * FROM hannah_workforce_skills WHERE user_id = $1 AND id = $2 AND archived_at IS NULL", [routine.user_id, routine.skill_id])).rows[0] : null;
   if (routine.skill_id && !skill) {
@@ -176,11 +176,15 @@ async function fireRoutine(db, routine, { trigger = "schedule", plannedFor = Dat
     `INSERT INTO hannah_workforce_tasks (user_id, id, parent_id, bot_id, team_id, title, objective, status, depth, depends_on, inputs, deliverable, acceptance, deadline, priority, project, result, error, continuation, created_at, updated_at, started_at, finished_at)
      VALUES ($1, $2, NULL, $3, $4, $5, $6, 'queued', 0, '[]', $7, $8, $9, NULL, 'normal', $10, NULL, NULL, NULL, $11, $11, NULL, NULL)`,
     [routine.user_id, taskId, routine.bot_id, routine.team_id, `${routine.name} — ${new Date(plannedFor).toISOString().slice(0, 16).replace("T", " ")}`,
+      // Keep routineId and eventId adjacent and in this order: the event tick finds handled events by that text.
       objective, JSON.stringify({ ...(skill ? { skillId: skill.id } : {}), values: asObject(triggerConfig.inputs), routineId: routine.id, eventId }),
       skill ? "A completed run with the recorded result and any output artifact." : "A completed work product with sources and next steps.",
       "Every step is recorded, nothing is fabricated, and risky steps waited for approval.", clean(routine.name, 80), at],
   );
-  await db.query("UPDATE hannah_routines SET last_run_at = $1, run_count = run_count + 1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, routine.user_id, routine.id]);
+  // An event routine's last_run_at is its place in the event stream; the tick moves it.
+  await db.query(advanceLastRun
+    ? "UPDATE hannah_routines SET last_run_at = $1, run_count = run_count + 1, updated_at = $1 WHERE user_id = $2 AND id = $3"
+    : "UPDATE hannah_routines SET run_count = run_count + 1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, routine.user_id, routine.id]);
   await recordEvent(db, routine.user_id, "routine.fired", { botId: routine.bot_id, taskId, detail: { routineId: routine.id, runId, trigger } });
   return { runId, taskId };
 }
@@ -217,42 +221,73 @@ async function tick({ budgetMs = 45_000, onlyUserId = null } = {}) {
     }
   }
 
-  // Event routines: one run per matching event since the last run, capped.
+  // Event routines: one run per matching event since the last one handled, capped.
+  // - Matching is done in SQL, so unrelated events can't push a match out of the window.
+  // - Events produced by routine runs never trigger a routine: a routine on
+  //   "routine.*" or "task.*" fired on its own events forever.
+  // - The batch is claimed with a compare-and-swap before anything runs, so two
+  //   servers ticking together fire it once.
   const eventRoutines = await db.query(
     `SELECT * FROM hannah_routines WHERE status = 'active' AND mode = 'event'${onlyUserId ? " AND user_id = $1" : ""} LIMIT 100`,
     onlyUserId ? [onlyUserId] : [],
   );
   for (const routine of eventRoutines.rows) {
     const trigger = parse(routine.trigger, {});
+    const kind = String(trigger.kind || "");
+    if (!kind) continue;
     const since = Number(routine.last_run_at) || Number(routine.created_at);
-    const rows = await db.query(
-      `SELECT * FROM hannah_workforce_events WHERE user_id = $1 AND created_at > $2 ORDER BY created_at LIMIT 50`,
-      [routine.user_id, since],
+    const prefix = kind.endsWith("*") ? kind.slice(0, -1) : null;
+    const rows = (await db.query(
+      `SELECT * FROM hannah_workforce_events e
+        WHERE e.user_id = $1 AND e.created_at >= $2
+          AND ${prefix !== null ? "substr(e.kind, 1, $4) = $3" : "e.kind = $3"}
+          AND (e.task_id IS NULL OR e.task_id NOT IN (
+                SELECT r.task_id FROM hannah_routine_runs r WHERE r.user_id = $1 AND r.task_id IS NOT NULL
+                UNION
+                SELECT t.id FROM hannah_workforce_tasks t JOIN hannah_routine_runs r2 ON r2.task_id = t.parent_id AND r2.user_id = t.user_id WHERE t.user_id = $1))
+        ORDER BY e.created_at, e.id LIMIT ${MAX_RUNS_PER_TICK * 4}`,
+      prefix !== null ? [routine.user_id, since, prefix, prefix.length] : [routine.user_id, since, kind],
+    )).rows;
+    // The cursor is inclusive (several events can share a millisecond), so an
+    // event this routine already handled is recognised by its id in the run's task.
+    const fresh = [];
+    for (const event of rows) {
+      if (parse(event.detail, {})?.routineId) continue;
+      const handled = await db.query("SELECT 1 FROM hannah_workforce_tasks WHERE user_id = $1 AND inputs LIKE $2 LIMIT 1", [routine.user_id, `%"routineId":"${routine.id}","eventId":"${event.id}"%`]);
+      if (!handled.rows.length) fresh.push(event);
+      if (fresh.length >= MAX_RUNS_PER_TICK) break;
+    }
+    if (!fresh.length) continue;
+    const cursor = Number(fresh[fresh.length - 1].created_at);
+    // Claim on both the cursor and updated_at: a second server ticking at the
+    // same moment sees either value changed and fires nothing.
+    const claimed = await db.query(
+      "UPDATE hannah_routines SET last_run_at = $1, updated_at = $2 WHERE user_id = $3 AND id = $4 AND COALESCE(last_run_at, -1) = $5 AND updated_at = $6",
+      [cursor, Math.max(at, Number(routine.updated_at) + 1), routine.user_id, routine.id, routine.last_run_at === null || routine.last_run_at === undefined ? -1 : Number(routine.last_run_at), Number(routine.updated_at)],
     );
-    const matches = rows.rows.filter((event) => {
-      if (trigger.kind.endsWith("*")) return event.kind.startsWith(trigger.kind.slice(0, -1));
-      return event.kind === trigger.kind;
-    }).slice(0, MAX_RUNS_PER_TICK);
-    if (!matches.length) continue;
+    if (!claimed.rowCount) continue;
+    const matches = fresh;
     for (const event of matches) {
       try {
-        const run = await fireRoutine(db, routine, { trigger: `event:${event.kind}`, plannedFor: Number(event.created_at), eventId: event.id });
+        const run = await fireRoutine(db, routine, { trigger: `event:${event.kind}`, plannedFor: Number(event.created_at), eventId: event.id, advanceLastRun: false });
         if (run) fired.push({ routineId: routine.id, ...run });
       } catch {
         await db.query("UPDATE hannah_routines SET failure_count = failure_count + 1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, routine.user_id, routine.id]);
       }
     }
-    await db.query("UPDATE hannah_routines SET last_run_at = $1, updated_at = $2 WHERE user_id = $3 AND id = $4", [Number(matches[matches.length - 1].created_at), at, routine.user_id, routine.id]);
   }
 
   const processed = await runQueuedTasks(db, { limit: Number(process.env.WORKFORCE_TICK_TASKS) || 2, budgetMs, userId: onlyUserId });
   // Honest, deterministic proactive suggestions at most every six hours.
   let proactive = 0;
-  const watched = (await db.query("SELECT user_id, settings FROM hannah_proactive_settings" + (onlyUserId ? " WHERE user_id = $1" : "") + " LIMIT 25", onlyUserId ? [onlyUserId] : [])).rows;
-  for (const row of watched) {
-    const settings = parse(row.settings, {});
-    if (settings.enabled !== true) continue;
-    if (settings.lastScanAt && Date.now() - Number(settings.lastScanAt) < 6 * 3600_000) continue;
+  // Everyone who switched suggestions on is eligible; the longest-waiting go first,
+  // so a busy server can't skip the same people tick after tick.
+  const watched = (await db.query("SELECT user_id, settings FROM hannah_proactive_settings" + (onlyUserId ? " WHERE user_id = $1" : ""), onlyUserId ? [onlyUserId] : [])).rows
+    .map((row) => ({ row, settings: parse(row.settings, {}) }))
+    .filter(({ settings }) => settings.enabled === true && (!settings.lastScanAt || Date.now() - Number(settings.lastScanAt) >= 6 * 3600_000))
+    .sort((a, b) => (Number(a.settings.lastScanAt) || 0) - (Number(b.settings.lastScanAt) || 0))
+    .slice(0, 25);
+  for (const { row } of watched) {
     const outcome = await proactiveScan(db, row.user_id).catch(() => null);
     if (outcome?.created?.length) proactive += outcome.created.length;
   }

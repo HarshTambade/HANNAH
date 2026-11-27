@@ -100,15 +100,16 @@ function once(url, { method, headers, body, timeoutMs, maxBytes, signal }) {
  * Make a request. Returns { status, headers, body (Buffer), truncated, url }.
  * Throws RequestBlockedError for addresses workflows may not reach.
  */
-async function safeRequest(rawUrl, { method = "GET", headers = {}, body, timeoutMs = 30_000, maxBytes = DEFAULT_MAX_BYTES, signal } = {}) {
+async function safeRequest(rawUrl, { method = "GET", headers = {}, body, timeoutMs = 30_000, maxBytes = DEFAULT_MAX_BYTES, signal, httpsOnly = false, maxRedirects = MAX_REDIRECTS } = {}) {
   let url = checkUrl(rawUrl);
   let currentMethod = method.toUpperCase();
   let currentBody = body;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+  for (let hop = 0; hop <= maxRedirects; hop += 1) {
     const response = await once(url, { method: currentMethod, headers, body: currentBody, timeoutMs, maxBytes, signal });
     const location = response.headers.location;
-    if (response.status >= 300 && response.status < 400 && location && hop < MAX_REDIRECTS) {
+    if (response.status >= 300 && response.status < 400 && location && hop < maxRedirects) {
       const nextUrl = checkUrl(new URL(location, url).toString());
+      if (httpsOnly && nextUrl.protocol !== "https:") throw new RequestBlockedError("The server redirected to a plain http address, which isn't followed.");
       // Never forward credentials to a different host.
       if (nextUrl.host !== url.host) {
         for (const key of Object.keys(headers)) if (/^(authorization|cookie|x-api-key|api-key)$/i.test(key) || /token|secret/i.test(key)) delete headers[key];

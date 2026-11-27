@@ -118,7 +118,7 @@ export default function VaultPage() {
                     <KeyRound size={18} className="text-slate-700" />
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{secret.name}{secret.revoked ? <span className="ml-2 text-xs font-normal text-slate-500">revoked</span> : null}</p>
-                      <p className="text-xs text-slate-500">{secret.application} · {secret.kind} · {secret.hint ? `•••• ${secret.hint}` : "no hint"} · {secret.botIds.length ? `${secret.botIds.length} teammates` : "no teammates assigned"}</p>
+                      <p className="text-xs text-slate-500">{secret.application} · {secret.kind} · {secret.hint ? `•••• ${secret.hint}` : "no hint"} · {secret.botIds.length ? `${secret.botIds.length} teammates` : "only you: assign teammates to let them use it"}</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">

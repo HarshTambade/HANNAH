@@ -417,7 +417,7 @@ async function runSkillTask(db, userId, task, bot, skill) {
           delete action.secretRef;
         }
         const result = await browser.act({
-          userId, computerId, workspace, action,
+          userId, computerId, workspace, action, policy: parse(computer.permissions, {}),
           secrets: { resolve: (ref, { host } = {}) => resolveSecret(db, userId, ref, { botId: bot.id, host }) },
         });
         if (result.challenge?.needed) {

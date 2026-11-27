@@ -251,3 +251,25 @@ test("a visitor with no account or key can connect the directory's connectors, a
     server.close();
   }
 });
+
+test("a visitor key Groq doesn't accept reaches only the directory's connectors", async () => {
+  const checked = [];
+  const app = express();
+  app.use(express.json());
+  app.use((req, res, next) => { res.locals.hannahByok = true; next(); });
+  app.use("/api", createConnectorsRouter({ publicBaseUrl: () => SITE, verifyKey: async (key) => { checked.push(key); return key === "gsk_accepted_key_000000000000"; } }));
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${server.address().port}/api`;
+  const discover = (key) => fetch(`${base}/connectors/discover`, { method: "POST", headers: { "Content-Type": "application/json", "x-groq-api-key": key }, body: JSON.stringify({ url: `${vendorUrl}/mcp` }) });
+  try {
+    const fake = await discover("gsk_made_up_key_00000000000000");
+    assert.equal(fake.status, 401);
+    assert.equal((await fake.json()).reason, "key-not-accepted");
+    const real = await discover("gsk_accepted_key_000000000000");
+    assert.notEqual((await real.json()).reason, "key-not-accepted");
+    assert.deepEqual(checked, ["gsk_made_up_key_00000000000000", "gsk_accepted_key_000000000000"]);
+  } finally {
+    server.close();
+  }
+});

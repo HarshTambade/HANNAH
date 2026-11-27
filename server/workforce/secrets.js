@@ -45,8 +45,11 @@ async function resolveSecret(db, userId, ref, { botId = null, host = null } = {}
   const { rows } = await db.query("SELECT * FROM hannah_workforce_secrets WHERE user_id = $1 AND id = $2 AND revoked_at IS NULL", [userId, match[1]]);
   const row = rows[0];
   if (!row) throw fail(404, "That vault entry doesn't exist or was revoked.", "not-found");
+  // A teammate uses a credential only when it is assigned to it. With none
+  // assigned (the Vault shows "no teammates assigned"), only the person's own
+  // actions can use it; it was available to every teammate before.
   const botIds = parse(row.bot_ids, []);
-  if (botIds.length && (!botId || !botIds.includes(botId))) throw fail(403, "This credential isn't assigned to that teammate.", "not-assigned");
+  if (botId && !botIds.includes(botId)) throw fail(403, "This credential isn't assigned to that teammate. Assign it in the Vault first.", "not-assigned");
   const scopes = parse(row.scopes, []);
   const domains = scopes.filter((item) => /^[a-z0-9*.-]+\.[a-z]{2,}$/i.test(item) || item.startsWith("*."));
   if (domains.length) {

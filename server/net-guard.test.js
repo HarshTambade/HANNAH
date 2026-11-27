@@ -39,3 +39,47 @@ test("workflow URLs, webhooks and the workforce browser refuse mapped loopback a
   assert.equal(await refusedHost("[::ffff:7f00:1]"), true);
   assert.equal(await refusedHost("no-such-host.invalid"), true, "a name that can't be checked isn't opened");
 });
+
+test("a computer's network setting decides which hosts its browser reaches", () => {
+  const { networkAllows, normalizePolicy } = require("./workforce/browser");
+  const none = normalizePolicy({ network: "none" });
+  const list = normalizePolicy({ network: "allowlist", allowedHosts: ["example.com"] });
+  const open = normalizePolicy({});
+  assert.equal(networkAllows(none, "example.com"), false);
+  assert.equal(networkAllows(list, "example.com"), true);
+  assert.equal(networkAllows(list, "docs.example.com"), true);
+  assert.equal(networkAllows(list, "example.com.evil.net"), false);
+  assert.equal(networkAllows(list, "notexample.com"), false);
+  assert.equal(networkAllows(open, "anything.org"), true);
+  assert.equal(open.downloads, true);
+  assert.equal(normalizePolicy({ downloads: false }).downloads, false);
+});
+
+test("downloads are refused before the browser starts when a computer turns them off", async () => {
+  const { act } = require("./workforce/browser");
+  await assert.rejects(
+    act({ userId: "u", computerId: "c", workspace: "/nonexistent", action: { action: "download", selector: "a" }, policy: { downloads: false } }),
+    (error) => error.reason === "downloads-off",
+  );
+});
+
+test("with httpsOnly, a redirect to a plain http address isn't followed", async () => {
+  const http = require("node:http");
+  const { once } = require("node:events");
+  const { safeRequest } = require("./workflows/http");
+  const previous = process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK;
+  process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK = "true";
+  const target = http.createServer((req, res) => res.end("plain")).listen(0, "127.0.0.1");
+  await once(target, "listening");
+  const redirector = http.createServer((req, res) => { res.writeHead(302, { location: `http://127.0.0.1:${target.address().port}/` }); res.end(); }).listen(0, "127.0.0.1");
+  await once(redirector, "listening");
+  try {
+    const start = `http://127.0.0.1:${redirector.address().port}/`;
+    assert.equal(String((await safeRequest(start)).body), "plain");
+    await assert.rejects(safeRequest(start, { httpsOnly: true }), /plain http address/);
+  } finally {
+    target.close();
+    redirector.close();
+    if (previous === undefined) delete process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK; else process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK = previous;
+  }
+});
