@@ -27,7 +27,11 @@ Three rules shape the product:
 >
 > **On `main`, not in a release yet — devices (beta):** a hub you run on your own network (HANNAH Edge) that speaks MQTT, Modbus TCP and HTTP to lights, plugs, sensors and meters; adding a device from a list, from its manual or with a form, with no code; a Devices screen; automations the hub runs by itself. Read-only discovery of USB, serial, mDNS and MQTT services, QR-code profile lookup and a dependency-free device SDK have since been added. **Tested with HANNAH's own simulated devices only**: no physical device has been connected, no real product's profile ships, and there is no HANNAH OS image to install. See [Devices](#devices).
 >
-> **New on `main` — HANNAH Robot OS (in progress, not a shipped feature):** a Linux-based, AI-native operating environment for robot hardware that reuses HANNAH's model gateway, agents, safety gateways and robotics runtime. The architecture and the first implementation slices are in place (the tracker marks the programme **IN_PROGRESS** at Phase 0/1): service and safety boundaries, boot/READY design, motor-controller and sensor managers, signed updates, and an outbound-only gateway, verified at **unit/simulation/smoke level (18 tests)**. No OS image has been built or booted, ROS 2/Gazebo/Nav2 has not been run, no physical robot has been commissioned, and no safety certification is claimed. See [HANNAH Robot OS](#hannah-robot-os).
+> **New on `main` — HANNAH Robot OS (in progress, not a shipped feature):** a Linux-based, AI-native operating environment for robot hardware that reuses HANNAH's model gateway, agents, safety gateways and robotics runtime. The architecture and the first implementation slices are in place (the tracker marks the programme **IN_PROGRESS** at Phase 0/1): service and safety boundaries, boot/READY design, motor-controller and sensor managers, a latched software stop shared by every service, signed updates, and an outbound-only gateway, verified at **unit/simulation/smoke level (62 tests)**. No OS image has been built or booted, ROS 2/Gazebo/Nav2 has not been run, no physical robot has been commissioned, and no safety certification is claimed. See [HANNAH Robot OS](#hannah-robot-os).
+>
+> **New on `main` — AI Workforce (beta):** AI teammates with a role, instructions and their own memory that take tasks, work on a cloud computer (files, a restricted terminal and a real browser), learn skills from a demonstration, run on schedules or events, share credentials only through a Secure Vault, and wait for your approval before anything risky. Needs an account. See [AI Workforce](#ai-workforce).
+>
+> **Security hardening on `main`:** one address check behind every outbound request (internal, cloud-metadata and every IPv6 spelling refused), a checking proxy for the workforce browser, sandboxed artifacts, sign-in limits shared across server instances, an account confirmation for Google and Microsoft sign-ins finished outside the web app, and owner-set robot limits enforced on the robot itself. See [Other guardrails](#other-guardrails).
 >
 > **Also new on `main`:** Azure OpenAI, Amazon Bedrock and Hugging Face model gateways bring the provider catalog to **23**. See [Configuration](#configuration).
 >
@@ -57,6 +61,7 @@ Three rules shape the product:
 - [Accounts and your own database](#accounts-and-your-own-database)
 - [Marketplace: agents and skills](#marketplace-agents-and-skills)
 - [Automations](#automations)
+- [AI Workforce](#ai-workforce)
 - [Robots](#robots)
 - [HANNAH Robot OS](#hannah-robot-os)
 - [Devices](#devices)
@@ -175,6 +180,8 @@ sequenceDiagram
 - **Circuit breaker:** a tool that fails 3 times in a row is disabled for the session.
 - **Routing profiles** limit which tools a task type can see (see [Agent runtime and tools](#agent-runtime-and-tools)).
 - **Server limits:** with only a Groq key, a visitor can reach just the chat routes, and their key is forwarded only to Groq's official API. Server-held keys and every other route need the operator token. Rate limits apply per token and per visitor key.
+- **Outbound requests:** web reading, workflow HTTP steps, connectors and webhooks share one address check ([`server/net-guard.js`](./server/net-guard.js)) that refuses loopback, private, link-local and cloud-metadata addresses in every spelling, including IPv4-mapped IPv6 such as `[::ffff:7f00:1]`. The check runs again when the connection opens, so a host can't pass it and then resolve to an internal address (DNS rebinding). Connectors don't follow a redirect from https to http, and reach servers outside the directory only with a key Groq accepts. Webhooks don't follow redirects. Self-hosters who need a private network set `WORKFLOW_ALLOW_PRIVATE_NETWORK=true`.
+- **Sign-in limits:** attempts are counted per email and address, and per address, in the database when there is one, so every server instance shares them. Behind a reverse proxy the client's address comes from `X-Forwarded-For` (set `HANNAH_TRUST_PROXY=true` when the proxy isn't on the same machine or network).
 
 These checks are defense in depth. They are not a guarantee against every prompt injection, so test your own release build before relying on them.
 
@@ -712,6 +719,13 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | `DATABASE_SSL`, `DATABASE_CA_CERT`, `DATABASE_POOL_MAX` | verified TLS, —, `3` | TLS mode (`no-verify` or `off` only if your provider needs it), a custom CA certificate, and the connection pool size. |
 | `HANNAH_VAULT_KEY`, `HANNAH_VAULT_PREVIOUS_KEYS` | — | 32-byte master key (`openssl rand -hex 32`) that encrypts saved provider keys, and older keys still accepted during rotation. |
 | `HANNAH_ALLOW_SIGNUP` | `true` | Set `false` to close new sign-ups. |
+| `HANNAH_TRUST_PROXY` | `false` | `true` when a reverse proxy on another machine always sets `X-Forwarded-For`; a proxy on the same machine or private network is trusted already. Used for rate limits. |
+| `CRON_SECRET` | — | Bearer secret for `POST /api/workflows/tick` and `POST /api/workforce/tick`, which a scheduler calls on serverless hosts. |
+| `WORKFLOW_ALLOW_PRIVATE_NETWORK` | `false` | `true` lets web reading, workflow HTTP steps and connectors reach private addresses (self-hosting only). |
+| `HANNAH_WORKFORCE_DIR` | `~/.hannah/workforce` | Where AI Workforce computers keep their files and browser profiles. |
+| `WORKFORCE_ALLOW_PRIVATE_NETWORK` | `false` | `true` lets workforce browsers reach private addresses (self-hosting only). A computer's allowlist and "none" settings still apply. |
+| `HANNAH_WORKFORCE_EXTENDED_COMMANDS` | — | `1` allows more terminal programs on workforce computers. Use it only inside a container. |
+| `WORKFORCE_WORKER`, `WORKFORCE_WORKER_INTERVAL_MS`, `WORKFORCE_TICK_TASKS` | on, `60000`, `2` | The built-in worker that runs routines and queued tasks (`off` turns it off), how often it runs, and tasks per tick. |
 | `HANNAH_ACCOUNTS_USE_SERVER_KEYS` | `false` | `true` lets signed-in users use the server's provider keys, which you pay for. By default each user brings their own keys. |
 | `OPENAI_TTS_MODEL`, `GROQ_STT_MODEL` | `gpt-4o-mini-tts`, `whisper-large-v3-turbo` | Models for the hosted voice engines. |
 | `HANNAH_MCP_SERVERS` | — | JSON list of outside MCP servers HANNAH can use as a client, for example `[{"id":"docs","name":"Team docs","url":"https://…/mcp","headers":{"Authorization":"Bearer …"}}]`. |
@@ -1028,7 +1042,38 @@ Connect Google (Calendar and Gmail) or Microsoft (Outlook calendar and mail) in 
 - **Google Chat:** choose **Also connect Google Chat** on your Google card. HANNAH can then list the spaces you're in, read and summarize recent messages, and post as you after you approve the exact text. The operator also needs the Chat API set up ([`docs/CALENDAR_AND_EMAIL.md`](./docs/CALENDAR_AND_EMAIL.md)).
 - **WhatsApp:** only a WhatsApp Business number, through Meta's official Cloud API ([Chat apps](#chat-apps)). Personal WhatsApp has no official API, so HANNAH doesn't read it.
 - **Mail is untrusted.** Mail HANNAH reads is marked to the model as other people's content, never instructions.
+- **Signing in from the apps:** the mobile and desktop apps finish the provider's sign-in in your system browser, which isn't signed in to HANNAH. There, nothing is saved until you confirm a page that names the mailbox and the HANNAH account it will join. A browser signed in to a different HANNAH account is refused.
 - **Server setup:** the operator registers a Google and/or Microsoft sign-in app and sets `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` and `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`. Step-by-step: [`docs/CALENDAR_AND_EMAIL.md`](./docs/CALENDAR_AND_EMAIL.md). Gmail access for the public needs Google's app verification.
+
+## AI Workforce
+
+**Beta. Needs a signed-in account and the account database.** Open **Workforce** in the app. AI teammates are workers with a role, instructions and their own memory. They take tasks, work on a cloud computer, hand work to each other and come back with results you can check. Anything risky waits for you.
+
+| Part | What it does |
+| --- | --- |
+| **Teammates** | Start from 11 templates (Chief of Staff, Research Analyst, Software Engineer, QA Engineer, Security Analyst, Marketing Manager, Sales Assistant, Finance Assistant, Personal Assistant, Robotics Engineer, IoT Manager) or describe your own. Each has an autonomy level (`observe`, `suggest`, `approval`, `scoped`, `autonomous`), version history with restore, a test run, duplicate, export and archive. |
+| **Tasks** | Run by a worker on the server, not in your browser tab, so they keep going when HANNAH is closed. A task can be planned, delegated or handed to another teammate, produces artifacts, and can be verified by a different teammate. |
+| **Cloud computers** | A workspace per computer on the server: files, a terminal limited to read-only commands with checked arguments (no shell), and a real browser (Playwright and Chromium) whose sign-ins persist. Each computer has a storage limit, and network (open, allowlist, none) and download settings its browser obeys. |
+| **Skills and Teach mode** | A skill is a reviewed list of steps. Teach mode records a demonstration only with your consent, never records audio, and never keeps a typed password: it becomes an input filled from the vault when the skill runs. A taught skill starts as a draft and must be tested and approved before it runs. |
+| **Routines** | Run a teammate or skill on a schedule (cron in your time zone, or every N minutes) or when an event happens. Every run is recorded. Events from a routine's own runs never start a routine, and two servers ticking together run it once. |
+| **Secure Vault** | Credentials encrypted with the server's vault key. The API never returns a value and the model never sees one: a teammate refers to `secret:<id>`, and the server types the value into the page itself, only on the sites you name, if you name any. A teammate can use a credential only when you assign it; an unassigned one is yours alone. |
+| **Approvals** | Every action has a risk level. Low-risk actions follow the teammate's autonomy level, high-risk ones (sending, publishing, deleting, changing access) always ask, and critical ones (payments, destructive or safety changes, robot motion) are refused here. A team rule can only tighten yours. An approval covers the one step you saw: if the skill changes, the step asks again. Text from a web page, mail or a tool is never an approval. |
+| **Teams, meetings, suggestions, artifacts** | Share a teammate with a team without sharing anyone's private data; removing a member withdraws the teammates they published. Summarize a meeting transcript you provide (with consent) into notes and tasks. Suggestions are opt-in, use real signals and respect your settings. Artifacts are versioned; HTML and SVG ones open sandboxed, so their scripts can't act as you. |
+
+**How the browser is contained.** Every request a computer's browser makes (page loads, scripts' requests, images, frames and every redirect) goes through that computer's own proxy on `127.0.0.1` ([`egress-proxy.js`](./server/workforce/egress-proxy.js)). The proxy checks the address it actually connects to: internal and cloud-metadata addresses are refused in every spelling, along with anything outside the computer's network setting. Uploads can't read the saved sign-ins or follow a link out of the workspace, and downloads are capped at 100 MB.
+
+**Server setup.**
+- **Database and vault:** `DATABASE_URL` and `HANNAH_VAULT_KEY`.
+- **Workspace location:** `HANNAH_WORKFORCE_DIR` sets where workspaces live; the default is `~/.hannah/workforce`.
+- **Browser:** Playwright and its Chromium must be installed on the server (`npx playwright install chromium`); without them, browser steps say so.
+- **Tasks and routines:** on a long-running server, a built-in worker runs them every minute (`WORKFORCE_WORKER=off` turns it off). On Vercel, call `POST /api/workforce/tick` with `Authorization: Bearer $CRON_SECRET` on a schedule.
+
+**Not done yet.**
+- **Isolation:** a cloud computer is a folder and a browser profile on the HANNAH server, not a virtual machine or container per person. Extra terminal programs (`HANNAH_WORKFORCE_EXTENDED_COMMANDS=1`) belong only in a containerized deployment.
+- **Live models:** no live model has carried a whole task end to end in the tests; they use a scripted stand-in.
+- **Outside apps:** Slack, Microsoft Teams and meeting platforms are reached only through the [chat apps](#chat-apps) and connectors that exist, not through their own bot or meeting APIs.
+
+---
 
 ## Robots
 
@@ -1070,6 +1115,8 @@ python3 -m hannah_robot doctor     # checks this computer: profile, limits, cred
 
 A **physical** robot is refused all movement until a signed-in person has taken it through eleven commissioning steps, and after that every movement still asks. No physical robot has been commissioned.
 
+Limits you tighten on a robot's page (speed, turning speed, acceleration, joint speed, link timeout) go with every command, and the robot applies the stricter of its own and yours. A robot whose controller can't apply a lower limit refuses the move instead of ignoring it. The runtime sends its profile each time it starts, so a profile changed after commissioning (a higher limit, a removed keep-out zone, a longer link timeout) withdraws the approval until it is commissioned again. Mission numbers come from a per-robot counter, so two server instances never send the same one.
+
 **What is not done:** the ROS 2 adapter, the Gazebo robot and the container are written and have never been run (no ROS 2 or Docker on the development machine); no physical robot, no MoveIt 2, no physical camera, no learned vision model, no industrial or IoT connectors. Every requirement with its real state and the tests behind it: [`robotics/PROGRESS.md`](./robotics/PROGRESS.md).
 
 More: [architecture](./docs/robotics/ROBOTICS_ARCHITECTURE.md), [safety gateway](./docs/robotics/SAFETY_GATEWAY.md), [security](./docs/robotics/SECURITY_ARCHITECTURE.md), [developer guide and JavaScript client](./docs/robotics/DEVELOPER_SDK.md), [deploying the runtime](./docs/robotics/DEPLOYMENT.md), [tests](./docs/robotics/TESTS.md), [`robotics/README.md`](./robotics/README.md).
@@ -1087,13 +1134,15 @@ The [`robot-os/`](./robot-os/) tree holds image profiles and manifests, systemd 
 - **Two separate boundaries.** A deterministic safety boundary (E-stop input, watchdog, motion limits, command expiry, motor enable, fault states) starts before motion-capable services and has minimal dependencies. The AI/orchestration boundary (local/cloud model routing, natural-language intents, mission planning, memory, voice bridge) is isolated and **never** drives PWM, torque or joint velocity directly.
 - **Motion path.** intent → Action Engine/permission → server Safety Gateway → signed command → onboard Safety Gateway → Motor Controller Manager → validated controller interface → embedded controller. Lost communication, a stale command, a watchdog timeout, an E-stop or invalid feedback means a safe stop/fault state.
 - **Services and boot.** systemd-targeted units for first boot, hardware discovery, motor controllers, sensors, ROS 2 runtime, navigation, perception, Safety Gateway, AI runtime, telemetry, updates and the outbound-only remote gateway. READY is emitted only when mandatory hardware, safety and profile checks pass, and motors stay disabled until those checks pass.
+- **Software stop shared by every service.** The safety-gateway service is the only process that changes the safety state; it publishes it every tick, and the motor-controller service follows it, stopping the motors on an engaged or latched stop, a fault, or a state that stopped arriving. A released stop stays latched until an operator resets it: `hannah-robot-os safety engage|release|status` and `hannah-robot-os safety reset --operator <name>`. Speed-ups are limited to the configured acceleration; slowing down never is. `hannah-robot-os ready` passes only when each required service reported ready within the last 5 seconds. This is coordination between processes, not a safety-rated stop.
+- **Commands from the parent.** Signed commands are checked once: accepted nonces can be kept on disk, a repeated command gets its first answer instead of a failure, and a malformed one is refused rather than crashing the service.
 - **Hardware managers.** A simulated serial motor controller and a generic `ros2_control` interface exist; encoder feedback is simulated. A sensor registry with timestamp/frame checks and health handling exists, and an unhealthy required sensor blocks readiness. Physical controller families (ODrive, CANopen, Modbus) and board targets (Raspberry Pi 5, Jetson Orin) are not supported.
 - **Offline operation and updates.** Signed manifests with hash, size, signer and signature checks, staged A/B slot state and rollback, a bounded offline queue, and a draft parent-API contract. TLS/signature transport, production signing infrastructure and bootloader/image integration are still pending.
 - **OS foundation.** Ubuntu Server 24.04 LTS is selected for desktop/edge, robotics development and developer profiles; Ubuntu Core 24 is the evaluated target for unattended industrial/IoT profiles; Yocto is deferred until a validated board target exists. Version choices must be re-checked against upstream release pages before the first image build.
 
 ### Verification and limits
 
-The [test report](./docs/HANNAH_ROBOT_OS_TEST_REPORT.md) records **18 unit/simulation/smoke tests passed** on a macOS arm64 development host: motor-controller commands (valid, expired, over-speed, raw-AI rejection, E-stop and watchdog timeout), Safety Gateway denials, the service readiness gate, sensor health, update-manifest tamper rejection, A/B rollback, the bounded offline queue, hardware-discovery abstraction, service-runtime CLI, `doctor` and `sim` smoke, three image-profile manifests, and a build script that honestly reports missing tools instead of building an image.
+**62 unit/simulation/smoke tests pass** on a macOS arm64 development host (`python3 -m pytest -q robot-os/tests`): motor-controller commands (valid, expired, over-speed, raw-AI rejection, E-stop and watchdog timeout, the acceleration limit), Safety Gateway denials and the latched stop, the shared stop across two real service processes (including a gateway that stops reporting), the service readiness gate with fresh status only, sensor health, update-manifest tamper rejection, A/B rollback and recovery, the bounded offline queue, signed commands (re-delivery, restart, malformed input), hardware-discovery abstraction, serial and CAN transports, the service-runtime CLI, and five image-profile manifests. The build script honestly reports missing tools instead of building an image. The earlier [test report](./docs/HANNAH_ROBOT_OS_TEST_REPORT.md) records the first 18.
 
 What has **not** been run: an OS image build or boot (no Docker, QEMU, snapcraft or `ubuntu-image` on the host), systemd service startup (macOS), ROS 2 Jazzy/Gazebo/Nav2 (no runtime installed), and any physical motor, sensor or commissioning. There are no production signing keys, no live provider credentials in the environment and no independent security or functional-safety reviewer ([blockers RB1–RB6](./docs/HANNAH_ROBOT_OS_BLOCKERS.md)). **No safety certification is claimed.** The physical E-stop is independent hardware; the app's Stop button is not one. Threats and standards (ISO 3691-4, ISO 12100, ISO 13849, IEC 62443, ISO 10218, ISO/TS 15066, ISO 13482, IEC 61508, IEC 60204-1, ISO 13850) are listed as input for a future assessment in the [security document](./docs/HANNAH_ROBOT_OS_SECURITY.md), not as evidence of conformance.
 
@@ -1564,8 +1613,8 @@ npm run test:e2e --prefix client         # Playwright against real local servers
 npm run build --prefix client
 (cd robotics/runtime && python3 -m unittest discover -s tests -t .)   # robot runtime and simulators; standard library only
 (cd hannah-os/runtime && python3 -m unittest discover -s tests -t .)  # device hub, protocol stacks and simulated devices; standard library only
-python3 -m pytest -q robot-os/tests      # Robot OS managers, Safety Gateway, updates, offline queue; simulation only
-python3 robot-os/tools/validate_manifests.py  # static check of the three image-profile manifests
+python3 -m pytest -q robot-os/tests      # Robot OS managers, shared Safety Gateway, updates, commands; simulation only
+python3 robot-os/tools/validate_manifests.py  # static check of the five image-profile manifests
 ```
 
 The suites cover:
@@ -1576,11 +1625,13 @@ The suites cover:
   - token checks and rate limits;
   - accounts, vault, sync, developer keys and webhooks on SQLite and on real Postgres (PGlite);
   - team planning and verification, voice routes, the MCP client against a real MCP server, A2A, and the SDK end to end;
-  - connectors' OAuth flow;
+  - connectors' OAuth flow, and calendar and email sign-ins with and without a session in the browser;
+  - the AI workforce: teammates, computers, the terminal's limits, skills and Teach mode, approvals bound to the step a person saw, routines (no self-triggering, no double runs), the vault's teammate assignment, teams and artifacts, on SQLite and Postgres;
+  - the outbound address check in every IPv6 spelling, the workforce browser's proxy, and webhook and connector redirects;
   - every chat app, using real signatures (HMAC, Ed25519, RS256 tokens) against stand-in platform APIs;
   - the hosting setup, and serving the web app in Docker.
 - **Robots:** the contract, both Safety Gateways, signed commands, missions, plans, the camera, commissioning and the fleet, as unit tests, on the real server with a scripted stand-in robot (SQLite and Postgres), and with the real runtime driving the built-in simulators, also in a browser. None of it is a Gazebo or hardware test ([details](./docs/robotics/TESTS.md)).
-- **Robot OS:** 18 unit/simulation/smoke tests for the motor controller, Safety Gateway, readiness gate, sensor health, signed-update verification, A/B rollback, the offline queue, hardware-discovery abstraction, service runtime and CLI tools; the image manifests pass a static check. No image build or boot, no systemd startup, no ROS 2/Gazebo run and no hardware ([report](./docs/HANNAH_ROBOT_OS_TEST_REPORT.md)).
+- **Robot OS:** 62 unit/simulation/smoke tests for the motor controller, the Safety Gateway and the stop shared between service processes, the readiness gate, sensor health, signed-update verification, A/B rollback, the offline queue, signed commands, hardware-discovery abstraction, service runtime and CLI tools; the image manifests pass a static check. No image build or boot, no systemd startup, no ROS 2/Gazebo run and no hardware ([report](./docs/HANNAH_ROBOT_OS_TEST_REPORT.md)).
 - **Devices:** the MQTT and Modbus TCP stacks against HANNAH's own test servers, the MQTT client also against an independent broker (aedes), the hub with simulated devices, profiles and the Device Safety Gateway as unit tests, read-only USB/serial/mDNS/MQTT discovery with worker isolation, QR handling that never opens a URL, the device SDK, a descriptive loopback benchmark, the manual reader on a real PDF, and the whole chain with three real processes (server, hub, simulated devices) on the server and in a browser. No physical device, network service or camera scan.
 - **Desktop rules** (`node --test` in `client/plugins/desktop-tools`):
   - folders, commands and the sandbox;
@@ -1608,7 +1659,8 @@ Not covered automatically: physical-device permissions, speech, calls, app resum
 
 **In progress, not shipped:**
 
-- **HANNAH Robot OS** (Phase 0/1): onboard Linux services, the safety/motor-control boundaries, signed updates and an offline gateway exist and pass 18 unit/simulation/smoke tests, but no image has been built or booted, ROS 2/Gazebo/Nav2 has not been run, no hardware has been commissioned, and no safety certification is claimed. [Tracker](./docs/HANNAH_ROBOT_OS_IMPLEMENTATION_TRACKER.md), [blockers](./docs/HANNAH_ROBOT_OS_BLOCKERS.md). See [HANNAH Robot OS](#hannah-robot-os).
+- **AI Workforce (beta):** teammates, cloud computers, tasks, skills, routines, the Secure Vault, approvals, teams, meetings from a transcript, proactive suggestions and artifacts are on `main` but not in a release. Tested with a scripted model stand-in, not yet with a live model across a whole task; see [AI Workforce](#ai-workforce).
+- **HANNAH Robot OS** (Phase 0/1): onboard Linux services, the safety/motor-control boundaries, signed updates and an offline gateway exist and pass 62 unit/simulation/smoke tests, but no image has been built or booted, ROS 2/Gazebo/Nav2 has not been run, no hardware has been commissioned, and no safety certification is claimed. [Tracker](./docs/HANNAH_ROBOT_OS_IMPLEMENTATION_TRACKER.md), [blockers](./docs/HANNAH_ROBOT_OS_BLOCKERS.md). See [HANNAH Robot OS](#hannah-robot-os).
 - **Devices (beta):** the hub, profiles, Safety Gateway, hub-run automations, read-only discovery, QR-code profile lookup and the device SDK are on `main` but not in a release, and are proven only with HANNAH's own simulators and fixtures.
 
 **Library modules not on a screen yet.** [`client/src/services`](./client/src/services) also holds modules that no screen uses yet. In 1.5.0 the ones that faked their work were made to work for real, with tests (`RestoredModules.test.ts`):
