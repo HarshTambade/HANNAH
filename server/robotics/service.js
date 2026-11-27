@@ -612,19 +612,24 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
   }
 
   // ---------- missions (the Action Engine calls these) ----------
-  let lastSeq = 0;
   /**
-   * A number above every mission this robot was sent (the robot refuses one
-   * that isn't). It starts above the highest already stored, so a clock that
-   * stepped back can't go below it, and adds a random part within the
-   * millisecond so two server instances rarely pick the same one. A per-robot
-   * counter column would make it certain; that needs a migration.
+   * The next mission number for this robot, above every one it was sent (the
+   * robot refuses one that isn't). Claimed from the robot's own counter with a
+   * compare-and-swap, so two server instances never hand out the same number
+   * and a clock that stepped back can't go below the last one.
    */
   async function nextSeq(db, robotId) {
-    const stored = Number((await db.query("SELECT MAX(seq) AS seq FROM hannah_robot_missions WHERE robot_id = $1", [robotId])).rows[0]?.seq) || 0;
-    lastSeq = Math.max(lastSeq + 1, now() * 1000 + crypto.randomInt(1000), stored + 1);
-    return lastSeq;
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      const current = Number((await db.query("SELECT mission_seq FROM hannah_robots WHERE id = $1", [robotId])).rows[0]?.mission_seq) || 0;
+      // First use: start above the missions stored before the counter existed.
+      const stored = current ? 0 : Number((await db.query("SELECT MAX(seq) AS seq FROM hannah_robot_missions WHERE robot_id = $1", [robotId])).rows[0]?.seq) || 0;
+      const next = Math.max(current + 1, stored + 1, now() * 1000);
+      const claimed = await db.query("UPDATE hannah_robots SET mission_seq = $1 WHERE id = $2 AND mission_seq = $3", [next, robotId, current]);
+      if (claimed.rowCount) return next;
+    }
+    throw fail(503, "The robot is busy taking another mission. Try again.", "busy");
   }
+
   async function activeMotion(db, userId, robotId) {
     const at = now();
     const { rows } = await db.query("SELECT * FROM hannah_robot_missions WHERE user_id = $1 AND robot_id = $2 AND status IN ('queued', 'sent', 'accepted', 'paused') ORDER BY seq", [userId, robotId]);
@@ -1101,7 +1106,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return fleet.analytics({ robots, missions, plans: planRows, events, telemetry: telemetryOf, now: at, windowMs });
   }
 
-  return { activeMotion, addDestination, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
+  return { nextSeq, activeMotion, addDestination, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
 }
 
 module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, fingerprintOf, normalizeDescriptor, requestMessage, signCommand, signRequest };

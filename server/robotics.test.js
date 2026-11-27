@@ -639,3 +639,17 @@ test("guessing enrollment codes is limited per network address", async () => {
   for (let attempt = 0; attempt < 44 && status !== 429; attempt += 1) status = (await robot.enroll("ZZZZZ-ZZZZZ")).status;
   assert.equal(status, 429);
 });
+
+test("mission numbers claimed at the same moment by two server instances never repeat", async () => {
+  const robotId = (await db.query("SELECT id FROM hannah_robots ORDER BY created_at LIMIT 1")).rows[0]?.id;
+  assert.ok(robotId, "a robot from the earlier tests");
+  const frozen = 1_900_000_000_000;
+  // Two instances, the same clock reading: the old clock-based numbers collided here.
+  const first = createRoboticsService({ now: () => frozen });
+  const second = createRoboticsService({ now: () => frozen });
+  const numbers = await Promise.all(Array.from({ length: 20 }, (_, index) => (index % 2 ? first : second).nextSeq(db, robotId)));
+  assert.equal(new Set(numbers).size, numbers.length, `repeated: ${numbers.join(", ")}`);
+  // A clock that stepped back still gets a higher number.
+  const behind = createRoboticsService({ now: () => frozen - 3_600_000 });
+  assert.ok((await behind.nextSeq(db, robotId)) > Math.max(...numbers));
+});

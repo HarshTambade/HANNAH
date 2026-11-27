@@ -1480,6 +1480,18 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_workforce_local_jobs_pending ON hannah_workforce_local_jobs (user_id, status, expires_at)",
     ],
   },
+  {
+    version: 31,
+    name: "Robots: a per-robot mission number counter",
+    // A robot refuses a mission whose number isn't above every one it took.
+    // Numbers came from the server's clock, so two instances in the same
+    // millisecond, or a clock step back, could repeat one. Each number is now
+    // claimed from this counter with a compare-and-swap. Additive; 0 means
+    // "not used yet", and the first claim starts above every stored mission.
+    statements: [
+      "ALTER TABLE hannah_robots ADD COLUMN mission_seq BIGINT NOT NULL DEFAULT 0",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };
