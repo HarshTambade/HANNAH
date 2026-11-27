@@ -26,11 +26,22 @@ const { createProactiveRouter } = require("./proactive");
 const { createMeetingsRouter } = require("./meetings");
 const { createConversationsRouter } = require("./conversations");
 const { createUsageRouter } = require("./usage");
+const { createHardwareRouter, setOperator } = require("./hardware");
+const { createNotificationsRouter, startNotifications } = require("./notify");
+const { createLocalRouter } = require("./local");
+const { createRoutineHooksRouter } = require("./routine-hooks");
 const { modelTarget } = require("./runner");
 const browser = require("./browser");
 
-function createWorkforceRouter() {
+/**
+ * `operator` is the server's shared robot registry, device registry and Action
+ * Engine (or a function returning it), so teammates use the same hardware path
+ * as everything else.
+ */
+function createWorkforceRouter({ operator = null } = {}) {
   const router = express.Router();
+  if (operator) setOperator(operator);
+  startNotifications();
 
   router.get("/workforce/overview", withAccount(async (_req, res, db, account) => {
     const counts = {};
@@ -131,6 +142,10 @@ function createWorkforceRouter() {
   router.use(createMeetingsRouter());
   router.use(createConversationsRouter());
   router.use(createUsageRouter());
+  router.use(createHardwareRouter());
+  router.use(createNotificationsRouter());
+  router.use(createLocalRouter());
+  router.use(createRoutineHooksRouter());
 
   return router;
 }

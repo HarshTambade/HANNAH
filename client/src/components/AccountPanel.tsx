@@ -244,7 +244,7 @@ function DeveloperKeys() {
   );
 }
 
-const EVENT_LABELS: Record<string, string> = { "reminder.fired": "A reminder goes off", "team.completed": "A team task finishes", "budget.exceeded": "Today's budget runs out" };
+const EVENT_LABELS: Record<string, string> = { "reminder.fired": "A reminder goes off", "team.completed": "A team task finishes", "budget.exceeded": "Today's budget runs out", "workforce.approval.requested": "A teammate needs your approval", "workforce.task.completed": "A teammate finishes a task", "workforce.task.failed": "A teammate's task is blocked or fails" };
 
 function Webhooks() {
   const [hooks, setHooks] = useState<Webhook[]>([]);

@@ -1433,6 +1433,53 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_workforce_messages_task ON hannah_workforce_messages (user_id, task_id, created_at)",
     ],
   },
+  {
+    version: 30,
+    name: "AI workforce: notifications, their delivery log, and desktop jobs",
+    // Where a person wants workforce notifications (chat apps, webhooks), a
+    // record of every delivery attempt (including ones held for quiet hours),
+    // and jobs a teammate sends to the person's desktop app, which asks there
+    // before running each one. Additive; no existing row is changed.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_workforce_notify_settings (
+        user_id TEXT PRIMARY KEY REFERENCES hannah_users(id) ON DELETE CASCADE,
+        settings TEXT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_workforce_deliveries (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        event_id TEXT,
+        event_kind TEXT NOT NULL,
+        target TEXT NOT NULL,
+        status TEXT NOT NULL,
+        detail TEXT,
+        created_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_workforce_deliveries_recent ON hannah_workforce_deliveries (user_id, created_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_workforce_local_jobs (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        bot_id TEXT,
+        computer_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        input TEXT NOT NULL,
+        status TEXT NOT NULL,
+        device_id TEXT,
+        device_name TEXT,
+        claimed_at BIGINT,
+        result TEXT,
+        error TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_workforce_local_jobs_pending ON hannah_workforce_local_jobs (user_id, status, expires_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

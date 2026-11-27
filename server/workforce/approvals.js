@@ -157,6 +157,34 @@ function publicApproval(row, at = Date.now()) {
   };
 }
 
+/**
+ * Decide one pending approval. Only the account owner can call this: from the
+ * app, or from a chat app they paired themselves. An approval covers only
+ * this one action; it never creates a broad rule.
+ */
+async function decideApproval(db, userId, approvalId, decision, { reason = "", via = "app" } = {}) {
+  if (decision !== "allow" && decision !== "deny") throw fail(400, "decision must be allow or deny.", "invalid");
+  const at = Date.now();
+  const { rows } = await db.query("SELECT * FROM hannah_workforce_approvals WHERE user_id = $1 AND id = $2", [userId, clean(approvalId, 80)]);
+  const row = rows[0];
+  if (!row) throw fail(404, "That approval doesn't exist.", "not-found");
+  if (row.status !== "pending") throw fail(409, `This approval is already ${row.status}.`, "not-pending");
+  if (Number(row.expires_at) <= at) {
+    await db.query("UPDATE hannah_workforce_approvals SET status = 'expired' WHERE user_id = $1 AND id = $2", [userId, row.id]);
+    throw fail(409, "This approval expired. Ask the teammate to try again.", "expired");
+  }
+  const updatedRows = await db.query(
+    "UPDATE hannah_workforce_approvals SET status = $1, decision = $2, reason = $3, decided_at = $4, decided_by = $5 WHERE user_id = $6 AND id = $7 AND status = 'pending'",
+    [decision === "allow" ? "approved" : "denied", decision, clean(reason, 500), at, userId, userId, row.id],
+  );
+  if (!updatedRows.rowCount) throw fail(409, "This approval was just decided elsewhere.", "not-pending");
+  await recordEvent(db, userId, `approval.${decision === "allow" ? "approved" : "denied"}`, { botId: row.bot_id || null, taskId: row.task_id || null, detail: { approvalId: row.id, action: row.action, risk: row.risk, via: clean(via, 40) } });
+  const updated = await db.query("SELECT * FROM hannah_workforce_approvals WHERE user_id = $1 AND id = $2", [userId, row.id]);
+  // An approved task can continue. The runner checks the approval itself before acting.
+  if (decision === "allow" && row.task_id) await db.query("UPDATE hannah_workforce_tasks SET status = 'queued', updated_at = $1 WHERE user_id = $2 AND id = $3 AND status = 'waiting-approval'", [at, userId, row.task_id]);
+  return { approval: publicApproval(updated.rows[0]), resume: decision === "allow" && Boolean(row.task_id) };
+}
+
 function createApprovalsRouter() {
   const router = express.Router();
 
@@ -182,27 +210,7 @@ function createApprovalsRouter() {
 
   router.post("/workforce/approvals/:id/decide", withAccount(async (req, res, db, account) => {
     const body = readBody(req);
-    const decision = String(body.decision || "");
-    if (decision !== "allow" && decision !== "deny") throw fail(400, "decision must be allow or deny.", "invalid");
-    const at = Date.now();
-    const { rows } = await db.query("SELECT * FROM hannah_workforce_approvals WHERE user_id = $1 AND id = $2", [account.id, clean(req.params.id, 80)]);
-    const row = rows[0];
-    if (!row) throw fail(404, "That approval doesn't exist.", "not-found");
-    if (row.status !== "pending") throw fail(409, `This approval is already ${row.status}.`, "not-pending");
-    if (Number(row.expires_at) <= at) {
-      await db.query("UPDATE hannah_workforce_approvals SET status = 'expired' WHERE user_id = $1 AND id = $2", [account.id, row.id]);
-      throw fail(409, "This approval expired. Ask the teammate to try again.", "expired");
-    }
-    // An approval covers only this one action. It never creates a broad rule.
-    await db.query(
-      "UPDATE hannah_workforce_approvals SET status = $1, decision = $2, reason = $3, decided_at = $4, decided_by = $5 WHERE user_id = $6 AND id = $7 AND status = 'pending'",
-      [decision === "allow" ? "approved" : "denied", decision, clean(body.reason, 500), at, account.id, account.id, row.id],
-    );
-    await recordEvent(db, account.id, `approval.${decision === "allow" ? "approved" : "denied"}`, { botId: row.bot_id || null, taskId: row.task_id || null, detail: { approvalId: row.id, action: row.action, risk: row.risk } });
-    const updated = await db.query("SELECT * FROM hannah_workforce_approvals WHERE user_id = $1 AND id = $2", [account.id, row.id]);
-    // An approved task can continue. The runner checks the approval itself before acting.
-    if (decision === "allow" && row.task_id) await db.query("UPDATE hannah_workforce_tasks SET status = 'queued', updated_at = $1 WHERE user_id = $2 AND id = $3 AND status = 'waiting-approval'", [at, account.id, row.task_id]);
-    res.json({ approval: publicApproval(updated.rows[0]), resume: decision === "allow" && Boolean(row.task_id) });
+    res.json(await decideApproval(db, account.id, clean(req.params.id, 80), String(body.decision || ""), { reason: body.reason, via: "app" }));
   }));
 
   router.get("/workforce/policies", withAccount(async (_req, res, db, account) => {
@@ -231,4 +239,4 @@ function createApprovalsRouter() {
   return router;
 }
 
-module.exports = { RISK_FOR, RISK_LEVEL, assertAction, classify, createApprovalsRouter, effectiveRules, gate, normalizeRules, publicApproval, strictest };
+module.exports = { RISK_FOR, RISK_LEVEL, assertAction, classify, createApprovalsRouter, decideApproval, effectiveRules, gate, normalizeRules, publicApproval, strictest };

@@ -358,7 +358,11 @@ function createComputersRouter() {
       allowedHosts: (Array.isArray(body.permissions?.allowedHosts) ? body.permissions.allowedHosts : [])
         .map((host) => String(host).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/:].*$/, ""))
         .filter((host) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(host)).slice(0, 50),
-      localMode: ["ask", "allow", "never"].includes(body.permissions?.localMode) ? body.permissions.localMode : "ask",
+      // A local computer's rule for teammate jobs (see local.js): ask every time (the default), only some
+      // kinds of job, only some shared folders, or never. The desktop app still asks before each job.
+      localMode: ["ask", "tasks", "workspaces", "never"].includes(body.permissions?.localMode) ? body.permissions.localMode : body.permissions?.localMode === "allow" ? "tasks" : "ask",
+      localKinds: (Array.isArray(body.permissions?.localKinds) ? body.permissions.localKinds : []).filter((kind) => ["browser", "coding", "open", "notify"].includes(kind)).slice(0, 4),
+      localFolders: (Array.isArray(body.permissions?.localFolders) ? body.permissions.localFolders : []).map((name) => String(name).trim().slice(0, 120)).filter(Boolean).slice(0, 20),
     };
     const limits = {
       storageMb: Math.min(10_000, Math.max(16, Number(body.limits?.storageMb) || DEFAULT_STORAGE_MB)),
@@ -636,7 +640,7 @@ function createComputersRouter() {
     const session = await loadSession(db, account.id, req.params.id);
     const row = await loadComputer(db, account.id, session.computer_id);
     const workspace = await ensureWorkspace(row);
-    const image = await browser.latestScreenshot({ userId: account.id, computerId: row.id, workspace });
+    const image = await browser.latestScreenshot({ userId: account.id, computerId: row.id, workspace, live: req.query.live === "1" });
     if (!image) throw fail(404, "No screenshot has been taken yet.", "not-found");
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Cache-Control", "no-store");

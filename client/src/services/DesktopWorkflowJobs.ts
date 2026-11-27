@@ -8,6 +8,10 @@
  * device gets it), asks the person in a system dialog, runs it here and
  * reports the result, which continues the workflow on the server.
  *
+ * AI Workforce teammates use the same runner: a job a person sent to this
+ * computer from a teammate's task (server/workforce/local.js) is claimed and
+ * run the same way, and its dialog names the teammate and the task.
+ *
  * The system dialogs and the folder and address rules live in the desktop
  * plugin's main process (plugins/desktop-tools), so nothing here, and no
  * model, can skip them.
@@ -129,6 +133,41 @@ export async function checkForJobs(deps: JobDeps = { plugin: hannahDesktop(), ru
   return ran;
 }
 
+/** A teammate's job as the runner sees it: the dialog says which teammate and task asked. */
+export type TeammateJob = { id: string; kind: DeviceJob["kind"]; taskId: string; input: Record<string, unknown>; createdAt: number; expiresAt: number };
+
+export function teammateJobAsDeviceJob(job: TeammateJob): DeviceJob {
+  const who = String(job.input.teammate || "A teammate");
+  const task = String(job.input.taskTitle || "a task");
+  return { id: job.id, kind: job.kind, workflowName: `Teammate ${who} (task “${task}”)`, executionId: job.taskId, input: job.input, createdAt: job.createdAt, expiresAt: job.expiresAt };
+}
+
+let teammateRunning = false;
+
+/** Check for teammate jobs once and run them one at a time. Returns how many ran. */
+export async function checkForTeammateJobs(deps: JobDeps = { plugin: hannahDesktop(), runCodingAgent }): Promise<number> {
+  if (teammateRunning) return 0;
+  teammateRunning = true;
+  let ran = 0;
+  try {
+    const { jobs } = await accountRequest<{ jobs: TeammateJob[] }>("/api/workforce/local-jobs");
+    const device = thisDevice();
+    for (const job of jobs) {
+      try {
+        await accountRequest(`/api/workforce/local-jobs/${encodeURIComponent(job.id)}/claim`, { method: "POST", body: JSON.stringify({ deviceId: device.id, deviceName: device.name }) });
+      } catch {
+        continue; // Another device took it, or it was cancelled.
+      }
+      const outcome = await runJob(teammateJobAsDeviceJob(job), deps);
+      await accountRequest(`/api/workforce/local-jobs/${encodeURIComponent(job.id)}/complete`, { method: "POST", body: JSON.stringify({ deviceId: device.id, deviceName: device.name, ...outcome }), signal: AbortSignal.timeout(60_000) }).catch(() => {});
+      ran += 1;
+    }
+  } finally {
+    teammateRunning = false;
+  }
+  return ran;
+}
+
 /** Start checking while the desktop app is open. Returns a stop function. */
 export function startDesktopWorkflowJobs(): () => void {
   if (!desktopFilesAvailable()) return () => {};
@@ -137,7 +176,10 @@ export function startDesktopWorkflowJobs(): () => void {
     if (stopped || !getAccountHint()) return;
     try {
       const { enabled } = await hannahDesktop().workflowTaskSettings();
-      if (enabled) await checkForJobs();
+      if (enabled) {
+        await checkForJobs();
+        await checkForTeammateJobs().catch(() => 0);
+      }
     } catch {
       // Offline, signed out or the server has no workflows: try again later.
     }

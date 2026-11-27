@@ -45,6 +45,30 @@ const fail = (status, message, reason) => Object.assign(new Error(message), { st
 const now = () => Date.now();
 const parse = (text, fallback) => { try { return text ? JSON.parse(text) : fallback; } catch { return fallback; } };
 
+/** The parts of an owner's message needed to write to them later; no message text. */
+function ownerTarget(message) {
+  const keep = ["chatId", "chatRef", "serviceUrl", "activityId", "bot", "from"];
+  return Object.fromEntries(keep.filter((key) => message[key] !== undefined && message[key] !== null).map((key) => [key, message[key]]));
+}
+
+/** Platforms that can take a message HANNAH starts (Discord's tokens expire; Google Chat only answers). */
+const PROACTIVE = new Set(["telegram", "slack", "teams", "whatsapp"]);
+
+/**
+ * Write to a channel's paired owner without a message to answer, for
+ * notifications. Needs the owner to have written to the bot at least once, so
+ * the platform's own address for that chat is known.
+ */
+async function sendToChannelOwner(db, row, text, { fetchImpl = (...args) => fetch(...args) } = {}) {
+  const driver = DRIVERS[row.kind];
+  if (!driver || !PROACTIVE.has(row.kind)) throw fail(400, `${driver?.label || row.kind} can't take a message HANNAH starts.`, "not-proactive");
+  const config = parse(row.config, {});
+  if (!row.paired_chat_id || !config.ownerTarget?.chatId) throw fail(409, `Write to the ${driver.label} bot once from your paired chat, so HANNAH knows where to reach you.`, "no-owner-target");
+  const core = createChannelsCore({ runtime: null, publicBaseUrl: "", fetchImpl });
+  const call = (url, options) => callJson(fetchImpl, url, options);
+  await driver.send({ secrets: core.secretsOf(row), config, message: { ...config.ownerTarget, senderId: row.paired_chat_id }, text, call });
+}
+
 /**
  * Keep working after the webhook is answered. On Vercel the function would
  * otherwise be frozen; its request context offers waitUntil (as @vercel/functions uses).
@@ -138,7 +162,9 @@ function createChannelsCore({ runtime, publicBaseUrl, fetchImpl = (...args) => f
       const valid = row.pairing_code_hash && Number(row.pairing_expires_at) > now() && /^hn[A-Za-z0-9]{8,20}$/.test(code) && sha256(code) === row.pairing_code_hash;
       if (valid) {
         const name = String(message.senderName || "you").slice(0, 80);
-        await db.query("UPDATE hannah_channels SET paired_chat_id = $1, paired_name = $2, pairing_code_hash = NULL, pairing_expires_at = NULL, history = NULL, updated_at = $3 WHERE id = $4", [message.senderId, name, now(), row.id]);
+        // Pairing also records where to reach the owner later (workforce notifications).
+        const config = { ...parse(row.config, {}), ownerTarget: ownerTarget(message) };
+        await db.query("UPDATE hannah_channels SET paired_chat_id = $1, paired_name = $2, pairing_code_hash = NULL, pairing_expires_at = NULL, history = NULL, config = $3, updated_at = $4 WHERE id = $5", [message.senderId, name, JSON.stringify(config), now(), row.id]);
         return `Paired. Hi ${name.split(" ")[0]}, I'm HANNAH: write to me here any time.`;
       }
       if (!row.paired_chat_id) return `This HANNAH bot is private. To use it, open HANNAH → Marketplace → Chat apps and pair this chat with the code shown there.`;
@@ -155,7 +181,24 @@ function createChannelsCore({ runtime, publicBaseUrl, fetchImpl = (...args) => f
     times.push(now());
     recent.set(row.id, times);
     if (times.length > 20) return "That's a lot of messages at once. Give me a minute.";
+
+    const config = parse(row.config, {});
+    if (owner) {
+      // Where to reach the owner later (workforce notifications). Only the paired owner's chat is kept.
+      const target = ownerTarget(message);
+      if (JSON.stringify(target) !== JSON.stringify(config.ownerTarget || null)) {
+        config.ownerTarget = target;
+        await db.query("UPDATE hannah_channels SET config = $1, updated_at = $2 WHERE id = $3", [JSON.stringify(config), now(), row.id]);
+      }
+    }
     if (!message.text.trim()) return null;
+
+    // A channel bound to a teammate: the owner talks to that teammate. Anyone else the owner
+    // approved still gets HANNAH, never the owner's teammate, memory or tasks.
+    if (owner && config.workforceBotId) {
+      const { ownerMessage } = require("./workforce/channel-bridge");
+      return ownerMessage(db, { userId: row.user_id, botId: config.workforceBotId, text: message.text, label: driver.label }).catch(() => "I couldn't reach your teammate just now. Try again in a moment.");
+    }
 
     // History per person; bots connected before 1.5.0 kept one list for the owner.
     const stored = parse(row.history, {});
@@ -336,4 +379,4 @@ function createChannelHookRouter({ runtime, publicBaseUrl, fetchImpl } = {}) {
   return router;
 }
 
-module.exports = { createChannelsRouter, createChannelHookRouter };
+module.exports = { PROACTIVE, createChannelsRouter, createChannelHookRouter, sendToChannelOwner };

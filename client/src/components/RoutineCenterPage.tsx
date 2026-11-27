@@ -32,15 +32,17 @@ const RUN_TONES: Record<string, string> = {
   cancelled: "border-slate-200 bg-slate-50 text-slate-700", expired: "border-amber-200 bg-amber-50 text-amber-900",
 };
 
-type Trigger = { type: "cron"; cron: string } | { type: "interval"; minutes: number } | { type: "event"; kind: string } | { type: "manual" };
+type Trigger = { type: "cron"; cron: string } | { type: "interval"; minutes: number } | { type: "event"; kind: string } | { type: "manual" } | { type: "webhook"; provider: string; event: string };
 type RoutineForm = { name: string; description: string; botId: string; skillId: string; mode: string; timezone: string; status: string; trigger: Trigger };
-const MODES = ["schedule", "event", "manual"] as const;
+const MODES = ["schedule", "event", "webhook", "manual"] as const;
+const WEBHOOK_PROVIDERS: Array<[string, string]> = [["github", "GitHub"], ["linear", "Linear"], ["sentry", "Sentry"], ["pagerduty", "PagerDuty"], ["generic", "Any service (HANNAH signature)"]];
 const defaultForm: RoutineForm = { name: "", description: "", botId: "", skillId: "", mode: "schedule", timezone: "UTC", status: "active", trigger: { type: "interval", minutes: 60 } };
 
 function triggerText(trigger: Trigger): string {
   if (trigger.type === "cron") return `Cron: ${trigger.cron}`;
   if (trigger.type === "interval") return `Every ${Math.round(trigger.minutes / 5) * 5} minutes`;
   if (trigger.type === "event") return `Event: ${trigger.kind}`;
+  if (trigger.type === "webhook") return `Webhook from ${WEBHOOK_PROVIDERS.find(([id]) => id === trigger.provider)?.[1] || trigger.provider}${trigger.event ? ` (${trigger.event})` : ""}`;
   return "Manual";
 }
 
@@ -75,8 +77,8 @@ function RoutineFormView({ form, setForm, onSave, onCancel, saving, title }: {
           </select>
         </label>
         <label className="block"><span className={heading}>Trigger mode</span>
-          <select value={form.mode} onChange={(event) => pick("mode", event.target.value)} className={input}>
-            {MODES.map((mode) => <option key={mode} value={mode}>{mode === "schedule" ? "Schedule" : mode === "event" ? "Event trigger" : "Manual"}</option>)}
+          <select value={form.mode} onChange={(event) => setForm({ ...form, mode: event.target.value, ...(event.target.value === "webhook" ? { trigger: { type: "webhook", provider: "github", event: "" } } : form.trigger.type === "webhook" ? { trigger: { type: "interval", minutes: 60 } } : {}) })} className={input}>
+            {MODES.map((mode) => <option key={mode} value={mode}>{mode === "schedule" ? "Schedule" : mode === "event" ? "Event trigger" : mode === "webhook" ? "Webhook (GitHub, Linear, Sentry, PagerDuty…)" : "Manual"}</option>)}
           </select>
         </label>
         <label className="block"><span className={heading}>Timezone</span><input value={form.timezone} onChange={(event) => pick("timezone", event.target.value)} className={input} placeholder="UTC" /></label>
@@ -87,6 +89,17 @@ function RoutineFormView({ form, setForm, onSave, onCancel, saving, title }: {
         )}
         {form.mode === "schedule" && form.trigger.type === "cron" && (
           <label className="block"><span className={heading}>Cron expression</span><input value={form.trigger.cron} onChange={(event) => setForm({ ...form, trigger: { type: "cron", cron: event.target.value } })} className={input} placeholder="0 9 * * 1-5" /></label>
+        )}
+        {form.mode === "webhook" && form.trigger.type === "webhook" && (
+          <>
+            <label className="block"><span className={heading}>Sent by</span>
+              <select value={form.trigger.provider} onChange={(event) => setForm({ ...form, trigger: { type: "webhook", provider: event.target.value, event: form.trigger.type === "webhook" ? form.trigger.event : "" } })} className={input}>
+                {WEBHOOK_PROVIDERS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+              </select>
+            </label>
+            <label className="block"><span className={heading}>Only these events (optional, e.g. issues.opened or issue.*)</span><input value={form.trigger.event} onChange={(event) => setForm({ ...form, trigger: { type: "webhook", provider: form.trigger.type === "webhook" ? form.trigger.provider : "generic", event: event.target.value } })} className={input} placeholder="Every event" /></label>
+            <p className="text-xs text-slate-500 sm:col-span-2">HANNAH makes a secret for this routine and shows it once. Every delivery is checked against that service's own signature; the event's contents reach the teammate as data it reads, never as instructions.</p>
+          </>
         )}
         {form.mode === "event" && (
           <label className="block"><span className={heading}>Event name (e.g. artifact.*, task.completed)</span><input value={form.trigger.type === "event" ? form.trigger.kind : ""} onChange={(event) => setForm({ ...form, trigger: { type: "event", kind: event.target.value } })} className={input} placeholder="artifact.*" /></label>
@@ -102,8 +115,9 @@ function RoutineFormView({ form, setForm, onSave, onCancel, saving, title }: {
 }
 
 /** A routine and its runs. */
-function RoutinePanel({ routine, onClose, refresh }: { routine: Routine; onClose: () => void; refresh: () => Promise<void> }) {
+function RoutinePanel({ routine, onClose, refresh, secret: firstSecret = null }: { routine: Routine; onClose: () => void; refresh: () => Promise<void>; secret?: string | null }) {
   const [runs, setRuns] = useState<RoutineRun[]>([]);
+  const [secret, setSecret] = useState<string | null>(firstSecret);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   useEffect(() => { void workforce.routine(routine.id).then((data) => { setRuns(data.runs); }).catch((e) => setError(e.message)).finally(() => undefined); }, [routine.id]);
@@ -125,6 +139,18 @@ function RoutinePanel({ routine, onClose, refresh }: { routine: Routine; onClose
         <div><span className={heading}>Next run</span><p className="text-sm text-slate-700">{routine.nextRunAt ? formatTime(routine.nextRunAt) : "never"}</p></div>
         <div><span className={heading}>Runs</span><p className="text-sm text-slate-700">{routine.runCount} · {routine.failureCount} failed</p></div>
       </div>
+      {routine.webhook && (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm" data-testid="routine-webhook">
+          <span className={heading}>Webhook address</span>
+          <p className="mt-1 break-all font-mono text-xs text-slate-800">{routine.webhook.url}</p>
+          {secret ? (
+            <p className="mt-2 text-xs text-amber-900">Secret (copy it now; it isn't shown again): <code className="break-all rounded bg-white px-1 py-0.5 font-mono">{secret}</code></p>
+          ) : (
+            <p className="mt-2 text-xs text-slate-600">The secret is stored sealed and isn't shown again. Make a new one if you lost it; the old one stops working at once.</p>
+          )}
+          <button type="button" className={`${button} mt-2`} disabled={busy !== ""} onClick={() => void workforce.routineWebhookSecret(routine.id).then((result) => setSecret(result.secret)).catch((e) => setError(e instanceof Error ? e.message : "That didn't work."))}>New secret</button>
+        </div>
+      )}
       {error && <Notice tone="rose">{error}</Notice>}
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" onClick={() => void act("Running", () => workforce.routineRun(routine.id))} className={primary} disabled={busy !== ""}><Play size={13} /> Run now</button>
@@ -154,6 +180,7 @@ export default function RoutineCenterPage() {
   const [bots, setBots] = useState<Bot[]>([]);
   const [detail, setDetail] = useState<Routine | null>(null);
   const [creating, setCreating] = useState<RoutineForm | null>(null);
+  const [newSecret, setNewSecret] = useState<{ routineId: string; secret: string } | null>(null);
   const [error, setError] = useState("");
   const botName = (id: string | null) => (bots.find((bot) => bot.id === id)?.name || id || "");
 
@@ -172,7 +199,8 @@ export default function RoutineCenterPage() {
   const createRoutine = async () => {
     setError("");
     try {
-      const { routine } = await workforce.routineCreate(creating!);
+      const { routine, secret } = await workforce.routineCreate(creating!);
+      setNewSecret(secret ? { routineId: routine.id, secret } : null);
       setCreating(null); setDetail(routine); await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : "That didn't work."); }
   };
@@ -227,7 +255,7 @@ export default function RoutineCenterPage() {
         </div>
       )}
 
-      {detail && <RoutinePanel routine={detail} onClose={() => setDetail(null)} refresh={refresh} />}
+      {detail && <RoutinePanel key={detail.id} routine={detail} onClose={() => { setDetail(null); setNewSecret(null); }} refresh={refresh} secret={newSecret?.routineId === detail.id ? newSecret.secret : null} />}
     </main>
   );
 }

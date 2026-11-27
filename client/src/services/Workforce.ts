@@ -102,6 +102,7 @@ export interface Routine {
   skillId: string | null; mode: string; trigger: Record<string, unknown>; timezone: string; status: string;
   nextRunAt: number | null; lastRunAt: number | null; runCount: number; failureCount: number;
   notifications: Record<string, unknown>; createdAt: number; updatedAt: number;
+  webhook?: { url: string; provider: string; event: string; secretSet: boolean } | null;
 }
 
 export interface RoutineRun {
@@ -206,6 +207,26 @@ export interface ConversationThread {
   reactions: string[];
 }
 
+export interface HardwareSnapshot {
+  access: { robots: boolean; devices: boolean }; available: boolean; reason?: string; readAt: number;
+  robots: Array<{ id: string; name: string; simulated: boolean; connection: string; mode: string; battery: number | null; lastSeenAt: number | null; places: string[] }>;
+  missions: Array<{ id: string; robotId: string; title: string; capability: string; status: string }>;
+  devices: Array<{ id: string; name: string; location: string; connection: string; readings: Record<string, { value: unknown; unit: string | null; ageS: number; live: boolean }> }>;
+  hubs: Array<{ id: string; name: string; connection: string; lastSeenAt: number | null }>;
+}
+export interface HardwareView { access: { robots: boolean; devices: boolean }; snapshot: HardwareSnapshot | null; actions: Array<{ id: string; title: string; kind: string; inputs: string[] }>; note?: string }
+
+export interface LocalJob {
+  id: string; taskId: string; botId: string | null; computerId: string; kind: "browser" | "coding" | "open" | "notify";
+  input: Record<string, unknown>; status: string; device: string | null; result: unknown; error: string | null; createdAt: number; updatedAt: number; expiresAt: number;
+}
+export interface LocalPermissions { mode: "ask" | "tasks" | "workspaces" | "never"; kinds: string[]; folders: string[] }
+
+export interface NotificationSettings { categories: { approvals: boolean; completions: boolean; failures: boolean }; channelIds: string[]; webhooks: boolean; quietHours: boolean }
+export interface NotificationChannel { id: string; kind: string; name: string; paired: boolean; pairedName: string | null; canNotify: boolean; reachable: boolean; teammateId: string | null }
+export interface Delivery { id: string; eventId: string | null; eventKind: string; target: string; status: string; detail: Record<string, unknown> | null; createdAt: number }
+export interface NotificationItem { id: string; kind: string; category: string; text: string; botId: string | null; taskId: string | null; createdAt: number; detail: Record<string, unknown> | null; deliveries: Delivery[] }
+
 export interface UsageCount { used: number; limit: number }
 export interface WorkforceUsage {
   window: string; since: number; account: { tasks: UsageCount; messages: UsageCount };
@@ -268,8 +289,8 @@ export const workforce = {
   computerDeleteFiles: (id: string, path: string, recursive?: boolean) => remove(`/computers/${id}/files?path=${encodeURIComponent(path)}${recursive ? "&recursive=true" : ""}`),
   computerSessions: (id: string) => get<{ sessions: ComputerSession[] }>(`/computers/${id}/sessions`),
   computerStartSession: (id: string, body?: Record<string, unknown>) => post<{ session: ComputerSession }>(`/computers/${id}/sessions`, body || {}),
-  computerScreenshot: async (sessionId: string): Promise<Blob> => {
-    const response = await apiFetch(apiUrl(`/api/workforce/sessions/${sessionId}/screenshot`));
+  computerScreenshot: async (sessionId: string, live = false): Promise<Blob> => {
+    const response = await apiFetch(apiUrl(`/api/workforce/sessions/${sessionId}/screenshot${live ? "?live=1" : ""}`));
     if (!response.ok) throw new Error("No screenshot has been taken yet.");
     return response.blob();
   },
@@ -296,7 +317,8 @@ export const workforce = {
   // -- routines
   routines: () => get<{ routines: Routine[]; upcoming?: Array<{ id: string; name: string; at: number }>; modes: string[] }>("/routines"),
   routine: (id: string) => get<{ routine: Routine; runs: RoutineRun[] }>(`/routines/${id}`),
-  routineCreate: (input: Record<string, unknown>) => post<{ routine: Routine }>("/routines", input),
+  routineCreate: (input: Record<string, unknown>) => post<{ routine: Routine; secret?: string; note?: string }>("/routines", input),
+  routineWebhookSecret: (id: string) => post<{ webhook: NonNullable<Routine["webhook"]>; secret: string; note: string }>(`/routines/${id}/webhook-secret`, {}),
   routineUpdate: (id: string, input: Record<string, unknown>) => patch<{ routine: Routine }>(`/routines/${id}`, input),
   routineDelete: (id: string) => remove(`/routines/${id}`),
   routineRun: (id: string) => post<{ run: RoutineRun }>(`/routines/${id}/run`, {}),
@@ -319,7 +341,7 @@ export const workforce = {
   memoryCreate: (input: Record<string, unknown>) => post<{ memory: MemoryRecord }>("/memory", input),
   memoryUpdate: (id: string, input: Record<string, unknown>) => put(`/memory/${id}`, input),
   memoryDelete: (id: string) => remove(`/memory/${id}`),
-  memoryRecall: (query: string) => post("/memory/recall", { query }),
+  memoryRecall: (query: string, botId?: string) => post<{ matches: MemoryRecord[]; method: string }>("/memory/recall", { query, ...(botId ? { botId } : {}) }),
 
   // -- tasks
   tasks: (params?: Record<string, string>) => get<{ tasks: Task[]; counts: Record<string, number> }>("/tasks", params),
@@ -345,6 +367,19 @@ export const workforce = {
   conversationReact: (botId: string, messageId: string, emoji: string) => post<{ message: ConversationMessage }>(`/bots/${botId}/messages/${messageId}/reactions`, { emoji }),
   conversationClear: (botId: string) => remove<{ ok: boolean; deleted: number }>(`/bots/${botId}/messages`),
   usage: () => get<WorkforceUsage>("/usage"),
+
+  // -- hardware, desktop jobs and notifications
+  botHardware: (botId: string) => get<HardwareView>(`/bots/${botId}/hardware`),
+  taskHardwareAction: (taskId: string, index: number) => post<{ record: { id: string; status: string; action: string }; text: string }>(`/tasks/${taskId}/hardware-actions`, { index }),
+  taskLocalJob: (taskId: string, body: { index?: number; computerId?: string; kind?: string; input?: Record<string, unknown> }) => post<{ job: LocalJob; note: string }>(`/tasks/${taskId}/local-jobs`, body),
+  taskLocalJobs: (taskId: string) => get<{ jobs: LocalJob[] }>(`/tasks/${taskId}/local-jobs`),
+  localJobCancel: (jobId: string) => post(`/local-jobs/${jobId}/cancel`, {}),
+  localPermissions: (computerId: string, body: LocalPermissions) => put<{ computerId: string; permissions: LocalPermissions; kinds: Record<string, string> }>(`/computers/${computerId}/local-permissions`, body),
+  notificationSettings: () => get<{ settings: NotificationSettings; channels: NotificationChannel[]; categories: string[]; webhookEvents: string[] }>("/notifications/settings"),
+  notificationSettingsSet: (settings: Partial<NotificationSettings>) => put<{ settings: NotificationSettings }>("/notifications/settings", settings),
+  notifications: (since?: number) => get<{ notifications: NotificationItem[]; deliveries: Delivery[]; serverTime: number }>("/notifications", since ? { since: String(since) } : undefined),
+  notificationTest: (channelId: string) => post<{ ok: boolean }>("/notifications/test", { channelId }),
+  channelTeammate: (channelId: string, botId: string | null) => put<{ channel: NotificationChannel; note: string }>(`/channels/${channelId}/teammate`, { botId }),
 
   // -- proactive
   proactive: () => get<{ settings: ProactiveSettings; categories: string[]; offers: ProactiveOffer[] }>("/proactive"),

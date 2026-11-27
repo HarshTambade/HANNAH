@@ -169,6 +169,7 @@ export default function DesktopAccessPanel() {
           <span>
             <span className="block text-sm font-semibold text-ink">Run workflow tasks</span>
             <span className="mt-0.5 block text-xs leading-5 text-slate-600">Server workflows signed in to your account can send this computer two kinds of task: read a web page in a hidden, signed-out window, and a coding task in a shared folder. Each task asks you here before it starts, and a coding task still asks before every file change and command. Only while this app is open.</span>
+            <span className="mt-1 block text-xs leading-5 text-slate-600">AI Workforce teammates use the same switch: a job you send to this computer from a teammate's task (read a page, a coding task, open apps and links, a notification) asks you here too, and its dialog names the teammate. Each local computer in the Computer Center also says which jobs it takes at all.</span>
           </span>
         </label>
       </div>

@@ -3,6 +3,7 @@ import { BellRing, BookOpen, Bot, Brain, Cpu, LayoutDashboard, Laptop, Lock, Mes
 import { ReminderToasts } from "./Reminders";
 import { AutomationToasts } from "./AutomationToasts";
 import { RemoteApprovalToasts } from "./DeviceTasksPanel";
+import WorkforceAlerts from "./WorkforceAlerts";
 import { ScreenWatchIndicator } from "./DesktopControlSections";
 import { desktopFilesAvailable } from "../services/DesktopFiles";
 import { pathForScreen } from "../routes";
@@ -107,6 +108,7 @@ export default function AppShell({ active, onNavigate, onHome, children, fill = 
       <ReminderToasts />
       <AutomationToasts onOpen={() => onNavigate("automations")} onAutomationsScreen={active === "automations"} />
       <RemoteApprovalToasts />
+      <WorkforceAlerts />
       {desktopFilesAvailable() && <ScreenWatchIndicator />}
     </div>
   );

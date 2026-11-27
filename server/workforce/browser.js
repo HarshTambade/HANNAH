@@ -406,11 +406,20 @@ async function act({ userId, computerId, workspace, action, secrets = null, poli
   return result;
 }
 
-async function latestScreenshot({ userId, computerId, workspace }) {
+/**
+ * The computer's screen. `live` captures the open browser page now (for the
+ * live preview) and falls back to the last stored screenshot; otherwise the
+ * stored one comes first.
+ */
+async function latestScreenshot({ userId, computerId, workspace, live = false }) {
+  const entry = sessions.get(sessionKey(userId, computerId));
+  if (live && entry) {
+    const now = await entry.page.screenshot({ type: "png" }).catch(() => null);
+    if (now) return now;
+  }
   const file = path.join(workspace, ".hannah", "screenshots", "latest.png");
   const buffer = await fsp.readFile(file).catch(() => null);
   if (buffer) return buffer;
-  const entry = sessions.get(sessionKey(userId, computerId));
   if (!entry) return null;
   return entry.page.screenshot({ type: "png" }).catch(() => null);
 }

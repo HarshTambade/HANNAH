@@ -405,6 +405,8 @@ onUserEvent((userId, event, data) => (databaseConfigured() ? workflowRuntime.emi
 app.use("/api", createHookRouter({ runtime: workflowRuntime }));
 // Chat apps (Slack, Discord, Google Chat, Teams, WhatsApp) sign the exact bytes of each request.
 app.use("/api", createChannelHookRouter({ runtime: workflowRuntime, publicBaseUrl }));
+// Routine webhooks (GitHub, Linear, Sentry, PagerDuty, signed generic): raw body, verified per provider.
+app.use("/api", require("./workforce/routine-hooks").createRoutineHookEndpoint());
 app.use("/api", createRememberedKeyRouter());
 // Phone Bridge: a paired phone signs its requests over the exact body, so it parses its own.
 // A workflow's phone step waits for its request: picking it up gives the phone time to report, and the report resumes the run.
@@ -567,7 +569,8 @@ app.use("/api", createTaskRunRouter());
 app.use("/api", createWorkflowRouter({ runtime: workflowRuntime, publicBaseUrl }));
 // The AI workforce: teammates, persistent computers, tasks, skills, routines,
 // vault, approvals, artifacts, proactive suggestions and meetings.
-app.use("/api", createWorkforceRouter());
+// The getter runs per request: `operator` is created a few lines below.
+app.use("/api", createWorkforceRouter({ operator: () => operator }));
 // Calendar and email: Google and Microsoft accounts connected with their own sign-in.
 app.use("/api", createConnectionsRouter({ allowedOrigins }));
 app.use("/api", createOrchestrateHandler({ getRequestProvider, preferredProviderId, timeoutMs: cloudRequestTimeout }));

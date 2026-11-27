@@ -7,10 +7,10 @@
  * status is what the server stored, and every button does a server action.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronDown, ChevronRight, ClipboardList, Lightbulb, Pause, Play, Plus, RefreshCw, ShieldAlert, Users, Video, X } from "lucide-react";
+import { Bell, Check, ChevronDown, ChevronRight, ClipboardList, Laptop, Lightbulb, Pause, Play, Plus, RefreshCw, ShieldAlert, Users, Video, X } from "lucide-react";
 import workforce, {
   shortDate, shortTime,
-  type Approval, type Bot, type Meeting, type PolicyRule, type ProactiveOffer, type Task, type TaskDetail, type WorkforceUsage,
+  type Approval, type Bot, type Meeting, type NotificationChannel, type NotificationItem, type NotificationSettings, type PolicyRule, type ProactiveOffer, type Task, type TaskDetail, type WorkforceUsage,
 } from "../services/Workforce";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 
@@ -54,7 +54,8 @@ const when = (at: number | null | undefined) => (at ? `${shortDate(at)} ${shortT
 type TaskResult = {
   summary?: string; findings?: string[]; unparsed?: boolean; model?: string; provider?: string;
   artifacts?: Array<{ id: string; name: string; type?: string; size?: number }>;
-  nextSteps?: Array<{ action: string; title: string; reason?: string; risk?: string; refused?: boolean }>;
+  nextSteps?: Array<{ action: string; title: string; reason?: string; risk?: string; refused?: boolean; hardware?: boolean; local?: boolean; params?: Record<string, unknown>; actionId?: string; actionStatus?: string; localJobId?: string; localStatus?: string }>;
+  localRuns?: Array<{ jobId: string; kind: string; ok: boolean; device: string; error: string | null; artifact: { id: string; name: string } | null; at: number }>;
   verification?: { verdict: string; reviewerName: string; notes?: string; checks?: string[]; at: number };
   steps?: number; outcome?: string;
 };
@@ -121,7 +122,7 @@ function ApprovalCard({ approval, botName, taskTitle, onDecided }: {
 
 // ------------------------------------------------------------------ new work
 
-function NewTaskForm({ bots, onCreated }: { bots: Bot[]; onCreated: (note: string) => Promise<void> }) {
+function NewTaskForm({ bots, onCreated }: { bots: Bot[]; onCreated: (note: string, taskId: string) => Promise<void> }) {
   const [botId, setBotId] = useState("");
   const [title, setTitle] = useState("");
   const [objective, setObjective] = useState("");
@@ -143,7 +144,7 @@ function NewTaskForm({ bots, onCreated }: { bots: Bot[]; onCreated: (note: strin
         note = `"${task.title}" is ${statusLabel[ran.task.status] || ran.task.status}.${ran.note ? ` ${ran.note}` : ""}`;
       }
       setTitle(""); setObjective(""); setDeliverable(""); setAcceptance("");
-      await onCreated(note);
+      await onCreated(note, task.id);
     } catch (e) { setError(message(e)); }
     finally { setBusy(false); }
   };
@@ -236,7 +237,22 @@ function PlanForm({ bots, onCreated }: { bots: Bot[]; onCreated: (note: string) 
 
 // ------------------------------------------------------------------ tasks
 
-function TaskResultView({ result }: { result: TaskResult }) {
+function TaskResultView({ result, taskId, onChanged }: { result: TaskResult; taskId: string; onChanged: (note: string, taskId: string) => Promise<void> }) {
+  const [busy, setBusy] = useState(-1);
+  const [error, setError] = useState("");
+  const send = async (index: number, how: "hardware" | "local") => {
+    setBusy(index); setError("");
+    try {
+      if (how === "hardware") {
+        const sent = await workforce.taskHardwareAction(taskId, index);
+        await onChanged(sent.text, taskId);
+      } else {
+        const sent = await workforce.taskLocalJob(taskId, { index });
+        await onChanged(sent.note, taskId);
+      }
+    } catch (e) { setError(message(e)); }
+    finally { setBusy(-1); }
+  };
   return (
     <div className="mt-3 space-y-2 text-sm">
       {result.summary && <div><span className={heading}>Result</span><p className="whitespace-pre-wrap text-slate-800">{result.summary}</p></div>}
@@ -250,8 +266,22 @@ function TaskResultView({ result }: { result: TaskResult }) {
       {!!result.nextSteps?.length && (
         <div><span className={heading}>Suggested next steps (not done)</span>
           <ul className="space-y-1">{result.nextSteps.map((step, index) => (
-            <li key={index} className="text-slate-800">{step.title} <code className="text-xs text-slate-500">{step.action}</code> {step.risk && <Pill tone={riskTones[step.risk] || riskTones.medium}>{step.refused ? "not available" : step.risk}</Pill>}{step.reason ? <span className="block text-xs text-slate-500">{step.reason}</span> : null}</li>
+            <li key={index} className="text-slate-800">{step.title} <code className="text-xs text-slate-500">{step.action}</code> {step.risk && <Pill tone={riskTones[step.risk] || riskTones.medium}>{step.refused ? "not available" : step.risk}</Pill>}{step.reason ? <span className="block text-xs text-slate-500">{step.reason}</span> : null}
+              {step.hardware && (step.actionId
+                ? <span className="mt-1 block text-xs text-slate-600">Sent to the Action Engine: {step.actionStatus === "waiting-approval" ? <>waiting for your approval in <a className="underline" href="/actions">Actions</a></> : step.actionStatus}.</span>
+                : <button type="button" className={`${button} mt-1`} disabled={busy !== -1} onClick={() => void send(index, "hardware")} data-testid={`send-hardware-${index}`}>Send for approval (robots and devices)</button>)}
+              {step.local && (step.localJobId
+                ? <span className="mt-1 block text-xs text-slate-600">Sent to your computer: {step.localStatus === "pending" ? "waiting for the desktop app to ask you" : step.localStatus}.</span>
+                : <button type="button" className={`${button} mt-1`} disabled={busy !== -1} onClick={() => void send(index, "local")} data-testid={`send-local-${index}`}><Laptop size={13} /> Send to my computer</button>)}
+            </li>
           ))}</ul>
+          <p className="mt-1 text-xs text-slate-500">Nothing here runs by itself. A robot or device step goes to the Action Engine, which asks for approval and runs the safety checks; a step for your computer waits for the desktop app, which asks you before it runs.</p>
+          {error && <Notice tone="rose">{error}</Notice>}
+        </div>
+      )}
+      {!!result.localRuns?.length && (
+        <div><span className={heading}>On your computer</span>
+          <ul className="text-xs text-slate-700">{result.localRuns.map((run) => <li key={run.jobId}>{run.kind} on {run.device}: {run.ok ? "done" : `not done — ${run.error}`}{run.artifact ? <> · <a className="underline" href="/artifacts">{run.artifact.name}</a></> : null} · {when(run.at)}</li>)}</ul>
         </div>
       )}
       {result.verification && (
@@ -300,7 +330,7 @@ function TaskRow({ task, bots, botName, onChanged }: { task: Task; bots: Bot[]; 
         <div className="border-t border-slate-100 px-3 pb-3">
           <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{task.objective}</p>
           {task.error && <Notice tone={task.status === "blocked" || task.status === "failed" ? "rose" : "amber"}>{task.error}</Notice>}
-          {result && <TaskResultView result={result} />}
+          {result && <TaskResultView result={result} taskId={task.id} onChanged={onChanged} />}
           <div className="mt-3 flex flex-wrap gap-2">
             {task.botId && ["queued", "paused", "blocked", "failed"].includes(task.status) && (
               <button type="button" className={primary} disabled={!!busy} onClick={() => void act("run", async () => { const ran = await workforce.taskRun(task.id); return `"${task.title}" is ${statusLabel[ran.task.status] || ran.task.status}.${ran.note ? ` ${ran.note}` : ""}`; })}><Play size={14} /> {busy === "run" ? "Running…" : "Run now"}</button>
@@ -439,6 +469,82 @@ function MeetingsSection({ bots, meetings, onChanged }: { bots: Bot[]; meetings:
   );
 }
 
+// ------------------------------------------------------------------ notifications
+
+const CATEGORY_LABEL: Record<string, string> = { approvals: "Approvals waiting for you", completions: "Finished tasks", failures: "Blocked or failed work" };
+const DELIVERY_LABEL: Record<string, string> = { sent: "sent", failed: "failed", "held-quiet-hours": "held for quiet hours", muted: "muted by the teammate" };
+
+function NotificationsSection({ bots, onChanged }: { bots: Bot[]; onChanged: (note: string) => Promise<void> }) {
+  const [settings, setSettings] = useState<NotificationSettings | null>(null);
+  const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  const [feed, setFeed] = useState<NotificationItem[]>([]);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    const [view, recent] = await Promise.all([workforce.notificationSettings(), workforce.notifications()]);
+    setSettings(view.settings); setChannels(view.channels); setFeed(recent.notifications.slice(0, 15));
+  }, []);
+  useEffect(() => { void load().catch((e) => setError(message(e))); const timer = setInterval(() => void load().catch(() => undefined), 15_000); return () => clearInterval(timer); }, [load]);
+  const save = async (next: Partial<NotificationSettings>) => {
+    setError("");
+    const before = settings;
+    // Show the change at once; the server's answer replaces it, or it's undone with the reason.
+    if (before) setSettings({ ...before, ...next });
+    try { const result = await workforce.notificationSettingsSet(next); setSettings(result.settings); await onChanged("Notification settings saved."); }
+    catch (e) { setSettings(before); setError(message(e)); }
+  };
+  const channelName = (target: string) => { const id = target.replace(/^channel:/, ""); return channels.find((item) => item.id === id)?.name || (target === "webhooks" ? "webhooks" : target); };
+  if (!settings) return <p className="text-sm text-slate-500">{error || "Loading…"}</p>;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <fieldset className="space-y-1"><legend className={heading}>Tell me about</legend>
+          {(Object.keys(CATEGORY_LABEL) as Array<keyof NotificationSettings["categories"]>).map((key) => (
+            <label key={key} className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={settings.categories[key]} onChange={(event) => void save({ categories: { ...settings.categories, [key]: event.target.checked } })} /> {CATEGORY_LABEL[key]}</label>
+          ))}
+        </fieldset>
+        <fieldset className="space-y-1"><legend className={heading}>Where</legend>
+          <p className="text-sm text-slate-700">Always here, in Agent Activity.</p>
+          <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={settings.webhooks} onChange={(event) => void save({ webhooks: event.target.checked })} /> Account webhooks (Settings → Account)</label>
+          <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={settings.quietHours} onChange={(event) => void save({ quietHours: event.target.checked })} /> Hold chat and webhook messages during quiet hours</label>
+        </fieldset>
+      </div>
+      <div>
+        <span className={heading}>Chat apps</span>
+        {channels.length ? (
+          <ul className="mt-1 space-y-2">{channels.map((channel) => (
+            <li key={channel.id} className="rounded-xl border border-slate-200 p-3 text-sm" data-testid={`channel-${channel.id}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-slate-900">{channel.name} <span className="text-xs font-normal text-slate-500">· {channel.kind}{channel.paired ? ` · paired with ${channel.pairedName || "you"}` : " · not paired yet"}</span></span>
+                {channel.canNotify && channel.reachable && <button type="button" className={button} onClick={() => void workforce.notificationTest(channel.id).then(() => onChanged(`Test sent to ${channel.name}.`)).catch((e) => setError(message(e)))}>Send a test</button>}
+              </div>
+              {channel.canNotify ? (
+                <label className="mt-2 flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" disabled={!channel.reachable} checked={settings.channelIds.includes(channel.id)} onChange={(event) => void save({ channelIds: event.target.checked ? [...settings.channelIds, channel.id] : settings.channelIds.filter((item) => item !== channel.id) })} /> Send notifications here{!channel.reachable ? " (write to the bot once from your paired chat first)" : ""}</label>
+              ) : <p className="mt-2 text-xs text-slate-500">{channel.kind} can't take messages HANNAH starts, so it can't carry notifications.</p>}
+              <label className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-700">Your messages here go to
+                <select className={`${input} w-auto`} value={channel.teammateId || ""} onChange={(event) => void workforce.channelTeammate(channel.id, event.target.value || null).then((result) => onChanged(result.note)).then(load).catch((e) => setError(message(e)))} aria-label={`Teammate for ${channel.name}`}>
+                  <option value="">HANNAH</option>
+                  {bots.map((bot) => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
+                </select>
+              </label>
+              {channel.teammateId && <p className="mt-1 text-xs text-slate-500">Reply “queue” to queue a task it proposes, “approve apv_…” or “deny apv_…” to answer an approval it sent, or “status”. Anyone else you approved there still talks to HANNAH, never to this teammate.</p>}
+            </li>
+          ))}</ul>
+        ) : <p className="mt-1 text-sm text-slate-500">No chat apps yet. Connect Slack, Microsoft Teams, Telegram or WhatsApp in <a className="underline" href="/marketplace">Marketplace → Chat apps</a> and pair your own chat.</p>}
+      </div>
+      <div>
+        <span className={heading}>Recent</span>
+        <ul className="mt-1 space-y-1.5">{feed.map((item) => (
+          <li key={item.id} className="text-sm text-slate-700">
+            <span className="whitespace-pre-line">{item.text.split("\n")[0]}</span> <span className="text-xs text-slate-500">· {when(item.createdAt)}</span>
+            {!!item.deliveries.length && <span className="block text-xs text-slate-500">{item.deliveries.map((delivery) => `${channelName(delivery.target)}: ${DELIVERY_LABEL[delivery.status] || delivery.status}${delivery.status === "failed" && delivery.detail?.reason ? ` (${String(delivery.detail.reason)})` : ""}`).join(" · ")}</span>}
+          </li>
+        ))}{!feed.length && <li className="text-sm text-slate-500">Nothing yet.</li>}</ul>
+      </div>
+      {error && <Notice tone="rose">{error}</Notice>}
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------ page
 
 const OFFER_TARGET: Record<string, string> = { tasks: "#tasks", approvals: "#approvals", meetings: "#meetings", routines: "/routines", memory: "/bots" };
@@ -540,7 +646,7 @@ export default function AgentActivityPage() {
             ))}
           </div>
         </div>
-        {mode === "task" ? <NewTaskForm bots={workers} onCreated={done} /> : <PlanForm bots={workers} onCreated={done} />}
+        {mode === "task" ? <NewTaskForm bots={workers} onCreated={taskChanged} /> : <PlanForm bots={workers} onCreated={done} />}
       </section>
 
       <section id="tasks" className="mt-6" aria-label="Tasks">
@@ -581,6 +687,11 @@ export default function AgentActivityPage() {
       <section id="meetings" className={`${card} mt-6`} aria-label="Meetings">
         <div className="mb-2 flex items-center gap-2"><Video size={16} /><h2 className="text-base font-semibold text-ink">Meeting notes</h2></div>
         <MeetingsSection bots={workers} meetings={meetings} onChanged={done} />
+      </section>
+
+      <section id="notifications" className={`${card} mt-6`} aria-label="Notifications">
+        <div className="mb-2 flex items-center gap-2"><Bell size={16} /><h2 className="text-base font-semibold text-ink">Notifications</h2></div>
+        <NotificationsSection bots={workers} onChanged={done} />
       </section>
 
       {usage && (

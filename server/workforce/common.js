@@ -86,14 +86,35 @@ async function policiesFor(db, userId) {
   return { user: parse(userRows[0]?.rules, []), teams: teamPolicies };
 }
 
+const eventListeners = new Set();
+
+/**
+ * Listen to every recorded workforce event (notifications use this). A
+ * listener runs after the event is stored, never blocks the caller, and its
+ * failure never fails the action that recorded the event.
+ */
+function onWorkforceEvent(listener) {
+  eventListeners.add(listener);
+  return () => eventListeners.delete(listener);
+}
+
 async function recordEvent(db, userId, kind, { botId = null, taskId = null, computerId = null, severity = "info", detail = null } = {}) {
+  const event = { id: id("evt"), kind: clean(kind, 80), botId, taskId, computerId, severity: RISKS.includes(severity) ? severity : "info", detail, createdAt: Date.now() };
   try {
     await db.query(
       "INSERT INTO hannah_workforce_events (user_id, id, kind, bot_id, task_id, computer_id, severity, detail, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-      [userId, id("evt"), clean(kind, 80), botId, taskId, computerId, RISKS.includes(severity) ? severity : "info", detail ? JSON.stringify(detail).slice(0, 20_000) : null, Date.now()],
+      [userId, event.id, event.kind, botId, taskId, computerId, event.severity, detail ? JSON.stringify(detail).slice(0, 20_000) : null, event.createdAt],
     );
   } catch (error) {
     console.error(`Workforce event write failed (${error?.code || error?.name || "error"}).`);
+    return;
+  }
+  for (const listener of eventListeners) {
+    try {
+      listener(db, userId, event);
+    } catch (error) {
+      console.error(`Workforce event listener failed (${error?.code || error?.name || "error"}).`);
+    }
   }
 }
 
@@ -163,6 +184,7 @@ module.exports = {
   managedTeam,
   membership,
   nowIso,
+  onWorkforceEvent,
   parse,
   policiesFor,
   publicEvent,

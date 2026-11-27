@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Folder, FolderOpen, FileText, Image as ImageIcon, Laptop, PlayCircle, RefreshCw, RotateCcw, Trash2, Upload, X, Zap } from "lucide-react";
-import workforce, { type Computer, type ComputerSession } from "../services/Workforce";
+import workforce, { type Computer, type ComputerSession, type LocalPermissions } from "../services/Workforce";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -65,7 +65,7 @@ function NewComputer({ onDone, onCancel }: { onDone: () => void; onCancel: () =>
             </label>
             <label className="block"><span className={heading}>Local execution</span>
               <select value={form.localMode} onChange={(event) => setForm({ ...form, localMode: event.target.value })} className={input}>
-                <option value="ask">Ask every time</option><option value="allow">Allow this computer</option><option value="never">Never</option>
+                <option value="ask">Ask every time (default)</option><option value="never">Never</option>
               </select>
             </label>
           </div>
@@ -76,6 +76,44 @@ function NewComputer({ onDone, onCancel }: { onDone: () => void; onCancel: () =>
           <button type="button" className={primary} onClick={() => void submit()}><Zap size={13} /> Add computer</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+const LOCAL_KINDS: Array<[string, string]> = [["browser", "Read a web page"], ["coding", "Coding in a shared folder"], ["open", "Open apps and links"], ["notify", "Desktop notifications"]];
+
+/** What a local computer takes from teammates. The desktop app still asks before every job. */
+function LocalComputerPanel({ computer }: { computer: Computer }) {
+  const stored = computer.permissions as { localMode?: string; localKinds?: string[]; localFolders?: string[] };
+  const [mode, setMode] = useState<LocalPermissions["mode"]>((["ask", "tasks", "workspaces", "never"].includes(String(stored.localMode)) ? stored.localMode : stored.localMode === "allow" ? "tasks" : "ask") as LocalPermissions["mode"]);
+  const [kinds, setKinds] = useState<string[]>(stored.localKinds ?? []);
+  const [folders, setFolders] = useState((stored.localFolders ?? []).join("\n"));
+  const [note, setNote] = useState("");
+  const save = async () => {
+    setNote("");
+    try {
+      await workforce.localPermissions(computer.id, { mode, kinds, folders: folders.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) });
+      setNote("Saved.");
+    } catch (error) { setNote(error instanceof Error ? error.message : "That didn't work."); }
+  };
+  return (
+    <div className="mt-4 space-y-3" data-testid="local-computer-panel">
+      <p className="text-sm text-slate-600">This is your own computer. Teammates can't reach it directly: from a teammate's task you send a job here, the HANNAH desktop app (signed in, with “Run workflow tasks” on in Settings → Desktop access) shows its own system dialog naming the teammate, and runs it only if you say yes. These settings decide which jobs may be sent at all; they're separate from any cloud computer's permissions.</p>
+      <fieldset className="space-y-1.5">
+        <legend className={heading}>Teammate jobs</legend>
+        {([["ask", "Ask every time — any kind of job (default)"], ["tasks", "Only some kinds of job"], ["workspaces", "Only coding, in some shared folders"], ["never", "Never"]] as const).map(([value, label]) => (
+          <label key={value} className="flex items-center gap-2 text-sm text-slate-700"><input type="radio" name={`local-mode-${computer.id}`} checked={mode === value} onChange={() => setMode(value)} /> {label}</label>
+        ))}
+      </fieldset>
+      {mode === "tasks" && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1">{LOCAL_KINDS.map(([value, label]) => (
+          <label key={value} className="flex items-center gap-1.5 text-sm text-slate-700"><input type="checkbox" checked={kinds.includes(value)} onChange={() => setKinds((list) => (list.includes(value) ? list.filter((item) => item !== value) : [...list, value]))} /> {label}</label>
+        ))}</div>
+      )}
+      {mode === "workspaces" && (
+        <label className="block"><span className={heading}>Shared folder names (one per line, as shown in Settings → Desktop access)</span><textarea className={`${input} min-h-20`} value={folders} onChange={(event) => setFolders(event.target.value)} /></label>
+      )}
+      <div className="flex items-center gap-2"><button type="button" className={primary} onClick={() => void save()} data-testid="local-permissions-save">Save</button>{note && <span className="text-sm text-slate-600" role="status">{note}</span>}</div>
     </div>
   );
 }
@@ -111,23 +149,38 @@ export default function ComputerCenterPage() {
 
   const openDetail = useCallback(async (computer: Computer) => {
     setDetail(computer); setError(""); setCurrentPath(""); setContentFile(null); setSessions([]); setScreenshotUrl(null);
+    // A local computer's files, terminal and browser live in the desktop app; this server can't list them.
+    if (computer.kind === "local") return;
     const [filesData, sessionsData] = await Promise.all([workforce.computerFiles(computer.id), workforce.computerSessions(computer.id)]);
     setFiles(filesData.files.slice(0, 100)); setSessions(sessionsData.sessions);
   }, []);
 
   useEffect(() => {
-    if (!detail) return;
+    if (!detail || detail.kind === "local") return;
     void workforce.computerFiles(detail.id, currentPath).then((data) => setFiles(data.files.slice(0, 100))).catch(() => undefined);
     void workforce.computerSessions(detail.id).then((data) => setSessions(data.sessions)).catch(() => undefined);
     const timer = setInterval(() => void workforce.computerSessions(detail.id).then((data) => setSessions(data.sessions)).catch(() => undefined), 8_000);
     return () => clearInterval(timer);
   }, [detail, currentPath]);
 
-  const pollScreenshot = useCallback(async (sessionId: string) => {
-    const blob = await workforce.computerScreenshot(sessionId);
-    setScreenshotUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-    setScreenshotUrl(URL.createObjectURL(blob));
+  const pollScreenshot = useCallback(async (sessionId: string, live = false) => {
+    const blob = await workforce.computerScreenshot(sessionId, live);
+    setScreenshotUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
+    setScreenshotAt(Date.now());
   }, []);
+
+  // Live view: a fresh capture of the session's browser every two seconds while it's on.
+  const [liveSession, setLiveSession] = useState<string | null>(null);
+  const [screenshotAt, setScreenshotAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!liveSession) return;
+    let stopped = false;
+    const tick = () => void pollScreenshot(liveSession, true).catch(() => { if (!stopped) setLiveSession(null); });
+    tick();
+    const timer = window.setInterval(tick, 2_000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [liveSession, pollScreenshot]);
+  useEffect(() => { if (!detail) setLiveSession(null); }, [detail]);
 
   const viewFile = async (file: FileEntry) => {
     if (file.type === "folder") { setCurrentPath(file.path); setContentFile(null); setContent(""); return; }
@@ -200,6 +253,7 @@ export default function ComputerCenterPage() {
             </div>
             <button type="button" onClick={() => setDetail(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Close computer"><X size={16} /></button>
           </div>
+          {detail.kind === "local" ? <LocalComputerPanel computer={detail} /> : <>
 
           {/* Files */}
           <div className="mt-4" data-testid="computer-files">
@@ -278,6 +332,7 @@ export default function ComputerCenterPage() {
                     </div>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => void pollScreenshot(session.id)} className={button}><ImageIcon size={12} /> Screenshot</button>
+                      {session.status !== "ended" && <button type="button" onClick={() => setLiveSession((current) => (current === session.id ? null : session.id))} className={liveSession === session.id ? primary : button} aria-pressed={liveSession === session.id} data-testid={`live-view-${session.id}`}>{liveSession === session.id ? "Stop live view" : "Live view"}</button>}
                       {session.status === "waiting-human" && <button type="button" onClick={() => void resumeSession(session.id)} className={primary}><RotateCcw size={12} /> Resume</button>}
                       {session.status !== "ended" && session.status !== "waiting-human" && <button type="button" onClick={() => void handoff(session.id)} className={button}><AlertTriangle size={12} /> Handoff to a human</button>}
                     </div>
@@ -290,6 +345,7 @@ export default function ComputerCenterPage() {
               {sessions.length === 0 && <li className="text-sm text-slate-500">No sessions recorded.</li>}
             </ul>
             {screenshotUrl && <img src={screenshotUrl} alt="Browser session screenshot" className="mt-3 max-h-96 w-full rounded-xl border border-slate-200 shadow-sm" data-testid="browser-screenshot-preview" />}
+            {screenshotUrl && screenshotAt && <p className="mt-1 text-[11px] text-slate-500">{liveSession ? "Live: " : ""}captured {new Date(screenshotAt).toLocaleTimeString()}</p>}
             {detail.kind === "cloud" && (
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <input value={navUrl} onChange={(event) => setNavUrl(event.target.value)} placeholder="Navigate to a URL" className={input} data-testid="browser-nav-url" />
@@ -301,6 +357,7 @@ export default function ComputerCenterPage() {
               </div>
             )}
           </div>
+          </>}
         </section>
       )}
 

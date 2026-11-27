@@ -6,10 +6,12 @@
  * server's records; they refresh on a timer and after every action.
  */
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
-import { Activity, Bot as BotIcon, Copy, Eye, MessageSquare, Pause as PauseIcon, Pencil, Play as PlayIcon, Plus, RefreshCw, Settings2, Upload, Users, X } from "lucide-react";
+import { Activity, Bot as BotIcon, Brain, Copy, Cpu, Eye, MessageSquare, Pause as PauseIcon, Pencil, Play as PlayIcon, Plus, RefreshCw, Settings2, Upload, Users, X } from "lucide-react";
 import workforce, { type Bot, type BotTemplate, type BotVersion, type Computer, type MemoryRecord, type Task, type WorkforceEvent } from "../services/Workforce";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import TeammateChat from "./TeammateChat";
+import TeammateHardware from "./TeammateHardware";
+import TeammateMemory from "./TeammateMemory";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -155,7 +157,8 @@ function BotPanel({ bot, onClose, onOpenChange, refresh }: {
   const [draft, setDraft] = useState<FormDraft>(() => draftFromBot(bot));
   const [saving, setSaving] = useState("");
   const [status, setStatus] = useState("");
-  const [tab, setTab] = useState<"chat" | "configure">(bot.status === "active" ? "chat" : "configure");
+  const [tab, setTab] = useState<"chat" | "memory" | "hardware" | "configure">(bot.status === "active" ? "chat" : "configure");
+  const seesHardware = bot.tools.some((tool) => ["robots", "robot", "devices", "iot"].includes(tool.toLowerCase()));
 
   const loadDetail = useCallback(async () => {
     const [v, t, m, e] = await Promise.all([
@@ -222,12 +225,14 @@ function BotPanel({ bot, onClose, onOpenChange, refresh }: {
           <div><span className={heading}>Status</span><p className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusTones[bot.status] || ""}`}>{statusLabel[bot.status] || bot.status} · version {bot.version}</p></div>
         </div>
         <div className="mt-3 flex rounded-lg border border-slate-200 p-0.5 text-sm" role="tablist" aria-label={`${bot.name} views`}>
-          {([["chat", "Chat", MessageSquare], ["configure", "Configure and history", Settings2]] as const).map(([id, label, Icon]) => (
+          {([["chat", "Chat", MessageSquare], ["memory", "Memory", Brain], ...(seesHardware ? [["hardware", "Hardware", Cpu]] as const : []), ["configure", "Configure", Settings2]] as const).map(([id, label, Icon]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} data-testid={`bot-tab-${id}`}
               className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 ${tab === id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}><Icon size={14} /> {label}</button>
           ))}
         </div>
         {tab === "chat" && <TeammateChat bot={bot} />}
+        {tab === "memory" && <TeammateMemory bot={bot} />}
+        {tab === "hardware" && <TeammateHardware bot={bot} />}
         {tab === "configure" && <>
         <ConfigForm draft={draft} setDraft={setDraft} onSave={save} onCancel={onClose} submitting={saving !== ""} />
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
