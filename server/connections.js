@@ -349,10 +349,42 @@ function callbackPage(title, message, status = 200) {
   };
 }
 
+const PENDING_TTL_MS = 10 * 60_000;
+const maskEmail = (value) => {
+  const [name, domain] = String(value || "").split("@");
+  return domain ? `${name.slice(0, 1)}•••@${domain}` : "your HANNAH account";
+};
+
+/**
+ * The page a browser without a HANNAH session sees before anything is saved:
+ * the mailbox and the HANNAH account it would be joined to, and a choice.
+ * Someone who was sent another person's sign-in link sees an account that
+ * isn't theirs and can cancel.
+ */
+function confirmPage(provider, mailbox, account, token) {
+  const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+  const action = `/api/account/connections/${provider.id}/confirm`;
+  return {
+    status: 200,
+    html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm the connection · HANNAH</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f8fafc;color:#0f172a;font:16px/1.5 system-ui,sans-serif}main{max-width:30rem;margin:1.5rem;padding:2rem;border-radius:1.25rem;background:#fff;box-shadow:0 20px 50px -30px rgba(15,23,42,.45)}h1{margin:0 0 .75rem;font-size:1.35rem}p{margin:0 0 1rem;color:#475569}strong{color:#0f172a}.row{display:flex;gap:.75rem;flex-wrap:wrap}button{font:inherit;font-weight:600;padding:.7rem 1.2rem;border-radius:.75rem;border:1px solid #cbd5e1;background:#fff;cursor:pointer}button.go{background:#0f172a;color:#fff;border-color:#0f172a}</style></head>
+<body><main><h1>Connect ${escape(provider.label)} to HANNAH?</h1>
+<p>This joins <strong>${escape(mailbox || `your ${provider.label} account`)}</strong> to the HANNAH account <strong>${escape(account)}</strong>, which can then read and send mail and manage the calendar for you.</p>
+<p>If that isn't your HANNAH account, or you didn't start this from HANNAH, choose Cancel. Nothing has been saved yet.</p>
+<form method="post" action="${escape(action)}" class="row"><input type="hidden" name="token" value="${escape(token)}">
+<button class="go" type="submit" name="decision" value="connect">Connect</button><button type="submit" name="decision" value="cancel">Cancel</button></form></main></body></html>`,
+  };
+}
+
 /**
  * `allowedOrigins` are the app origins a finished sign-in may return to (the
  * server's CLIENT_ORIGIN list); anything else gets a plain "you can close this" page.
  */
+const PAGE_HEADERS = {
+  "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+  "X-Frame-Options": "DENY", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+};
+
 function createConnectionsRouter({ fetchImpl = (...args) => fetch(...args), now = () => Date.now(), allowedOrigins = [] } = {}) {
   const router = express.Router();
   const withUser = (handler) => async (req, res) => {
@@ -441,7 +473,7 @@ function createConnectionsRouter({ fetchImpl = (...args) => fetch(...args), now 
 
   // Public: the provider sends the browser here. The state identifies the user.
   router.get("/account/connections/:provider/callback", async (req, res) => {
-    const send = ({ status, html }) => res.status(status).set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" }).send(html);
+    const send = ({ status, html }) => res.status(status).set(PAGE_HEADERS).send(html);
     const provider = PROVIDERS[String(req.params.provider || "")];
     if (!provider) return send(callbackPage("Unknown provider", "This sign-in link isn't for Google or Microsoft.", 404));
     const db = await getDatabase().catch(() => null);
@@ -481,17 +513,65 @@ function createConnectionsRouter({ fetchImpl = (...args) => fetch(...args), now 
       if (!result.body.refresh_token) return finish(false, `${provider.label} didn't grant offline access, so HANNAH couldn't stay connected. Try again and accept every permission.`);
       const tokens = { accessToken: result.body.access_token, refreshToken: result.body.refresh_token, expiresAt: now() + Math.max(60, Number(result.body.expires_in) || 3600) * 1000 };
       const email = await accountEmail(fetchImpl, provider, tokens.accessToken).catch(() => null);
-      const sealed = sealTokens(saved.user_id, provider.id, tokens);
-      const at = now();
-      await db.query("DELETE FROM hannah_connections WHERE user_id = $1 AND provider = $2", [saved.user_id, provider.id]);
-      await db.query("INSERT INTO hannah_connections (user_id, provider, account_email, scopes, key_id, wrapped_key, ciphertext, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)", [saved.user_id, provider.id, email, String(result.body.scope || provider.scopes.join(" ")).slice(0, 2000), sealed.keyId, sealed.wrappedKey, sealed.ciphertext, at]);
-      await db.query("INSERT INTO hannah_audit (id, user_id, event, detail, created_at) VALUES ($1, $2, $3, $4, $5)", [base64url(randomBytes(12)), saved.user_id, "connection.added", JSON.stringify({ provider: provider.id }), at]).catch(() => {});
+      const scope = String(result.body.scope || provider.scopes.join(" ")).slice(0, 2000);
+      if (!finisher?.id) {
+        // No HANNAH session in this browser (the apps open the system browser):
+        // nothing ties it to the account that started the sign-in, so the person
+        // confirms which account this joins before anything is saved.
+        const token = base64url(randomBytes(32));
+        const pending = encryptSecret(JSON.stringify({ tokens, email, scope }), { userId: saved.user_id, providerId: `oauth-pending:${provider.id}` });
+        await db.query("INSERT INTO hannah_oauth_states (id, user_id, provider, key_id, wrapped_key, ciphertext, return_to, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+          [sha256(token), saved.user_id, `pending:${provider.id}`, pending.keyId, pending.wrappedKey, pending.ciphertext, saved.return_to || null, now() + PENDING_TTL_MS]);
+        const owner = (await db.query("SELECT email FROM hannah_users WHERE id = $1", [saved.user_id])).rows[0];
+        return send(confirmPage(provider, email, maskEmail(owner?.email), token));
+      }
+      await saveConnection(db, saved.user_id, provider, { tokens, email, scope });
       return finish(true, "");
     } catch (error) {
       console.error(`OAuth callback failed (${error?.code || error?.name || "error"}).`);
       return finish(false, "Something went wrong while connecting. Try again.");
     }
   });
+
+  // Public, like the callback: the single-use token from the confirmation page identifies the sign-in.
+  router.post("/account/connections/:provider/confirm", express.urlencoded({ extended: false, limit: "4kb" }), async (req, res) => {
+    const send = ({ status, html }) => res.status(status).set(PAGE_HEADERS).send(html);
+    const provider = PROVIDERS[String(req.params.provider || "")];
+    if (!provider) return send(callbackPage("Unknown provider", "This sign-in link isn't for Google or Microsoft.", 404));
+    const db = await getDatabase().catch(() => null);
+    if (!db) return send(callbackPage("Not available", "This server has no account database.", 503));
+    const token = String(req.body?.token || "");
+    const { rows } = token ? await db.query("SELECT * FROM hannah_oauth_states WHERE id = $1 AND provider = $2", [sha256(token), `pending:${provider.id}`]) : { rows: [] };
+    const pending = rows[0];
+    if (pending) await db.query("DELETE FROM hannah_oauth_states WHERE id = $1", [pending.id]);
+    if (!pending || Number(pending.expires_at) < now()) return send(callbackPage("This confirmation expired", "Nothing was connected. Start again from Settings → Calendar and email in HANNAH.", 400));
+    const back = (ok, message) => {
+      if (pending.return_to) {
+        const url = new URL(pending.return_to);
+        url.searchParams.set(ok ? "connected" : "connection-error", provider.id);
+        if (!ok) url.searchParams.set("message", message.slice(0, 200));
+        return res.redirect(303, url.toString());
+      }
+      return send(callbackPage(ok ? `${provider.label} connected` : "Not connected", ok ? "You can close this tab and go back to HANNAH." : message, ok ? 200 : 400));
+    };
+    if (req.body?.decision !== "connect") return back(false, "You cancelled, so nothing was connected.");
+    try {
+      const { tokens, email, scope } = JSON.parse(decryptSecret(pending, { userId: pending.user_id, providerId: `oauth-pending:${provider.id}` }).secret);
+      await saveConnection(db, pending.user_id, provider, { tokens, email, scope });
+      return back(true, "");
+    } catch (error) {
+      console.error(`OAuth confirmation failed (${error?.code || error?.name || "error"}).`);
+      return back(false, "Something went wrong while connecting. Try again.");
+    }
+  });
+
+  async function saveConnection(db, userId, provider, { tokens, email, scope }) {
+    const sealed = sealTokens(userId, provider.id, tokens);
+    const at = now();
+    await db.query("DELETE FROM hannah_connections WHERE user_id = $1 AND provider = $2", [userId, provider.id]);
+    await db.query("INSERT INTO hannah_connections (user_id, provider, account_email, scopes, key_id, wrapped_key, ciphertext, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)", [userId, provider.id, email, scope, sealed.keyId, sealed.wrappedKey, sealed.ciphertext, at]);
+    await db.query("INSERT INTO hannah_audit (id, user_id, event, detail, created_at) VALUES ($1, $2, $3, $4, $5)", [base64url(randomBytes(12)), userId, "connection.added", JSON.stringify({ provider: provider.id }), at]).catch(() => {});
+  }
 
   router.delete("/account/connections/:provider", withUser(async (req, res, db, account) => {
     const provider = providerFrom(req.params.provider);

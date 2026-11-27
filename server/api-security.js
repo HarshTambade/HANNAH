@@ -33,7 +33,7 @@ const BYOK_PATHS = new Set(["/feedback", "/report-content", "/events", "/agent",
 const GUEST_PATHS = new Set(["/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc"]);
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
 // The calendar/email sign-in callbacks are opened by Google or Microsoft; the single-use state identifies the user.
-const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/workflows/catalog", "/workflows/tick", "/workforce/tick", "/session/key", "/connectors/catalog"]);
+const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/account/connections/google/confirm", "/account/connections/microsoft/confirm", "/workflows/catalog", "/workflows/tick", "/workforce/tick", "/session/key", "/connectors/catalog"]);
 // Workflow webhooks are called by other services. Each one authenticates
 // itself (a secret token or an HMAC signature) in server/workflows/router.js;
 // the cron tick checks CRON_SECRET. Nothing else under these paths is public.

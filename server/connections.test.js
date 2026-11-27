@@ -63,13 +63,14 @@ after(async () => {
 const post = (path, body) => fetch(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const get = (path) => fetch(`${base}${path}`);
 
-async function connect(provider, { email = "me@example.com", refresh = "refresh-1" } = {}) {
+async function connect(provider, { email = "me@example.com", refresh = "refresh-1", session = true } = {}) {
   const started = await (await post(`/account/connections/${provider}/start`, { returnTo: "https://app.example/settings" })).json();
   const authorize = new URL(started.url);
   const state = authorize.searchParams.get("state");
   replies.set(provider === "google" ? "POST oauth2.googleapis.com/token" : "POST login.microsoftonline.com/common/oauth2/v2.0/token", { body: { access_token: `${provider}-access-1`, refresh_token: refresh, expires_in: 3600, scope: "granted" } });
   replies.set(provider === "google" ? "GET openidconnect.googleapis.com/v1/userinfo" : "GET graph.microsoft.com/v1.0/me", { body: provider === "google" ? { email } : { mail: email } });
-  const callback = await fetch(`${base}/account/connections/${provider}/callback?state=${state}&code=auth-code`, { redirect: "manual" });
+  // A sign-in from the web app finishes in the same browser, signed in to HANNAH.
+  const callback = await fetch(`${base}/account/connections/${provider}/callback?state=${state}&code=auth-code`, { redirect: "manual", headers: session ? { "x-test-finisher": user } : {} });
   return { authorize, state, callback };
 }
 
@@ -107,7 +108,7 @@ test("a sign-in only returns to the app's own origins", async () => {
   const started = await (await post("/account/connections/microsoft/start", { returnTo: "https://evil.example/steal" })).json();
   const state = new URL(started.url).searchParams.get("state");
   replies.set("POST login.microsoftonline.com/common/oauth2/v2.0/token", { body: { access_token: "x", refresh_token: "y", expires_in: 3600 } });
-  const callback = await fetch(`${base}/account/connections/microsoft/callback?state=${state}&code=c`, { redirect: "manual" });
+  const callback = await fetch(`${base}/account/connections/microsoft/callback?state=${state}&code=c`, { redirect: "manual", headers: { "x-test-finisher": user } });
   assert.equal(callback.status, 200);
   assert.match(await callback.text(), /Microsoft connected/);
 });
@@ -234,4 +235,36 @@ test("a sign-in started by one account and finished in another account's browser
   const after = (await db.query("SELECT user_id, account_email FROM hannah_connections WHERE provider = 'google'")).rows;
   assert.deepEqual(after, before, "no connection was stored or replaced");
   assert.equal(after.some((row) => row.account_email === "victim@example.com"), false);
+});
+
+test("a sign-in finished in a browser without a HANNAH session asks which account it joins first", async () => {
+  user = "user-2";
+  const db = await getDatabase();
+  const stored = async () => (await db.query("SELECT account_email FROM hannah_connections WHERE user_id = 'user-2' AND provider = 'microsoft'")).rows;
+  await db.query("DELETE FROM hannah_connections WHERE user_id = 'user-2'");
+  const confirm = (token, decision) => fetch(`${base}/account/connections/microsoft/confirm`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token, decision }).toString(), redirect: "manual" });
+  const tokenOf = (html) => /name="token" value="([^"]+)"/.exec(html)?.[1];
+
+  // Cancel: nothing is saved, and the token can't be used again.
+  const first = await connect("microsoft", { email: "app-user@example.com", session: false });
+  assert.equal(first.callback.status, 200);
+  assert.equal(first.callback.headers.get("x-frame-options"), "DENY");
+  const page = await first.callback.text();
+  assert.match(page, /Connect Microsoft to HANNAH\?/);
+  assert.match(page, /app-user@example\.com/);
+  assert.match(page, /u•••@example\.com/, "the HANNAH account is named, masked");
+  assert.deepEqual(await stored(), [], "nothing is saved before the person confirms");
+  const cancelToken = tokenOf(page);
+  assert.equal((await confirm(cancelToken, "cancel")).status, 303);
+  assert.deepEqual(await stored(), []);
+  assert.equal((await confirm(cancelToken, "connect")).status, 400, "a used token is gone");
+
+  // Connect: saved for the account that started the sign-in.
+  const second = await connect("microsoft", { email: "app-user@example.com", session: false });
+  const connected = await confirm(tokenOf(await second.callback.text()), "connect");
+  assert.equal(connected.status, 303);
+  assert.match(connected.headers.get("location"), /connected=microsoft/);
+  assert.deepEqual(await stored(), [{ account_email: "app-user@example.com" }]);
+  assert.equal((await confirm("made-up-token", "connect")).status, 400);
+  user = "user-1";
 });

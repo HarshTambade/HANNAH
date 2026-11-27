@@ -44,6 +44,8 @@ before(async () => {
   app.use(express.json());
   app.use((req, res, next) => {
     if (!req.path.endsWith("/callback")) res.locals.hannahAccount = { id: user, via: "session" };
+    // A sign-in from the web app finishes in the same browser, signed in to HANNAH.
+    else if (req.get("x-test-finisher")) res.locals.hannahAccount = { id: req.get("x-test-finisher"), via: "session" };
     next();
   });
   app.use("/api", createConnectionsRouter({ fetchImpl: fakeFetch, allowedOrigins: ["https://app.example"] }));
@@ -65,7 +67,7 @@ async function connect(provider, { features = [], scope } = {}) {
   const authorize = new URL(started.body.url);
   replies.set(provider === "google" ? "POST oauth2.googleapis.com/token" : "POST login.microsoftonline.com", { body: { access_token: `${provider}-access`, refresh_token: "refresh", expires_in: 3600, scope: scope ?? authorize.searchParams.get("scope") } });
   replies.set(provider === "google" ? "GET openidconnect.googleapis.com/v1/userinfo" : "GET graph.microsoft.com/v1.0/me", { body: provider === "google" ? { email: "me@example.com" } : { mail: "me@example.com" } });
-  const callback = await fetch(`${base}/account/connections/${provider}/callback?state=${authorize.searchParams.get("state")}&code=c`, { redirect: "manual" });
+  const callback = await fetch(`${base}/account/connections/${provider}/callback?state=${authorize.searchParams.get("state")}&code=c`, { redirect: "manual", headers: { "x-test-finisher": user } });
   assert.equal(callback.status, 303);
   return authorize;
 }
