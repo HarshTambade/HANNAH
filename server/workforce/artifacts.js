@@ -135,6 +135,11 @@ function createArtifactsRouter() {
     res.setHeader("Content-Length", String(buffer.length));
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
+    // Artifacts are written by models and may come from untrusted pages. Served
+    // from the app's own origin, an HTML or SVG file's script would run with the
+    // viewer's session. A sandbox gives it an opaque origin and no scripts, so a
+    // preview still shows the document but can't act as the person.
+    res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'; media-src data:");
     const disposition = req.query.download === "true" || !/^(text\/|image\/|application\/(json|pdf|xml))/.test(type) ? "attachment" : "inline";
     res.setHeader("Content-Disposition", `${disposition}; filename="${encodeURIComponent(row.name)}"`);
     res.end(buffer);

@@ -121,7 +121,9 @@ function createTeamsRouter() {
     if (targetMember.role === "owner") throw fail(403, "The owner can't be removed. Delete the team instead.", "forbidden");
     if (targetMember.role === "manager" && mine.role !== "owner") throw fail(403, "Only the owner can remove a manager.", "forbidden");
     await db.query("DELETE FROM hannah_team_members WHERE team_id = $1 AND user_id = $2", [teamId, target]);
-    await recordEvent(db, account.id, "team.member_removed", { detail: { teamId } });
+    // Their teammates leave with them: no longer published, no longer in this team.
+    const withdrawn = await db.query("UPDATE hannah_bots SET published_at = NULL, visibility = 'private', team_id = NULL, updated_at = $1 WHERE team_id = $2 AND user_id = $3", [Date.now(), teamId, target]);
+    await recordEvent(db, account.id, "team.member_removed", { detail: { teamId, botsWithdrawn: withdrawn.rowCount || 0 } });
     res.json({ ok: true, removed: true });
   }));
 
@@ -153,9 +155,10 @@ function createTeamsRouter() {
     const teamId = requireId(req.params.id, "team");
     await managedTeam(db, teamId, account.id);
     const botId = requireId(req.params.botId, "teammate");
-    const bot = (await db.query("SELECT * FROM hannah_bots WHERE user_id = $1 AND id = $2", [account.id, botId])).rows[0];
-    if (!bot || bot.team_id !== teamId) throw fail(404, "That teammate isn't published to this team.", "not-found");
-    await db.query("UPDATE hannah_bots SET published_at = NULL, updated_at = $1 WHERE user_id = $2 AND id = $3", [Date.now(), account.id, botId]);
+    // Any owner or manager may take a teammate down from their team, whoever published it.
+    const bot = (await db.query("SELECT * FROM hannah_bots WHERE team_id = $1 AND id = $2", [teamId, botId])).rows[0];
+    if (!bot) throw fail(404, "That teammate isn't published to this team.", "not-found");
+    await db.query("UPDATE hannah_bots SET published_at = NULL, updated_at = $1 WHERE team_id = $2 AND id = $3", [Date.now(), teamId, botId]);
     await recordEvent(db, account.id, "bot.unpublished", { botId, detail: { teamId } });
     res.json({ ok: true, published: false });
   }));

@@ -45,3 +45,9 @@ test("browsers can call it (CORS preflight)", async () => {
   assert.equal(response.status, 204);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
 });
+
+test("a malformed device id is refused, and the relay keeps running", async () => {
+  const bad = await fetch(`${base}/sync/%E0%A4%A`);
+  assert.equal(bad.status, 400);
+  assert.equal((await fetch(`${base}/sync/phone`)).status, 200);
+});

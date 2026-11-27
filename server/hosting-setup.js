@@ -1,5 +1,11 @@
 "use strict";
 
+/** The rate-limit key for this request's client: proxy-aware, IPv6 by /64. */
+function clientKey(req) {
+  const { addressKey, clientAddress } = require("./api-security");
+  return addressKey(clientAddress(req));
+}
+
 /**
  * "Set up HANNAH": connect this deployment to Vercel and Supabase from the app.
  *
@@ -72,7 +78,7 @@ function createHostingSetupRouter({ fetchImpl = (...args) => fetch(...args), tes
   const withTeam = (path, teamId) => (teamId ? `${path}${path.includes("?") ? "&" : "?"}${team(teamId)}` : path);
 
   const handle = (fn) => async (req, res) => {
-    const key = req.ip || "unknown";
+    const key = clientKey(req);
     const now = Date.now();
     const entry = hits.get(key);
     if (!entry || now - entry.at > 60_000) hits.set(key, { at: now, n: 1 });

@@ -186,6 +186,12 @@ function accountAuth({ originAllowed } = {}) {
 }
 
 /** Simple fixed-window limiter for sign-in attempts. */
+/** The rate-limit key for this request's client: proxy-aware, IPv6 by /64. */
+function clientKey(req) {
+  const { addressKey, clientAddress } = require("./api-security");
+  return addressKey(clientAddress(req));
+}
+
 function attemptLimiter(limit, windowMs) {
   const buckets = new Map();
   return (key) => {
@@ -236,7 +242,10 @@ async function databaseStatus() {
  */
 function createAccountRouter({ isOperator, verifyProviderKey }) {
   const router = express.Router();
+  // Per email and address: ten tries, so a stranger's guesses can't lock the owner out.
   const signInLimit = attemptLimiter(10, 15 * 60 * 1000);
+  // Per email from everywhere: a ceiling on guesses spread across many addresses.
+  const emailCap = attemptLimiter(100, 15 * 60 * 1000);
   const ipLimit = attemptLimiter(60, 15 * 60 * 1000);
 
   const withDb = (handler) => async (req, res) => {
@@ -309,7 +318,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
     const displayName = typeof req.body?.displayName === "string" ? req.body.displayName.trim().replace(/[\r\n]+/g, " ").slice(0, 60) : "";
     if (!EMAIL_PATTERN.test(email) || email.length > 254) return res.status(400).json({ error: "Enter a valid email address." });
     if (password.length < 10 || password.length > 200) return res.status(400).json({ error: "Use a password of at least 10 characters." });
-    if (ipLimit(`ip:${req.ip}`)) return res.status(429).json({ error: "Too many attempts. Try again later." });
+    if (ipLimit(`ip:${clientKey(req)}`)) return res.status(429).json({ error: "Too many attempts. Try again later." });
     const existing = await db.query("SELECT id FROM hannah_users WHERE email = $1", [email]);
     if (existing.rows.length) return res.status(409).json({ error: "An account with that email already exists. Sign in instead." });
     const now = Date.now();
@@ -323,7 +332,8 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
     const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     if (!email || !password || password.length > 200) return res.status(400).json({ error: "Enter your email and password." });
-    const wait = signInLimit(`email:${email}`) || ipLimit(`ip:${req.ip}`);
+    const client = clientKey(req);
+    const wait = ipLimit(`ip:${client}`) || signInLimit(`email:${email}|${client}`) || emailCap(`email:${email}`);
     if (wait) {
       res.setHeader("Retry-After", String(wait));
       return res.status(429).json({ error: "Too many sign-in attempts. Wait a few minutes and try again." });

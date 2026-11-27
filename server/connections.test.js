@@ -44,6 +44,8 @@ before(async () => {
   app.use(express.json());
   app.use((req, res, next) => {
     if (!req.path.endsWith("/callback")) res.locals.hannahAccount = { id: user, via: "session" };
+    // A browser that finishes a sign-in while signed in to HANNAH.
+    else if (req.get("x-test-finisher")) res.locals.hannahAccount = { id: req.get("x-test-finisher"), via: "session" };
     next();
   });
   app.use("/api", createConnectionsRouter({ fetchImpl: fakeFetch, now: () => clock, allowedOrigins: ["https://app.example"] }));
@@ -216,4 +218,20 @@ test("an approval nobody answers expires and can't be approved later", async () 
   const body = await late.json();
   assert.equal(body.task.status, "expired");
   assert.match(body.error, /expired/);
+});
+
+test("a sign-in started by one account and finished in another account's browser connects nothing", async () => {
+  user = "user-1";
+  const started = await (await post("/account/connections/google/start", {})).json();
+  const state = new URL(started.url).searchParams.get("state");
+  replies.set("POST oauth2.googleapis.com/token", { body: { access_token: "victim-access", refresh_token: "victim-refresh", expires_in: 3600, scope: "granted" } });
+  replies.set("GET openidconnect.googleapis.com/v1/userinfo", { body: { email: "victim@example.com" } });
+  const db = await getDatabase();
+  const before = (await db.query("SELECT user_id, account_email FROM hannah_connections WHERE provider = 'google'")).rows;
+  const callback = await fetch(`${base}/account/connections/google/callback?state=${state}&code=auth-code`, { headers: { "x-test-finisher": "user-2" }, redirect: "manual" });
+  assert.equal(callback.status, 403);
+  assert.match(await callback.text(), /different HANNAH account/);
+  const after = (await db.query("SELECT user_id, account_email FROM hannah_connections WHERE provider = 'google'")).rows;
+  assert.deepEqual(after, before, "no connection was stored or replaced");
+  assert.equal(after.some((row) => row.account_email === "victim@example.com"), false);
 });

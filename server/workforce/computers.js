@@ -95,11 +95,16 @@ async function safePath(workspace, input, { allowMissing = false } = {}) {
   return { absolute: target, relative: rel || "." };
 }
 
+// Counting stops here; a workspace this large is treated as full, never as small.
+const USAGE_MAX_ENTRIES = 200_000;
+
 async function usage(workspace) {
   let bytes = 0;
   let files = 0;
+  let truncated = false;
   async function walk(dir, depth) {
-    if (depth > 8 || files > 20_000) return;
+    if (truncated) return;
+    if (files >= USAGE_MAX_ENTRIES || depth > 64) { truncated = true; return; }
     const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const entry of entries) {
       if (entry.name === ".hannah" && depth === 0) continue;
@@ -112,7 +117,7 @@ async function usage(workspace) {
     }
   }
   await walk(workspace, 0);
-  return { bytes, files };
+  return { bytes: truncated ? Number.POSITIVE_INFINITY : bytes, files, truncated };
 }
 
 function publicComputer(row, extra = {}) {
@@ -246,8 +251,14 @@ async function validateCommand(workspace, command, args) {
         await safePath(workspace, file);
       }
     } else if (spec.find) {
-      const target = list.find((arg) => !arg.startsWith("-")) || ".";
-      await safePath(workspace, target);
+      // Every allowed find option takes one value; any other word is a start
+      // path, and each one must be inside the workspace (not just the first).
+      const starts = [];
+      for (let index = 0; index < list.length; index += 1) {
+        if (list[index].startsWith("-")) { index += 1; continue; }
+        starts.push(list[index]);
+      }
+      for (const start of starts.length ? starts : ["."]) await safePath(workspace, start);
       for (const arg of list) if (arg.startsWith("-") && spec.flags && !spec.flags.test(arg) && !FORBIDDEN_FIND.test(arg)) throw fail(400, "That option isn't allowed for find.", "invalid");
     } else if (spec.paths) {
       for (const arg of list) {

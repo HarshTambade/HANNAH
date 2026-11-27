@@ -461,6 +461,13 @@ function createConnectionsRouter({ fetchImpl = (...args) => fetch(...args), now 
       }
       return send(callbackPage(ok ? `${provider.label} connected` : "Not connected", ok ? "You can close this tab and go back to HANNAH." : message, ok ? 200 : 400));
     };
+    // The state says who started this sign-in. If the browser finishing it is
+    // signed in to HANNAH as someone else, a link was passed between people:
+    // connecting would put this person's mailbox into another account.
+    const finisher = res.locals.hannahAccount;
+    if (finisher?.id && finisher.id !== saved.user_id) {
+      return send(callbackPage("Not connected", "This sign-in link was started from a different HANNAH account. Nothing was connected. Start again from Settings → Calendar and email while signed in to your own account.", 403));
+    }
     if (req.query.error) return finish(false, req.query.error === "access_denied" ? "You cancelled the sign-in, so nothing was connected." : `${provider.label} didn't finish the sign-in.`);
     const creds = credentials(provider);
     const code = String(req.query.code || "");

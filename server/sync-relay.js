@@ -72,7 +72,13 @@ function createRelayServer() {
     }
 
     if (req.method === "GET" && path.startsWith("/sync/")) {
-      const deviceId = decodeURIComponent(path.slice("/sync/".length));
+      let deviceId;
+      try {
+        deviceId = decodeURIComponent(path.slice("/sync/".length));
+      } catch {
+        // A malformed escape (for example /sync/%E0%A4%A) used to throw here and stop the relay.
+        return send(res, 400, { error: "deviceId is invalid." });
+      }
       if (!DEVICE_ID.test(deviceId)) return send(res, 400, { error: "deviceId is invalid." });
       const envelopes = [];
       for (const [id, list] of store) if (id !== deviceId) envelopes.push(...list);

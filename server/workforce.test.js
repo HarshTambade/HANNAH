@@ -603,6 +603,65 @@ test("a skill step's approval covers only that step as the person saw it", async
   assert.match(typeof file.body === "string" ? file.body : JSON.stringify(file.body), /changed after approval/);
 });
 
+test("the terminal's find stays inside the workspace, and HTML artifacts can't run scripts", async () => {
+  const run = (args) => state.alice.post(`/workforce/computers/${state.computer.id}/terminal`, { command: "find", args });
+  const inside = await run([".", "-maxdepth", "1", "-name", "notes.txt"]);
+  assert.equal(inside.status, 200, JSON.stringify(inside.body));
+  assert.match(inside.body.result.stdout, /notes\.txt/);
+  // A second start path used to go unchecked: find . /etc listed the server's files.
+  for (const args of [[".", "/etc", "-maxdepth", "1"], [".", "../..", "-name", "*"], ["-name", "x", "/etc"]]) {
+    const escaped = await run(args);
+    assert.equal(escaped.status, 400, `${args.join(" ")} -> ${JSON.stringify(escaped.body)}`);
+  }
+
+  const page = await state.alice.post("/workforce/artifacts", { name: "report.html", type: "text/html", content: "<h1>Report</h1><script>fetch('/api/workforce/approvals')</script>" });
+  assert.equal(page.status, 201, JSON.stringify(page.body));
+  const served = await state.alice.get(`/workforce/artifacts/${page.body.artifact.id}/content`);
+  assert.equal(served.status, 200);
+  assert.match(served.headers.get("content-security-policy") || "", /\bsandbox\b/);
+  assert.match(served.headers.get("content-security-policy") || "", /default-src 'none'/);
+});
+
+test("deeply nested files count against a computer's storage limit", async () => {
+  const quota = await state.alice.post("/workforce/computers", { name: "Small", kind: "cloud", limits: { storageMb: 16 } });
+  assert.equal(quota.status, 201, JSON.stringify(quota.body));
+  assert.equal(Number(quota.body.computer.limits.storageMb), 16);
+  const id = quota.body.computer.id;
+  // Below depth 8 the old count saw nothing, so every write fitted.
+  const deep = "a/b/c/d/e/f/g/h/i/j/k";
+  const chunk = "x".repeat(7 * 1024 * 1024);
+  const results = [];
+  for (let index = 0; index < 4; index += 1) results.push((await state.alice.put(`/workforce/computers/${id}/files`, { path: `${deep}/part-${index}.txt`, content: chunk })).status);
+  assert.deepEqual(results, [200, 200, 413, 413]);
+});
+
+test("a teammate leaves its team when the person who published it is removed", async () => {
+  const added = await state.alice.post(`/workforce/teams/${state.teamId}/members`, { email: "carol@example.com", role: "manager" });
+  assert.equal(added.status, 201, JSON.stringify(added.body));
+  const made = await state.carol.post("/workforce/bots", { templateId: "research-analyst", name: "Carol's scout", teamId: state.teamId, visibility: "team" });
+  assert.equal(made.status, 201, JSON.stringify(made.body));
+  const botId = made.body.bot.id;
+  await state.carol.post(`/workforce/bots/${botId}/status`, { status: "active" });
+  const publish = () => state.carol.post(`/workforce/teams/${state.teamId}/bots/${botId}/publish`, {});
+  assert.equal((await publish()).status, 200);
+  const bobSees = async () => (await state.bob.get("/workforce/bots")).body.bots.some((bot) => bot.id === botId);
+  assert.equal(await bobSees(), true);
+
+  // The team's owner can take down a teammate someone else published.
+  const unpublished = await state.alice.post(`/workforce/teams/${state.teamId}/bots/${botId}/unpublish`, {});
+  assert.equal(unpublished.status, 200, JSON.stringify(unpublished.body));
+  assert.equal(await bobSees(), false);
+
+  assert.equal((await publish()).status, 200);
+  assert.equal(await bobSees(), true);
+  const removed = await state.alice.delete(`/workforce/teams/${state.teamId}/members/${state.carolId}`);
+  assert.equal(removed.status, 200, JSON.stringify(removed.body));
+  assert.equal(await bobSees(), false, "a removed manager's teammate is no longer shared");
+  const { canUseBot } = require("./workforce/common");
+  assert.equal(await canUseBot(db, state.bobId, botId), null);
+  assert.ok(await canUseBot(db, state.carolId, botId), "Carol keeps her own teammate");
+});
+
 test("the workforce API is closed to signed-out callers", async () => {
   const response = await realFetch(`${baseUrl}/api/workforce/overview`);
   assert.equal(response.status, 401);

@@ -19,35 +19,14 @@ const dns = require("node:dns");
 const http = require("node:http");
 const https = require("node:https");
 const net = require("node:net");
+const { isBlockedAddress } = require("../net-guard");
 
 const MAX_REDIRECTS = 3;
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 
-function ipv4Parts(address) {
-  return address.split(".").map(Number);
-}
-
-function blockedIPv4(address) {
-  const [a, b] = ipv4Parts(address);
-  return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254)
-    || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 0) || (a === 192 && b === 168)
-    || (a === 198 && (b === 18 || b === 19)) || a >= 224;
-}
-
-function blockedIPv6(address) {
-  const lower = address.toLowerCase();
-  if (lower === "::" || lower === "::1") return true;
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
-  if (mapped) return blockedIPv4(mapped[1]);
-  return /^f[cd]/.test(lower) || /^fe[89ab]/.test(lower) || /^ff/.test(lower) || lower.startsWith("64:ff9b:") || lower.startsWith("2001:db8");
-}
-
 function addressBlocked(address) {
   if (process.env.WORKFLOW_ALLOW_PRIVATE_NETWORK === "true") return false;
-  const family = net.isIP(address);
-  if (family === 4) return blockedIPv4(address);
-  if (family === 6) return blockedIPv6(address);
-  return true;
+  return isBlockedAddress(address);
 }
 
 class RequestBlockedError extends Error {

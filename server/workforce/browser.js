@@ -18,6 +18,8 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const dns = require("node:dns/promises");
 const crypto = require("node:crypto");
+const net = require("node:net");
+const { isBlockedAddress } = require("../net-guard");
 const { clean, fail } = require("./common");
 
 let playwright = null;
@@ -26,6 +28,8 @@ const sessions = new Map();
 const privateCache = new Map();
 const IDLE_MS = 10 * 60_000;
 const MAX_TEXT = 30_000;
+const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
 
 function loadPlaywright() {
   if (playwright || playwrightError) return playwright;
@@ -41,36 +45,31 @@ function browserAvailable() {
   return Boolean(loadPlaywright()?.chromium);
 }
 
+/** Loopback, private, link-local, metadata and reserved addresses, in every spelling. */
 function isPrivateAddress(address) {
-  const value = String(address || "").toLowerCase();
-  if (!value) return true;
-  if (value === "::1" || value === "0:0:0:0:0:0:0:1") return true;
-  if (value.startsWith("fc") || value.startsWith("fd") || value.startsWith("fe80")) return true;
-  if (value.startsWith("::ffff:")) return isPrivateAddress(value.slice(7));
-  const parts = value.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return false;
-  if (parts[0] === 10 || parts[0] === 127 || parts[0] === 0) return true;
-  if (parts[0] === 169 && parts[1] === 254) return true;
-  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-  if (parts[0] === 192 && parts[1] === 168) return true;
-  return false;
+  return isBlockedAddress(address);
 }
 
+const RESOLVE_TTL_MS = 60_000;
+
 async function refusedHost(hostname) {
-  const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
+  const host = String(hostname || "").toLowerCase().replace(/\.$/, "").replace(/^\[|\]$/g, "");
   if (!host) return true;
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return true;
-  if (privateCache.has(host)) return privateCache.get(host);
-  let refused = false;
+  // An address written in the URL is judged as written: no lookup to fail open.
+  if (net.isIP(host)) return isPrivateAddress(host);
+  const cached = privateCache.get(host);
+  if (cached && Date.now() - cached.at < RESOLVE_TTL_MS) return cached.refused;
+  let refused;
   try {
     const answers = await dns.lookup(host, { all: true, verbatim: true });
     refused = !answers.length || answers.some((answer) => isPrivateAddress(answer.address));
   } catch {
-    // An unresolvable name fails at navigation anyway.
-    refused = false;
+    // Fail closed: a name we can't check isn't opened.
+    refused = true;
   }
   if (privateCache.size > 500) privateCache.clear();
-  privateCache.set(host, refused);
+  privateCache.set(host, { refused, at: Date.now() });
   return refused;
 }
 
@@ -100,10 +99,30 @@ async function guardRoute(route) {
     return route.abort("blockedbyclient");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return route.abort("blockedbyclient");
-  if (url.hostname === "localhost" || url.hostname.endsWith(".local")) {
-    if (!allowPrivateNetwork()) return route.abort("blockedbyclient");
-  } else if (!allowPrivateNetwork() && (await refusedHost(url.hostname))) {
-    return route.abort("blockedbyclient");
+  if (allowPrivateNetwork()) return route.continue();
+  if (await refusedHost(url.hostname)) return route.abort("blockedbyclient");
+  // Playwright routes only the first request of a redirect chain, and a
+  // redirect handed back with route.fulfill is followed without routing either
+  // (checked with Chromium). So page and frame loads follow their redirects
+  // here, checking every hop before it is fetched.
+  if (request.isNavigationRequest()) {
+    try {
+      let target = request.url();
+      let method = request.method();
+      for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+        const response = await route.fetch({ url: target, method, maxRedirects: 0 });
+        const status = response.status();
+        const location = response.headers().location;
+        if (status < 300 || status >= 400 || !location) return route.fulfill({ response });
+        const next = new URL(location, target);
+        if ((next.protocol !== "http:" && next.protocol !== "https:") || (await refusedHost(next.hostname))) return route.abort("blockedbyclient");
+        if (status === 301 || status === 302 || status === 303) method = method === "HEAD" ? "HEAD" : "GET";
+        target = next.toString();
+      }
+      return route.abort("failed");
+    } catch {
+      return route.abort("failed");
+    }
   }
   return route.continue();
 }
@@ -200,13 +219,6 @@ async function saveScreenshot(page, workspace) {
   return { file, sha256: crypto.createHash("sha256").update(buffer).digest("hex"), size: buffer.length, capturedAt: Date.now() };
 }
 
-function safeWorkspacePath(workspace, relative) {
-  const resolved = path.resolve(workspace, relative);
-  const root = path.resolve(workspace);
-  if (resolved !== root && !resolved.startsWith(root + path.sep)) throw fail(400, "That path is outside this computer.", "outside-workspace");
-  return resolved;
-}
-
 /**
  * Run one browser action. `secrets.resolve(ref)` returns a secret value for a
  * vault reference, or throws. It is called here, never returned to the caller.
@@ -298,7 +310,10 @@ async function act({ userId, computerId, workspace, action, secrets = null }) {
     }
     case "upload": {
       const selector = selectorFor(action);
-      const file = safeWorkspacePath(workspace, clean(action.path, 1000));
+      // The same check as the file tools: no ".hannah" (the saved browser
+      // sessions live there) and no link that leads outside the workspace.
+      const { safePath } = require("./computers");
+      const file = (await safePath(workspace, clean(action.path, 1000))).absolute;
       const info = await fsp.stat(file).catch(() => null);
       if (!info || !info.isFile()) throw fail(404, "That file isn't in this computer's workspace.", "not-found");
       if (info.size > 25 * 1024 * 1024) throw fail(413, "Uploads are limited to 25 MB.", "too-large");
@@ -315,6 +330,11 @@ async function act({ userId, computerId, workspace, action, secrets = null }) {
       await fsp.mkdir(dir, { recursive: true });
       const target = path.join(dir, `${Date.now()}-${name.replace(/[^A-Za-z0-9._-]/g, "_")}`);
       await download.saveAs(target);
+      const saved = await fsp.stat(target);
+      if (saved.size > MAX_DOWNLOAD_BYTES) {
+        await fsp.rm(target, { force: true });
+        throw fail(413, `Downloads are limited to ${MAX_DOWNLOAD_BYTES / 1024 / 1024} MB.`, "too-large");
+      }
       const buffer = await fsp.readFile(target);
       result.download = { name, path: path.relative(workspace, target), size: buffer.length, sha256: crypto.createHash("sha256").update(buffer).digest("hex") };
       break;

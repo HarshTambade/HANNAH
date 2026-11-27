@@ -113,7 +113,7 @@ async function collectSignals(db, userId, categories) {
     }
   }
   if (categories.includes("routines")) {
-    const { rows } = await db.query("SELECT id, name, failure_count, status FROM hannah_routines WHERE user_id = $1 AND (failure_count > 0 OR status = 'active') ORDER BY failure_count DESC LIMIT 20", [userId]);
+    const { rows } = await db.query("SELECT id, name, failure_count, status, next_run_at FROM hannah_routines WHERE user_id = $1 AND (failure_count > 0 OR status = 'active') ORDER BY failure_count DESC LIMIT 20", [userId]);
     const failing = rows.filter((row) => Number(row.failure_count) > 0);
     if (failing.length) {
       signals.push({

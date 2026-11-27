@@ -49,7 +49,10 @@ async function canUseBot(db, userId, botId) {
   if (row.user_id === userId) return row;
   if (row.visibility !== "team" || !row.team_id || !row.published_at) return null;
   const member = await membership(db, row.team_id, userId);
-  return member ? row : null;
+  if (!member) return null;
+  // A teammate published by someone who has since left the team is no longer shared.
+  const owner = await membership(db, row.team_id, row.user_id);
+  return owner ? row : null;
 }
 
 async function membership(db, teamId, userId) {

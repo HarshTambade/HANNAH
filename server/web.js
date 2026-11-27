@@ -1,5 +1,11 @@
 "use strict";
 
+/** The rate-limit key for this request's client: proxy-aware, IPv6 by /64. */
+function clientKey(req) {
+  const { addressKey, clientAddress } = require("./api-security");
+  return addressKey(clientAddress(req));
+}
+
 /**
  * The web for HANNAH on every platform (the desktop app also has its own
  * visible browser, see client/src/services/BrowserTools.ts):
@@ -142,7 +148,7 @@ function createWebRouter({ getRequestProvider, fetchImpl = (...args) => fetch(..
   const json = express.json({ limit: "64kb" });
   const hits = new Map();
   const limited = (req, max) => {
-    const key = `${req.path}:${req.ip}`;
+    const key = `${req.path}:${clientKey(req)}`;
     const now = Date.now();
     const entry = hits.get(key);
     if (!entry || now - entry.at > 60_000) { hits.set(key, { at: now, n: 1 }); return false; }

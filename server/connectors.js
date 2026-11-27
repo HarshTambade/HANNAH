@@ -1,5 +1,11 @@
 "use strict";
 
+/** The rate-limit key for this request's client: proxy-aware, IPv6 by /64. */
+function clientKey(req) {
+  const { addressKey, clientAddress } = require("./api-security");
+  return addressKey(clientAddress(req));
+}
+
 /**
  * Connectors: outside services HANNAH can use as tools, each one a remote MCP
  * server run by the service itself, connected by the person with their own
@@ -173,7 +179,7 @@ function createConnectorsRouter({ publicBaseUrl, allowedOrigins = [], timeoutMs 
   const hits = new Map();
 
   const limited = (req, max = 120) => {
-    const key = req.ip || "unknown";
+    const key = clientKey(req);
     const now = Date.now();
     const entry = hits.get(key);
     if (!entry || now - entry.at > 60_000) { hits.set(key, { at: now, n: 1 }); return false; }

@@ -22,6 +22,7 @@
 const express = require("express");
 const dns = require("node:dns").promises;
 const net = require("node:net");
+const { isBlockedAddress } = require("./net-guard");
 const { createHmac, randomBytes, randomUUID } = require("node:crypto");
 const { getDatabase } = require("./db");
 
@@ -36,14 +37,7 @@ const CLIENT_EVENTS = new Set(["reminder.fired", "team.completed"]);
 const MAX_HOOKS = 5;
 
 function privateAddress(address) {
-  if (net.isIPv4(address)) {
-    const [a, b] = address.split(".").map(Number);
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
-  }
-  const lower = address.toLowerCase();
-  if (lower === "::" || lower === "::1") return true;
-  if (lower.startsWith("::ffff:")) return privateAddress(lower.slice(7));
-  return /^(fc|fd|fe8|fe9|fea|feb|ff)/.test(lower);
+  return isBlockedAddress(address);
 }
 
 /** Throws unless the URL is https on a public address. Exported for tests. */
