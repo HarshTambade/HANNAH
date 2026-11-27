@@ -5,11 +5,15 @@
  * and replies are the server's records (`/api/workforce/bots/:id/messages`).
  * A teammate can't act from here: when it proposes work, nothing is queued
  * until the person accepts the proposal. Dictation uses HANNAH's voice service.
+ * Talk is a spoken conversation (services/TeammateCall.ts): the same messages,
+ * said aloud, with the microphone off while the teammate speaks.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CornerUpLeft, Mic, MicOff, Paperclip, Send, Trash2, X } from "lucide-react";
+import { Check, CornerUpLeft, Mic, MicOff, Paperclip, Phone, PhoneOff, Send, Trash2, X } from "lucide-react";
 import workforce, { shortTime, type Artifact, type Bot, type ConversationMessage, type ConversationThread } from "../services/Workforce";
 import { VoiceService } from "../services/VoiceService";
+import { SpeechService } from "../services/SpeechService";
+import { startTeammateCall, type CallState } from "../services/TeammateCall";
 import type { SpeechLanguage } from "../types";
 
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -64,6 +68,10 @@ export default function TeammateChat({ bot }: { bot: Bot }) {
   const [listening, setListening] = useState(false);
   const [language, setLanguage] = useState<SpeechLanguage>("en-US");
   const stopVoice = useRef<null | (() => void | Promise<void>)>(null);
+  const call = useRef<ReturnType<typeof startTeammateCall> | null>(null);
+  const [callState, setCallState] = useState<CallState | null>(null);
+  const [callHeard, setCallHeard] = useState("");
+  const [callSaid, setCallSaid] = useState("");
   const bottom = useRef<HTMLDivElement | null>(null);
   const count = thread?.messages.length ?? 0;
 
@@ -74,7 +82,30 @@ export default function TeammateChat({ bot }: { bot: Bot }) {
     return () => clearInterval(timer);
   }, [load]);
   useEffect(() => { bottom.current?.scrollIntoView({ block: "end" }); }, [count]);
-  useEffect(() => () => { void stopVoice.current?.(); }, []);
+  useEffect(() => () => { void stopVoice.current?.(); void call.current?.end(); }, []);
+
+  const startCall = () => {
+    if (call.current || listening) return;
+    setError(""); setNote(""); setCallHeard(""); setCallSaid("");
+    call.current = startTeammateCall(bot.name, {
+      listen: (onHeard, onError) => VoiceService.startSession(language, onHeard, onError),
+      speak: (said) => SpeechService.speak(said, language),
+      stopSpeaking: () => SpeechService.cancel(),
+      send: async (content) => {
+        const result = await workforce.conversationSend(bot.id, { content });
+        setThread((current) => (current ? { ...current, messages: [...current.messages, ...result.messages] } : current));
+        void load().catch(() => undefined);
+        return result;
+      },
+      onState: (state, detail) => {
+        setCallState(state);
+        if (detail?.heard !== undefined) setCallHeard(detail.heard);
+        if (detail?.said !== undefined) setCallSaid(detail.said);
+        if (state === "listening" && detail?.heard === undefined) setCallHeard("");
+        if (state === "ended") { call.current = null; if (detail?.error) setError(detail.error); else setNote("Call ended. The conversation is above."); }
+      },
+    });
+  };
 
   const done = async (text: string) => { setNote(text); setError(""); await load().catch((e) => setError(message(e))); };
 
@@ -165,6 +196,22 @@ export default function TeammateChat({ bot }: { bot: Bot }) {
         <div ref={bottom} />
       </ol>
 
+      {callState && callState !== "ended" && (
+        <div className="border-t border-slate-100 bg-slate-50 px-3 py-2 text-sm" role="region" aria-label={`Talking with ${bot.name}`} data-testid="teammate-call">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-medium text-slate-800" aria-live="polite">{callState === "starting" ? "Starting the microphone…" : callState === "listening" ? "Listening… pause when you're done." : callState === "thinking" ? `${bot.name} is thinking…` : `${bot.name} is speaking.`}</p>
+            <div className="flex gap-1.5">
+              {callState === "listening" && callHeard && <button type="button" className={button} onClick={() => void call.current?.sendNow()}>Send now</button>}
+              {callState === "speaking" && <button type="button" className={button} onClick={() => void call.current?.interrupt()}>Skip</button>}
+              <button type="button" className={primary} onClick={() => void call.current?.end()} data-testid="chat-end-call"><PhoneOff size={14} /> End</button>
+            </div>
+          </div>
+          {callHeard && <p className="mt-1 text-xs text-slate-600">You: {callHeard}</p>}
+          {callState === "speaking" && callSaid && <p className="mt-1 text-xs text-slate-600">{bot.name}: {callSaid}</p>}
+          <p className="mt-1 text-[11px] text-slate-500">The microphone is off while {bot.name} speaks. Say “end call” to hang up. Proposed tasks wait in the chat for you to queue.</p>
+        </div>
+      )}
+
       <form className="border-t border-slate-100 p-3" onSubmit={(event) => { event.preventDefault(); void send(); }}>
         {replyTo && <p className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2 py-1 text-xs text-slate-600"><span className="truncate">Replying to: {replyTo.content.slice(0, 120)}</span><button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply"><X size={12} /></button></p>}
         {!!thread?.openTasks.length && (
@@ -192,7 +239,8 @@ export default function TeammateChat({ bot }: { bot: Bot }) {
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             {!taskId && <button type="button" className={button} onClick={() => void openLibrary()} aria-pressed={Boolean(library)}><Paperclip size={14} /> {attachments.length ? `${attachments.length} attached` : "Attach"}</button>}
-            <button type="button" className={button} onClick={() => void toggleVoice()} disabled={paused} aria-pressed={listening}>{listening ? <MicOff size={14} /> : <Mic size={14} />} {listening ? "Stop" : "Dictate"}</button>
+            <button type="button" className={button} onClick={startCall} disabled={paused || listening || Boolean(callState && callState !== "ended")} data-testid="chat-talk"><Phone size={14} /> Talk</button>
+            <button type="button" className={button} onClick={() => void toggleVoice()} disabled={paused || Boolean(callState && callState !== "ended")} aria-pressed={listening}>{listening ? <MicOff size={14} /> : <Mic size={14} />} {listening ? "Stop" : "Dictate"}</button>
             <select className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs" value={language} onChange={(event) => setLanguage(event.target.value as SpeechLanguage)} aria-label="Dictation language" disabled={listening}>
               <option value="en-US">English</option><option value="hi-IN">हिन्दी</option><option value="mr-IN">मराठी</option>
             </select>
