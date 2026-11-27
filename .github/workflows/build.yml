@@ -96,6 +96,9 @@ jobs:
         working-directory: client
       - run: npm test
         working-directory: client
+      # The workforce live view tests drive a real headless Chromium.
+      - name: Install Chromium for the server's browser tests
+        run: npx playwright install --with-deps chromium
       - name: Server tests (API, accounts on SQLite and Postgres, routing)
         run: npm test
         working-directory: server

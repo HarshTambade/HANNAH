@@ -41,8 +41,15 @@ function loadPlaywright() {
   return playwright;
 }
 
+/** Playwright is installed and so is its Chromium (the package alone can't open a page). */
 function browserAvailable() {
-  return Boolean(loadPlaywright()?.chromium);
+  const chromium = loadPlaywright()?.chromium;
+  if (!chromium) return false;
+  try {
+    return require("node:fs").existsSync(chromium.executablePath());
+  } catch {
+    return false;
+  }
 }
 
 /** Loopback, private, link-local, metadata and reserved addresses, in every spelling. */

@@ -89,7 +89,7 @@ async function readStream(path, stop, ms = 15_000) {
   return events;
 }
 
-test("live view: a real screencast, taking control, the person's input, and the teammate waiting meanwhile", { skip: !browser.browserAvailable() && "Playwright isn't installed" }, async () => {
+test("live view: a real screencast, taking control, the person's input, and the teammate waiting meanwhile", { skip: !browser.browserAvailable() && "Playwright's Chromium isn't installed" }, async () => {
   const computer = (await api("POST", "/workforce/computers", { name: "Cloud box", kind: "cloud" })).body.computer;
   const ses = (await api("POST", `/workforce/computers/${computer.id}/sessions`, {})).body.session;
 
