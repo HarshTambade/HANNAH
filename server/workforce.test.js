@@ -545,6 +545,64 @@ test("meetings summarize a consented transcript and turn actions into real tasks
   assert.equal(rejected.body.reason, "consent-required");
 });
 
+test("a skill step's approval covers only that step as the person saw it", async () => {
+  await db.query("UPDATE hannah_bots SET computer_access = $1, autonomy = 'approval' WHERE user_id = $2 AND id = $3",
+    [JSON.stringify({ enabled: true, computerIds: [state.computer.id] }), state.aliceId, state.aliceBot.id]);
+  const definition = (content) => ({
+    name: "Write a note", description: "Writes a note after a person confirms.", whenToUse: "When asked to write the note.",
+    inputs: [], permissions: ["file.write"], safety: [],
+    steps: [
+      { action: "human.approval", title: "Confirm the person is at the computer" },
+      { action: "file.write", title: "Write the note", params: { path: "approval-note.txt", content } },
+    ],
+  });
+  const created = await state.alice.post("/workforce/skills", definition("first"));
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const skillId = created.body.skill.id;
+  const approveSkill = async () => {
+    assert.equal((await state.alice.post(`/workforce/skills/${skillId}/test`, { inputs: {} })).status, 200);
+    const result = await state.alice.post(`/workforce/skills/${skillId}/status`, { status: "approved" });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+  };
+  await approveSkill();
+  const made = await state.alice.post("/workforce/tasks", { botId: state.aliceBot.id, title: "Write the note", objective: "Run the note skill.", inputs: { skillId } });
+  assert.equal(made.status, 201, JSON.stringify(made.body));
+  const task = made.body.task;
+  const pending = async (action) => (await state.alice.get("/workforce/approvals?status=pending")).body.approvals
+    .filter((item) => item.taskId === task.id && item.action === action);
+  const run = async () => {
+    const response = await state.alice.post(`/workforce/tasks/${task.id}/run`, {});
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    return response.body.task;
+  };
+  const decide = (approval) => state.alice.post(`/workforce/approvals/${approval.id}/decide`, { decision: "allow" });
+
+  // The human step waits; once approved, the run moves on instead of asking again.
+  assert.equal((await run()).status, "waiting-approval");
+  const takeover = await pending("browser.takeover");
+  assert.equal(takeover.length, 1);
+  await decide(takeover[0]);
+  assert.equal((await run()).status, "waiting-approval");
+  assert.equal((await pending("browser.takeover")).length, 0, "an approved human step is not asked for again");
+  const write = await pending("file.write");
+  assert.equal(write.length, 1);
+  await decide(write[0]);
+
+  // The skill changes after that decision: the old approval must not cover the changed step.
+  const edited = await state.alice.put(`/workforce/skills/${skillId}`, definition("changed after approval"));
+  assert.equal(edited.status, 200, JSON.stringify(edited.body));
+  await approveSkill();
+  assert.equal((await run()).status, "waiting-approval");
+  const rewrite = await pending("file.write");
+  assert.equal(rewrite.length, 1, "the changed step needs its own decision");
+  await decide(rewrite[0]);
+  const done = await run();
+  assert.equal(done.status, "completed", JSON.stringify(done));
+  const file = await state.alice.get(`/workforce/computers/${state.computer.id}/files/content?path=approval-note.txt`);
+  assert.equal(file.status, 200, JSON.stringify(file.body));
+  assert.match(typeof file.body === "string" ? file.body : JSON.stringify(file.body), /changed after approval/);
+});
+
 test("the workforce API is closed to signed-out callers", async () => {
   const response = await realFetch(`${baseUrl}/api/workforce/overview`);
   assert.equal(response.status, 401);

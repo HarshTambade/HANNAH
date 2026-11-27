@@ -21,6 +21,7 @@
  *     persisted from it. External actions become recommendations, not silent
  *     side effects.
  */
+const crypto = require("node:crypto");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 const { loadAccountKeys, accountsUseServerKeys } = require("../accounts");
@@ -212,12 +213,22 @@ async function blockTask(db, userId, taskId, reason, { status = "blocked", botId
 
 // ------------------------------------------------------------------ approvals
 
-async function approvedStep(db, userId, taskId, action, stepIndex) {
+/**
+ * What a person approves for a skill step: this skill, at this version, this
+ * step, with these parameters. Editing the skill changes the fingerprint, so an
+ * earlier decision never covers a step the person hasn't seen.
+ */
+function stepFingerprint(skill, step, index, action = step.action) {
+  const material = JSON.stringify([skill.id, Number(skill.version) || 0, index, step.id || null, action, step.params || {}]);
+  return crypto.createHash("sha256").update(material).digest("hex");
+}
+
+async function approvedStep(db, userId, taskId, action, fingerprint) {
   const { rows } = await db.query(
     "SELECT * FROM hannah_workforce_approvals WHERE user_id = $1 AND task_id = $2 AND action = $3 AND status = 'approved' ORDER BY decided_at DESC LIMIT 20",
     [userId, taskId, action],
   );
-  return rows.find((row) => Number(parse(row.payload, {})?.detail?.stepIndex) === Number(stepIndex)) || null;
+  return rows.find((row) => parse(row.payload, {})?.detail?.fingerprint === fingerprint) || null;
 }
 
 async function askForStep(db, userId, bot, task, step, index, target, detail) {
@@ -232,7 +243,7 @@ async function askForStep(db, userId, bot, task, step, index, target, detail) {
         : `Executes step ${index + 1} of this skill on the assigned computer.`,
       reversible: !takeover && step.action !== "browser.download" && step.action !== "browser.submit",
       dataShared: [],
-      detail: { skillId: detail.skillId, stepIndex: index, stepId: step.id, sessionId: detail.sessionId || null, computerId: detail.computerId || null },
+      detail: { skillId: detail.skillId, skillVersion: detail.skillVersion ?? null, stepIndex: index, stepId: step.id, fingerprint: detail.fingerprint, sessionId: detail.sessionId || null, computerId: detail.computerId || null },
     },
   });
   if (decision.outcome === "ask") return { waiting: true, approval: decision.approval };
@@ -355,11 +366,13 @@ async function runSkillTask(db, userId, task, bot, skill) {
   for (const [index, step] of definition.steps.entries()) {
     if (progress.completed.includes(step.id)) continue;
     const target = clean(step.title, 300) || step.action;
+    const askDetail = (action) => ({ skillId: skill.id, skillVersion: Number(skill.version) || null, fingerprint: stepFingerprint(skill, step, index, action), sessionId: session.id, computerId: computer.id });
     if (step.action === "human.approval") {
-      const approval = await approvedStep(db, userId, task.id, "human.takeover", index);
+      // The request is made as browser.takeover, so the decision is looked up under that action.
+      const approval = await approvedStep(db, userId, task.id, "browser.takeover", stepFingerprint(skill, step, index, "browser.takeover"));
       if (!approval) {
         await saveProgress();
-        await askForStep(db, userId, bot, task, { ...step, action: "browser.takeover" }, index, target, { skillId: skill.id, sessionId: session.id, computerId: computer.id });
+        await askForStep(db, userId, bot, task, { ...step, action: "browser.takeover" }, index, target, askDetail("browser.takeover"));
         await db.query("UPDATE hannah_workforce_tasks SET status = 'waiting-approval', updated_at = $1 WHERE user_id = $2 AND id = $3", [Date.now(), userId, task.id]);
         return { status: "waiting-approval" };
       }
@@ -373,9 +386,9 @@ async function runSkillTask(db, userId, task, bot, skill) {
       });
       return { status: "blocked", reason: "step-not-executable" };
     }
-    const approved = await approvedStep(db, userId, task.id, step.action, index);
+    const approved = await approvedStep(db, userId, task.id, step.action, stepFingerprint(skill, step, index));
     if (!approved) {
-      const decision = await askForStep(db, userId, bot, task, step, index, target, { skillId: skill.id, sessionId: session.id, computerId: computer.id });
+      const decision = await askForStep(db, userId, bot, task, step, index, target, askDetail(step.action));
       if (decision.waiting) {
         await saveProgress();
         await db.query("UPDATE hannah_workforce_tasks SET status = 'waiting-approval', updated_at = $1 WHERE user_id = $2 AND id = $3", [Date.now(), userId, task.id]);
@@ -409,7 +422,7 @@ async function runSkillTask(db, userId, task, bot, skill) {
         });
         if (result.challenge?.needed) {
           await saveProgress();
-          await askForStep(db, userId, bot, task, { ...step, action: "browser.takeover" }, index, target, { skillId: skill.id, sessionId: session.id, computerId: computer.id });
+          await askForStep(db, userId, bot, task, { ...step, action: "browser.takeover" }, index, target, askDetail("browser.takeover"));
           await db.query("UPDATE hannah_workforce_tasks SET status = 'waiting-approval', updated_at = $1 WHERE user_id = $2 AND id = $3", [Date.now(), userId, task.id]);
           return { status: "waiting-approval", human: true };
         }
@@ -572,4 +585,4 @@ async function runQueuedTasks(db, { limit = Number(process.env.WORKFORCE_TICK_TA
   return processed;
 }
 
-module.exports = { blockTask, complete, finishTask, modelTarget, parseModelOutput, runQueuedTasks, runTask, systemPromptFor };
+module.exports = { stepFingerprint, blockTask, complete, finishTask, modelTarget, parseModelOutput, runQueuedTasks, runTask, systemPromptFor };
