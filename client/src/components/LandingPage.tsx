@@ -51,10 +51,27 @@ function StatusChip({ status }: { status: Status }) {
 function SectionHeading({ kicker, title, children, invert = false }: { kicker: string; title: string; children?: ReactNode; invert?: boolean }) {
   return (
     <div className="max-w-2xl">
-      <p className={invert ? "text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300" : "section-kicker"}>{kicker}</p>
-      <h2 className={invert ? "mt-3 font-display text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium leading-[1.08] tracking-tight text-white" : "section-title"}>{title}</h2>
+      <p className={`flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${invert ? "text-sky-300" : "text-sky-700"}`}>
+        <span className={`h-px w-6 ${invert ? "bg-sky-300/70" : "bg-sky-600/60"}`} aria-hidden="true" />{kicker}
+      </p>
+      <h2 className={invert ? "mt-4 font-display text-[clamp(1.9rem,3.6vw,2.9rem)] font-medium leading-[1.08] tracking-tight text-white" : "section-title mt-3"}>{title}</h2>
       {children && <p className={invert ? "mt-4 text-[16px] leading-7 text-slate-300" : "section-desc"}>{children}</p>}
     </div>
+  );
+}
+
+/** What a beta feature can't do yet: stated plainly, folded so it doesn't read as an error. */
+function LimitsNote({ items, className = "" }: { items: readonly string[]; className?: string }) {
+  return (
+    <details className={`group rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 ${className}`}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[13px] font-semibold text-slate-800">
+        <span className="flex items-center gap-2"><Radar size={15} className="text-slate-500" aria-hidden="true" /> Current limits ({items.length})</span>
+        <ChevronDown size={15} className="shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <ul className="mt-2 list-disc space-y-1 pb-1 pl-5 text-[13px] leading-6 text-slate-700">
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </details>
   );
 }
 
@@ -121,7 +138,9 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
     setKeyDialogOpen(true);
   };
 
-  const sections: Array<[string, string]> = [["Features", "features"], ["Models", "models"], ["Agents", "agents"], ["Automation", "automation"], ["Robots", "robots"], ["Devices", "devices"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
+  // The bar keeps the few places people look for; every section is in the mobile menu and the footer.
+  const sections: Array<[string, string]> = [["Features", "features"], ["Agents", "agents"], ["Robots", "robots"], ["Privacy", "privacy"], ["Download", "download"], ["FAQ", "faq"]];
+  const mobileSections: Array<[string, string]> = [["Features", "features"], ["Models", "models"], ["Agents", "agents"], ["Automation", "automation"], ["Robots", "robots"], ["Devices", "devices"], ["Privacy", "privacy"], ["Get started", "start"], ["Download", "download"], ["Developers", "developers"], ["FAQ", "faq"], ["Support", "support"]];
   const others = capabilities.filter((item) => !PILLAR_TITLES.has(item.title));
 
   return (
@@ -131,21 +150,21 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
         <div className="landing-grain absolute inset-0 opacity-[0.06]" />
       </div>
 
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/80 pt-[env(safe-area-inset-top)] backdrop-blur-2xl">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0c0e14]/85 pt-[env(safe-area-inset-top)] text-white backdrop-blur-2xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-5 sm:px-8 lg:px-12">
           <a {...sectionLink("home")} className="flex items-center gap-2.5">
             <span className="logo-ring !h-6 !w-6" aria-hidden="true" />
-            <span className="text-[15px] font-semibold tracking-tight text-ink">HANNAH</span>
-            <span className="hidden rounded-full border border-slate-200 bg-white px-2 py-0.5 font-mono text-[10px] text-slate-500 sm:inline">v{APP_VERSION}</span>
+            <span className="text-[15px] font-semibold tracking-tight text-white">HANNAH</span>
+            <span className="hidden rounded-full border border-white/15 px-2 py-0.5 font-mono text-[10px] text-slate-300 sm:inline">v{APP_VERSION}</span>
           <span className="sr-only"> home</span></a>
 
-          <nav className="hidden items-center gap-5 lg:flex xl:gap-6" aria-label="Main navigation">
+          <nav className="hidden items-center gap-6 lg:flex" aria-label="Main navigation">
             {sections.map(([label, id]) => (
-              <a key={id} {...sectionLink(id)} className="text-[13px] text-slate-600 transition hover:text-ink">{label}</a>
+              <a key={id} {...sectionLink(id)} className="text-[13px] text-slate-300 transition hover:text-white">{label}</a>
             ))}
-            <span className="h-4 w-px bg-slate-200" aria-hidden="true" />
-            <a href="/marketplace" onClick={(event) => followInApp(event, onMarketplace)} className="text-[13px] text-slate-600 transition hover:text-ink">Marketplace</a>
-            <a href="/integrations" onClick={(event) => followInApp(event, onIntegrations)} className="text-[13px] text-slate-600 transition hover:text-ink">Integrations</a>
+            <span className="h-4 w-px bg-white/15" aria-hidden="true" />
+            <a href="/marketplace" onClick={(event) => followInApp(event, onMarketplace)} className="text-[13px] text-slate-300 transition hover:text-white">Marketplace</a>
+            <a href="/integrations" onClick={(event) => followInApp(event, onIntegrations)} className="text-[13px] text-slate-300 transition hover:text-white">Integrations</a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -155,28 +174,28 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
               aria-expanded={mobileNavigationOpen}
               aria-controls="main-mobile-navigation"
               onClick={() => setMobileNavigationOpen((open) => !open)}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 lg:hidden"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 text-slate-200 transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 lg:hidden"
             >
               {mobileNavigationOpen ? <X size={17} /> : <Menu size={17} />}
             </button>
             <button
               type="button"
               onClick={openKeyDialog}
-              className="group inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+              className="group inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
             >
               {hasSession ? "Open HANNAH" : "Talk to HANNAH"} <ArrowRight size={13} className="transition group-hover:translate-x-0.5" />
             </button>
           </div>
         </div>
         {mobileNavigationOpen && (
-          <nav id="main-mobile-navigation" aria-label="Mobile main navigation" className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-slate-200 bg-white/95 px-5 py-3 shadow-soft lg:hidden">
+          <nav id="main-mobile-navigation" aria-label="Mobile main navigation" className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-white/10 bg-[#0c0e14] px-5 py-3 lg:hidden">
             <div className="mx-auto grid max-w-7xl grid-cols-2 gap-1">
-              {[...sections, ["Developers", "developers"] as [string, string], ["Support", "support"] as [string, string]].map(([label, id]) => (
-                <a key={id} {...sectionLink(id)} className="rounded-lg px-3 py-3 text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">{label}</a>
+              {mobileSections.map(([label, id]) => (
+                <a key={id} {...sectionLink(id)} className="rounded-lg px-3 py-3 text-sm text-slate-200 transition hover:bg-white/10 hover:text-white">{label}</a>
               ))}
-              <a href="/marketplace" onClick={(event) => followInApp(event, () => { setMobileNavigationOpen(false); onMarketplace(); })} className="rounded-lg px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">Marketplace</a>
-              <a href="/integrations" onClick={(event) => followInApp(event, () => { setMobileNavigationOpen(false); onIntegrations(); })} className="rounded-lg px-3 py-3 text-left text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">Integrations</a>
-              <a href="/about/" className="rounded-lg px-3 py-3 text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-700">About</a>
+              <a href="/marketplace" onClick={(event) => followInApp(event, () => { setMobileNavigationOpen(false); onMarketplace(); })} className="rounded-lg px-3 py-3 text-left text-sm text-slate-200 transition hover:bg-white/10 hover:text-white">Marketplace</a>
+              <a href="/integrations" onClick={(event) => followInApp(event, () => { setMobileNavigationOpen(false); onIntegrations(); })} className="rounded-lg px-3 py-3 text-left text-sm text-slate-200 transition hover:bg-white/10 hover:text-white">Integrations</a>
+              <a href="/about/" className="rounded-lg px-3 py-3 text-sm text-slate-200 transition hover:bg-white/10 hover:text-white">About</a>
             </div>
           </nav>
         )}
@@ -184,57 +203,60 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
 
       <div className="relative z-10">
         {/* Hero */}
-        <section id="home" tabIndex={-1} className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 pt-10 outline-none sm:px-8 sm:pt-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-8 lg:px-12 lg:pb-20">
-          <div className="min-w-0 max-w-[40rem]">
-            <a {...sectionLink("try")} className="inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 transition hover:border-brand-200 hover:text-ink">
-              <span className="font-semibold text-brand-700">New</span>
-              <span className="h-3 w-px shrink-0 bg-slate-200" aria-hidden="true" />
-              <span className="truncate">Agents, skills and connectors you can turn on in one click</span> <ArrowRight size={12} className="shrink-0" />
-            </a>
-            <h1 className="display-title mt-6 text-[clamp(2.5rem,5.6vw,4.9rem)]">
-              Your Personal AI.
-              <span className="block text-brand-600">Your Intelligence.</span>
-              <span className="block">Your World.</span>
-            </h1>
-            <p className="mt-6 max-w-[36rem] text-[16px] leading-[1.75] text-slate-600">
-              HANNAH is an AI companion that talks with you, remembers what you ask her to, and gets real work done: she searches the web, sets your reminders, works in the tools you connect and runs workflows on her own. You choose the model and approve every action.
-            </p>
-            <HeroPrompt onTry={onTry} />
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <button type="button" onClick={openKeyDialog} className="btn-primary group min-h-[3.25rem] !gap-3 !rounded-2xl !px-6 text-sm">
-                {hasSession ? "Open HANNAH" : "Talk to HANNAH"}
-                <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />
-              </button>
-              <a {...sectionLink("download")} className="inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-ink transition hover:border-brand-300">
-                <Download size={15} /> Download the app
+        <div className="landing-hero relative overflow-hidden text-white">
+          <div className="landing-hero-grid pointer-events-none absolute inset-0" aria-hidden="true" />
+          <section id="home" tabIndex={-1} className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 pb-16 pt-12 outline-none sm:px-8 sm:pt-16 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10 lg:px-12 lg:pb-24 lg:pt-20">
+            <div className="min-w-0 max-w-[40rem]">
+              <a {...sectionLink("try")} className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs text-slate-200 transition hover:border-sky-300/50 hover:text-white">
+                <span className="rounded-full bg-sky-400/20 px-1.5 py-px font-semibold text-sky-200">New</span>
+                <span className="truncate">Agents, skills and connectors you can turn on in one click</span> <ArrowRight size={12} className="shrink-0" />
               </a>
-            </div>
-            <p className="mt-4 text-[13px] text-slate-500">{freeNote}</p>
-            <ul className="mt-9 grid gap-3 border-t border-slate-200 pt-6 text-[13px] text-slate-600 sm:grid-cols-3">
-              <li className="flex items-center gap-2"><ShieldCheck size={15} className="shrink-0 text-emerald-600" aria-hidden="true" /> You approve every action</li>
-              <li className="flex items-center gap-2"><LockKeyhole size={15} className="shrink-0 text-brand-600" aria-hidden="true" /> Private mode stays local</li>
-              <li className="flex items-center gap-2"><MonitorSmartphone size={15} className="shrink-0 text-violet-600" aria-hidden="true" /> Web, Mac, Windows, Linux, Android</li>
-            </ul>
-          </div>
-
-          <div className="relative mx-auto h-[min(60dvh,540px)] w-full max-w-[520px] lg:h-[min(70dvh,620px)] lg:min-h-[500px]">
-            <div className="absolute inset-0 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_90px_-40px_rgba(15,23,42,0.35)]">
-              <div className="avatar-stage absolute inset-0" />
-              <div className="absolute inset-0">
-                <AvatarScene emotion="neutral" />
-              </div>
-              <p className="pointer-events-none absolute inset-x-4 bottom-4 rounded-xl border border-white/60 bg-white/85 px-3 py-2 text-center text-[12px] text-slate-600 backdrop-blur">
-                Live 3D avatar: move your pointer, or tap her.
+              <h1 className="mt-7 font-display text-[clamp(2.6rem,5.8vw,5.1rem)] font-medium leading-[1.02] tracking-[-0.045em] text-white">
+                Your Personal AI.
+                <span className="landing-gradient-text -mb-[0.12em] block pb-[0.12em]">Your Intelligence.</span>
+                <span className="block">Your World.</span>
+              </h1>
+              <p className="mt-6 max-w-[34rem] text-[17px] leading-[1.7] text-slate-300">
+                An AI companion that talks with you, remembers what you ask her to, and gets real work done in the web, your tools and your workflows. You choose the model. You approve every action.
               </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button type="button" onClick={openKeyDialog} className="group inline-flex min-h-[3.25rem] items-center justify-center gap-3 rounded-2xl bg-white px-6 text-sm font-semibold text-ink shadow-[0_18px_50px_-20px_rgba(125,211,252,0.7)] transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300">
+                  {hasSession ? "Open HANNAH" : "Talk to HANNAH"}
+                  <ArrowRight size={15} className="transition group-hover:translate-x-0.5" />
+                </button>
+                <a {...sectionLink("download")} className="inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl border border-white/20 px-5 text-sm font-semibold text-white transition hover:bg-white/10">
+                  <Download size={15} /> Download the app
+                </a>
+              </div>
+              <p className="mt-4 text-[13px] text-slate-400">{freeNote}</p>
+              <HeroPrompt onTry={onTry} dark />
+              <ul className="mt-9 grid gap-3 border-t border-white/10 pt-6 text-[13px] text-slate-300 sm:grid-cols-3">
+                <li className="flex items-center gap-2"><ShieldCheck size={15} className="shrink-0 text-emerald-300" aria-hidden="true" /> You approve every action</li>
+                <li className="flex items-center gap-2"><LockKeyhole size={15} className="shrink-0 text-sky-300" aria-hidden="true" /> Private mode stays local</li>
+                <li className="flex items-center gap-2"><MonitorSmartphone size={15} className="shrink-0 text-violet-300" aria-hidden="true" /> Web, Mac, Windows, Linux, Android</li>
+              </ul>
             </div>
-          </div>
-        </section>
 
-        {/* Works with */}
-        <div className="border-y border-slate-200/70 bg-white/70">
-          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-5 sm:px-8 lg:flex-row lg:items-center lg:gap-8 lg:px-12">
-            <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Works with</p>
-            <p className="text-[13px] leading-6 text-slate-600">{[...providers.cloud.slice(0, 9), "Ollama", "LM Studio", "llama.cpp", "WebLLM"].join(" · ")} <span className="text-slate-500">and more</span></p>
+            <div className="relative mx-auto h-[min(60dvh,540px)] w-full max-w-[520px] lg:h-[min(72dvh,640px)] lg:min-h-[520px]">
+              <div className="absolute -inset-8 rounded-[3rem] bg-sky-500/20 blur-3xl" aria-hidden="true" />
+              <div className="absolute inset-0 overflow-hidden rounded-[2rem] border border-white/10 shadow-[0_40px_120px_-40px_rgba(56,189,248,0.45)]">
+                <div className="avatar-stage absolute inset-0" />
+                <div className="absolute inset-0">
+                  <AvatarScene emotion="neutral" />
+                </div>
+                <p className="pointer-events-none absolute inset-x-4 bottom-4 rounded-xl border border-white/10 bg-[#0c0e14]/70 px-3 py-2 text-center text-[12px] text-slate-200 backdrop-blur">
+                  Live 3D avatar: move your pointer, or tap her.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* Works with */}
+          <div className="relative border-t border-white/10">
+            <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-6 sm:px-8 lg:flex-row lg:items-center lg:gap-8 lg:px-12">
+              <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Works with</p>
+              <p className="text-[13px] leading-6 text-slate-300">{[...providers.cloud.slice(0, 9), "Ollama", "LM Studio", "llama.cpp", "WebLLM"].join(" · ")} <span className="text-slate-400">and more</span></p>
+            </div>
           </div>
         </div>
 
@@ -435,18 +457,14 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
               <ul className="mt-4 space-y-1.5 text-[13px] leading-6 text-slate-600">
                 {robotics.also.map((item) => <li key={item} className="flex gap-2"><Check size={15} className="mt-1 shrink-0 text-emerald-700" aria-hidden="true" />{item}</li>)}
               </ul>
-              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-950"><Radar size={15} aria-hidden="true" /> What this is not, yet</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-6 text-amber-950">
-                  {robotics.limits.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              </div>
+              <LimitsNote items={robotics.limits} className="mt-5" />
             </div>
           </div>
         </section>
 
         {/* Devices */}
-        <section id="devices" tabIndex={-1} className="mx-auto max-w-7xl px-5 py-14 outline-none sm:px-8 sm:py-20 lg:px-12 lg:py-24">
+        <section id="devices" tabIndex={-1} className="border-y border-slate-200/70 bg-white/60 outline-none">
+          <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12 lg:py-24">
           <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
             <div>
               <figure className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
@@ -476,13 +494,9 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
                   </li>
                 ))}
               </ul>
-              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-950"><Radar size={15} aria-hidden="true" /> What this is not, yet</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-6 text-amber-950">
-                  {devices.limits.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-              </div>
+              <LimitsNote items={devices.limits} className="mt-6" />
             </div>
+          </div>
           </div>
         </section>
 
@@ -525,6 +539,12 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
           </div>
         </section>
 
+        {/* How to start */}
+        <section id="start" tabIndex={-1} className="mx-auto max-w-7xl px-5 pt-14 outline-none sm:px-8 sm:pt-20 lg:px-12 lg:pt-24">
+          <SectionHeading kicker="Getting started" title="Talking to HANNAH takes about a minute." />
+          <StartSteps keyless={keyless} />
+        </section>
+
         {/* Download and platforms */}
         <section id="download" tabIndex={-1} className="mx-auto max-w-7xl px-5 py-14 outline-none sm:px-8 sm:py-20 lg:py-24 lg:px-12">
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -553,8 +573,11 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
             ))}
           </div>
 
-          <div className="mt-12">
-            <h3 className="text-[17px] font-semibold text-ink">What works where</h3>
+          <details className="group mt-10 rounded-2xl border border-slate-200 bg-white px-5 py-4">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+              <h3 className="text-[15px] font-semibold text-ink">Compare features by platform</h3>
+              <ChevronDown size={16} className="shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden="true" />
+            </summary>
             <div tabIndex={0} role="region" aria-label="Features by platform (scrolls sideways)" className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
               <table className="w-full min-w-[42rem] text-left text-[13px]">
                 <caption className="sr-only">Features by platform</caption>
@@ -575,8 +598,8 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
                 </tbody>
               </table>
             </div>
-            <p className="mt-3 text-[12px] text-slate-500">The full matrix, with how each cell was checked: <a href={`${REPOSITORY_URL}/blob/main/docs/PLATFORM_SUPPORT.md`} target="_blank" rel="noreferrer" className="font-medium text-brand-600 hover:text-brand-700">platform support</a>.</p>
-          </div>
+            <p className="mt-3 text-[12px] text-slate-500">The full matrix, with how each cell was checked: <a href={`${REPOSITORY_URL}/blob/main/docs/PLATFORM_SUPPORT.md`} target="_blank" rel="noreferrer" className="font-medium text-brand-700 hover:text-brand-600">platform support</a>.</p>
+          </details>
         </section>
 
         {/* Developers */}
@@ -593,6 +616,24 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
               <figcaption className="flex items-center gap-2 border-b border-slate-800 px-4 py-2.5 text-[12px] text-slate-400"><Code2 size={13} aria-hidden="true" /> Any OpenAI client works. Here, Auto routing on a budget with your Groq key:</figcaption>
               <pre tabIndex={0} aria-label="Example request" className="overflow-x-auto p-4 font-mono text-[12px] leading-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400"><code>{API_EXAMPLE}</code></pre>
             </figure>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section id="faq" tabIndex={-1} className="border-t border-slate-200/70 bg-white/60 outline-none">
+          <div className="mx-auto max-w-4xl px-5 py-14 sm:px-8 sm:py-20 lg:py-24">
+            <SectionHeading kicker="Questions" title="Frequently asked." />
+            <div className="mt-8 divide-y divide-slate-200 rounded-2xl border border-slate-200/80 bg-white">
+              {faqs.map(({ q, a }) => (
+                <details key={q} className="group px-5 py-1">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 text-[15px] font-semibold text-ink">
+                    {q}
+                    <ChevronDown size={16} className="shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden="true" />
+                  </summary>
+                  <p className="pb-5 text-[14px] leading-6 text-slate-600">{a}</p>
+                </details>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -613,25 +654,6 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
                 </li>
               ))}
             </ul>
-          </div>
-        </section>
-
-        {/* FAQ */}
-        <section id="faq" tabIndex={-1} className="border-t border-slate-200/70 bg-white/60 outline-none">
-          <div className="mx-auto max-w-4xl px-5 py-14 sm:px-8 sm:py-20 lg:py-24">
-            <p className="section-kicker">Questions</p>
-            <h2 className="section-title">Frequently asked.</h2>
-            <div className="mt-8 divide-y divide-slate-200 rounded-2xl border border-slate-200/80 bg-white">
-              {faqs.map(({ q, a }) => (
-                <details key={q} className="group px-5 py-1">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 text-[15px] font-semibold text-ink">
-                    {q}
-                    <ChevronDown size={16} className="shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden="true" />
-                  </summary>
-                  <p className="pb-5 text-[14px] leading-6 text-slate-600">{a}</p>
-                </details>
-              ))}
-            </div>
           </div>
         </section>
 
@@ -656,15 +678,9 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
           </ul>
         </section>
 
-        {/* How to start */}
-        <section id="start" tabIndex={-1} className="mx-auto max-w-7xl px-5 pb-14 outline-none sm:px-8 sm:pb-20 lg:px-12">
-          <SectionHeading kicker="Getting started" title="Talking to HANNAH takes about a minute." />
-          <StartSteps keyless={keyless} />
-        </section>
-
         {/* Closing call to action */}
         <section className="mx-auto max-w-7xl px-5 pb-14 sm:px-8 sm:pb-20 lg:px-12">
-          <div className="flex flex-col items-start justify-between gap-6 rounded-[2rem] bg-ink px-7 py-10 text-white sm:px-10 lg:flex-row lg:items-center">
+          <div className="landing-hero relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-[2rem] px-7 py-12 text-white sm:px-12 lg:flex-row lg:items-center">
             <div>
               <h2 className="font-display text-[clamp(1.6rem,3vw,2.3rem)] font-medium tracking-tight">Say hello to HANNAH.</h2>
               <p className="mt-2 max-w-xl text-[15px] text-slate-300">{keyless ? "Start in your browser with a free account, no API key needed, or download the app." : "Start in your browser in a minute with a free Groq key, or download the app."}</p>

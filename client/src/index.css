@@ -793,3 +793,28 @@ button:focus-visible {
   background: radial-gradient(60% 45% at 50% 18%, #1c2140 0%, #0c0e14 72%);
   color: #fff;
 }
+
+/* ===== Landing page: dark hero and closing banner ===== */
+.landing-hero {
+  background:
+    radial-gradient(55% 60% at 78% 30%, rgba(56, 189, 248, 0.18), transparent 70%),
+    radial-gradient(45% 55% at 8% 0%, rgba(139, 92, 246, 0.16), transparent 70%),
+    radial-gradient(60% 45% at 50% 100%, rgba(30, 64, 175, 0.22), transparent 70%),
+    #0c0e14;
+}
+.landing-hero-grid {
+  background-image: linear-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(70% 70% at 50% 35%, black, transparent 85%);
+  -webkit-mask-image: radial-gradient(70% 70% at 50% 35%, black, transparent 85%);
+}
+.landing-gradient-text {
+  background: linear-gradient(92deg, #7dd3fc 0%, #a5b4fc 55%, #f0abfc 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@media (forced-colors: active) {
+  .landing-gradient-text { color: CanvasText; background: none; }
+}

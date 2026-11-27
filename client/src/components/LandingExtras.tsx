@@ -36,7 +36,7 @@ const HERO_PROMPTS = [
 ];
 
 /** Type a first message on the home page; it's waiting in the chat's message box when the chat opens. */
-export function HeroPrompt({ onTry }: { onTry: TryIt }) {
+export function HeroPrompt({ onTry, dark = false }: { onTry: TryIt; dark?: boolean }) {
   const [text, setText] = useState("");
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -44,15 +44,33 @@ export function HeroPrompt({ onTry }: { onTry: TryIt }) {
   };
   return (
     <div className="mt-8">
-      <form onSubmit={submit} className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)] transition focus-within:border-brand-300">
+      <form
+        onSubmit={submit}
+        className={dark
+          ? "flex items-center gap-2 rounded-2xl border border-white/15 bg-white/[0.07] p-1.5 shadow-[0_20px_60px_-30px_rgba(56,189,248,0.45)] backdrop-blur transition focus-within:border-sky-300/60 focus-within:bg-white/10"
+          : "flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)] transition focus-within:border-brand-300"}
+      >
         <label htmlFor="hero-prompt" className="sr-only">Your first message to HANNAH</label>
-        <input id="hero-prompt" value={text} onChange={(event) => setText(event.target.value.slice(0, 2000))} placeholder="Ask HANNAH anything…" autoComplete="off" enterKeyHint="send" className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] text-ink outline-none placeholder:text-slate-400" />
-        <button type="submit" disabled={!text.trim()} className="btn-primary !rounded-xl !px-4 !py-2.5 text-sm disabled:opacity-40">Ask <ArrowRight size={14} /></button>
+        <input
+          id="hero-prompt" value={text} onChange={(event) => setText(event.target.value.slice(0, 2000))} placeholder="Ask HANNAH anything…" autoComplete="off" enterKeyHint="send"
+          className={`min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[15px] outline-none ${dark ? "text-white placeholder:text-slate-400" : "text-ink placeholder:text-slate-400"}`}
+        />
+        <button
+          type="submit" disabled={!text.trim()}
+          className={dark
+            ? "inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40"
+            : "btn-primary !rounded-xl !px-4 !py-2.5 text-sm disabled:opacity-40"}
+        >Ask <ArrowRight size={14} /></button>
       </form>
       <ul className="mt-3 flex flex-wrap gap-2" aria-label="Example messages">
         {HERO_PROMPTS.map((prompt) => (
           <li key={prompt}>
-            <button type="button" onClick={() => onTry(prompt)} className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-left text-[12px] text-slate-700 transition hover:border-brand-300 hover:text-ink">{prompt}</button>
+            <button
+              type="button" onClick={() => onTry(prompt)}
+              className={dark
+                ? "rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-left text-[12px] text-slate-200 transition hover:border-sky-300/50 hover:bg-white/10 hover:text-white"
+                : "rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-left text-[12px] text-slate-700 transition hover:border-brand-300 hover:text-ink"}
+            >{prompt}</button>
           </li>
         ))}
       </ul>
@@ -69,11 +87,11 @@ export function FactsStrip({ connectors }: { connectors: number | null }) {
     [String(PLATFORM_DOWNLOADS.length), "platforms, with your account in sync across them"],
   ];
   return (
-    <dl className="mx-auto grid max-w-7xl grid-cols-2 gap-x-6 gap-y-5 px-5 py-8 sm:px-8 lg:grid-cols-4 lg:px-12" aria-label="HANNAH in numbers">
+    <dl className="mx-auto grid max-w-7xl grid-cols-2 gap-3 px-5 py-10 sm:px-8 lg:grid-cols-[repeat(auto-fit,minmax(0,1fr))] lg:px-12" aria-label="HANNAH in numbers">
       {facts.map(([value, label]) => (
-        <div key={label} className="flex flex-col-reverse justify-end">
-          <dt className="mt-1 text-[13px] leading-5 text-slate-600">{label}</dt>
-          <dd className="font-display text-[2rem] font-medium leading-none tracking-tight text-ink">{value}</dd>
+        <div key={label} className="flex flex-col-reverse justify-end rounded-2xl border border-slate-200/80 bg-white px-5 py-5 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.5)]">
+          <dt className="mt-2 text-[13px] leading-5 text-slate-600">{label}</dt>
+          <dd className="font-display text-[2.4rem] font-medium leading-none tracking-tight text-ink">{value}</dd>
         </div>
       ))}
     </dl>
