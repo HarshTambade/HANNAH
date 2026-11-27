@@ -130,7 +130,7 @@ Then a model writes a summary, decisions, risks and action items from the transc
 | `WORKFORCE_TICK_TASKS` | 2 | Queued tasks run per tick. |
 | `WORKFORCE_ACCOUNT_TASKS_PER_DAY` / `WORKFORCE_ACCOUNT_MESSAGES_PER_DAY` | 300 / 600 | The account ceiling no teammate can exceed. |
 | `WORKFORCE_BOT_TASKS_PER_DAY` / `WORKFORCE_BOT_MESSAGES_PER_DAY` | 60 / 200 | A teammate's default when it sets none. |
-| `HANNAH_WORKFORCE_DIR` | under the server | Where cloud computer workspaces and artifacts live. |
+| `HANNAH_WORKFORCE_DIR` | `~/.hannah/workforce` | Where cloud computer workspaces and artifacts live. |
 | `HANNAH_WORKFORCE_EXTENDED_COMMANDS` | off | Lets the cloud terminal run node, git, npm and similar. Only with a working sandbox or inside a container. |
 | `HANNAH_WORKFORCE_SANDBOX` | auto | The terminal's sandbox driver: `auto`, `off`, `sandbox-exec` or `bwrap`. Naming one makes it required (section 4). |
 | `HANNAH_ACCOUNTS_USE_SERVER_KEYS` | off | When on, accounts may use the server's provider keys and an operator-configured local runtime (for example `OLLAMA_BASE_URL`). When off, a teammate answers only with the account's own key. |
