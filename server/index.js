@@ -449,7 +449,13 @@ const robotOSCommands = createRobotOSCommandService({ secrets: robotOSSecrets })
 if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
   app.use("/api", createRobotOSBridgeRouter({
     enabled: true,
-    auth: createRobotOSBridgeAuthenticator({ secrets: robotOSSecrets }),
+    // The same key rule as commands: a revoked robot is refused here too.
+    auth: createRobotOSBridgeAuthenticator({
+      resolveSecret: async (robotId) => {
+        const db = await getDatabase().catch(() => null);
+        return db ? robotOSCommands.secretFor(db, robotId).catch(() => null) : robotOSSecrets[robotId] || null;
+      },
+    }),
     onEnvelope: async (env) => {
       const db = await getDatabase().catch(() => null);
       if (db) {

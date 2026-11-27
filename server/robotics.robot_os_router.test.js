@@ -49,3 +49,22 @@ test("bridge returns pending commands on heartbeat and records acks", async () =
     assert.equal(acks[0].commandId, "rosc_1");
   });
 });
+
+test("the bridge's 256 KB body limit applies to the bridge only, not to other routes", async () => {
+  const app = express();
+  app.use(createRobotOSBridgeRouter({}));
+  app.use(express.json({ limit: "2mb" }));
+  app.post("/other", (req, res) => res.json({ size: JSON.stringify(req.body).length }));
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const big = JSON.stringify({ data: "x".repeat(400 * 1024) });
+    const other = await fetch(`${base}/other`, { method: "POST", headers: { "content-type": "application/json" }, body: big });
+    assert.equal(other.status, 200);
+    const bridge = await fetch(`${base}/robotos/bridge`, { method: "POST", headers: { "content-type": "application/json" }, body: big });
+    assert.equal(bridge.status, 413);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

@@ -5,9 +5,11 @@ const { validateBridgeEnvelope } = require("./robot_os_bridge");
 
 function createRobotOSBridgeRouter({ onEnvelope = null, auth = null, enabled = true, pendingCommands = null, onCommandAck = null } = {}) {
   const router = express.Router();
-  router.use(express.json({ limit: "256kb", verify: (req, _res, buf) => { req.rawBody = buf.toString("utf8"); } }));
+  // The parser belongs to this route only. Mounted with router.use it ran for
+  // every /api request and refused any body over 256 KB (uploads, vision).
+  const bridgeBody = express.json({ limit: "256kb", verify: (req, _res, buf) => { req.rawBody = buf.toString("utf8"); } });
 
-  router.post("/robotos/bridge", async (req, res) => {
+  router.post("/robotos/bridge", bridgeBody, async (req, res) => {
     if (!enabled) return res.status(404).json({ error: "Not found." });
     const { ok, errors } = validateBridgeEnvelope(req.body);
     if (!ok) return res.status(400).json({ ok: false, errors });

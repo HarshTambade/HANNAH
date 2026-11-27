@@ -429,9 +429,18 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
     };
   }
   async function issue(db, userId, hubId, { type, deviceId = null, payload, ttlMs = COMMAND_TTL_MS, actionId = null, requestedBy = "" }) {
-    const advanced = await db.query("UPDATE hannah_hubs SET seq = seq + 1 WHERE user_id = $1 AND id = $2 AND status = 'enrolled'", [userId, hubId]);
-    if (!advanced.rowCount) throw fail(409, "That hub isn't enrolled.", "hub-not-enrolled");
-    const seq = Number((await db.query("SELECT seq FROM hannah_hubs WHERE id = $1", [hubId])).rows[0].seq);
+    // Claim the next number with a compare-and-swap. An increment followed by a
+    // separate read let two commands sent together get the same number, and
+    // the hub refused the second as a replay.
+    let seq = null;
+    for (let attempt = 0; attempt < 20 && seq === null; attempt += 1) {
+      const current = (await db.query("SELECT seq FROM hannah_hubs WHERE user_id = $1 AND id = $2 AND status = 'enrolled'", [userId, hubId])).rows[0];
+      if (!current) throw fail(409, "That hub isn't enrolled.", "hub-not-enrolled");
+      const next = Number(current.seq) + 1;
+      const claimed = await db.query("UPDATE hannah_hubs SET seq = $1 WHERE user_id = $2 AND id = $3 AND status = 'enrolled' AND seq = $4", [next, userId, hubId, Number(current.seq)]);
+      if (claimed.rowCount) seq = next;
+    }
+    if (seq === null) throw fail(503, "The hub is busy. Try again.", "hub-busy");
     const id = `cmd_${crypto.randomBytes(9).toString("hex")}`;
     const at = now();
     await db.query("INSERT INTO hannah_device_commands (user_id, id, hub_id, device_id, type, payload, status, seq, action_id, requested_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7, $8, $9, $10, $11)",

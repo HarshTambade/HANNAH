@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { decryptSecret } = require("../vault");
 
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const newNonce = () => crypto.randomBytes(12).toString("hex");
@@ -22,10 +23,22 @@ function signCommand(secret, command) {
 }
 
 function createRobotOSCommandService({ secrets = {}, now = () => Date.now(), ttlMs = 120_000 } = {}) {
+  /**
+   * The robot's shared key, or null. A robot the registry knows and has not
+   * enrolled (for example one its owner revoked) gets no key, even when one is
+   * configured in the environment. A registry key is decrypted with the vault:
+   * the stored ciphertext is never a key.
+   */
   async function secretFor(db, robotId) {
+    const row = db ? (await db.query("SELECT id, user_id, status, key_id, wrapped_key, ciphertext FROM hannah_robots WHERE id = $1", [robotId])).rows[0] : null;
+    if (row && row.status !== "enrolled") return null;
     if (secrets[robotId]) return secrets[robotId];
-    const row = (await db.query("SELECT ciphertext FROM hannah_robots WHERE id = $1 AND status = 'enrolled'", [robotId])).rows[0];
-    return row?.ciphertext || null;
+    if (!row?.ciphertext) return null;
+    try {
+      return decryptSecret(row, { userId: row.user_id, providerId: `robot:${row.id}` }).secret;
+    } catch {
+      return null;
+    }
   }
 
   async function issue(db, { userId, robotId, capability, params = {}, secret = null }) {

@@ -68,3 +68,16 @@ test("get is account scoped", async () => {
   const select = db.calls.find((c) => c.sql.includes("WHERE id = $1 AND user_id = $2"));
   assert.deepEqual(select.params, ["rosc_1", "u1"]);
 });
+
+test("command keys: a revoked robot gets none, and a registry key is decrypted, never the ciphertext", async () => {
+  process.env.HANNAH_VAULT_KEY ||= "f".repeat(64);
+  const { encryptSecret } = require("./vault");
+  const sealed = encryptSecret("robot-shared-secret", { userId: "u1", providerId: "robot:r9" });
+  const registry = (status) => ({ async query() { return { rows: [{ id: "r9", user_id: "u1", status, key_id: sealed.keyId, wrapped_key: sealed.wrappedKey, ciphertext: sealed.ciphertext }] }; } });
+  const svc = createRobotOSCommandService({ secrets: { r9: "env-secret" } });
+  assert.equal(await svc.secretFor(registry("revoked"), "r9"), null, "revocation wins over an environment key");
+  const fromRegistry = createRobotOSCommandService({});
+  assert.equal(await fromRegistry.secretFor(registry("enrolled"), "r9"), "robot-shared-secret");
+  assert.equal(await fromRegistry.secretFor(registry("revoked"), "r9"), null);
+  await assert.rejects(fromRegistry.issue(registry("revoked"), { userId: "u1", robotId: "r9", capability: "update.stage" }), /No enrolled key/);
+});
