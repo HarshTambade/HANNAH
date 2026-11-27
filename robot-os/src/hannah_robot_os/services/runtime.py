@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from ..common import AuditLog, ServiceState
+from ..common import AuditLog, ServiceState, now_ms
 from .health import ServiceHealthManager
 
 
@@ -53,6 +53,7 @@ class ServiceRuntime:
         self.status_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "service": self.name,
+            "written_at_ms": now_ms(),
             "health": self.health.snapshot(),
             "audit_tail": [e.to_dict() for e in self.audit.list()[-20:]],
         }

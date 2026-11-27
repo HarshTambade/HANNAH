@@ -24,26 +24,66 @@ class SafetyGateway:
     required_sensors_ok: bool = True
     _state: SafetyState = SafetyState.NORMAL
     _last_heartbeat_ms: int | None = field(default=None)
+    # Set when an emergency stop has been seen. With limits.estop_latched,
+    # releasing the stop does not clear it: an operator must reset it.
+    _estop_latch: bool = False
 
     @property
     def state(self) -> SafetyState:
         return self._state
+
+    @property
+    def estop_latched(self) -> bool:
+        return self._estop_latch
 
     def heartbeat(self, now: int | None = None) -> None:
         self._last_heartbeat_ms = now_ms() if now is None else now
 
     def set_estop(self, active: bool) -> None:
         self.estop_active = active
-        self._state = SafetyState.ESTOP if active else (SafetyState.FAULT if self.fault else SafetyState.NORMAL)
-        self.audit.emit("safety-gateway", "estop_changed", severity="warning" if active else "info", active=active)
+        if active:
+            self._estop_latch = bool(self.limits.estop_latched)
+        self._recompute_state()
+        self.audit.emit(
+            "safety-gateway",
+            "estop_changed",
+            severity="warning" if active else "info",
+            active=active,
+            latched=self._estop_latch,
+        )
+
+    def reset_estop(self, operator: str) -> SafetyDecision:
+        """Clear a latched emergency stop after it has been released.
+
+        Refused while the stop input is still active. The reset is audited with
+        the operator who asked for it; it never re-enables motors by itself.
+        """
+        now = now_ms()
+        if self.estop_active:
+            self.audit.emit("safety-gateway", "estop_reset_refused", severity="warning", operator=operator, reason="estop still active")
+            return SafetyDecision(False, "estop still active", self._state, now)
+        if not operator:
+            return SafetyDecision(False, "operator required", self._state, now)
+        self._estop_latch = False
+        self._recompute_state()
+        self.audit.emit("safety-gateway", "estop_reset", operator=operator)
+        return SafetyDecision(True, "reset", self._state, now)
+
+    def _recompute_state(self) -> None:
+        if self.estop_active or self._estop_latch:
+            self._state = SafetyState.ESTOP
+        elif self.fault:
+            self._state = SafetyState.FAULT
+        else:
+            self._state = SafetyState.NORMAL
 
     def set_fault(self, fault: str | None) -> None:
         self.fault = fault
         if fault:
             self._state = SafetyState.FAULT
             self.audit.emit("safety-gateway", "fault_set", severity="error", fault=fault)
-        elif not self.estop_active:
-            self._state = SafetyState.NORMAL
+        else:
+            self._recompute_state()
 
     def set_required_sensors_ok(self, ok: bool) -> None:
         self.required_sensors_ok = ok
@@ -54,6 +94,8 @@ class SafetyGateway:
         now = now_ms() if now is None else now
         if self.estop_active:
             return self._deny("estop active", SafetyState.ESTOP, now)
+        if self._estop_latch:
+            return self._deny("estop latched; operator reset required", SafetyState.ESTOP, now)
         if self.fault:
             return self._deny(f"fault active: {self.fault}", SafetyState.FAULT, now)
         if not self.required_sensors_ok:
@@ -76,7 +118,7 @@ class SafetyGateway:
     def evaluate_admin_command(self, capability: str, now: int | None = None) -> SafetyDecision:
         """Administrative commands (updates/rollback) cannot run in an unsafe state."""
         now = now_ms() if now is None else now
-        if self.estop_active:
+        if self.estop_active or self._estop_latch:
             return self._deny(f"estop active; {capability} refused", SafetyState.ESTOP, now)
         if self.fault:
             return self._deny(f"fault active; {capability} refused", SafetyState.FAULT, now)

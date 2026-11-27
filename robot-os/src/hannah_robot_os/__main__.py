@@ -65,20 +65,11 @@ def cmd_validate_config(args: argparse.Namespace) -> int:
 
 def cmd_ready(args: argparse.Namespace) -> int:
     """Print the boot READY marker only when mandatory services check out."""
+    from .services.status_files import required_services_ready
+
     cfg = RobotOSConfig.load(args.config) if args.config else RobotOSConfig()
-    audit = AuditLog()
-    health = ServiceHealthManager(audit=audit, required_services=cfg.required_services)
-    status_dir = Path(cfg.data_dir) / "status"
-    for name in cfg.required_services:
-        path = status_dir / f"{name}.json"
-        if path.exists():
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                if data.get("service") == name:
-                    health.set_state(name, ServiceState.READY)
-            except (OSError, ValueError):
-                pass
-    snapshot = health.snapshot()
+    status_dir = Path(args.status_dir) if args.status_dir else Path(cfg.data_dir) / "status"
+    snapshot = required_services_ready(status_dir, cfg.required_services)
     if not snapshot["robot_ready"]:
         print(json.dumps(snapshot, indent=2))
         return 1
@@ -101,25 +92,9 @@ def cmd_recovery(args: argparse.Namespace) -> int:
     if args.action == "exit":
         cfg = RobotOSConfig.load(args.config) if args.config else RobotOSConfig()
         status_dir = Path(args.status_dir) if args.status_dir else Path(cfg.data_dir) / "status"
-        ready = True
-        for name in cfg.required_services:
-            path = status_dir / f"{name}.json"
-            if not path.exists():
-                ready = False
-                break
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                states = {
-                    service["name"]: service["state"]
-                    for service in data.get("health", {}).get("services", [])
-                    if isinstance(service, dict)
-                }
-            except (OSError, ValueError, TypeError):
-                ready = False
-                break
-            if data.get("service") != name or states.get(name) != "ready":
-                ready = False
-                break
+        from .services.status_files import required_services_ready
+
+        ready = required_services_ready(status_dir, cfg.required_services)["robot_ready"]
         try:
             recovery.exit(robot_ready=ready)
         except RuntimeError as exc:
@@ -213,6 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     rd = sub.add_parser("ready", help="Print READY marker only when required services report ready")
     rd.add_argument("--config")
+    rd.add_argument("--status-dir")
     rd.set_defaults(func=cmd_ready)
 
     rec = sub.add_parser("recovery", help="Enter, exit, or inspect recovery mode")

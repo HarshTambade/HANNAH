@@ -18,7 +18,7 @@ This directory contains the HANNAH Robot OS foundation: onboard Linux service de
 
 ```bash
 cd robot-os
-PYTHONPATH=src python3 -m pytest tests/unit -q
+python3 -m pytest tests/unit -q
 PYTHONPATH=src python3 -m hannah_robot_os doctor
 PYTHONPATH=src python3 -m hannah_robot_os sim
 python3 tools/validate_manifests.py
@@ -38,3 +38,5 @@ python3 tools/validate_manifests.py
 ## Safety
 
 HANNAH Robot OS does not allow raw AI/UI commands to directly drive actuators. Motion commands pass through deterministic validation, limits, watchdog, and controller interfaces. Physical E-stop hardware is required for physical robots; software stop is not a safety-rated E-stop.
+
+Speed-ups are limited to `safety.max_acceleration_mps2`; slowing down and stopping are never limited. With `safety.estop_latched` (the default), releasing the emergency stop leaves the robot stopped until an operator reset is recorded. `hannah-robot-os ready` passes only when every required service's status file is recent (within 5 s) and records that service as ready.
