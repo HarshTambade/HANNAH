@@ -18,6 +18,7 @@ from . import PROTOCOL, __version__
 from .protocol import sign_request
 
 SYNC_PATH = "/api/robots/device/sync"
+BLACKBOX_PATH = "/api/robots/device/blackbox"
 ENROLL_PATH = "/api/robots/enroll"
 
 
@@ -72,6 +73,14 @@ class Link:
         self._counter = int(time.time() * 1000)
 
     def sync(self, body: dict) -> dict:
+        return self.post(SYNC_PATH, body)
+
+    def blackbox(self, body: dict) -> dict:
+        """Upload black box event summaries (and, when the owner allows it, one closed segment)."""
+        return self.post(BLACKBOX_PATH, body, timeout=max(self.timeout, 15.0))
+
+    def post(self, path: str, body: dict, timeout: float | None = None) -> dict:
+        """One signed request. Every request shares the counter, so they must come from one thread, one after another."""
         text = json.dumps(body, separators=(",", ":"))
         self._counter = max(self._counter + 1, int(time.time() * 1000))
         now = int(time.time() * 1000)
@@ -79,6 +88,6 @@ class Link:
             "X-Hannah-Robot": self.robot_id,
             "X-Hannah-Time": str(now),
             "X-Hannah-Counter": str(self._counter),
-            "X-Hannah-Signature": sign_request(self._secret, self.robot_id, now, self._counter, "POST", SYNC_PATH, text),
+            "X-Hannah-Signature": sign_request(self._secret, self.robot_id, now, self._counter, "POST", path, text),
         }
-        return _post(self.server + SYNC_PATH, text, headers, self.timeout)
+        return _post(self.server + path, text, headers, timeout or self.timeout)

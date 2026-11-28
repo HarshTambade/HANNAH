@@ -40,6 +40,7 @@ const { createConnectorsRouter } = require("./connectors");
 const { createStudioRouter } = require("./studio");
 const { createOperator, createOperatorRouter } = require("./actions/router");
 const { createRobotAccountRouter, createRobotDeviceRouter } = require("./robotics/router");
+const { createBlackBoxAccountRouter, createBlackBoxDeviceRouter } = require("./robotics/blackbox_router");
 const { createRobotOSBridgeRouter } = require("./robotics/robot_os_router");
 const { createAuthenticator: createRobotOSBridgeAuthenticator } = require("./robotics/robot_os_auth");
 const robotOSEnvelopes = require("./robotics/robot_os_envelopes");
@@ -84,6 +85,7 @@ const {
 const marketplaceCatalog = require("../shared/marketplace-catalog.json");
 const { createHash } = require("node:crypto");
 const { servedStatus } = require("./providers/served");
+const { createAsk } = require("./llm");
 
 assertProductionApiToken();
 
@@ -441,6 +443,8 @@ const phoneWorkflowHooks = {
 app.use("/api", createPhoneBridgeRouter({ hooks: phoneWorkflowHooks }));
 // A robot's own requests (enrollment, signed sync). Before the JSON parser: the signature covers the exact body.
 app.use("/api", createRobotDeviceRouter({ robotics: () => operator.robotics, enrollLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "robot-enroll" }) }));
+// A robot's black box uploads (event summaries; recordings only when its owner allows), signed the same way.
+app.use("/api", createBlackBoxDeviceRouter({ robotics: () => operator.robotics, blackbox: () => operator.blackbox }));
 // A device hub's own requests, the same way.
 app.use("/api", createHubDeviceRouter({ devices: () => operator.devices, enrollLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "hub-enroll" }) }));
 
@@ -486,6 +490,8 @@ if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
           await operator.robotics.edgeResources.record(db, { userId: result.owner, robotId: String(env.robot_id), report: env.payload.report, source: "robot-os-bridge", simulatedHost: Boolean(Number(robot?.simulated)) })
             .catch((error) => console.error(`Robot OS resources report refused: ${error?.message || error}`));
         }
+        // An event envelope from Robot OS's black box also goes on the robot's timeline.
+        if (env.kind === "event" && result.owner) await operator.blackbox.ingestEnvelope(db, result.owner, env).catch((error) => console.error(`Robot OS black box event not stored: ${error?.message || error}`));
       }
       console.log(JSON.stringify({ robotOSBridge: { robot_id: env.robot_id, envelope_id: env.envelope_id, kind: env.kind, ts_ms: env.ts_ms } }));
     },
@@ -618,7 +624,9 @@ workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 robotOps = createRobotOps({ robotics: operator.robotics, robotOSCommands, simulator: robotSimulator });
 app.use("/api", createRobotOpsRouter({ robotops: robotOps, simulator: robotSimulator }));
-app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands }));
+app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands, blackbox: operator.blackbox }));
+// A robot's black box: its event timeline, recordings, incident reports and replay.
+app.use("/api", createBlackBoxAccountRouter({ blackbox: operator.blackbox, createAsk: (req, res) => createAsk({ req, res, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 60_000) }) }));
 app.use("/api", createDeviceAccountRouter({ devices: operator.devices, engine: operator.engine, manuals: manualRoutes({ devices: operator.devices }) }));
 // The Device Intelligence Graph: entities, versioned relationships, history and live-checked context (server/graph).
 app.use("/api", createGraphRouter({ graph: operator.graph }));

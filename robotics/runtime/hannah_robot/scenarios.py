@@ -98,11 +98,16 @@ def _apply(sim: KinematicSimAdapter, action: dict) -> None:
 
 
 def run_scenario(path: str, config: dict | None = None) -> dict:
-    config = config or sim_config()
-    started, cpu_started = time.perf_counter(), time.process_time()
     with open(path, "r", encoding="utf-8") as handle:
         scenario = json.load(handle)
-    world_path = scenario["world"] if os.path.isabs(scenario["world"]) else os.path.join(os.path.dirname(os.path.abspath(path)), scenario["world"])
+    return run_scenario_data(scenario, os.path.dirname(os.path.abspath(path)), config)
+
+
+def run_scenario_data(scenario: dict, base_dir: str = DEFAULT_DIR, config: dict | None = None) -> dict:
+    """Run a scenario given as data; a relative world path is taken from base_dir."""
+    config = config or sim_config()
+    started, cpu_started = time.perf_counter(), time.process_time()
+    world_path = scenario["world"] if os.path.isabs(scenario["world"]) else os.path.join(base_dir, scenario["world"])
     with open(world_path, "r", encoding="utf-8") as handle:
         world = json.load(handle)
     limits = dict(config["limits"], **scenario.get("limits", {}))

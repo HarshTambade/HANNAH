@@ -1513,6 +1513,74 @@ const MIGRATIONS = [
     ],
   },
   {
+    version: 33,
+    name: "Robot black box: event timeline, recording segments, settings",
+    // What a robot's black box uploads: event summaries (one row each, with
+    // the robot's own id so an upload sent twice is stored once, the robot's
+    // timestamp and how sure the robot was of its clock), and the metadata of
+    // raw recording segments the owner allowed to be uploaded. The segment's
+    // bytes are in file storage (server/robotics/blackbox_store.js), never in
+    // a row. Every row expires; deleting the robot's black box data or the
+    // account removes them. Additive; no existing row is changed.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_robot_blackbox_events (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        robot_event_id TEXT NOT NULL,
+        device_id TEXT,
+        at BIGINT NOT NULL,
+        received_at BIGINT NOT NULL,
+        clock_synced INTEGER NOT NULL,
+        clock_uncertainty_ms BIGINT,
+        source TEXT NOT NULL,
+        type TEXT NOT NULL,
+        mission_id TEXT,
+        severity TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        details TEXT,
+        data_refs TEXT,
+        sensitivity TEXT NOT NULL,
+        simulated INTEGER NOT NULL,
+        origin TEXT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS hannah_robot_blackbox_events_once ON hannah_robot_blackbox_events (user_id, robot_id, robot_event_id)",
+      "CREATE INDEX IF NOT EXISTS hannah_robot_blackbox_events_time ON hannah_robot_blackbox_events (user_id, robot_id, at)",
+      "CREATE INDEX IF NOT EXISTS hannah_robot_blackbox_events_mission ON hannah_robot_blackbox_events (user_id, mission_id)",
+      "CREATE INDEX IF NOT EXISTS hannah_robot_blackbox_events_expiry ON hannah_robot_blackbox_events (expires_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_robot_blackbox_segments (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        stream TEXT NOT NULL,
+        topics TEXT NOT NULL,
+        from_at BIGINT,
+        to_at BIGINT,
+        records INTEGER NOT NULL,
+        bytes INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        storage_key TEXT NOT NULL,
+        sensitivity TEXT NOT NULL,
+        simulated INTEGER NOT NULL,
+        verified INTEGER NOT NULL,
+        uploaded_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robot_blackbox_segments_robot ON hannah_robot_blackbox_segments (user_id, robot_id, from_at)",
+      "CREATE INDEX IF NOT EXISTS hannah_robot_blackbox_segments_expiry ON hannah_robot_blackbox_segments (expires_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_robot_blackbox_settings (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        robot_id TEXT NOT NULL,
+        settings TEXT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, robot_id)
+      )`,
+    ],
+  },
+  {
     version: 35,
     name: "Robot operations: sim-to-real deployments, update packages, staged rollouts and firmware",
     // Simulator runs and their baselines, sim-to-real deployment records, the

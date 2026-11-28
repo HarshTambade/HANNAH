@@ -70,6 +70,7 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /\bfleet\b|\brobots\b|available robot|\bassign\b|(a|any|which|every|all|each) robots?\b/i, tools: /^robot_(fleet|assign)$/ },
   { match: /\breassign|hand (it|the task|that) (on|over)|give (it|that|this|the)( task| job| mission)? to (another|a different)|another robot (should|can|could) (take|do)|a different robot/i, tools: /^robot_(reassign|fleet|list|stop|wait_for_mission)$/ },
   { match: /(robot|rover).*(battery|health|diagnos|sensor|obstacle|temperature|humidity|surround|detect|maintenance|fault|wrong|blocked|sees?\b)|(battery|health|diagnos|sensor|obstacle|temperature|humidity|surround|detect|maintenance|fault|blocked).*(robot|rover)/i, tools: /^robot_(diagnostics|battery|read_sensor|surroundings)$/ },
+  { match: /(robot|rover).*(why|stopp|incident|black ?box|what happened|timeline|replay)|(why|what happened).*(robot|rover)|\bblack ?box\b/i, tools: /^robot_(why_stopped|timeline)$/ },
   { match: /(robot|rover).*(inspect|patrol|visit|check the (area|room|zone))|(inspect|patrol).*(robot|rover|area|zone|warehouse)/i, tools: /^robot_inspect$/ },
   { match: /(robot|rover).*(beacon|light|horn|switch)|(beacon|horn).*(robot|rover)/i, tools: /^robot_set_device$/ },
   { match: /(robot|rover|arm\b).*(\bplan\b|\broute\b|\bround\b|and (then|come back|return)|\bthen\b|template|\bsteps?\b|put the|pick and place)|(\bplan\b|inspection (route|round)|\bpatrol\b).*(robot|rover|arm\b)/i, tools: /^robot_(run_plan|plan|templates|cancel_plan)$/ },

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, Loader2, MapPin, OctagonX, Plus, Radio, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
+import BlackBoxPanel from "./robotops/BlackBoxPanel";
 import { AnalyticsPanel, ArmPanel, CameraPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
 import SimToRealPanel from "./robotops/SimToRealPanel";
 import { EdgeResourcesPanel } from "./robotops/EdgeResourcesPanel";
@@ -452,6 +453,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
       )}
 
       <DiagnosticsPanel robot={robot} />
+      <BlackBoxPanel robot={robot} />
 
       {robot.status === "enrolled" && !robot.simulated && <SimToRealPanel robot={robot} robots={robots} />}
 

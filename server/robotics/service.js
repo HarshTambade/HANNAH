@@ -1112,7 +1112,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return fleet.analytics({ robots, missions, plans: planRows, events, telemetry: telemetryOf, now: at, windowMs });
   }
 
-  return { edgeResources, nextSeq, activeMotion, addDestination, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
+  return { edgeResources, nextSeq, activeMotion, addDestination, addEvent, publicMission, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
 }
 
 module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, fingerprintOf, normalizeDescriptor, requestMessage, signCommand, signRequest };

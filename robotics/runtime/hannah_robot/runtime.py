@@ -55,8 +55,10 @@ class Mission:
 
 
 class Runtime:
-    def __init__(self, adapter: RobotAdapter, guard: CommandGuard, safety: LocalSafety, link_timeout: float = 5.0, clock=time.time, log=None, descriptor: dict | None = None):
+    def __init__(self, adapter: RobotAdapter, guard: CommandGuard, safety: LocalSafety, link_timeout: float = 5.0, clock=time.time, log=None, descriptor: dict | None = None, blackbox=None):
         self.adapter = adapter
+        # The black box (blackbox/hook.py), when recording is on. It only listens: nothing here waits for it or depends on it.
+        self.blackbox = blackbox
         # Sent with the first exchange after each start, so a profile changed while
         # the robot was off (a longer link timeout, a removed keep-out zone) reaches
         # the server, which then asks for commissioning again.
@@ -125,15 +127,26 @@ class Runtime:
                 self._event("revoked", "error", "HANNAH's server refused this robot's credentials. Holding position.")
 
     # ---------------- helpers ----------------
+    def _record(self, method: str, *args) -> None:
+        if self.blackbox is None:
+            return
+        try:
+            getattr(self.blackbox, method)(*args)
+        except Exception as error:  # noqa: BLE001 - recording must never stop the control loop
+            self.log("blackbox-error", error=f"{type(error).__name__}: {error}")
+
     def _event(self, kind: str, severity: str, message: str) -> None:
-        self._events.append({"at": int(self.clock() * 1000), "type": kind, "severity": severity, "message": message})
+        at = int(self.clock() * 1000)
+        self._events.append({"at": at, "type": kind, "severity": severity, "message": message})
         self._events = self._events[-100:]
         self.log(kind, severity=severity, message=message)
+        self._record("on_event", kind, severity, message, at)
 
     def _report(self, mission_id: str, status: str, **fields) -> dict:
         report = {"missionId": mission_id, "status": status, "at": int(self.clock() * 1000), **fields}
         self._reports.append(report)
         self.log("report", mission=mission_id, status=status, reason=fields.get("reason", ""))
+        self._record("on_report", report)
         return report
 
     def _finish(self, mission: Mission, status: str, reason: str = "", result: dict | None = None, attachment: dict | None = None) -> None:
@@ -178,6 +191,7 @@ class Runtime:
             return
         command = verdict.command
         mission_id = command["missionId"]
+        self._record("on_command", command)
         self._apply_link_limit(command.get("limits") or {})
         if command["type"] == "cancel":
             mission = self._missions.get(mission_id)
@@ -390,6 +404,7 @@ class Runtime:
 
             self._advance(now)
             self._state = self._compose(self.adapter.state())
+            self._record("on_state", self._state)
 
     def _advance(self, now: float) -> None:
         stopping = self._stopping
@@ -438,16 +453,20 @@ class Runtime:
         self.running = False
 
 
-def run(runtime: Runtime, link: Link, sync_interval: float | None = None, tick_hz: float = 20.0) -> None:
-    """Run until interrupted: the control loop here, the server exchanges on a second thread."""
+def run(runtime: Runtime, link: Link, sync_interval: float | None = None, tick_hz: float = 20.0, uploader=None) -> None:
+    """Run until interrupted: the control loop here, the server exchanges (and black box uploads) on a second thread."""
     pace = {"seconds": sync_interval or 1.0}
 
     def exchanges() -> None:
         while runtime.running:
             body = runtime.outbox()
             try:
+                sent = int(time.time() * 1000)
                 response = link.sync(body)
                 runtime.link_ok(response)
+                if uploader is not None:
+                    uploader.observe(response, sent, int(time.time() * 1000))
+                    uploader.maybe_upload(link)
                 suggested = response.get("intervalMs")
                 if sync_interval is None and isinstance(suggested, (int, float)) and suggested >= 100:
                     pace["seconds"] = suggested / 1000.0
@@ -474,6 +493,9 @@ def run(runtime: Runtime, link: Link, sync_interval: float | None = None, tick_h
         runtime.running = False
         runtime.adapter.hold()
         runtime.adapter.close()
+        recorder = getattr(runtime.blackbox, "recorder", None)
+        if recorder is not None:
+            recorder.flush()
 
 
 def json_logger(stream=sys.stdout):
