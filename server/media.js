@@ -116,7 +116,30 @@ async function providerFailure(response, label) {
  * Download a finished image or video the provider linked to. Only from the
  * provider's own origin or a public https address, re-checked on each redirect.
  */
+/**
+ * The default download: the address is checked when the socket connects (no
+ * second DNS answer can point it inward), redirects stay on https, and reading
+ * stops at the size cap instead of after the whole body.
+ */
+async function safeDownload(url, { maxBytes, kind, timeoutMs }) {
+  const { safeRequest } = require("./workflows/http");
+  let response;
+  try {
+    response = await safeRequest(url, { httpsOnly: true, maxRedirects: 3, maxBytes: maxBytes + 1, timeoutMs });
+  } catch {
+    throw Object.assign(new Error(`The provider's ${kind} link isn't a public https address, so HANNAH didn't fetch it.`), { status: 502 });
+  }
+  if (response.status < 200 || response.status >= 300) throw Object.assign(new Error(`The finished ${kind} couldn't be downloaded (HTTP ${response.status}).`), { status: 502 });
+  if (response.truncated || response.body.length > maxBytes) throw Object.assign(new Error(`The ${kind} is larger than ${Math.round(maxBytes / 1024 / 1024)} MB.`), { status: 502 });
+  if (!response.body.length) throw Object.assign(new Error(`The provider returned no usable ${kind}.`), { status: 502 });
+  return { bytes: response.body, mime: String(response.headers["content-type"] || "").split(";")[0].trim().toLowerCase() };
+}
+
 async function downloadMedia(url, { provider, fetchImpl, lookup, maxBytes, kind, timeoutMs }) {
+  if (!fetchImpl) {
+    if (!/^https:\/\//i.test(String(url || ""))) throw Object.assign(new Error(`The provider's ${kind} link isn't a public https address, so HANNAH didn't fetch it.`), { status: 502 });
+    return safeDownload(url, { maxBytes, kind, timeoutMs });
+  }
   let target = String(url || "");
   for (let hop = 0; hop < 3; hop += 1) {
     let parsed;
@@ -157,7 +180,10 @@ function envCost(name) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-function createMediaRouter({ getRequestProvider, allowedProviderIds, timeoutMs = 60_000, fetchImpl = (...args) => fetch(...args), lookup } = {}) {
+function createMediaRouter({ getRequestProvider, allowedProviderIds, timeoutMs = 60_000, fetchImpl: injectedFetch, lookup } = {}) {
+  const fetchImpl = injectedFetch ?? ((...args) => fetch(...args));
+  // Provider links are downloaded with the guarded request unless a test injects its own fetch.
+  const downloadFetch = injectedFetch;
   const router = express.Router();
   /** Video ids already charged in this process, so polling twice doesn't charge twice. */
   const charged = new Set();
@@ -249,7 +275,7 @@ function createMediaRouter({ getRequestProvider, allowedProviderIds, timeoutMs =
         let mime = typeof item?.mime_type === "string" ? item.mime_type : "";
         if (typeof item?.b64_json === "string" && item.b64_json) bytes = Buffer.from(item.b64_json, "base64");
         else if (typeof item?.url === "string" && item.url) {
-          const got = await downloadMedia(item.url, { provider: target.provider, fetchImpl, lookup, maxBytes: MAX_IMAGE_BYTES, kind: "image", timeoutMs });
+          const got = await downloadMedia(item.url, { provider: target.provider, fetchImpl: downloadFetch, lookup, maxBytes: MAX_IMAGE_BYTES, kind: "image", timeoutMs });
           bytes = got.bytes;
           mime = mime || got.mime;
         }
@@ -334,7 +360,7 @@ function createMediaRouter({ getRequestProvider, allowedProviderIds, timeoutMs =
     }
     let got;
     try {
-      got = await downloadMedia(url, { provider: target.provider, fetchImpl, lookup, maxBytes: MAX_VIDEO_BYTES, kind: "video", timeoutMs: Math.max(timeoutMs, 120_000) });
+      got = await downloadMedia(url, { provider: target.provider, fetchImpl: downloadFetch, lookup, maxBytes: MAX_VIDEO_BYTES, kind: "video", timeoutMs: Math.max(timeoutMs, 120_000) });
     } catch (error) {
       return res.status(error.status || 502).json({ error: error.message, reason: "download-failed" });
     }
@@ -355,4 +381,4 @@ function createMediaRouter({ getRequestProvider, allowedProviderIds, timeoutMs =
   return router;
 }
 
-module.exports = { createMediaRouter, checkMediaPrompt, IMAGE_ENGINES, VIDEO_ENGINES };
+module.exports = { createMediaRouter, checkMediaPrompt, IMAGE_ENGINES, VIDEO_ENGINES, downloadMedia };

@@ -198,3 +198,11 @@ test("a failed or moderated video job says why", async () => {
   assert.match(withheld.body.error, /moderation withheld/);
   assert.equal((await call("/api/media/video/xai/old1")).status, 410);
 });
+
+test("without an injected fetch, a provider link to an internal address or plain http is never fetched", async () => {
+  const { downloadMedia } = require("./media");
+  const provider = { baseUrl: "https://api.x.ai/v1" };
+  for (const url of ["https://127.0.0.1/out.png", "https://[::ffff:a9fe:a9fe]/latest", "http://cdn.example.org/out.png"]) {
+    await assert.rejects(downloadMedia(url, { provider, maxBytes: 1024, kind: "image", timeoutMs: 2000 }), /isn't a public https address/, url);
+  }
+});
