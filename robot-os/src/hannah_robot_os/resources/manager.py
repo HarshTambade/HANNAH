@@ -145,6 +145,8 @@ class EdgeResourceManager:
             "actions": applied,
             "enforcement": "applied" if self.enforce else "recommend-only",
             "shed_active": self._shed is not None,
+            # What the owner configured on the robot, so HANNAH's advice uses the same rules.
+            "policy": {"approved_remote_resources": list(self.config.approved_remote_resources), "reasoning_privacy": self.config.reasoning_privacy},
             "workloads": self.workload_table(),
         }
         for warning in evaluation["warnings"]:

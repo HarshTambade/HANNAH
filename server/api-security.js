@@ -65,6 +65,8 @@ function accountMayUse(path) {
     || path === "/robots" || path.startsWith("/robots/")
     // An account's own hubs, the devices behind them and their automations.
     || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/") || path === "/inventory"
+    // The account's Device Intelligence Graph (server/graph): scoped to the account and its teams.
+    || path === "/graph" || path.startsWith("/graph/")
     // The AI workforce: teammates, computers, tasks, skills, routines, vault and approvals.
     || path === "/workforce" || path.startsWith("/workforce/");
 }

@@ -1512,6 +1512,80 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_shared_conversations_owner ON hannah_shared_conversations (user_id, created_at)",
     ],
   },
+  {
+    version: 37,
+    name: "Device Intelligence Graph and edge resource reports",
+    // The graph: entities (robots, sensors, machines, rooms, workflows…) and
+    // typed, versioned relationships between them. Nothing is updated in
+    // place: a change closes the old row (valid_to) and adds a new one, so
+    // the graph can be read as it was at any time, with who or what said so
+    // (source). Each row belongs to one account and, when shared, one team;
+    // workspace and project narrow it further. Edge resource reports are what
+    // a robot's onboard Edge Resource Manager measured, kept for a bounded
+    // time. Additive; no existing row is changed.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_graph_nodes (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        team_id TEXT REFERENCES hannah_teams(id) ON DELETE CASCADE,
+        workspace_id TEXT,
+        project_id TEXT,
+        type TEXT NOT NULL,
+        ref TEXT,
+        name TEXT NOT NULL,
+        props TEXT NOT NULL,
+        source TEXT NOT NULL,
+        valid_from BIGINT NOT NULL,
+        valid_to BIGINT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS hannah_graph_nodes_ref ON hannah_graph_nodes (user_id, ref) WHERE ref IS NOT NULL AND valid_to IS NULL",
+      "CREATE INDEX IF NOT EXISTS hannah_graph_nodes_owner ON hannah_graph_nodes (user_id, type, valid_to)",
+      "CREATE INDEX IF NOT EXISTS hannah_graph_nodes_team ON hannah_graph_nodes (team_id, type, valid_to)",
+      `CREATE TABLE IF NOT EXISTS hannah_graph_node_versions (
+        node_id TEXT NOT NULL REFERENCES hannah_graph_nodes(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        props TEXT NOT NULL,
+        source TEXT NOT NULL,
+        valid_from BIGINT NOT NULL,
+        valid_to BIGINT,
+        PRIMARY KEY (node_id, version)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_graph_edges (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        team_id TEXT REFERENCES hannah_teams(id) ON DELETE CASCADE,
+        workspace_id TEXT,
+        project_id TEXT,
+        type TEXT NOT NULL,
+        type_version INTEGER NOT NULL,
+        from_id TEXT NOT NULL REFERENCES hannah_graph_nodes(id) ON DELETE CASCADE,
+        to_id TEXT NOT NULL REFERENCES hannah_graph_nodes(id) ON DELETE CASCADE,
+        props TEXT NOT NULL,
+        source TEXT NOT NULL,
+        valid_from BIGINT NOT NULL,
+        valid_to BIGINT,
+        created_at BIGINT NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_graph_edges_from ON hannah_graph_edges (from_id, valid_to)",
+      "CREATE INDEX IF NOT EXISTS hannah_graph_edges_to ON hannah_graph_edges (to_id, valid_to)",
+      "CREATE INDEX IF NOT EXISTS hannah_graph_edges_owner ON hannah_graph_edges (user_id, valid_to)",
+      `CREATE TABLE IF NOT EXISTS hannah_edge_resource_reports (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        at BIGINT NOT NULL,
+        measured_at BIGINT NOT NULL,
+        source TEXT NOT NULL,
+        status TEXT NOT NULL,
+        report TEXT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_edge_resource_reports_robot ON hannah_edge_resource_reports (user_id, robot_id, at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

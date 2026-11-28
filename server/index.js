@@ -45,6 +45,7 @@ const { createAuthenticator: createRobotOSBridgeAuthenticator } = require("./rob
 const robotOSEnvelopes = require("./robotics/robot_os_envelopes");
 const { createRobotOSCommandService } = require("./robotics/robot_os_commands");
 const { createDeviceAccountRouter, createHubDeviceRouter } = require("./devices/router");
+const { createGraphRouter } = require("./graph/router");
 const { manualRoutes } = require("./devices/manuals");
 const { createWebRouter } = require("./web");
 const { createHostingSetupRouter } = require("./hosting-setup");
@@ -473,6 +474,12 @@ if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
           return { stored: false };
         });
         if (!result.stored) return; // duplicate or unstoreable: never double-count
+        // The onboard Edge Resource Manager's report, kept with the robot's resource history.
+        if (env.kind === "telemetry" && env.payload?.type === "edge_resources" && result.owner) {
+          const robot = (await db.query("SELECT simulated FROM hannah_robots WHERE user_id = $1 AND id = $2", [result.owner, String(env.robot_id)]).catch(() => ({ rows: [] }))).rows[0];
+          await operator.robotics.edgeResources.record(db, { userId: result.owner, robotId: String(env.robot_id), report: env.payload.report, source: "robot-os-bridge", simulatedHost: Boolean(Number(robot?.simulated)) })
+            .catch((error) => console.error(`Robot OS resources report refused: ${error?.message || error}`));
+        }
       }
       console.log(JSON.stringify({ robotOSBridge: { robot_id: env.robot_id, envelope_id: env.envelope_id, kind: env.kind, ts_ms: env.ts_ms } }));
     },
@@ -600,6 +607,8 @@ workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands }));
 app.use("/api", createDeviceAccountRouter({ devices: operator.devices, engine: operator.engine, manuals: manualRoutes({ devices: operator.devices }) }));
+// The Device Intelligence Graph: entities, versioned relationships, history and live-checked context (server/graph).
+app.use("/api", createGraphRouter({ graph: operator.graph }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
 app.use("/api", createWebRouter({ getRequestProvider }));
 // "Set up HANNAH": connect this deployment to Vercel and Supabase with the person's own tokens.
