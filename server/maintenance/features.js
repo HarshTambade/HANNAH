@@ -14,7 +14,7 @@
  *   vibration:   { rms }                                         (the base, in g)
  *   compute:     { cpuTemperatureC, cpuPercent, memoryPercent }
  *   sensors:     { <id>: { bias…, drift…, offset…, calibrationError… } }   (sensor drift fields)
- *   faults:      [{ code, message, source }]                     (fault codes the robot's controllers reported)
+ *   faults:      [{ code, message, source }]                     (fault codes; source must name the controller that reported it)
  * snake_case spellings (temperature_c, current_a, voltage_v) are accepted too.
  *
  * Robot OS sends pre-aggregated windows (services/maintenance_features.py):
@@ -73,10 +73,15 @@ function fromRobotState(state) {
   return out;
 }
 
-/** Fault codes a robot reported: [{ component, code, message, source }]. Only entries that carry a code count. */
+// A fault counts as a controller-reported fault code only when the robot says a controller (or the
+// battery's management system, or firmware) reported it. A runtime's own observation ("odometry-stale")
+// is not a fault code and never becomes a confirmed fault.
+const CONTROLLER_SOURCE = /controller|motor|drive|firmware|bms|battery-management/i;
+
+/** Fault codes a robot's controllers reported: [{ component, code, message, source }]. */
 function faultsFromRobotState(state) {
   const faults = Array.isArray(state?.faults) ? state.faults : [];
-  return faults.filter((fault) => fault && (typeof fault.code === "string" || finite(fault.code))).slice(0, 20).map((fault) => ({
+  return faults.filter((fault) => fault && (typeof fault.code === "string" || finite(fault.code)) && CONTROLLER_SOURCE.test(String(fault.source || ""))).slice(0, 20).map((fault) => ({
     component: fault.component ? slug(fault.component) : fault.motor ? `motor:${slug(fault.motor)}` : fault.controller ? `controller:${slug(fault.controller)}` : "robot",
     code: String(fault.code).slice(0, 60), message: String(fault.message || "").slice(0, 200), source: String(fault.source || "robot").slice(0, 40),
   }));
@@ -97,7 +102,7 @@ function fromRobotOSFeatures(payload) {
       const { n, mean, min, max } = stats;
       const last = finite(stats.last) ? stats.last : mean;
       if (!(Number.isInteger(n) && n > 0 && n <= 1e6) || ![mean, min, max, last].every((value) => valid(metric, value)) || min > max || mean < min - 1e-9 || mean > max + 1e-9) continue;
-      const component = key === "temp_fet_c" ? `controller:${id}` : `motor:${id}`;
+      const component = key === "temp_fet_c" || key === "input_voltage_v" ? `controller:${id}` : `motor:${id}`;
       out.push({ component, metric, unit: UNITS[metric], stats: { n, mean, min, max, last, sumsq: finite(stats.std) && n > 1 ? (stats.std ** 2) * (n - 1) + n * mean * mean : n * mean * mean } });
     }
   }

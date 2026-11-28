@@ -169,9 +169,9 @@ test("detectors over whole robots: injected wear is found with measured precisio
 
 test("a controller-reported fault code is a confirmed fault; nothing else becomes one without a person", async () => {
   const robot = await enrolled(users.mira, "Faulty");
-  await robot.sync({ send: state({ faults: [{ code: "VESC-6", message: "motor over temperature", source: "motor-controller", motor: "left" }, { message: "no code" }] }) });
+  await robot.sync({ send: state({ faults: [{ code: "VESC-6", message: "motor over temperature", source: "motor-controller", motor: "left" }, { message: "no code", source: "motor-controller" }, { code: "odometry-stale", message: "the runtime's own observation" }] }) });
   const findings = (await call(users.mira, "GET", `/maintenance/findings?asset=${robot.robotId}`)).body.findings;
-  assert.equal(findings.length, 1, "a fault without a code is not a fault code");
+  assert.equal(findings.length, 1, "a fault without a code, or one no controller reported, is not a controller fault code");
   assert.equal(findings[0].label, "confirmed-fault");
   assert.equal(findings[0].confirmation.by, "controller");
   assert.equal(findings[0].confirmation.code, "VESC-6");
@@ -180,7 +180,7 @@ test("a controller-reported fault code is a confirmed fault; nothing else become
   // The same fault reported again is the same finding.
   await new Promise((resolve) => setTimeout(resolve, 20));
   const service = createMaintenanceService({ recordEveryMs: 0 });
-  await service.recordRobotState(db, { id: robot.robotId, user_id: users.miraId, simulated: 0 }, state({ faults: [{ code: "VESC-6", message: "again", motor: "left" }] }));
+  await service.recordRobotState(db, { id: robot.robotId, user_id: users.miraId, simulated: 0 }, state({ faults: [{ code: "VESC-6", message: "again", motor: "left", source: "motor-controller" }] }));
   assert.equal((await call(users.mira, "GET", `/maintenance/findings?asset=${robot.robotId}`)).body.findings.length, 1);
 });
 
@@ -270,4 +270,24 @@ test("chat and agents ask “is anything wearing out?” through the maintenance
   assert.ok(response.findings.every((item) => item.failureDate === null && item.label));
   assert.match(response.rules, /Never give a failure date/);
   assert.equal(typeof response.precision.precision, "number");
+});
+
+test("a Robot OS maintenance window (as robot-os/services/maintenance_features.py sends it) becomes series, and its controller fault a confirmed fault", async () => {
+  const robot = await enrolled(users.otto, "OS-robot");
+  const service = createMaintenanceService();
+  const payload = {
+    window_ms: 60000, simulated: false,
+    controllers: { drive: { input_voltage_v: { n: 600, mean: 23.9, min: 23.5, max: 24.2, std: 0.1, last: 23.8 } }, "drive-left": { temp_fet_c: { n: 600, mean: 41, min: 40, max: 43, std: 0.5, last: 42 }, encoder_residual_mps: { n: 599, mean: 0.01, min: 0, max: 0.04, std: 0.01, last: 0.0 } }, broken: { temp_fet_c: { n: 3, mean: 90, min: 10, max: 20, last: 15 } } },
+    fault_codes: [{ controller_id: "drive", fault: "FET over temperature", at_ms: Date.now() }],
+  };
+  assert.deepEqual(await service.recordRobotOSFeatures(db, users.ottoId, robot.robotId, payload), { recorded: 3 }, "a window whose mean is outside its own min and max is dropped");
+  const keys = (await call(users.otto, "GET", `/maintenance/series?asset=${robot.robotId}`)).body.series.map((item) => `${item.component}.${item.metric}`).sort();
+  assert.deepEqual(keys, ["controller:drive-left.temperatureC", "controller:drive.voltageV", "motor:drive-left.encoderResidualMps"]);
+  const bucket = (await call(users.otto, "GET", `/maintenance/series?asset=${robot.robotId}&component=controller:drive-left&metric=temperatureC`)).body.buckets[0];
+  assert.equal(bucket.n, 600);
+  assert.equal(bucket.mean, 41);
+  assert.equal(bucket.max, 43);
+  const fault = (await call(users.otto, "GET", `/maintenance/findings?asset=${robot.robotId}`)).body.findings[0];
+  assert.equal(fault.label, "confirmed-fault");
+  assert.equal(fault.confirmation.code, "FET over temperature");
 });
