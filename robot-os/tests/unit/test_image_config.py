@@ -408,6 +408,15 @@ def test_boot_check_markers_agree():
     assert 'print("HANNAH Robot OS READY")' in (ROBOT / "src/hannah_robot_os/__main__.py").read_text()
 
 
+def test_pinned_mkosi_matches_ci():
+    versions = dict(re.findall(r"^([A-Z_]+)=(.*)$", (MKOSI / "VERSIONS").read_text(), re.M))
+    assert re.fullmatch(r"v\d+(\.\d+)*", versions["MKOSI_VERSION"])
+    workflow = (REPO / ".github/workflows/robot-os-image-ci.yml").read_text()
+    pins = re.findall(r"uses: systemd/mkosi@(\S+)", workflow)
+    assert pins and set(pins) == {versions["MKOSI_VERSION"]}, "every mkosi install in CI uses the pinned version"
+    assert "qemu-smoke.sh" in workflow and "SHA256SUMS" in workflow
+
+
 def _dry_run(tmp_path, *args):
     return subprocess.run(["bash", str(ROBOT / "images/build.sh"), *args, "--out", str(tmp_path), "--dry-run"],
                           capture_output=True, text=True)
