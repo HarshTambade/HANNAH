@@ -1,0 +1,81 @@
+{
+  "note": "Signed by Node (server/robotics/update_packages.js signManifest) with a throwaway key; checked by Robot OS in Python and by the server.",
+  "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAoqmxRWHPRZFdQBP8EpZdAN0K7efrY2/JQo0d0w1dbKQ=\n-----END PUBLIC KEY-----\n",
+  "keyId": "92d19021339d8f05",
+  "owner": "Acme Robotics",
+  "artifact": {
+    "path": "nav.json",
+    "content": "navigation tuning v1.4\n"
+  },
+  "manifest": {
+    "schema": "hannah-update/1",
+    "id": "com.acme.nav-tuning",
+    "name": "Navigation tuning “corridors”",
+    "kind": "configuration",
+    "version": "1.4.0",
+    "publisher": "Acme Robotics",
+    "releasedAt": "2026-11-20",
+    "targets": {
+      "hardware": [
+        {
+          "manufacturer": "Acme",
+          "model": "Rover 2"
+        }
+      ],
+      "os": [
+        {
+          "name": "HANNAH Robot OS",
+          "range": ">=0.1.0 <1.0.0"
+        }
+      ],
+      "ros": [],
+      "runtime": ">=0.1.0 <0.3.0",
+      "firmware": [
+        "fw-3.1"
+      ]
+    },
+    "dependencies": [],
+    "artifacts": [
+      {
+        "path": "nav.json",
+        "sha256": "42673c3683b477191ed8f23cb8bc1d9f1036401e05122dd17425bd70e747906a",
+        "size": 23
+      }
+    ],
+    "changelog": "Lower top speed → 0.4 m/s in narrow corridors; café test track.\nSecond line\twith tab.",
+    "install": {
+      "instructions": "Staged by Robot OS; the robot is held stopped.",
+      "requiresStop": true,
+      "reboot": false
+    },
+    "recovery": {
+      "procedure": "Restore the configuration backup taken before installing.",
+      "rollback": "config-restore"
+    },
+    "healthChecks": [
+      {
+        "id": "robot-ready",
+        "description": "Robot OS READY gate",
+        "timeoutS": 120
+      }
+    ],
+    "tests": {
+      "level": "simulation",
+      "passed": 5,
+      "total": 5,
+      "evidence": "robotops sim run"
+    },
+    "config": {
+      "limits": {
+        "maxLinearSpeed": 0.4,
+        "robotRadius": 0.18,
+        "minBatteryPercent": 20
+      }
+    },
+    "signature": {
+      "algorithm": "ed25519",
+      "keyId": "92d19021339d8f05",
+      "value": "dhH/l4l2eCUrKPkE2PQudWvvlX0WsDcfOp8WgXd9dKDBWRC8S62wf3rQvnTYPaKq72OxdgKbEGHItPsrHU7bCA=="
+    }
+  }
+}

@@ -9,6 +9,8 @@ from typing import Any
 
 from ..common import AuditLog, new_id, now_ms
 from ..safety.gateway import SafetyGateway
+from ..updates import backup as backups
+from ..updates.package import PackageError, verify_package
 from ..updates.state import UpdateState
 from ..updates.recovery import RecoveryManager
 from .bridge import BridgeEnvelope
@@ -31,6 +33,17 @@ class RobotOSCommandDispatcher:
     # until it sees the ack, and a lost ack must not turn into "failed" (the
     # replay check refuses the copy) or into a second run after a restart.
     results_path: Any = None
+    # Signed packages. With trusted_keys set (the keys pinned on this robot),
+    # update.stage needs a signed "hannah-update/1" manifest that verifies here,
+    # with these keys, and fits `facts` (this robot's hardware and versions).
+    trusted_keys: Any = None
+    facts: Any = None
+    # Configuration backups before staging, restored (validated) on rollback.
+    backup_root: Any = None
+    backup_files: list = field(default_factory=list)
+    validate_backup: Any = None
+    # Health checks a package may ask for after activation, by id. "robot-ready" is always the READY gate.
+    health_checks: dict = field(default_factory=dict)
     _applied: list[str] = field(default_factory=list)
     _results: dict[str, dict] = field(default_factory=dict)
 
@@ -41,6 +54,30 @@ class RobotOSCommandDispatcher:
                 self._results = {str(key): value for key, value in saved.items() if isinstance(value, dict)}
             except (OSError, ValueError, AttributeError):
                 self._results = {}
+
+    def _facts(self) -> dict:
+        return (self.facts() if callable(self.facts) else self.facts) or {}
+
+    def _update_view(self) -> dict:
+        state = self.update_state
+        return {"status": state.status, "currentVersion": state.current_version, "pendingVersion": state.pending_version, "lastGoodVersion": state.last_good_version}
+
+    def _run_health(self, ids: list) -> list[dict]:
+        results = []
+        for check_id in ids:
+            check_id = str(check_id)
+            if check_id == "robot-ready":
+                ok = bool((self.health_snapshot() or {}).get("robot_ready"))
+                results.append({"id": check_id, "ok": ok, "detail": "READY gate passed" if ok else "READY gate not passed"})
+            elif check_id in self.health_checks:
+                try:
+                    ok = bool(self.health_checks[check_id]())
+                    results.append({"id": check_id, "ok": ok, "detail": "passed" if ok else "failed"})
+                except Exception as error:  # noqa: BLE001 - a crashing check is a failed check
+                    results.append({"id": check_id, "ok": False, "detail": f"the check crashed ({type(error).__name__})"})
+            else:
+                results.append({"id": check_id, "ok": False, "detail": "this robot has no such health check"})
+        return results
 
     def _remember(self, command_id: str, ok: bool, reason: str, expires_at: Any) -> None:
         now = self.now()
@@ -84,11 +121,32 @@ class RobotOSCommandDispatcher:
             return self._settle(command, command_id, False, decision.reason)
 
         params = command.get("params", {}) or {}
+        extra: dict = {}
         if capability == "update.stage":
             version = str(params.get("version", "")).strip()
+            manifest = params.get("manifest")
+            if self.trusted_keys is not None or manifest is not None:
+                if not isinstance(manifest, dict):
+                    return self._settle(command, command_id, False, "a signed update package is required")
+                try:
+                    verified = verify_package(manifest, self.trusted_keys or {}, self._facts())
+                except PackageError as error:
+                    self.audit.emit("command-dispatcher", "package_refused", severity="warning", command_id=command_id, reason=str(error))
+                    return self._settle(command, command_id, False, f"package refused: {error}")
+                if version and version != verified["version"]:
+                    return self._settle(command, command_id, False, "version doesn't match the signed manifest")
+                version = verified["version"]
+                backup_id = str(params["backup"].get("id", "")) if isinstance(params.get("backup"), dict) else ""
+                if backup_id and self.backup_root:
+                    try:
+                        taken = backups.take(self.backup_root, backup_id, self.backup_files, self._facts(), now=self.now)
+                    except backups.BackupError as error:
+                        return self._settle(command, command_id, False, f"backup failed: {error}")
+                    extra["backup"] = {"id": taken["id"], "files": len(taken["files"])}
             if not version:
                 return self._settle(command, command_id, False, "missing version")
             self.update_state.stage(version)
+            extra["update"] = self._update_view()
         elif capability == "update.activate":
             # Promotion is allowed only when this robot's own READY gate passes.
             # The parent cannot claim the robot is healthy.
@@ -98,7 +156,16 @@ class RobotOSCommandDispatcher:
             if params.get("version") and params["version"] != self.update_state.pending_version:
                 return self._settle(command, command_id, False, "pending version mismatch")
             self.update_state.mark_verifying()
+            requested = params.get("healthChecks") or []
+            results = self._run_health(requested if isinstance(requested, list) else [])
+            if results:
+                extra["health"] = {"checks": results}
+            if results and not all(item["ok"] for item in results):
+                self.update_state.status = "failed"
+                extra["update"] = self._update_view()
+                return self._settle(command, command_id, False, "health checks failed: " + ", ".join(item["id"] for item in results if not item["ok"]), extra)
             self.update_state.mark_healthy()
+            extra["update"] = self._update_view()
         elif capability == "update.rollback":
             self.update_state.rollback()
             if self.recovery is not None:
@@ -106,22 +173,30 @@ class RobotOSCommandDispatcher:
                     "approved update rollback",
                     self.update_state.last_good_version,
                 )
+            extra["update"] = self._update_view()
+            backup_id = str(params["backup"].get("id", "")) if isinstance(params.get("backup"), dict) else ""
+            if backup_id and self.backup_root:
+                try:
+                    extra["restored"] = backups.restore(self.backup_root, backup_id, self._facts(), self.validate_backup)
+                except backups.BackupError as error:
+                    self.audit.emit("command-dispatcher", "restore_refused", severity="warning", command_id=command_id, reason=str(error))
+                    return self._settle(command, command_id, False, f"slot rolled back; configuration not restored: {error}", extra)
         # diagnostics.run is a read/report capability; the report is the ack itself.
 
         self._applied.append(command_id)
         self.audit.emit("command-dispatcher", "command_applied", command_id=command_id, capability=capability)
-        return self._settle(command, command_id, True, "applied")
+        return self._settle(command, command_id, True, "applied", extra)
 
-    def _settle(self, command: dict[str, Any], command_id: str, ok: bool, reason: str) -> BridgeEnvelope:
+    def _settle(self, command: dict[str, Any], command_id: str, ok: bool, reason: str, extra: dict | None = None) -> BridgeEnvelope:
         """Every answer to a verified command is remembered, so a repeat gets the same one."""
         self._remember(command_id, ok, reason, command.get("expiresAt"))
-        return self._ack(command_id, ok, reason)
+        return self._ack(command_id, ok, reason, extra)
 
-    def _ack(self, command_id: str, ok: bool, reason: str) -> BridgeEnvelope:
+    def _ack(self, command_id: str, ok: bool, reason: str, extra: dict | None = None) -> BridgeEnvelope:
         return BridgeEnvelope(
             envelope_id=new_id("env"),
             robot_id=self.robot_id,
             ts_ms=self.now(),
             kind="command_ack",
-            payload={"commandId": command_id, "ok": ok, "reason": reason},
+            payload={"commandId": command_id, "ok": ok, "reason": reason, **(extra or {})},
         )
