@@ -59,6 +59,8 @@ function accountMayUse(path) {
     || path.startsWith("/phone/") || path.startsWith("/connectors/") || path.startsWith("/web/") || path.startsWith("/setup/hosting/") || path === "/channels" || path.startsWith("/channels/")
     // The Action Engine and the coding service: an account's own actions, permissions, repositories and tasks.
     || path === "/actions" || path.startsWith("/actions/") || path.startsWith("/coding/")
+    // Image and video generation with the account's own provider key (server/media.js).
+    || path.startsWith("/media/")
     // An account's own robots, their missions and telemetry.
     || path === "/robots" || path.startsWith("/robots/")
     // An account's own hubs, the devices behind them and their automations.
