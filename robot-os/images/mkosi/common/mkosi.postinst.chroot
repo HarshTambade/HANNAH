@@ -32,8 +32,12 @@ chmod 0440 /etc/sudoers.d/50-hannah-admin
 
 # --- Read-only root ---------------------------------------------------------
 # / is mounted read-only. Everything that changes lives on the /var partition.
-rm -rf /home
-ln -s var/home /home
+# /home becomes a link to /var/home. A fresh Debian tree has an empty /home,
+# so rmdir is enough, and it stops the build if anything was put there.
+if [ ! -L /home ]; then
+    rmdir /home
+    ln -s var/home /home
+fi
 mkdir -p /efi /var/home /var/lib/hannah-system
 # Each root slot carries its own fstab naming its own partition label, so the
 # slot written by an update names itself.
