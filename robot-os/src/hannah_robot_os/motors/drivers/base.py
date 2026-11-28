@@ -15,7 +15,12 @@ feedback. Everything that keeps the robot safe lives here, once:
 - set_estop(True) sends zero, disengages and holds the controller disabled
   until set_estop(False) and an explicit enable;
 - connect() after a fault reconnects and reconfigures, and leaves the
-  controller disabled.
+  controller disabled. It never clears an error the controller itself
+  reports: that stays a fault ("controller: ...") until a person clears it.
+
+Faults are "transport: ..." / "connect failed: ..." (the link) or
+"controller: ..." (the controller's own error). The motor-controller service
+retries only the first kind.
 
 Speeds handed to subclasses are motor shaft speeds in turns per second, after
 gearing and wheel direction.
@@ -67,6 +72,17 @@ class DriveGeometry:
 
     def motor_turns_to_wheel_m(self, motor_turns: float) -> float:
         return motor_turns / self.gear_ratio * 2 * math.pi * self.wheel_radius_m
+
+
+def _label(error: Exception, what: str = "") -> str:
+    """Fault text: the controller's own error, or the link's."""
+    kind = "controller" if isinstance(error, ControllerFault) else "transport"
+    return f"{kind}: {what}{error}"
+
+
+def is_link_fault(fault: str | None) -> bool:
+    """True for faults a reconnect may fix (never for the controller's own errors)."""
+    return bool(fault) and (fault.startswith("transport:") or fault.startswith("connect failed:"))
 
 
 def _clamp(value: float, limit: float) -> float:
@@ -153,12 +169,13 @@ class WheelPairDriver:
             self._configure()
         except Exception as error:
             self._connected = False
-            self._fault = f"connect failed: {error}"
+            controller = isinstance(error, ControllerFault)
+            self._fault = f"controller: {error}" if controller else f"connect failed: {error}"
             try:
                 self._close()
             except Exception:
                 pass
-            raise TransportError(self._fault) from error
+            raise (ControllerFault if controller else TransportError)(self._fault) from error
         if was_faulted:
             self._reconnects += 1
         self._connected = True
@@ -226,7 +243,7 @@ class WheelPairDriver:
                     self._command(0.0, 0.0)
                     self._disengage()
                 except Exception as error:
-                    self._fail(f"transport: {error}")
+                    self._fail(_label(error))
             return
         if not self._connected:
             raise RuntimeError("controller not connected")
@@ -238,7 +255,7 @@ class WheelPairDriver:
             self._command(0.0, 0.0)
             self._engage()
         except Exception as error:
-            self._fail(f"transport: {error}")
+            self._fail(_label(error))
             raise RuntimeError(f"enable failed: {error}") from error
         self._enabled = True
 
@@ -266,7 +283,7 @@ class WheelPairDriver:
         try:
             self._command(left, right)
         except Exception as error:
-            self._fail(f"transport: {error}")
+            self._fail(_label(error))
             raise RuntimeError(f"velocity command failed: {error}") from error
         self._left_cmd_tps, self._right_cmd_tps = left, right
 
@@ -278,7 +295,7 @@ class WheelPairDriver:
         try:
             self._command(0.0, 0.0)
         except Exception as error:
-            self._fail(f"transport: stop failed: {error}")
+            self._fail(_label(error, "stop failed: "))
 
     def set_estop(self, active: bool) -> None:
         """Follow the safety gateway. Engaging sends the protocol's stop and
@@ -290,7 +307,7 @@ class WheelPairDriver:
                 try:
                     self._emergency()
                 except Exception as error:
-                    self._fail(f"transport: estop failed: {error}")
+                    self._fail(_label(error, "estop failed: "))
         self._estop = bool(active)
 
     # ---- helpers ---------------------------------------------------------
@@ -300,6 +317,7 @@ class WheelPairDriver:
         self._fault = self._fault or reason
         self._enabled = False
         self._left_cmd_tps = self._right_cmd_tps = 0.0
+        self._feedback = Feedback()  # stale readings would look like motion
         if first and self._connected:
             try:
                 self._emergency()

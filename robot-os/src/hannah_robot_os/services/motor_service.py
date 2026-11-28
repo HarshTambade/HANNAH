@@ -11,8 +11,11 @@ Each tick, after the shared safety state has been mirrored:
   and is not enabled is enabled again, as at start-up. Enabling does not move
   anything: motion needs a new command that passes the safety gateway and
   the manager. A latched stop stays unsafe until an operator reset.
-- a controller that is disconnected or faulted is reconnected at most every
-  reconnect_interval_ms, only while safe.
+- a controller that is disconnected or has a link fault (transport or
+  connect failure) is reconnected at most every reconnect_interval_ms, only
+  while safe. A fault the controller itself reports (overcurrent,
+  overheating, axis error) is never retried: the motors stay off until a
+  person clears it and restarts the service.
 """
 from __future__ import annotations
 
@@ -25,6 +28,7 @@ from ..common import AuditLog, now_ms
 from ..config import RobotOSConfig
 from ..hardware.models import HardwareDevice
 from ..hardware.registry import HardwareRegistry
+from ..motors.drivers.base import is_link_fault
 from ..motors.factory import MANUFACTURER, build_from_profile, effective_limits
 from ..motors.manager import MotorControllerManager
 from ..motors.sim import SimMotorController
@@ -60,6 +64,7 @@ class MotorService:
     controllers: list = field(default_factory=list)
     _was_safe: bool = True
     _last_attempt: dict[str, int] = field(default_factory=dict)
+    _reported: dict[str, str] = field(default_factory=dict)
 
     def setup(self) -> MotorControllerManager:
         profile = load_profile(self.profile_path) if self.profile_path else None
@@ -115,6 +120,13 @@ class MotorService:
     def _recover(self, cid: str) -> None:
         assert self.motors is not None
         st = self.motors.status(cid)
+        if st.fault and not is_link_fault(st.fault):
+            # The controller's own error (overcurrent, overheating, ...): never
+            # retried automatically; a person clears it and restarts the service.
+            if self._reported.get(cid) != st.fault:
+                self._reported[cid] = st.fault
+                self.audit.emit("motor-controller", "controller_fault_needs_operator", severity="error", controller_id=cid, fault=st.fault)
+            return
         if not st.connected or st.fault:
             if self.clock() - self._last_attempt.get(cid, 0) >= self.reconnect_interval_ms:
                 self.audit.emit("motor-controller", "controller_reconnecting", severity="warning", controller_id=cid, fault=st.fault)

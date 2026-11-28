@@ -193,10 +193,14 @@ class ODriveCanDriver(WheelPairDriver):
     def _configure(self) -> None:
         # The heartbeat (default every 100 ms, "Cyclic Messages") shows each node is there.
         self._wait_for_heartbeats()
+        # Errors are never cleared here: an axis that reports one stays faulted
+        # until a person clears it (Clear_Errors, e.g. from odrivetool).
+        for axis in self.axes:
+            if axis.heartbeat and axis.heartbeat.axis_error:
+                raise ControllerFault(f"ODrive node {axis.node_id} axis error 0x{axis.heartbeat.axis_error:08x}")
         vel_limit = self.max_motor_tps()
         for axis in self.axes:
             self.bus.send(encode_set_axis_state(axis.node_id, AXIS_STATE_IDLE))
-            self.bus.send(encode_clear_errors(axis.node_id))
             self.bus.send(encode_set_controller_mode(axis.node_id, CONTROL_MODE_VELOCITY, INPUT_MODE_PASSTHROUGH))
             self.bus.send(encode_set_limits(axis.node_id, vel_limit, self.current_limit_a))
 
@@ -339,7 +343,11 @@ class ODriveAsciiDriver(WheelPairDriver):
             float(voltage)
         except ValueError as error:
             raise TransportError(f"unexpected reply to r vbus_voltage: {voltage!r}") from error
-        self._send(encode_ascii("sc", self.checksum))  # "System Commands": clear errors
+        # Errors are not cleared ("sc"): a person clears them; status() reports them.
+        for n in self.axes:
+            err = self._query(encode_read(f"axis{n}.{self.error_property}", self.checksum))
+            if err.strip() not in ("0", ""):
+                raise ControllerFault(f"ODrive axis{n} {self.error_property} = {err}")
         vel_limit = self.max_motor_tps()
         for n in self.axes:
             self._send(encode_write(f"axis{n}.requested_state", AXIS_STATE_IDLE, self.checksum))

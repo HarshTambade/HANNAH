@@ -259,3 +259,19 @@ def test_cli_service_with_missing_device_keeps_running_stopped(tmp_path):
     assert out.returncode == 0, out.stderr
     events = [e["event"] for e in json.loads((status / "motor-controller.json").read_text())["audit_tail"]]
     assert "controller_unavailable" in events
+
+
+def test_service_never_retries_a_controller_fault(tmp_path):
+    svc, fake, audit, clock = _service(tmp_path)
+    fake.error[0] = 0x800  # e.g. overcurrent, reported in the heartbeat
+    svc.tick(safe=True)
+    fault = svc.motors.status("drive").fault
+    assert fault.startswith("controller:")
+    fake.error[0] = 0  # even if it went away, nothing clears it automatically
+    for _ in range(3):
+        clock.t += 5000
+        svc.tick(safe=True)
+    st = svc.motors.status("drive")
+    assert st.fault == fault and not st.enabled
+    events = [e.event for e in audit.list()]
+    assert events.count("controller_fault_needs_operator") == 1 and "controller_reconnecting" not in events

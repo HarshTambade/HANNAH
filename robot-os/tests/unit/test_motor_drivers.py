@@ -271,3 +271,29 @@ def test_vesc_disengage_is_zero_current():
     drv.send_velocity(0.2, 0.0)
     drv.set_estop(True)
     assert fake.current == {0: 0.0, 1: 0.0}
+
+
+def test_connect_never_clears_a_controller_error():
+    from hannah_robot_os.motors.drivers.base import ControllerFault
+
+    fake = FakeODriveBus()
+    fake.error[1] = 0x1
+    drv = ODriveCanDriver("drive", fake, LIMITS, GEOMETRY, clock=Clock())
+    with pytest.raises(ControllerFault):
+        drv.connect()
+    assert drv.status().fault.startswith("controller:")
+    assert not any((f.arbitration_id & 0x1F) == 0x18 for f in fake.sent)  # no Clear_Errors sent
+    line = FakeODriveAsciiLine()
+    line.errors[0] = 4
+    drv = ODriveAsciiDriver("drive", line, LIMITS, GEOMETRY, clock=Clock())
+    with pytest.raises(ControllerFault):
+        drv.connect()
+    assert not any(w.startswith(b"sc") for w in line.written)
+
+
+def test_controller_error_during_a_command_is_a_controller_fault():
+    _, drv, fake, _ = make("dynamixel")
+    fake.hardware_error[1] = 0x20
+    with pytest.raises(RuntimeError):
+        drv.send_velocity(0.1, 0.0)
+    assert drv.status().fault.startswith("controller:") and "overload" in drv.status().fault
