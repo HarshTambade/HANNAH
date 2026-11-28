@@ -45,7 +45,7 @@ const SAFETY_TOUCHES = new Set(["motor-safety", "estop", "hazardous-equipment", 
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 const clip = (value, max) => String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
 
-function createRecoveryRegistry({ robotOSCommands = null, robotOSEnvelopes = null, devices = null, robotics = null, gateway = require("../gateway"), caches = require("./caches"), overrides = {}, commandWaitMs = 4000, now = () => Date.now() } = {}) {
+function createRecoveryRegistry({ robotOSCommands = null, robotOSEnvelopes = null, devices = null, robotics = null, gateway = require("../gateway"), caches = require("./caches"), overrides = {}, commandWaitMs = 4000, envelopeWaitMs = 3000, now = () => Date.now() } = {}) {
   async function robotTarget(ctx, params) {
     if (!robotics) throw fail(503, "Robots aren't available on this server.", "not-configured");
     const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
@@ -64,8 +64,14 @@ function createRecoveryRegistry({ robotOSCommands = null, robotOSEnvelopes = nul
     if (command.status === "failed") return { confirmed: false, failed: true, evidence: `The robot refused it: ${command.ackReason || "no reason given"}.` };
     if (command.status !== "acked") return { confirmed: false, pending: true, evidence: `The command is ${command.status}; ${result.robot.name} hasn't collected or answered it yet.` };
     if (!needEnvelopeAfter || !robotOSEnvelopes) return { confirmed: true, evidence: `${result.robot.name} applied ${result.capability}: ${command.ackReason || "applied"}.` };
-    const recent = await robotOSEnvelopes.listEnvelopes(ctx.db, ctx.userId, { robotId: result.robot.id, limit: 20 });
-    const fresh = recent.find((envelope) => ["telemetry", "heartbeat"].includes(envelope.kind) && envelope.receivedAt > result.issuedAt);
+    // The robot acknowledges first and reports the restarted service on its next exchange: wait a little for it.
+    let fresh = null;
+    for (const deadline = now() + envelopeWaitMs; ;) {
+      const recent = await robotOSEnvelopes.listEnvelopes(ctx.db, ctx.userId, { robotId: result.robot.id, limit: 20 });
+      fresh = recent.find((envelope) => ["telemetry", "heartbeat"].includes(envelope.kind) && envelope.receivedAt >= result.issuedAt);
+      if (fresh || now() >= deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
     return fresh ? { confirmed: true, evidence: `${result.robot.name} restarted the service and sent ${fresh.kind} at ${new Date(fresh.receivedAt).toISOString()}.` } : { confirmed: false, pending: true, evidence: `${result.robot.name} restarted the service; no new telemetry has arrived since.` };
   }
 

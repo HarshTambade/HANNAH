@@ -15,6 +15,7 @@ process.env.HANNAH_API_TOKEN = "maintenance-test-token-0123456789-abcdefghijklmn
 process.env.DATABASE_URL = process.env.HANNAH_TEST_DB === "pglite" ? "postgres://pglite.local/hannah" : "sqlite::memory:";
 process.env.HANNAH_VAULT_KEY = "d".repeat(64);
 process.env.HANNAH_RATE_LIMIT_ROBOT_SYNC_PER_5S = "100000";
+process.env.HANNAH_RATE_LIMIT_ROBOT_ENROLL_PER_ADDRESS = "200";
 delete process.env.VERCEL;
 
 const { createRobotClient, descriptor, state } = require("./test-fixtures/robot-client");
@@ -61,6 +62,7 @@ before(async () => {
   if (process.env.HANNAH_TEST_DB === "pglite") await require("./db").useDatabase(await require("./db/pglite-adapter").createPgliteAdapter());
   const app = require("./index");
   server = app.listen(0, "127.0.0.1");
+  server.keepAliveTimeout = 120_000; // long synthetic seeding leaves the connection idle; a closed keep-alive socket would reset the next request
   await once(server, "listening");
   base = `http://127.0.0.1:${server.address().port}`;
   db = await require("./db").getDatabase();
@@ -290,4 +292,20 @@ test("a Robot OS maintenance window (as robot-os/services/maintenance_features.p
   const fault = (await call(users.otto, "GET", `/maintenance/findings?asset=${robot.robotId}`)).body.findings[0];
   assert.equal(fault.label, "confirmed-fault");
   assert.equal(fault.confirmation.code, "FET over temperature");
+});
+
+test("clean series raise nothing whatever the time of day the data ends at (false-positive sweep over eight alignments)", async () => {
+  let raised = 0;
+  for (let k = 0; k < 8; k += 1) {
+    const robot = await enrolled(users.otto, `Clean-${k}`);
+    const end = Date.now() - 60_000 - k * 97 * 60_000;
+    const service = createMaintenanceService({ now: () => end + 60_000 });
+    for (const [component, metric, mu, sigma, s] of [["base", "vibrationRms", 0.3, 0.03, 74], ["motor:right", "temperatureC", 40, 1, 32], ["motor:right", "currentA", 3, 0.2, 39]]) {
+      const random = d.seeded(s + k);
+      for (let at = end - 4 * 24 * HOUR; at <= end; at += STEP) await service.record(db, users.ottoId, { assetId: robot.robotId, component, metric, value: mu + sigma * gaussian(random), at });
+    }
+    await service.analyze(db, users.ottoId, { assetId: robot.robotId });
+    raised += (await service.listFindings(db, users.ottoId, { assetId: robot.robotId })).length;
+  }
+  assert.equal(raised, 0, `${raised} findings on 24 clean series`);
 });

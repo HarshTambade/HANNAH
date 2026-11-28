@@ -206,6 +206,11 @@ function seasonalProfile(points, { minPerHour = 4 } = {}) {
       profile[hour] = { median: center, scale: robustScale(values, center), n: values.length };
     }
   });
+  // The noise once each hour's own level is taken out, pooled over all hours. A single hour's spread,
+  // from a few dozen values, can come out far too small by chance; it is never trusted below this.
+  const residuals = [];
+  byHour.forEach((values, hour) => { if (profile[hour]) for (const value of values) residuals.push(value - profile[hour].median); });
+  Object.defineProperty(profile, "pooledScale", { value: residuals.length ? robustScale(residuals, 0) : null, enumerable: false });
   return profile;
 }
 /** Points far from their own hour's baseline. Hours without enough history are skipped, not guessed. */
@@ -214,7 +219,7 @@ function seasonal(points, profile, { limit = 4, floor = 0 } = {}) {
   for (const point of points) {
     const hour = profile?.[new Date(point.at).getUTCHours()];
     if (!hour) continue;
-    const scale = Math.max(hour.scale || 0, floor);
+    const scale = Math.max(hour.scale || 0, floor, 0.8 * (profile.pooledScale || 0));
     if (!(scale > 0)) continue;
     const z = (point.value - hour.median) / scale;
     if (Math.abs(z) > limit) hits.push({ at: point.at, value: point.value, z: round(z, 2), hour: new Date(point.at).getUTCHours(), hourMedian: round(hour.median, 3) });

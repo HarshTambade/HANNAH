@@ -78,6 +78,7 @@ before(async () => {
   if (process.env.HANNAH_TEST_DB === "pglite") await require("./db").useDatabase(await require("./db/pglite-adapter").createPgliteAdapter());
   const app = require("./index");
   server = app.listen(0, "127.0.0.1");
+  server.keepAliveTimeout = 120_000; // long synthetic seeding leaves the connection idle; a closed keep-alive socket would reset the next request
   await once(server, "listening");
   base = `http://127.0.0.1:${server.address().port}`;
   db = await require("./db").getDatabase();

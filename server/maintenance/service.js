@@ -314,8 +314,11 @@ function createMaintenanceService({ now = () => Date.now(), emit = null, recordE
     if (history.length && history[history.length - 1].at - history[0].at >= 3 * DAY) {
       const profile = d.seasonalProfile(history.map((bucket) => ({ at: bucket.at, value: bucket.mean })));
       const odd = d.seasonal(recentPoints, profile, { limit: 4.5, floor: 0.5 * (baseline.scale || 0) });
-      if (odd.length >= 3) {
-        const direction = d.mean(odd.map((hit) => hit.z)) > 0 ? "up" : "down";
+      const up = odd.filter((hit) => hit.z > 0);
+      const down = odd.filter((hit) => hit.z < 0);
+      // Noise scatters both ways; a real change at the wrong hour goes one way.
+      if (Math.max(up.length, down.length) >= 3) {
+        const direction = up.length >= down.length ? "up" : "down";
         draft("seasonal", "seasonal", {
           title: `${label}: unusual for the time of day`, direction, confidence: clamp01(0.4 + 0.1 * odd.length),
           description: `${odd.length} recent periods were far from what this component usually measures at that hour (for example ${fmt(odd[0].value)} at ${odd[0].hour}:00 UTC, where it is usually ${fmt(odd[0].hourMedian)}).`,
@@ -339,7 +342,8 @@ function createMaintenanceService({ now = () => Date.now(), emit = null, recordE
     const model = d.isolationForest(history.map(vector), { trees: 100, sampleSize: 128, seed: 7, contamination: 0.01 });
     if (!model) return null;
     const flagged = recent.map((time) => ({ at: time, score: model.score(vector(time)), values: vector(time) })).filter((item) => item.score > model.threshold);
-    if (flagged.length < 2) return null;
+    // About 1% of normal points score above the threshold by construction; a finding needs clearly more than that.
+    if (flagged.length < Math.max(3, Math.ceil(0.05 * recent.length))) return null;
     const top = flagged.reduce((a, b) => (b.score > a.score ? b : a));
     const simulated = assetItem.simulated || Object.values(bySeries).some((list) => list.some((bucket) => bucket.source === "simulation"));
     return {
