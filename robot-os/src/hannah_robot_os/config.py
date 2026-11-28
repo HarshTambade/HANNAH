@@ -33,6 +33,8 @@ class RobotOSConfig:
     offline_allowed: bool = True
     # Hardware profile (JSON) that picks the motor drivers. Empty: simulated controller.
     hardware_profile: str = ""
+    # Edge Resource Manager: thresholds, approved remote resources, workload overrides, enforce.
+    resources: dict[str, Any] = field(default_factory=dict)
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "RobotOSConfig":
@@ -50,6 +52,7 @@ class RobotOSConfig:
             enable_remote_gateway=bool(data.get("enable_remote_gateway", True)),
             offline_allowed=bool(data.get("offline_allowed", True)),
             hardware_profile=str(data.get("hardware_profile") or ""),
+            resources=dict(data["resources"]) if isinstance(data.get("resources"), dict) else {},
         )
 
     @staticmethod
@@ -74,4 +77,5 @@ class RobotOSConfig:
             "enable_remote_gateway": self.enable_remote_gateway,
             "offline_allowed": self.offline_allowed,
             "hardware_profile": self.hardware_profile,
+            "resources": dict(self.resources),
         }

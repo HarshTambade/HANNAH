@@ -170,6 +170,47 @@ export async function detectHardware(): Promise<{ profile: HardwareProfile; hint
   return { profile, hints };
 }
 
+/** One reading from a robot's Edge Resource Manager: a measured value with its source, or why there isn't one. */
+export type EdgeMetric = { available: true; value: number | boolean | string; unit: string; source: string } | { available: false; reason: string };
+export type EdgeSnapshot = {
+  cpu?: { cores?: EdgeMetric };
+  memory?: { total_mb?: EdgeMetric; available_mb?: EdgeMetric };
+  gpu?: { devices?: Array<{ name?: string; memory_total_mb?: EdgeMetric; shared_memory?: boolean }> };
+  network?: { link_up?: EdgeMetric };
+};
+const measuredNumber = (metric?: EdgeMetric) => (metric && metric.available && typeof metric.value === "number" ? metric.value : null);
+
+/**
+ * A robot's measured hardware as an advisor profile, so the same fit estimate
+ * runs for a robot as for this computer. The robot's own stack already uses
+ * part of its memory, so what it doesn't have free is the reserve. Anything the
+ * robot couldn't measure stays unknown and is listed in `missing`.
+ */
+export function hardwareFromEdgeReport(snapshot: EdgeSnapshot): { profile: HardwareProfile; missing: string[] } {
+  const missing: string[] = [];
+  const totalMb = measuredNumber(snapshot.memory?.total_mb);
+  const freeMb = measuredNumber(snapshot.memory?.available_mb);
+  if (totalMb === null) missing.push("installed memory");
+  if (freeMb === null) missing.push("free memory");
+  const gpu = snapshot.gpu?.devices?.[0];
+  const vramMb = gpu && !gpu.shared_memory ? measuredNumber(gpu.memory_total_mb) : null;
+  if (!gpu) missing.push("GPU");
+  else if (!gpu.shared_memory && vramMb === null) missing.push("video memory");
+  const link = snapshot.network?.link_up;
+  if (!link?.available) missing.push("network link");
+  const ramGB = totalMb === null ? null : Math.round((totalMb / 1024) * 10) / 10;
+  const reservedGB = totalMb !== null && freeMb !== null ? Math.max(1, Math.round(((totalMb - freeMb) / 1024) * 10) / 10) : suggestedReserveGB(ramGB);
+  return {
+    profile: {
+      os: "linux", cpuThreads: measuredNumber(snapshot.cpu?.cores), ramGB,
+      gpuKind: !gpu ? "none" : gpu.shared_memory ? "integrated" : "discrete", gpuName: gpu?.name || "",
+      vramGB: vramMb === null ? null : Math.round((vramMb / 1024) * 10) / 10, reservedGB,
+      online: Boolean(link?.available && link.value === true),
+    },
+    missing,
+  };
+}
+
 export function loadHardware(): HardwareProfile | null {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(HARDWARE_KEY) || "null");

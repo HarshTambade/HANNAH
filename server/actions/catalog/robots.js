@@ -26,6 +26,7 @@
 const { capability } = require("../../robotics/contract");
 const fleet = require("../../robotics/fleet");
 const plans = require("../../robotics/plans");
+const { resourcesView } = require("../../edge/view");
 
 const fail = (status, message, reason, extra = {}) => Object.assign(new Error(message), { status, reason, ...extra });
 const clip = (value, max) => String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
@@ -67,7 +68,7 @@ function missionText(mission, robotName = "The robot") {
   }
 }
 
-function robotActions({ robotics }) {
+function robotActions({ robotics, graph = null }) {
   const summary = (robot) => ({
     id: robot.id, name: robot.name, kind: robot.simulated ? "simulation" : "physical", simulator: robot.simulator, type: robot.robotType || null, maker: [robot.manufacturer, robot.model].filter(Boolean).join(" ") || null,
     connection: robot.connection, mode: robot.mode, battery: robot.online ? robot.state?.battery?.percent ?? null : null,
@@ -436,6 +437,24 @@ function robotActions({ robotics }) {
       normalize: (raw) => ({ days: Math.max(1, Math.min(30, Number(raw?.days) || 7)) }),
       verify: () => ({ confirmed: true, evidence: "Computed from stored mission, plan, event and telemetry records." }),
     },
+    readAction({
+      id: "robots.resources", title: "Report a robot's computing resources", description: "What the robot's onboard Edge Resource Manager measured: CPU use and temperature, memory, GPU and video memory, storage, network link, battery and power, process health and inference latency, each with its source, and any metric the robot can't measure marked as such. Also its thermal, power, storage and overload warnings, the recovery policy it applied or recommended, and which local model fits its free memory now with the reason. Collision avoidance and safety functions are never degraded.", input: { robot: ROBOT, task: { type: "string", description: "chat, agentic, coding or reasoning (for the model advice)." }, context: { type: "string", description: "Context the model needs, in tokens." } },
+      run: async (params, ctx) => {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        const view = await resourcesView(ctx.db, robotics, ctx.userId, robot, { task: params.task, contextTokens: params.context, hours: 1 });
+        const latest = view.latest;
+        return {
+          robot: view.robot, note: view.note, stale: latest ? !latest.fresh : true, ageS: latest?.ageS ?? null, measuredOn: latest?.measuredOn ?? null,
+          status: latest?.evaluation.status ?? "no-report", warnings: latest?.evaluation.warnings ?? [], notMeasurable: latest?.evaluation.unmeasured ?? [],
+          actions: (latest?.actions || []).map(({ policy, targets, status, detail, applied, reason }) => ({ policy, targets, status, detail, applied, reason })), enforcement: latest?.enforcement ?? null,
+          snapshot: latest?.snapshot ?? null, modelAdvice: view.advice,
+        };
+      },
+    }),
+    ...(graph ? [readAction({
+      id: "robots.graph", title: "Ask the device graph", description: "Ask the Device Intelligence Graph about one entity (a sensor, machine, robot, device, room or workflow, by name or id). question=context follows a sensor or device to the machine it belongs to or watches, the places it is in, the robots that monitor or operate there and the workflows approved to respond, and checks each robot, device and workflow live; question=neighbors lists recorded relationships up to depth hops; question=history lists every version and relationship it had.", input: { entity: { type: "string", description: "The entity's name or id." }, question: { type: "string", enum: ["context", "neighbors", "history"] }, depth: { type: "string", description: "Hops for neighbors, 1 to 4." } },
+      run: async (params, ctx) => graph.ask(ctx.db, ctx.userId, { entity: params.entity, question: params.question || "context", depth: Number(params.depth) || 2 }),
+    })] : []),
     readAction({
       id: "robots.diagnostics", title: "Diagnose a robot", description: "What the evidence says about one robot's condition: sensors not reporting, faults, battery, link losses, refused commands, missions that didn't finish, software versions, the last maintenance entry. Findings come from what the robot reported and what was recorded; nothing is guessed.", input: { robot: ROBOT },
       run: async (params, ctx) => {

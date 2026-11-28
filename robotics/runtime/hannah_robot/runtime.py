@@ -87,6 +87,8 @@ class Runtime:
         self._state: dict = {}
         self._revoked = False
         self.running = True
+        # A ResourceReportReader (resources.py) or None.
+        self.resources = None
 
     # ---------------- what the link thread calls ----------------
     def outbox(self) -> dict:
@@ -95,6 +97,10 @@ class Runtime:
             reports, events = self._reports, self._events
             self._reports, self._events = [], []
             body = {"runtime": {"version": __version__, "protocol": PROTOCOL, "adapter": self.adapter.name}, "state": dict(self._state), "reports": reports, "events": events}
+            # The onboard Edge Resource Manager's measurements, when Robot OS runs beside this runtime.
+            resources = self.resources.due() if self.resources is not None else None
+            if resources is not None:
+                body["resources"] = resources
             if self._descriptor_pending:
                 body["descriptor"] = self._descriptor
             return body

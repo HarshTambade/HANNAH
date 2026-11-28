@@ -1,0 +1,18 @@
+[Unit]
+Description=HANNAH Robot OS Edge Resource Manager
+After=hannah-safety-gateway.service
+
+[Service]
+Type=simple
+User=hannah
+Group=hannah
+ExecStart=/usr/bin/python3 -m hannah_robot_os service edge-resources --config /etc/hannah-robot-os/config.json --interval 1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hannah-robot-os /var/log/hannah-robot-os /run/hannah-robot-os
+
+[Install]
+WantedBy=hannah-robot-os.target

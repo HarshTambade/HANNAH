@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultHardware, estimateMemory, kvBytesPerToken, recommend, type HardwareProfile, type ModelCatalog } from "../services/ModelAdvisor";
+import { defaultHardware, estimateMemory, hardwareFromEdgeReport, kvBytesPerToken, recommend, type HardwareProfile, type ModelCatalog } from "../services/ModelAdvisor";
 import profileData from "../../../shared/model-profiles.json";
 
 const llama8b = profileData.open.find((model) => model.id === "llama3.1-8b")!;
@@ -126,5 +126,28 @@ describe("recommend", () => {
   it("falls back to local models when offline", () => {
     const result = recommend(needs, laptop({ online: false }), catalog);
     expect(result.recommendations.every((item) => item.kind === "local")).toBe(true);
+  });
+});
+
+describe("a robot's measured hardware", () => {
+  const m = (value: number | boolean, unit: string) => ({ available: true as const, value, unit, source: "test" });
+  const na = { available: false as const, reason: "not measurable on this device: test" };
+
+  it("becomes an advisor profile, with the robot's used memory as the reserve", () => {
+    const { profile, missing } = hardwareFromEdgeReport({
+      cpu: { cores: m(6, "cores") }, memory: { total_mb: m(16384, "MB"), available_mb: m(10240, "MB") },
+      gpu: { devices: [{ name: "RTX A2000", memory_total_mb: m(6144, "MB"), shared_memory: false }] }, network: { link_up: m(true, "bool") },
+    });
+    expect(profile).toMatchObject({ ramGB: 16, reservedGB: 6, gpuKind: "discrete", vramGB: 6, cpuThreads: 6, online: true });
+    expect(missing).toEqual([]);
+    expect(recommend({ task: "chat", budget: "free-local", priority: "local", contextTokens: 4096 }, profile, null).recommendations.length).toBeGreaterThan(0);
+  });
+
+  it("leaves what the robot couldn't measure unknown instead of guessing", () => {
+    const { profile, missing } = hardwareFromEdgeReport({ memory: { total_mb: na, available_mb: na }, network: { link_up: na } });
+    expect(profile.ramGB).toBeNull();
+    expect(profile.online).toBe(false);
+    expect(missing).toEqual(["installed memory", "free memory", "GPU", "network link"]);
+    expect(estimateMemory(llama8b, 4096, profile).placement).toBe("unknown");
   });
 });

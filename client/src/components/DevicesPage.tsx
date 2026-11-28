@@ -20,6 +20,7 @@ import { Operator, type ActionRecord } from "../services/Operator";
 import { Devices, type Automation, type AutomationInput, type Check, type Device, type DeviceEvent, type HardwareInventory, type Hub, type HubEnrollment, type Overview, type PointInfo, type Profile, type RulePart, type UpdateRollout } from "../services/Devices";
 import DeviceSetup, { LevelChip } from "./DeviceSetup";
 import { QrScanner } from "./QrScanner";
+import { DeviceGraphPanel } from "./robotops/DeviceGraphPanel";
 
 const card = "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -645,6 +646,7 @@ export default function DevicesPage() {
 
             </aside>
           </div>
+          <DeviceGraphPanel />
         </>
       )}
       {scanOpen && <QrScanner onResult={(text) => { void identifyQr(text); }} onClose={() => setScanOpen(false)} />}

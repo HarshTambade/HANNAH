@@ -29,6 +29,7 @@
  *   DELETE /api/robots/:id                     (a signed-in person)
  *   POST   /api/robots/:id/stop                { reason? } → the action's record and the stop mission; never needs approval
  *   GET    /api/robots/:id/telemetry           ?minutes=
+ *   GET    /api/robots/:id/resources           ?hours= &task= &context=   edge resources report, history, model advice
  *
  * Starting a mission is not here: it is an action (POST /api/actions with
  * robots.navigate_to and so on), so it goes through the permission manager,
@@ -43,6 +44,7 @@ const plans = require("./plans");
 const safety = require("./safety");
 const { missionText } = require("../actions/catalog/robots");
 const { outcomeText } = require("../actions/engine");
+const { resourcesView } = require("../edge/view");
 
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 
@@ -222,6 +224,11 @@ function createRobotAccountRouter({ robotics, engine, robotOSEnvelopes = null, r
     const record = await engine.run(db, account.id, { action: "robots.run_plan", params: { ...(req.body || {}), robot: robot.id }, request: "Plan started from the Robots screen", source: account.via === "session" ? "robots" : "api-key", agent: "" });
     const planId = record.response?.planId;
     res.status(record.status === "waiting-approval" ? 202 : 200).json({ record: { ...record, outcome: outcomeText(record) }, plan: planId ? await planView(db, account.id, await robotics.getPlan(db, account.id, planId)) : null });
+  }));
+  // What the robot's onboard Edge Resource Manager measured, its history, and model advice from those measurements.
+  router.get("/robots/:id/resources", anyAccount(async (req, res, db, account) => {
+    const robot = await robotics.getRobot(db, account.id, req.params.id);
+    res.json(await resourcesView(db, robotics, account.id, robot, { task: req.query.task, contextTokens: req.query.context, hours: req.query.hours }));
   }));
   router.get("/robots/:id/telemetry", anyAccount(async (req, res, db, account) => {
     const robot = await robotics.getRobot(db, account.id, req.params.id);

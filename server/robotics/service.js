@@ -41,6 +41,7 @@ const safety = require("./safety");
 const commissioning = require("./commissioning");
 const plans = require("./plans");
 const fleet = require("./fleet");
+const { createEdgeResourceStore } = require("../edge/resources");
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_TTL_MS = 15 * 60_000;
@@ -167,7 +168,7 @@ function normalizeDescriptor(input) {
 
 const ALERTS = new Set(["estop-engaged", "fault", "link-lost", "commissioning-reset", "revoked"]);
 
-function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(process.env.HANNAH_ROBOT_ACK_WAIT_MS) || 6000, pollMs = 150, emit = null } = {}) {
+function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(process.env.HANNAH_ROBOT_ACK_WAIT_MS) || 6000, pollMs = 150, emit = null, edgeResources = createEdgeResourceStore({ now }) } = {}) {
   /**
    * Tell the account's webhooks and workflows that something happened. Never
    * waited for: a robot's exchange must not depend on someone else's server
@@ -354,7 +355,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const row = await robotRow(db, userId, id);
     if (!row) return false;
     if (row.status === "enrolled") await revokeRobot(db, userId, row.id);
-    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_plans", "hannah_robot_images", "hannah_robot_destinations", "hannah_robot_maintenance"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
+    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_plans", "hannah_robot_images", "hannah_robot_destinations", "hannah_robot_maintenance", "hannah_edge_resource_reports"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
     return (await db.query("DELETE FROM hannah_robots WHERE user_id = $1 AND id = $2", [userId, row.id])).rowCount > 0;
   }
 
@@ -567,6 +568,11 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       if (ALERTS.has(String(event?.type))) announce(row.user_id, "robot.alert", { robotId: row.id, robot: row.name, kind: robot.simulated ? "simulation" : "physical", type: String(event.type), severity: clean(event?.severity, 20) || "warning", message: clean(event?.message, 300), source: "robot" });
     }
     for (const report of Array.isArray(body.reports) ? body.reports.slice(0, 40) : []) await applyReport(db, robot, report || {}, state, at);
+    // What the onboard Edge Resource Manager measured. A bad report is recorded as an event and never fails the exchange.
+    if (body.resources && typeof body.resources === "object") {
+      await edgeResources.record(db, { userId: row.user_id, robotId: row.id, report: body.resources, source: "robot-sync", simulatedHost: robot.simulated })
+        .catch((error) => addEvent(db, row.user_id, row.id, { type: "resources-refused", severity: "warning", message: `A resources report was refused: ${clean(error?.message, 160)}` }).catch(() => {}));
+    }
     const names = Object.keys(fields);
     await db.query(`UPDATE hannah_robots SET ${names.map((name, index) => `${name} = $${index + 1}`).join(", ")}, updated_at = $${names.length + 1} WHERE id = $${names.length + 2}`, [...names.map((name) => fields[name]), at, row.id]);
 
@@ -1106,7 +1112,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return fleet.analytics({ robots, missions, plans: planRows, events, telemetry: telemetryOf, now: at, windowMs });
   }
 
-  return { nextSeq, activeMotion, addDestination, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
+  return { edgeResources, nextSeq, activeMotion, addDestination, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
 }
 
 module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, fingerprintOf, normalizeDescriptor, requestMessage, signCommand, signRequest };

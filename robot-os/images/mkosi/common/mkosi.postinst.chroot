@@ -75,6 +75,7 @@ systemctl enable \
     hannah-ros2-runtime.service \
     hannah-telemetry.service \
     hannah-update-manager.service \
+    hannah-edge-resources.service \
     hannah-boot-ready.service \
     hannah-update.timer \
     systemd-networkd.service \

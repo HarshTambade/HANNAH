@@ -51,6 +51,7 @@ const { hardwareActions } = require("./catalog/hardware");
 const { robotOSActions } = require("./catalog/robot_os");
 const { createDeviceService } = require("../devices/service");
 const { createRoboticsService } = require("../robotics/service");
+const { createGraphService } = require("../graph/service");
 const { emitUserEvent } = require("../webhooks");
 const { createCodingService } = require("../coding/service");
 const { DRIVERS } = require("../channel-drivers");
@@ -67,8 +68,9 @@ function createOperator({ fetchImpl = (...args) => fetch(...args), request, now 
   const coding = createCodingService({ fetchImpl, now, ...(request ? { request } : {}), ...(roots ? { roots } : {}) });
   const robotics = createRoboticsService({ now, emit: emitUserEvent, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
   const devices = createDeviceService({ now, emit: emitUserEvent });
-  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands })] });
-  return { coding, devices, engine, robotics, robotOSCommands };
+  const graph = createGraphService({ now, robotics, devices });
+  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics, graph }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands })] });
+  return { coding, devices, engine, graph, robotics, robotOSCommands };
 }
 
 /** Every connection an account has, in one shape. */
