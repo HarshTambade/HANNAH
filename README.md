@@ -1016,6 +1016,19 @@ Ask in chat, the way you would with Grok: "draw a red fox in snow", "make a pict
 
 Code: [`server/media.js`](./server/media.js), [`client/src/services/Media.ts`](./client/src/services/Media.ts).
 
+## Code in chat
+
+Python and JavaScript in a reply can run **in your own browser or app**, never on a server.
+
+- **Run button.** A `python` or `javascript` code block in a reply has a **Run** button. The output appears under it: printed text, errors, the last expression's value, pandas tables and `console.table`, and matplotlib charts as images.
+- **HANNAH runs code herself.** For sums, statistics, data or a chart she can call the `run_code` tool, read the output and answer from it. The code and its output appear under her reply as **Code HANNAH ran**.
+- **Attached files.** With files attached to the chat, tick **Use attached files** (or HANNAH sets `use_attached_files`): Python opens them with `open("data.csv")`, JavaScript reads `files["data.csv"]`. Text files up to 2 MB, four per run; spreadsheets are passed as CSV.
+- **Python** is [Pyodide](https://pyodide.org) 0.29.5, loaded from jsDelivr the first time Python runs (about 10 MB, more for numpy, pandas or matplotlib). It **needs a connection the first time**; the website then keeps a copy for offline use, and the apps rely on the WebView's cache. Variables carry over between runs until a run times out.
+- **Limits.** 20 seconds per run, after which the worker is terminated. 20,000 characters of output, four images, 50 table rows, 50,000 characters of code. Memory is limited only by what the browser allows a worker.
+- **Sandbox.** Each language runs in its own Web Worker: no page, no cookies, no app storage. Before any code runs, the worker removes `fetch` (Python's may only download Pyodide's own files), `XMLHttpRequest`, `WebSocket`, `EventSource`, `importScripts`, nested workers, `eval` and `new Function`, and JavaScript may not use `import`. On the website, and under `vite` and `vite preview`, the worker scripts also get their own strict Content-Security-Policy (`vercel.json`, `client/scripts/codeRunnerHeaders.ts`), so the browser blocks any connection the code tries. The desktop and phone apps don't send that header, so there the sandbox is only the worker's own lockdown.
+
+Code: [`CodeRunner.ts`](./client/src/services/CodeRunner.ts), [`codeSandbox.ts`](./client/src/services/codeSandbox.ts), [`workers/`](./client/src/workers), [`CodeBlock.tsx`](./client/src/components/CodeBlock.tsx).
+
 ## Knowledge
 
 **Knowledge** is your own documents, indexed on this device so HANNAH can answer from them and show where each answer came from. Add files or paste text on **Memory & trust → Knowledge**; in the desktop app, index the text files of a shared folder. Each document is split into overlapping passages, and a search ranks them with BM25 over the same tokenizer memory uses (any script, light stemming).

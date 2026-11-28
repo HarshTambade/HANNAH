@@ -11,4 +11,6 @@ export type ChatMessage = {
   id?: string;
   /** What the Studio produced for this reply: research (by id, in this device's history), files and generated pictures or clips (by id, in this device's files). */
   studio?: { researchId?: string; fileIds?: string[]; mediaIds?: string[] };
+  /** Code HANNAH ran with run_code for this reply (services/CodeRunner.ts). The output is kept in memory for this session only. */
+  codeRuns?: Array<{ id: string; language: "python" | "javascript"; code: string }>;
 };

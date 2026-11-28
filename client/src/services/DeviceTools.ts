@@ -25,6 +25,7 @@ import { getConnectionTools } from "./Connections";
 import { getKnowledgeTools } from "./Knowledge";
 import { getBriefingTools } from "./Briefing";
 import { getWorkflowTools } from "./WorkflowTools";
+import { getCodeTools } from "./CodeRunner";
 
 export type ToolSchema = {
   type: "object";
@@ -365,7 +366,7 @@ export function getDeviceTools() {
   // The Action Engine's tools (calendar scheduling, messaging, code) for a signed-in account: one execution path for every agent.
   // Robot tools (services/Robotics.ts) are engine tools too, offered only when the account has a robot.
   // Device tools (services/Devices.ts) likewise, only when a device is switched on.
-  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getMediaTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...getOperatorTools({ calendar: connections.length > 0 }), ...getRobotTools(), ...getHardwareTools(), ...externalTools];
+  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getMediaTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getCodeTools(), ...getPhoneTools(), ...desktop, ...connections, ...getOperatorTools({ calendar: connections.length > 0 }), ...getRobotTools(), ...getHardwareTools(), ...externalTools];
 }
 
 /**
