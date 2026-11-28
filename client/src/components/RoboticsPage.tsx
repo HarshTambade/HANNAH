@@ -21,6 +21,8 @@ import { AnalyticsPanel, ArmPanel, CameraPanel, CommissioningPanel, Destinations
 import SimToRealPanel from "./robotops/SimToRealPanel";
 import { EdgeResourcesPanel } from "./robotops/EdgeResourcesPanel";
 import MaintenancePanel from "./robotops/MaintenancePanel";
+import InteropPanel from "./robotops/InteropPanel";
+import DeviceSecurityPanel from "./robotops/DeviceSecurityPanel";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -563,6 +565,8 @@ export default function RoboticsPage() {
         </div>
       )}
       {signedIn && robots && robots.length > 0 && <AnalyticsPanel />}
+      {signedIn && <InteropPanel />}
+      {signedIn && <DeviceSecurityPanel />}
     </main>
   );
 }

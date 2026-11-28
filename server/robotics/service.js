@@ -168,7 +168,7 @@ function normalizeDescriptor(input) {
 
 const ALERTS = new Set(["estop-engaged", "fault", "link-lost", "commissioning-reset", "revoked"]);
 
-function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(process.env.HANNAH_ROBOT_ACK_WAIT_MS) || 6000, pollMs = 150, emit = null, edgeResources = createEdgeResourceStore({ now }), onState = null } = {}) {
+function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(process.env.HANNAH_ROBOT_ACK_WAIT_MS) || 6000, pollMs = 150, emit = null, edgeResources = createEdgeResourceStore({ now }), onState = null, credentialPolicy = null } = {}) {
   /**
    * Tell the account's webhooks and workflows that something happened. Never
    * waited for: a robot's exchange must not depend on someone else's server
@@ -345,7 +345,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const row = await robotRow(db, userId, id);
     if (!row) throw fail(404, "That robot isn't enrolled in your account.", "not-found");
     const at = now();
-    await db.query("UPDATE hannah_robots SET status = 'revoked', key_id = NULL, wrapped_key = NULL, ciphertext = NULL, enroll_hash = NULL, enroll_expires_at = NULL, revoked_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, userId, row.id]);
+    await db.query("UPDATE hannah_robots SET status = 'revoked', key_id = NULL, wrapped_key = NULL, ciphertext = NULL, pending_key_id = NULL, pending_wrapped_key = NULL, pending_ciphertext = NULL, enroll_hash = NULL, enroll_expires_at = NULL, revoked_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, userId, row.id]);
     await db.query("UPDATE hannah_robot_missions SET status = 'cancelled', error = $1, finished_at = $2, updated_at = $2 WHERE user_id = $3 AND robot_id = $4 AND status = 'queued'", ["Cancelled: the robot's credentials were revoked before the command was delivered.", at, userId, row.id]);
     await db.query("UPDATE hannah_robot_missions SET status = 'lost', error = $1, finished_at = $2, updated_at = $2 WHERE user_id = $3 AND robot_id = $4 AND status IN ('sent', 'accepted', 'paused')", ["The robot's credentials were revoked while this was running. It can no longer report; a robot that loses its link to HANNAH stops by itself.", at, userId, row.id]);
     await addEvent(db, userId, row.id, { type: "revoked", severity: "warning", message: "Credentials revoked. The robot can no longer connect." });
@@ -379,7 +379,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     described.profile.fingerprint = fingerprintOf(secret);
     const won = await db.query(
       `UPDATE hannah_robots SET status = 'enrolled', profile = $1, capabilities = $2, safety = $3, simulator = $4, key_id = $5, wrapped_key = $6, ciphertext = $7,
-         enroll_hash = NULL, enroll_expires_at = NULL, counter = 0, enrolled_at = $8, updated_at = $8, revoked_at = NULL, state = NULL, mode = NULL, last_seen_at = NULL, commissioning = NULL
+         enroll_hash = NULL, enroll_expires_at = NULL, counter = 0, enrolled_at = $8, updated_at = $8, revoked_at = NULL, state = NULL, mode = NULL, last_seen_at = NULL, commissioning = NULL, pending_key_id = NULL, pending_wrapped_key = NULL, pending_ciphertext = NULL
        WHERE id = $9 AND enroll_hash = $10`,
       [JSON.stringify(described.profile), JSON.stringify(described.capabilities), JSON.stringify({ ...parse(row.safety, {}), reported: described.reported, reportedAt: at }), described.simulation?.kind || null, sealed.keyId, sealed.wrappedKey, sealed.ciphertext, at, row.id, hash],
     );
@@ -389,7 +389,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
   }
 
   /** Is this request really from that robot, now, and not a copy of an earlier one? Returns its row. */
-  async function authenticate(db, { robotId, time, counter, signature, method, path, body }) {
+  async function authenticate(db, { robotId, time, counter, signature, method, path, body, clientDevice = null }) {
     const refused = (reason) => fail(401, "The robot's request wasn't accepted.", reason);
     const id = String(robotId || "");
     if (!/^rb_[0-9a-f]{18}$/.test(id) || !/^[0-9a-f]{64}$/.test(String(signature || ""))) throw refused("bad-signature");
@@ -399,13 +399,58 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     try { secret = decryptSecret(row, { userId: row.user_id, providerId: `robot:${row.id}` }).secret; } catch { throw fail(503, "The server can't read this robot's key.", "vault-key-missing"); }
     const stamp = Number(time);
     const count = Number(counter);
-    if (!sameHex(signRequest(secret, { robotId: id, time: String(time), counter: String(counter), method, path, body }), signature)) throw refused("bad-signature");
-    // Only the robot gets this far, so these two answers tell nobody else anything.
+    const parts = { robotId: id, time: String(time), counter: String(counter), method, path, body };
+    let promoted = false;
+    if (!sameHex(signRequest(secret, parts), signature)) {
+      // A rotated secret becomes the secret with the first request the robot signs with it; until then the old one still works.
+      let pending = null;
+      if (row.pending_ciphertext) { try { pending = decryptSecret({ key_id: row.pending_key_id, wrapped_key: row.pending_wrapped_key, ciphertext: row.pending_ciphertext }, { userId: row.user_id, providerId: `robot:${row.id}` }).secret; } catch { pending = null; } }
+      if (!pending || !sameHex(signRequest(pending, parts), signature)) throw refused("bad-signature");
+      secret = pending;
+      promoted = true;
+    }
+    // Only the robot gets this far, so these answers tell nobody else anything.
     if (!Number.isFinite(stamp) || Math.abs(now() - stamp) > SKEW_MS) throw fail(401, "The robot's clock is more than a minute away from the server's. Set the robot's clock.", "clock-skew");
     if (!Number.isSafeInteger(count) || count <= 0) throw refused("replayed");
+    const policy = credentialPolicy ? await credentialPolicy(db, row.user_id) : null;
+    const issuedAt = Math.max(Number(row.secret_rotated_at || 0), Number(row.enrolled_at || 0));
+    if (!promoted && policy?.robotSecretMaxAgeDays && now() - issuedAt > policy.robotSecretMaxAgeDays * 86_400_000) {
+      await addEvent(db, row.user_id, row.id, { type: "credential-expired", severity: "warning", message: `The robot's secret is older than the account's ${policy.robotSecretMaxAgeDays}-day limit. Enroll it again with a new code.` });
+      throw fail(401, "The robot's secret has expired. Enroll it again with a new code.", "credential-expired");
+    }
+    if (policy?.requireMtlsForRobotLink && clientDevice !== row.id) throw fail(401, "This account requires robots to connect with their client certificate (mutual TLS).", "mtls-required");
     const advanced = await db.query("UPDATE hannah_robots SET counter = $1 WHERE id = $2 AND counter < $1 AND status = 'enrolled'", [count, id]);
     if (!advanced.rowCount) throw refused("replayed");
+    if (promoted) {
+      const at = now();
+      const profile = parse(row.profile, {});
+      profile.fingerprint = fingerprintOf(secret);
+      await db.query("UPDATE hannah_robots SET key_id = pending_key_id, wrapped_key = pending_wrapped_key, ciphertext = pending_ciphertext, pending_key_id = NULL, pending_wrapped_key = NULL, pending_ciphertext = NULL, secret_rotated_at = $1, profile = $2, updated_at = $1 WHERE id = $3 AND pending_ciphertext = $4",
+        [at, JSON.stringify(profile), id, row.pending_ciphertext]);
+      await addEvent(db, row.user_id, row.id, { type: "secret-rotated", message: `The robot now signs with its new secret (fingerprint ${profile.fingerprint}). The old one no longer works.` });
+      return { row: { ...row, profile: JSON.stringify(profile), secret_rotated_at: at }, secret };
+    }
     return { row, secret };
+  }
+
+  /** When a robot's secret stops working under the account's policy, or null when it doesn't expire. */
+  async function credentialExpiry(db, row) {
+    const policy = credentialPolicy ? await credentialPolicy(db, row.user_id) : null;
+    if (!policy?.robotSecretMaxAgeDays) return null;
+    return Math.max(Number(row.secret_rotated_at || 0), Number(row.enrolled_at || 0)) + policy.robotSecretMaxAgeDays * 86_400_000;
+  }
+
+  /**
+   * The robot asks for a new secret (a signed request, like sync). The new one
+   * is sealed and waits; it replaces the old one with the first request the
+   * robot signs with it, so a lost answer never locks the robot out.
+   */
+  async function rotateSecret(db, { row }) {
+    const secret = crypto.randomBytes(32).toString("base64url");
+    const sealed = encryptSecret(secret, { userId: row.user_id, providerId: `robot:${row.id}` });
+    await db.query("UPDATE hannah_robots SET pending_key_id = $1, pending_wrapped_key = $2, pending_ciphertext = $3, updated_at = $4 WHERE id = $5 AND status = 'enrolled'", [sealed.keyId, sealed.wrappedKey, sealed.ciphertext, now(), row.id]);
+    await addEvent(db, row.user_id, row.id, { type: "secret-rotation", message: "The robot asked for a new secret. The old one works until the robot first signs with the new one." });
+    return { secret, fingerprint: fingerprintOf(secret), serverTime: now() };
   }
 
   /**
@@ -1115,7 +1160,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return fleet.analytics({ robots, missions, plans: planRows, events, telemetry: telemetryOf, now: at, windowMs });
   }
 
-  return { edgeResources, nextSeq, activeMotion, addDestination, addEvent, publicMission, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
+  return { credentialExpiry, rotateSecret, edgeResources, nextSeq, activeMotion, addDestination, addEvent, publicMission, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
 }
 
 module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, fingerprintOf, normalizeDescriptor, requestMessage, signCommand, signRequest };

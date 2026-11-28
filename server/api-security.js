@@ -45,7 +45,10 @@ const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/accou
 // A device hub's endpoints work the same way (server/devices/service.js).
 // A Robot OS bridge envelope authenticates itself with its own HMAC signature
 // (server/robotics/robot_os_auth.js); the router is opt-in and returns 404 when disabled.
-const PUBLIC_PREFIXES = ["/hooks/", "/robots/device/", "/hubs/device/", "/robotos/"];
+// A device enrolling its zero-trust identity proves itself with a one-time code
+// and its own key; later requests with a signature or a short-lived credential
+// (server/trust/service.js).
+const PUBLIC_PREFIXES = ["/hooks/", "/robots/device/", "/hubs/device/", "/robotos/", "/trust/device/"];
 const ROBOT_ENROLL_PATH = "/robots/enroll";
 const HUB_ENROLL_PATH = "/hubs/enroll";
 function isPublic(path) {
@@ -65,6 +68,8 @@ function accountMayUse(path) {
     || path === "/robots" || path.startsWith("/robots/")
     // An account's own sim-to-real deployments, update packages, rollouts and firmware operations.
     || path.startsWith("/robotops/")
+    // Device identities and policy, robots behind other adapters (VDA 5050), and hardware packages.
+    || path.startsWith("/trust/") || path === "/interop" || path.startsWith("/interop/") || path === "/hardware-packages" || path.startsWith("/hardware-packages/")
     // An account's own hubs, the devices behind them and their automations.
     || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/") || path === "/inventory"
     // The account's Device Intelligence Graph (server/graph): scoped to the account and its teams.

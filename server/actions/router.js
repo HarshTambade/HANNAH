@@ -56,6 +56,12 @@ const { createMaintenanceService } = require("../maintenance/service");
 const { createRecoveryRegistry } = require("../diagnostics/recovery");
 const { createDiagnosticsEngine } = require("../diagnostics/engine");
 const robotOSEnvelopes = require("../robotics/robot_os_envelopes");
+const { interopActions } = require("./catalog/interop");
+const { hardwarePackageActions } = require("./catalog/hardware_packages");
+const { createVda5050Adapter } = require("../interop/vda5050/adapter");
+const { createHannahLinkAdapter } = require("../interop/adapters/hannah");
+const { createInteropRegistry } = require("../interop/registry");
+const { createHardwarePackageService } = require("../marketplace/hardware-packages");
 const { createDeviceService } = require("../devices/service");
 const { createRoboticsService } = require("../robotics/service");
 const { createGraphService } = require("../graph/service");
@@ -71,19 +77,36 @@ const { vaultConfigured } = require("../vault");
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 
 /** One engine, one coding service and one robot registry for the whole server: routes, workflows and MCP all use these. */
-function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs, robotOSCommands = null, diagnosticProbes = null } = {}) {
+function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs, robotOSCommands = null, diagnosticProbes = null, trust = null } = {}) {
   const coding = createCodingService({ fetchImpl, now, ...(request ? { request } : {}), ...(roots ? { roots } : {}) });
+  // The account's device policy (secret age, mTLS) for the robot link, read at most every 30 s per account.
+  const policies = new Map();
+  const credentialPolicy = trust ? async (db, userId) => {
+    const cached = policies.get(userId);
+    if (cached && now() - cached.at < 30_000) return cached.policy;
+    const policy = await trust.getPolicy(db, userId).catch(() => null);
+    if (policies.size > 5000) policies.clear();
+    policies.set(userId, { at: now(), policy });
+    return policy;
+  } : null;
   // Maintenance records what robots report on each sync; it never changes what the robot is sent.
   const maintenance = createMaintenanceService({ now, emit: emitUserEvent });
-  const robotics = createRoboticsService({ now, emit: emitUserEvent, onState: (db, row, state, at) => maintenance.recordRobotState(db, row, state, at), ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
+  const robotics = createRoboticsService({ now, emit: emitUserEvent, onState: (db, row, state, at) => maintenance.recordRobotState(db, row, state, at), credentialPolicy, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
   const devices = createDeviceService({ now, emit: emitUserEvent });
+  // Interop: one fleet over HANNAH's robot link (adapter #1) and VDA 5050 over MQTT (adapter #2).
+  const vda5050 = createVda5050Adapter({ trust, now, log: (text) => console.error(text) });
+  const interop = createInteropRegistry({ adapters: [
+    { adapter: createHannahLinkAdapter({ robotics }), robotPrefix: "rb_", missionPrefix: "ms_" },
+    { adapter: vda5050, robotPrefix: "ia_", missionPrefix: "im_" },
+  ] });
+  const packages = createHardwarePackageService({ now, trust, robots: (db, userId, id) => robotics.getRobot(db, userId, id) });
   const graph = createGraphService({ now, robotics, devices });
   const blackbox = createBlackBoxService({ robotics, now });
   let engine = null;
   const recovery = createRecoveryRegistry({ robotOSCommands, robotOSEnvelopes, devices, robotics, now });
   const diagnostics = createDiagnosticsEngine({ now, robotics, devices, robotOSEnvelopes, registry: recovery, actionEngine: () => engine, ...(diagnosticProbes ? { probes: diagnosticProbes } : {}) });
-  engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics, graph }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands }), ...blackboxActions({ robotics, blackbox }), ...opsActions({ maintenance, diagnostics })] });
-  return { blackbox, coding, devices, diagnostics, engine, graph, maintenance, recovery, robotics, robotOSCommands };
+  engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics, graph }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands }), ...blackboxActions({ robotics, blackbox }), ...opsActions({ maintenance, diagnostics }), ...interopActions({ interop }), ...hardwarePackageActions({ packages })] });
+  return { blackbox, coding, devices, diagnostics, engine, graph, interop, maintenance, packages, recovery, robotics, robotOSCommands, trust, vda5050 };
 }
 
 /** Every connection an account has, in one shape. */

@@ -106,7 +106,7 @@ SECRET = "robot-secret-for-tests"
 
 
 def command(capability: str, params: dict, n: int) -> dict:
-    cmd = {"id": f"rosc_{n}", "robotId": "rb_1", "capability": capability, "params": params, "issuedAt": 1000 + n, "expiresAt": 999_999, "nonce": f"nonce-{n}"}
+    cmd = {"id": f"rosc_{n}", "robotId": "rb_1", "capability": capability, "params": params, "issuedAt": 1000 + n, "expiresAt": 1000 + n + 60_000, "nonce": f"nonce-{n}"}
     cmd["signature"] = sign_command(SECRET, cmd)
     return cmd
 

@@ -107,6 +107,10 @@ class RobotOSCommandDispatcher:
 
     def _handle(self, command: dict[str, Any]) -> BridgeEnvelope:
         command_id = str(command.get("id", ""))
+        if str(command.get("robotId", "")) != str(self.robot_id):
+            # Addressed to another robot: refused before the guard, so it never uses up a nonce here.
+            self.audit.emit("command-dispatcher", "command_denied", severity="warning", command_id=command_id, reason="command for another robot")
+            return self._ack(command_id, False, "command for another robot")
         ok, reason = self.guard.verify(command)
         if not ok and reason == "replayed command" and command_id in self._results:
             # The same signed command again: answer with what happened the first time.

@@ -11,6 +11,9 @@ from typing import Any
 from ..common import now_ms
 
 FUTURE_TOLERANCE_MS = 60_000
+# The server issues Robot OS commands valid for 2 minutes. A command claiming a
+# much longer life was not made by it, or was made to be replayed later.
+MAX_LIFETIME_MS = 15 * 60_000
 
 
 def _params_json(params: Any) -> str:
@@ -39,11 +42,17 @@ def sign_command(secret: str, command: dict[str, Any]) -> str:
 class CommandGuard:
     """Checks a signed command. With `state_path`, the nonces it has accepted
     survive a restart, so a command delivered again after a restart is still a
-    replay and never runs twice. Nonces are kept until their command expires."""
+    replay and never runs twice. Nonces are kept until their command expires.
+
+    With `robot_id`, a command addressed to another robot is refused even when
+    its signature is valid (a secret shared by mistake between two robots must
+    not let one robot's commands run on the other)."""
 
     secret: str
     now: Any = now_ms
     state_path: Any = None
+    robot_id: Any = None
+    max_lifetime_ms: int = MAX_LIFETIME_MS
     _seen: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -81,10 +90,14 @@ class CommandGuard:
             return False, "command issued in future"
         if now >= expires:
             return False, "command expired"
+        if expires - issued > self.max_lifetime_ms:
+            return False, "command lifetime too long"
         expected = sign_command(self.secret, command)
         signature = str(command.get("signature", ""))
         if not hmac.compare_digest(expected, signature):
             return False, "bad signature"
+        if self.robot_id is not None and str(command.get("robotId")) != str(self.robot_id):
+            return False, "command for another robot"
         for nonce, expires_at in list(self._seen.items()):
             if expires_at <= now:
                 del self._seen[nonce]

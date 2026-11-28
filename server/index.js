@@ -50,6 +50,10 @@ const { createRobotOpsRouter } = require("./robotics/robotops_router");
 const robotSimulator = require("./robotics/simulator");
 const { createDeviceAccountRouter, createHubDeviceRouter } = require("./devices/router");
 const { createGraphRouter } = require("./graph/router");
+const { createTrustService } = require("./trust/service");
+const { createTrustRouter } = require("./trust/router");
+const { createInteropRouter } = require("./interop/router");
+const { createMtlsServer, requireClientCertificate } = require("./trust/mtls");
 const { manualRoutes } = require("./devices/manuals");
 const { createWebRouter } = require("./web");
 const { createHostingSetupRouter } = require("./hosting-setup");
@@ -466,6 +470,8 @@ try {
 const robotOSCommands = createRobotOSCommandService({ secrets: robotOSSecrets });
 // Sim-to-real deployments, update rollouts and firmware (created with the operator below).
 let robotOps = null;
+// Zero-trust device identity (server/trust): one service for every device link.
+const deviceTrust = createTrustService();
 if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
   app.use("/api", createRobotOSBridgeRouter({
     enabled: true,
@@ -474,6 +480,17 @@ if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
       resolveSecret: async (robotId) => {
         const db = await getDatabase().catch(() => null);
         return db ? robotOSCommands.secretFor(db, robotId).catch(() => null) : robotOSSecrets[robotId] || null;
+      },
+      // Replays are refused across every server instance and restart, not only in this process.
+      claim: async (scope, id, expiresAt) => {
+        const db = await getDatabase().catch(() => null);
+        return db ? deviceTrust.claimNonce(db, scope, id, expiresAt) : false;
+      },
+      onRefused: async ({ robotId, envelopeId, reason }) => {
+        const db = await getDatabase().catch(() => null);
+        if (!db) return;
+        const owner = await robotOSEnvelopes.resolveOwner(db, robotId, robotOSOwners).catch(() => null);
+        await deviceTrust.audit(db, { userId: owner, deviceId: robotId, kind: "robotos-envelope", decision: "refused", reason, detail: { envelopeId } });
       },
     }),
     onEnvelope: async (env) => {
@@ -624,15 +641,19 @@ app.use("/api", createConnectorsRouter({ publicBaseUrl, allowedOrigins, timeoutM
 // Research (search, read, cite) and Document Studio (PowerPoint, PDF, Word, Excel): server/studio.js.
 app.use("/api", createStudioRouter({ getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 // The Action Engine (permission, approval, execution, verification, audit), the integrations hub and the coding service: server/actions, server/coding.
-const operator = createOperator({ robotOSCommands });
+const operator = createOperator({ robotOSCommands, trust: deviceTrust });
 // Workflows reach the same engine ("Do an action", "Check a repository").
 workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 robotOps = createRobotOps({ robotics: operator.robotics, robotOSCommands, simulator: robotSimulator });
 app.use("/api", createRobotOpsRouter({ robotops: robotOps, simulator: robotSimulator }));
-app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands, blackbox: operator.blackbox }));
 // A robot's black box: its event timeline, recordings, incident reports and replay.
 app.use("/api", createBlackBoxAccountRouter({ blackbox: operator.blackbox, createAsk: (req, res) => createAsk({ req, res, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 60_000) }) }));
+// Device identities, certificates, credentials, quarantine, SROS 2 keystores (server/trust).
+app.use("/api", createTrustRouter({ trust: deviceTrust, robotics: operator.robotics, deviceLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "trust-device" }) }));
+// Robots behind other adapters (VDA 5050) and hardware packages (server/interop, server/marketplace).
+app.use("/api", createInteropRouter({ interop: operator.interop, vda: operator.vda5050, packages: operator.packages, engine: operator.engine }));
+app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands, blackbox: operator.blackbox }));
 app.use("/api", createDeviceAccountRouter({ devices: operator.devices, engine: operator.engine, manuals: manualRoutes({ devices: operator.devices }) }));
 // The Device Intelligence Graph: entities, versioned relationships, history and live-checked context (server/graph).
 app.use("/api", createGraphRouter({ graph: operator.graph }));
@@ -1328,6 +1349,16 @@ async function startServer() {
   server.on("close", () => {
     void closeFeedbackStores();
   });
+  // Optional mutual-TLS listener for robots (server/trust/mtls.js): only where this process terminates TLS itself.
+  const mtlsPort = Number(process.env.HANNAH_DEVICE_MTLS_PORT) || 0;
+  if (mtlsPort && process.env.HANNAH_DEVICE_MTLS_KEY && process.env.HANNAH_DEVICE_MTLS_CERT) {
+    const mtlsApp = express();
+    mtlsApp.use("/api", requireClientCertificate({ trust: deviceTrust, database: getDatabase, matchHeader: "x-hannah-robot" }));
+    mtlsApp.use("/api", createRobotDeviceRouter({ robotics: () => operator.robotics }));
+    createMtlsServer(mtlsApp, { key: process.env.HANNAH_DEVICE_MTLS_KEY.replace(/\\n/g, "\n"), cert: process.env.HANNAH_DEVICE_MTLS_CERT.replace(/\\n/g, "\n") })
+      .listen(mtlsPort, host, () => console.log(`HANNAH robot mTLS link listening on https://${host}:${mtlsPort}`))
+      .on("error", (error) => console.error(`The robot mTLS listener could not start (${error.code || error.name}).`));
+  }
 }
 
 // Export the Express app for serverless adapters while preserving direct startup
