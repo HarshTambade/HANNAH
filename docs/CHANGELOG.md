@@ -17,6 +17,7 @@ Devices (beta): HANNAH can work with lights, plugs, fans, sensors and meters thr
 - A self-update module for the hub with a health check and rollback (tested by itself; not wired to the server).
 - Descriptions of five HANNAH OS images that share one core, a service unit, a first-boot configuration and a snap description (written; never built or booted).
 - Migration 22: seven tables for hubs, devices, commands, automations, events, readings and profiles.
+- **Code in chat**: Python (Pyodide, downloaded the first time) and JavaScript run in a sandboxed Web Worker in your browser or app. A Run button on code blocks, a `run_code` tool HANNAH uses for calculations, data and charts, attached files for the code to read, output, tables and matplotlib charts under the code, a 20-second limit and capped output. No network inside the sandbox.
 
 ### Changed
 
