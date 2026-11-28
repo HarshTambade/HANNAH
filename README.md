@@ -994,6 +994,19 @@ Two platform services, each implemented once on the server and used by chat, voi
 
 Code: [`server/research/`](./server/research), [`server/documents/`](./server/documents), [`server/studio.js`](./server/studio.js), [`client/src/services/Studio.ts`](./client/src/services/Studio.ts).
 
+## Images and video clips
+
+Ask in chat, the way you would with Grok: "draw a red fox in snow", "make a picture of a lighthouse at dusk, landscape", "make a 5-second clip of waves". You can also turn on **Create** above the message box, pick **Image** or **Video clip**, and type only the description. The picture or clip appears in the conversation with a **Download** button and is kept with your other files on this device (Library → Files). The agent can also call `generate_image` and `generate_video` itself. A video asks for your approval first, because it costs more and takes a minute or more.
+
+- **Whose key pays.** Generation uses the same keys as chat: a key saved to your account in Settings → Account, or the operator's key on the server. Images work with an **OpenAI**, **xAI** or **Together AI** key, through the OpenAI-style `/v1/images/generations` endpoint. Video works with an **xAI** key only, through xAI's video job API (start a job, then check it until the clip is ready). Without a suitable key, HANNAH tells you which key to add. OpenAI's Sora video API was shut down in September 2026, so it isn't offered.
+- **Models.** By default these are `gpt-image-2` (OpenAI), `grok-imagine-image-2.0` (xAI), `black-forest-labs/FLUX.1-schnell` (Together) and `grok-imagine-video-1.5` (xAI video). Change them with `OPENAI_IMAGE_MODEL`, `XAI_IMAGE_MODEL`, `TOGETHER_IMAGE_MODEL` and `XAI_VIDEO_MODEL` on the server. Clips are 1 to 15 seconds long (5 by default) and 720p.
+- **What HANNAH won't make.** It refuses sexual content involving anyone who might be under 18, pictures or videos of real private people (for example "my neighbour Sarah"), and sexual images of real, named people. These are word checks on the server, applied before any provider is called. They catch the plain cases, not every possible wording. The provider's own moderation still applies, and when a provider says no, HANNAH shows its reason word for word.
+- **Cost.** Your daily budget (Settings, or `HANNAH_DAILY_BUDGET_USD` on the server) applies: once it's used up, nothing more is generated that day. xAI reports what each image and video cost, and HANNAH counts that toward the budget. OpenAI and Together don't report a cost, so set `HANNAH_IMAGE_COST_USD` (per image) and `HANNAH_VIDEO_COST_USD_PER_SECOND` if you want those counted too.
+- **Storage.** The server doesn't keep generated media. It passes the file to the app, which saves it in the browser's storage with the documents HANNAH makes. Generated media isn't copied to your account, so it doesn't follow you to another device.
+- **Tested so far.** The server routes and the app's code are tested with stand-ins for the provider APIs, built from each provider's public documentation. **No real OpenAI, xAI or Together key has been used yet.** Field names that the docs leave unclear, such as xAI's video status values other than "done", "failed" and "expired", haven't been checked against the live APIs. A clip comes back from the server as one response, so a long clip may be larger than a serverless host allows in a single response (Vercel's limit is about 4.5 MB).
+
+Code: [`server/media.js`](./server/media.js), [`client/src/services/Media.ts`](./client/src/services/Media.ts).
+
 ## Knowledge
 
 **Knowledge** is your own documents, indexed on this device so HANNAH can answer from them and show where each answer came from. Add files or paste text on **Memory & trust → Knowledge**; in the desktop app, index the text files of a shared folder. Each document is split into overlapping passages, and a search ranks them with BM25 over the same tokenizer memory uses (any script, light stemming).
