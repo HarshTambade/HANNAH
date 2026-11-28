@@ -43,7 +43,12 @@ def _apply(sim: KinematicSimAdapter, action: dict) -> None:
 def run_scenario(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as handle:
         scenario = json.load(handle)
-    world_path = scenario["world"] if os.path.isabs(scenario["world"]) else os.path.join(os.path.dirname(os.path.abspath(path)), scenario["world"])
+    return run_scenario_data(scenario, os.path.dirname(os.path.abspath(path)))
+
+
+def run_scenario_data(scenario: dict, base_dir: str = DEFAULT_DIR) -> dict:
+    """Run a scenario given as data; a relative world path is taken from base_dir."""
+    world_path = scenario["world"] if os.path.isabs(scenario["world"]) else os.path.join(base_dir, scenario["world"])
     with open(world_path, "r", encoding="utf-8") as handle:
         world = json.load(handle)
     sim = KinematicSimAdapter(world, dict(LIMITS, **scenario.get("limits", {})), {"radius": 0.18}, {"seed": scenario.get("seed", 7), "odometryDrift": scenario.get("odometryDrift", 0.004)})

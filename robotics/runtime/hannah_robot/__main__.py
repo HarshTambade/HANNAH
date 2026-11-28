@@ -4,6 +4,8 @@
     python3 -m hannah_robot enroll --server https://… --code XXXXX-XXXXX [--profile FILE] [--state-dir DIR]
     python3 -m hannah_robot run [--profile FILE] [--state-dir DIR] [--sim-speed N]
     python3 -m hannah_robot doctor [--profile FILE] [--state-dir DIR] [--json]
+    python3 -m hannah_robot run --record [--blackbox-config FILE]      also keep a black box recording
+    python3 -m hannah_robot blackbox list|sweep|timeline|scenario|reproduce|export-rosbag2 [--mission ID] [--out PATH]
 
 Enrollment exchanges the one-time code from HANNAH's Robots screen for this
 robot's secret and stores it in the state directory, readable only by this
@@ -37,7 +39,8 @@ def _credentials_path(state_dir: str) -> str:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="hannah_robot", description=f"HANNAH Robotics Runtime {__version__}")
-    parser.add_argument("command", choices=["describe", "enroll", "run", "doctor"])
+    parser.add_argument("command", choices=["describe", "enroll", "run", "doctor", "blackbox"])
+    parser.add_argument("action", nargs="?", help="For blackbox: list, sweep, timeline, scenario, reproduce or export-rosbag2.")
     parser.add_argument("--profile", default=DEFAULT_PROFILE, help="The robot's profile file (default: the simulated differential-drive robot).")
     parser.add_argument("--state-dir", help="Where this robot's credentials and replay state are kept.")
     parser.add_argument("--server", help="HANNAH's address, for enroll.")
@@ -46,7 +49,17 @@ def main(argv=None) -> int:
     parser.add_argument("--sim-speed", type=float, default=1.0, help="Simulated seconds per real second (built-in simulator only).")
     parser.add_argument("--sync-interval", type=float, default=None, help="Seconds between exchanges with the server (default: what the server asks for).")
     parser.add_argument("--json", action="store_true", help="For doctor: print the checks as JSON.")
+    parser.add_argument("--record", action="store_true", help="For run: keep a black box recording in the state directory and upload its event summaries.")
+    parser.add_argument("--blackbox-config", help="The black box's rules (JSON): topics, rates, sensitivity, retention, size caps.")
+    parser.add_argument("--blackbox-dir", help="Where the recording is (default: <state dir>/blackbox).")
+    parser.add_argument("--mission", help="For blackbox timeline, scenario and reproduce: the mission id.")
+    parser.add_argument("--out", help="For blackbox scenario and export-rosbag2: where to write.")
+    parser.add_argument("--world", default="../worlds/home.json", help="For blackbox scenario and reproduce: the world, relative to robotics/scenarios.")
+    parser.add_argument("--storage", default="mcap", help="For blackbox export-rosbag2: the rosbag2 storage plugin (mcap or sqlite3).")
     args = parser.parse_args(argv)
+    if args.command == "blackbox":
+        from .blackbox.cli import main as blackbox_main
+        return blackbox_main(args)
     if args.command == "doctor":
         from .doctor import checks, report
         state_dir = args.state_dir or os.path.join(os.path.expanduser("~"), ".hannah-robot", os.path.splitext(os.path.basename(args.profile))[0])
@@ -96,11 +109,20 @@ def main(argv=None) -> int:
             return 3
         safety = local_safety(adapter)
         guard = CommandGuard(credentials["secret"], credentials["robotId"], os.path.join(state_dir, "guard.json"))
-        runtime = Runtime(adapter, guard, safety, link_timeout=float(safety.limits.get("linkTimeoutS", 5)), log=log, descriptor=descriptor(profile, adapter))
+        hook = uploader = None
+        if args.record:
+            from .blackbox import Recorder, RecorderConfig, RuntimeRecorder, Uploader
+            config = RecorderConfig.load(args.blackbox_config) if args.blackbox_config else RecorderConfig()
+            simulated = bool((adapter.describe().get("simulation") or {}).get("kind"))
+            recorder = Recorder(args.blackbox_dir or os.path.join(state_dir, "blackbox"), credentials["robotId"], config, simulated=simulated, log=log)
+            recorder.sweep()
+            hook, uploader = RuntimeRecorder(recorder), Uploader(recorder, log=log)
+            log("recording", directory=recorder.directory, simulated=simulated)
+        runtime = Runtime(adapter, guard, safety, link_timeout=float(safety.limits.get("linkTimeoutS", 5)), log=log, descriptor=descriptor(profile, adapter), blackbox=hook)
         for name in (signal.SIGINT, signal.SIGTERM):
             signal.signal(name, lambda *_: runtime.stop())
         log("running", robot=credentials["robotId"], adapter=adapter.name, simulation=(adapter.describe().get("simulation") or {}).get("kind"), server=server)
-        run(runtime, Link(server, credentials["robotId"], credentials["secret"]), sync_interval=args.sync_interval)
+        run(runtime, Link(server, credentials["robotId"], credentials["secret"]), sync_interval=args.sync_interval, uploader=uploader)
         log("stopped")
         return 0
     except (ProfileError, LinkError) as error:
