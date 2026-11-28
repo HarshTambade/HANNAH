@@ -115,7 +115,8 @@ before(async () => {
   const [code] = await once(enrolling, "exit");
   assert.equal(code, 0, said);
   log.push(...said.split("\n").filter(Boolean).map((line) => { try { return JSON.parse(line); } catch { return { event: "text", message: line }; } }));
-  runtime = spawn("python3", runtimeArgs("run", ["--sync-interval", "0.2", ...(GAZEBO ? [] : ["--sim-speed", String(SPEED)])]), { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
+  // --record: the runtime also keeps its black box and uploads event summaries.
+  runtime = spawn("python3", runtimeArgs("run", ["--record", "--sync-interval", "0.2", ...(GAZEBO ? [] : ["--sim-speed", String(SPEED)])]), { cwd: RUNTIME, stdio: ["ignore", "pipe", "pipe"] });
   let buffer = "";
   runtime.stdout.on("data", (chunk) => { buffer += chunk; const lines = buffer.split("\n"); buffer = lines.pop(); for (const line of lines) { try { log.push(JSON.parse(line)); } catch { /* not a log line */ } } });
   runtime.stderr.on("data", (chunk) => log.push({ event: "stderr", message: String(chunk) }));
@@ -246,6 +247,19 @@ test("a pressed emergency stop halts the robot at once, fails the mission and bl
   assert.match(refused.body.record.permission.reason, /emergency stop is engaged\. It has to be released at the robot/);
   const events = (await call("GET", `/robots/events?robot=${robotId}`)).body.events;
   assert.ok(events.some((event) => event.type === "estop-engaged" && event.source === "robot"));
+  // The runtime's black box recorded it with the mission, uploaded it, and the incident report rests on it.
+  const recorded = await until(() => call("GET", `/robots/${robotId}/blackbox/events?mission=${started.missionId}&server=0`), (answer) => ["mission-issued", "estop-engaged", "mission-failed"].every((type) => answer.body.events.some((event) => event.type === type)), { what: "the black box upload" });
+  const stop = recorded.body.events.find((event) => event.type === "estop-engaged");
+  assert.equal(stop.origin, "robot-blackbox");
+  assert.equal(stop.simulated, true);
+  assert.equal(stop.clock.synced, true, "the runtime compared its clock with the server's");
+  const { report } = (await call("GET", `/robots/${robotId}/blackbox/incident?mission=${started.missionId}`)).body;
+  assert.equal(report.anchor.missionId, started.missionId);
+  assert.ok(report.confirmed.some((line) => line.evidence.includes(stop.id)));
+  assert.ok(report.suspected.some((item) => item.status === "suspected" && item.evidence.includes(stop.id) && /simulated emergency-stop input/.test(item.cause)));
+  const { replay } = (await call("GET", `/robots/${robotId}/blackbox/missions/${started.missionId}/replay`)).body;
+  assert.equal(replay.playback, true);
+  assert.ok(replay.frames.length > 0, "the recorded track comes back as playback");
   inputs({ estop: false });
   const released = await until(robot, (value) => !value.state.estop.engaged, { what: "the release" });
   await sleep(600);
