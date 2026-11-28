@@ -47,6 +47,17 @@ class PosixSerialStream:
             raise RuntimeError("serial stream not open")
         os.write(self.fd, data)
 
+    def read(self, size: int) -> bytes:
+        """Return up to size bytes (for binary protocols), or b'' on timeout."""
+        if self.fd is None:
+            raise RuntimeError("serial stream not open")
+        if not self._buffer:
+            ready, _, _ = select.select([self.fd], [], [], self.timeout_ms / 1000.0)
+            if ready:
+                self._buffer += os.read(self.fd, 4096)
+        data, self._buffer = self._buffer[:size], self._buffer[size:]
+        return data
+
     def read_line(self) -> bytes:
         """Return one newline-terminated frame, or b'' on timeout."""
         if self.fd is None:
