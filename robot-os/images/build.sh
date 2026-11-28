@@ -198,7 +198,7 @@ fi
 
 "${MKOSI_CMD[@]}"
 
-cd "$OUT/output"
+cd "$OUT/output" || exit 5
 shopt -s nullglob
 files=(hannah-robot-os_"$VERSION"*)
 if [[ ${#files[@]} -eq 0 ]]; then
