@@ -49,6 +49,12 @@ const { deviceActions } = require("./catalog/device");
 const { robotActions } = require("./catalog/robots");
 const { hardwareActions } = require("./catalog/hardware");
 const { robotOSActions } = require("./catalog/robot_os");
+const { interopActions } = require("./catalog/interop");
+const { hardwarePackageActions } = require("./catalog/hardware_packages");
+const { createVda5050Adapter } = require("../interop/vda5050/adapter");
+const { createHannahLinkAdapter } = require("../interop/adapters/hannah");
+const { createInteropRegistry } = require("../interop/registry");
+const { createHardwarePackageService } = require("../marketplace/hardware-packages");
 const { createDeviceService } = require("../devices/service");
 const { createRoboticsService } = require("../robotics/service");
 const { emitUserEvent } = require("../webhooks");
@@ -77,8 +83,15 @@ function createOperator({ fetchImpl = (...args) => fetch(...args), request, now 
   } : null;
   const robotics = createRoboticsService({ now, emit: emitUserEvent, credentialPolicy, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
   const devices = createDeviceService({ now, emit: emitUserEvent });
-  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands })] });
-  return { coding, devices, engine, robotics, robotOSCommands, trust };
+  // Interop: one fleet over HANNAH's robot link (adapter #1) and VDA 5050 over MQTT (adapter #2).
+  const vda5050 = createVda5050Adapter({ trust, now, log: (text) => console.error(text) });
+  const interop = createInteropRegistry({ adapters: [
+    { adapter: createHannahLinkAdapter({ robotics }), robotPrefix: "rb_", missionPrefix: "ms_" },
+    { adapter: vda5050, robotPrefix: "ia_", missionPrefix: "im_" },
+  ] });
+  const packages = createHardwarePackageService({ now, trust, robots: (db, userId, id) => robotics.getRobot(db, userId, id) });
+  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands }), ...interopActions({ interop }), ...hardwarePackageActions({ packages })] });
+  return { coding, devices, engine, interop, packages, robotics, robotOSCommands, trust, vda5050 };
 }
 
 /** Every connection an account has, in one shape. */

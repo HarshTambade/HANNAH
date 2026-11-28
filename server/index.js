@@ -47,6 +47,7 @@ const { createRobotOSCommandService } = require("./robotics/robot_os_commands");
 const { createDeviceAccountRouter, createHubDeviceRouter } = require("./devices/router");
 const { createTrustService } = require("./trust/service");
 const { createTrustRouter } = require("./trust/router");
+const { createInteropRouter } = require("./interop/router");
 const { createMtlsServer, requireClientCertificate } = require("./trust/mtls");
 const { manualRoutes } = require("./devices/manuals");
 const { createWebRouter } = require("./web");
@@ -616,6 +617,8 @@ workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 // Device identities, certificates, credentials, quarantine, SROS 2 keystores (server/trust).
 app.use("/api", createTrustRouter({ trust: deviceTrust, robotics: operator.robotics, deviceLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "trust-device" }) }));
+// Robots behind other adapters (VDA 5050) and hardware packages (server/interop, server/marketplace).
+app.use("/api", createInteropRouter({ interop: operator.interop, vda: operator.vda5050, packages: operator.packages, engine: operator.engine }));
 app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands }));
 app.use("/api", createDeviceAccountRouter({ devices: operator.devices, engine: operator.engine, manuals: manualRoutes({ devices: operator.devices }) }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
