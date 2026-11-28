@@ -45,6 +45,7 @@ def main(argv=None) -> int:
     parser.add_argument("--allow-insecure", action="store_true", help="Allow http:// to another computer. Only for a closed development network.")
     parser.add_argument("--sim-speed", type=float, default=1.0, help="Simulated seconds per real second (built-in simulator only).")
     parser.add_argument("--sync-interval", type=float, default=None, help="Seconds between exchanges with the server (default: what the server asks for).")
+    parser.add_argument("--resources-file", default=None, help="The Robot OS Edge Resource Manager's latest report to forward (default: /var/lib/hannah-robot-os/resources/latest.json when it exists).")
     parser.add_argument("--json", action="store_true", help="For doctor: print the checks as JSON.")
     args = parser.parse_args(argv)
     if args.command == "doctor":
@@ -97,6 +98,8 @@ def main(argv=None) -> int:
         safety = local_safety(adapter)
         guard = CommandGuard(credentials["secret"], credentials["robotId"], os.path.join(state_dir, "guard.json"))
         runtime = Runtime(adapter, guard, safety, link_timeout=float(safety.limits.get("linkTimeoutS", 5)), log=log, descriptor=descriptor(profile, adapter))
+        from .resources import reader_from_env
+        runtime.resources = reader_from_env(args.resources_file)
         for name in (signal.SIGINT, signal.SIGTERM):
             signal.signal(name, lambda *_: runtime.stop())
         log("running", robot=credentials["robotId"], adapter=adapter.name, simulation=(adapter.describe().get("simulation") or {}).get("kind"), server=server)
