@@ -44,12 +44,20 @@ test.beforeAll(async () => {
   }
   throw new Error(`The HANNAH server didn't start:\n${serverLog}`);
 });
-test.afterAll(() => { runtime?.kill(); second?.kill(); server?.kill(); });
+test.afterAll(() => { runtime?.kill(); second?.kill(); server?.kill(); if (process.env.HANNAH_E2E_SERVER_LOG) require("node:fs").writeFileSync(process.env.HANNAH_E2E_SERVER_LOG, serverLog); });
 
 async function signedIn(page: Page) {
   await page.route(/\/(api|v1)\//, async (route) => {
     const url = new URL(route.request().url());
-    const response = await route.fetch({ url: `${api}${url.pathname}${url.search}`, timeout: 60_000 });
+    // A GET can race Node's keep-alive close (ECONNRESET); the proxy retries it once, as a browser would.
+    const send = () => route.fetch({ url: `${api}${url.pathname}${url.search}`, timeout: 60_000 });
+    let response;
+    try {
+      response = await send();
+    } catch (error) {
+      if (route.request().method() !== "GET" || !/ECONNRESET|socket hang up/.test(String(error))) throw error;
+      response = await send();
+    }
     await route.fulfill({ response });
   });
   const registered = await page.request.post(`${api}/api/account/register`, { data: { email: EMAIL, password: "correct horse battery" } });

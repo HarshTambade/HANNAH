@@ -5,6 +5,7 @@
  * account-scoped bridge store. Nothing here commands a robot: motion still
  * goes through the Action Engine and the safety gateways.
  */
+import { PanelBoundary } from "./robotops/PanelBoundary";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { apiFetch, apiUrl } from "../services/api";
@@ -149,7 +150,7 @@ export default function RobotOSPage() {
 
       {error ? <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900" role="alert">{error}</p> : null}
 
-      <DiagnosticsPanel />
+      <PanelBoundary name="Self-diagnostics"><DiagnosticsPanel /></PanelBoundary>
 
       <section className="mb-4 grid gap-3 sm:grid-cols-4">
         <div className={card}><p className={heading}>Envelopes</p><p className="mt-1 text-2xl font-semibold text-slate-900">{summary.total}</p></div>
@@ -259,7 +260,7 @@ export default function RobotOSPage() {
         {actionMessage ? <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800" role="status">{actionMessage}</p> : null}
       </section>
 
-      <UpdatesPanel />
+      <PanelBoundary name="Updates"><UpdatesPanel /></PanelBoundary>
 
       {confirm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true">

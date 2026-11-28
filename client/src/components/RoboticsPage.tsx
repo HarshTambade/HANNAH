@@ -12,6 +12,7 @@
  *   - how old the state on screen is (an offline robot's is marked as old);
  *   - that Stop is a software request, not an emergency stop.
  */
+import { PanelBoundary } from "./robotops/PanelBoundary";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, Loader2, MapPin, OctagonX, Plus, Radio, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
@@ -310,8 +311,8 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
       </section>
 
       {robot.status === "enrolled" && <CommissioningPanel robot={robot} onChanged={() => void refresh()} />}
-      {robot.status === "enrolled" && <SafetyAutonomyPanel robotId={robot.id} canChange={isAccountSession()} />}
-      {robot.status === "enrolled" && !isArm && <TeleopPanel robot={robot} canOperate={isAccountSession()} />}
+      {robot.status === "enrolled" && <PanelBoundary name="Safety and autonomy"><SafetyAutonomyPanel robotId={robot.id} canChange={isAccountSession()} /></PanelBoundary>}
+      {robot.status === "enrolled" && !isArm && <PanelBoundary name="Manual control"><TeleopPanel robot={robot} canOperate={isAccountSession()} /></PanelBoundary>}
 
       {isArm && <ArmPanel robot={robot} busy={Boolean(busy)} onAsk={(action, params) => void ask(action, action, params)} />}
       {isArm && active && (
@@ -383,7 +384,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
           </div>
         </section>
       )}
-      {robot.status === "enrolled" && <EdgeResourcesPanel robotId={robot.id} />}
+      {robot.status === "enrolled" && <PanelBoundary name="Edge resources"><EdgeResourcesPanel robotId={robot.id} /></PanelBoundary>}
 
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Missions</h3>
@@ -459,11 +460,11 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
         </section>
       )}
 
-      <DiagnosticsPanel robot={robot} />
-      <BlackBoxPanel robot={robot} />
+      <PanelBoundary name="Self-diagnostics"><DiagnosticsPanel robot={robot} /></PanelBoundary>
+      <PanelBoundary name="Black box"><BlackBoxPanel robot={robot} /></PanelBoundary>
 
-      {robot.status === "enrolled" && !robot.simulated && <SimToRealPanel robot={robot} robots={robots} />}
-      {robot.status === "enrolled" && <MaintenancePanel assetId={robot.id} />}
+      {robot.status === "enrolled" && !robot.simulated && <PanelBoundary name="Simulation to real"><SimToRealPanel robot={robot} robots={robots} /></PanelBoundary>}
+      {robot.status === "enrolled" && <PanelBoundary name="Maintenance"><MaintenancePanel assetId={robot.id} /></PanelBoundary>}
 
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Device</h3>
@@ -569,8 +570,8 @@ export default function RoboticsPage() {
         </div>
       )}
       {signedIn && robots && robots.length > 0 && <AnalyticsPanel />}
-      {signedIn && <InteropPanel />}
-      {signedIn && <DeviceSecurityPanel />}
+      {signedIn && <PanelBoundary name="Interoperability"><InteropPanel /></PanelBoundary>}
+      {signedIn && <PanelBoundary name="Device security"><DeviceSecurityPanel /></PanelBoundary>}
     </main>
   );
 }

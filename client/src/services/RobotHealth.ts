@@ -45,7 +45,11 @@ export const RobotHealth = {
   confirm: (findingId: string, note: string) => accountRequest<{ finding: MaintenanceFinding }>(`/api/maintenance/findings/${q(findingId)}/confirm`, post({ note })),
   createTask: (task: { assetId: string; kind: string; title?: string; note?: string; dueAt?: number | null; component?: string | null; findingId?: string | null; remind?: boolean }) => accountRequest<{ task: MaintenanceTask }>("/api/maintenance/tasks", post(task)),
   completeTask: (taskId: string, note = "") => accountRequest<{ task: MaintenanceTask }>(`/api/maintenance/tasks/${q(taskId)}/complete`, post({ note })),
-  diagnose: (auto = true) => accountRequest<Diagnosis>(`/api/diagnostics${auto ? "" : "?auto=0"}`, { signal: AbortSignal.timeout(30_000) }),
+  diagnose: async (auto = true) => {
+    const answer = await accountRequest<Diagnosis>(`/api/diagnostics${auto ? "" : "?auto=0"}`, { signal: AbortSignal.timeout(30_000) });
+    if (!answer || typeof answer.subsystems !== "object" || answer.subsystems === null || !Array.isArray(answer.incidents)) throw new Error("The server's diagnostics answer is incomplete. It may be running an older version of HANNAH.");
+    return answer;
+  },
   recover: (action: string, params: Record<string, unknown>, incidentId?: string) => accountRequest<{ recovery: Recovery & { approval?: { id: string; status: string } } }>("/api/diagnostics/recover", { ...post({ action, params, incidentId }), signal: AbortSignal.timeout(30_000) }),
 };
 

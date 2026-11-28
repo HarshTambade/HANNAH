@@ -13,6 +13,7 @@
  *   - whether a value is live or only the last one known, and how old it is;
  *   - that HANNAH is not a safety system.
  */
+import { PanelBoundary } from "./robotops/PanelBoundary";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Activity, AlertTriangle, CheckCircle2, CircleSlash, Clock, Fan, Gauge, HelpCircle, Lightbulb, Loader2, PauseCircle, PlayCircle, Plug, Plus, Power, QrCode, Router, ShieldAlert, Thermometer, Trash2, Workflow, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
@@ -646,7 +647,7 @@ export default function DevicesPage() {
 
             </aside>
           </div>
-          <DeviceGraphPanel />
+          <PanelBoundary name="Device graph"><DeviceGraphPanel /></PanelBoundary>
         </>
       )}
       {scanOpen && <QrScanner onResult={(text) => { void identifyQr(text); }} onClose={() => setScanOpen(false)} />}
