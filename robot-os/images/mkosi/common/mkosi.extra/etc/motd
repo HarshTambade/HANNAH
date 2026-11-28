@@ -1,0 +1,11 @@
+
+  HANNAH Robot OS (experimental)
+
+  NOT SAFETY CERTIFIED. The software stop (hannah-robot-os safety engage)
+  is not a safety-rated emergency stop. A physical robot needs a hardware
+  emergency stop circuit that cuts actuator power.
+
+  The root filesystem is read-only; state lives in /var.
+  Status:  hannah-robot-os ready --config /etc/hannah-robot-os/config.json
+  Logs:    journalctl -u 'hannah-*'
+

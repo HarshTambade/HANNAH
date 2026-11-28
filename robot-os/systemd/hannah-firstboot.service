@@ -1,12 +1,18 @@
 [Unit]
 Description=HANNAH Robot OS First Boot
-After=network-online.target
-Before=hannah-robot-os.target
+Documentation=file:/opt/hannah-robot-os/README.md
+# Needs only /var; the network is not required (enrollment happens later, outbound).
+After=local-fs.target systemd-tmpfiles-setup.service nftables.service
+Before=hannah-robot-os.target ssh.service hannah-hostname.service
+# The root filesystem is read-only, so the unit can't disable itself: it runs
+# until it has written this marker.
+ConditionPathExists=!/var/lib/hannah-system/firstboot.done
 
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/hannah-firstboot
 RemainAfterExit=yes
+StandardOutput=journal+console
 
 [Install]
 WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+# Pinned versions for the HANNAH Robot OS disk image build.
+# build.sh and .github/workflows/robot-os-image-ci.yml read or repeat these;
+# a test checks they agree. Chosen 2026-11-28 without a local build: confirm
+# against the projects' release pages when the first CI build runs.
+
+# mkosi (https://github.com/systemd/mkosi): the image builder, installed in CI
+# from this tag by the project's own GitHub Action. Pin to a commit SHA for
+# a stronger guarantee.
+MKOSI_VERSION=v25.3
+
+# The image's distribution.
+DEBIAN_RELEASE=trixie
+
+# The tools tree mkosi builds the image with (systemd-repart, ukify, mkfs):
+# from this distribution, so the host's own tools don't matter.
+TOOLS_TREE_DISTRIBUTION=debian
+TOOLS_TREE_RELEASE=trixie
+
+# Optional: a snapshot.debian.org timestamp, e.g. 20261101T000000Z, pins every
+# package to that day for a byte-for-byte rebuild. Empty uses the live archive
+# (the package versions used are recorded in the build's manifest.json).
+DEBIAN_SNAPSHOT=

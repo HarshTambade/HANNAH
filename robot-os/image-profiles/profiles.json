@@ -5,7 +5,7 @@
       "id": "robotos-dev-x86_64",
       "name": "HANNAH Robot OS Developer (x86_64)",
       "arch": "amd64",
-      "base": "ubuntu-server-24.04",
+      "base": "debian-13",
       "target": "generic-x86_64",
       "services": [
         "hannah-safety-gateway",
@@ -16,15 +16,29 @@
         "hannah-telemetry",
         "hannah-update-manager"
       ],
-      "packages": ["python3", "python3-venv", "ca-certificates", "openssh-server", "curl"],
+      "packages": [
+        "python3",
+        "ca-certificates",
+        "openssh-server",
+        "nftables",
+        "can-utils"
+      ],
       "ros2": "jazzy",
-      "status": "experimental"
+      "status": "experimental",
+      "image": {
+        "tool": "mkosi",
+        "board": "uefi",
+        "arch": "x86-64",
+        "kernel": "standard",
+        "ci": "build-and-boot"
+      },
+      "note": "Built and boot-checked in QEMU by robot-os-image-ci.yml once CI runs it; never booted on hardware."
     },
     {
       "id": "robotos-dev-arm64",
       "name": "HANNAH Robot OS Developer (arm64)",
       "arch": "arm64",
-      "base": "ubuntu-server-24.04",
+      "base": "debian-13",
       "target": "generic-arm64",
       "services": [
         "hannah-safety-gateway",
@@ -35,16 +49,30 @@
         "hannah-telemetry",
         "hannah-update-manager"
       ],
-      "packages": ["python3", "python3-venv", "ca-certificates", "openssh-server", "curl"],
+      "packages": [
+        "python3",
+        "ca-certificates",
+        "openssh-server",
+        "nftables",
+        "can-utils"
+      ],
       "ros2": "jazzy",
-      "status": "experimental"
+      "status": "experimental",
+      "image": {
+        "tool": "mkosi",
+        "board": "uefi",
+        "arch": "arm64",
+        "kernel": "standard",
+        "ci": "manual"
+      },
+      "note": "Generic arm64 UEFI image; built on manual dispatch only; never booted on hardware."
     },
     {
       "id": "robotos-rpi5-arm64",
-      "name": "HANNAH Robot OS Raspberry Pi 5 (arm64)",
+      "name": "HANNAH Robot OS Raspberry Pi 4/5 (arm64)",
       "arch": "arm64",
-      "base": "ubuntu-server-24.04",
-      "target": "raspberry-pi-5",
+      "base": "debian-13",
+      "target": "raspberry-pi-4-5",
       "services": [
         "hannah-safety-gateway",
         "hannah-hardware-manager",
@@ -53,15 +81,29 @@
         "hannah-telemetry",
         "hannah-update-manager"
       ],
-      "packages": ["python3", "ca-certificates"],
+      "packages": [
+        "python3",
+        "ca-certificates",
+        "openssh-server",
+        "nftables",
+        "can-utils"
+      ],
       "ros2": "jazzy",
-      "status": "not_supported"
+      "status": "experimental",
+      "image": {
+        "tool": "mkosi",
+        "board": "rpi",
+        "arch": "arm64",
+        "kernel": "standard",
+        "ci": "manual"
+      },
+      "note": "Pi 4 primary; Pi 5 depends on Debian's Pi 5 support; no slot switching after an update on this board; never booted."
     },
     {
       "id": "robotos-industrial-x86_64",
       "name": "HANNAH Robot OS Industrial Edge (x86_64)",
       "arch": "amd64",
-      "base": "ubuntu-core-24-eval",
+      "base": "debian-13",
       "target": "industrial-x86_64",
       "services": [
         "hannah-safety-gateway",
@@ -71,15 +113,29 @@
         "hannah-telemetry",
         "hannah-update-manager"
       ],
-      "packages": ["python3", "ca-certificates"],
+      "packages": [
+        "python3",
+        "ca-certificates",
+        "openssh-server",
+        "nftables",
+        "can-utils"
+      ],
       "ros2": "jazzy",
-      "status": "not_supported"
+      "status": "not_supported",
+      "image": {
+        "tool": "mkosi",
+        "board": "uefi",
+        "arch": "x86-64",
+        "kernel": "rt",
+        "ci": "manual"
+      },
+      "note": "x86_64 UEFI image with Debian's PREEMPT_RT kernel; no latency measured; never booted on hardware."
     },
     {
       "id": "robotos-jetson-orin-arm64",
       "name": "HANNAH Robot OS Jetson Orin (arm64)",
       "arch": "arm64",
-      "base": "ubuntu-jetson-l4t-eval",
+      "base": "debian-13",
       "target": "nvidia-jetson-orin",
       "services": [
         "hannah-safety-gateway",
@@ -90,9 +146,23 @@
         "hannah-telemetry",
         "hannah-update-manager"
       ],
-      "packages": ["python3", "ca-certificates"],
+      "packages": [
+        "python3",
+        "ca-certificates",
+        "openssh-server",
+        "nftables",
+        "can-utils"
+      ],
       "ros2": "jazzy",
-      "status": "not_supported"
+      "status": "not_supported",
+      "image": {
+        "tool": "mkosi",
+        "board": "uefi",
+        "arch": "arm64",
+        "kernel": "standard",
+        "ci": "manual"
+      },
+      "note": "Generic arm64 UEFI image only: no NVIDIA L4T kernel, so no GPU, camera or carrier-board drivers."
     }
   ]
 }

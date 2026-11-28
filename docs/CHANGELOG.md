@@ -20,6 +20,7 @@ Devices (beta): HANNAH can work with lights, plugs, fans, sensors and meters thr
 - Descriptions of five HANNAH OS images that share one core, a service unit, a first-boot configuration and a snap description (written; never built or booted).
 - Migration 22: seven tables for hubs, devices, commands, automations, events, readings and profiles.
 - **Motor controller drivers in HANNAH Robot OS** (`robot-os`): ODrive (CAN and USB), Dynamixel Protocol 2.0, VESC (CAN and UART), and HANNAH's own serial protocol to a microcontroller. The hardware profile picks one (`service motor-controller --profile`); without a profile the service still uses the simulator. The manager's limits, ramp and watchdog still apply; each driver also clamps to the limits, and stops on an emergency stop or a link error. **Tested against protocol vectors and fake transports only, never on a real motor.**
+- **A HANNAH Robot OS disk image definition** (`robot-os/images`, mkosi on Debian 13) for x86_64 UEFI, arm64 UEFI and Raspberry Pi 4/5: read-only root with A/B slots and a separate `/var`, optional PREEMPT_RT kernel, SSH keys only with no password anywhere, outbound-only firewall, stable device names for ODrive, Dynamixel U2D2 and VESC, SocketCAN, watchdog, signed update hook and a not-safety-certified notice. CI builds the x86_64 image and boots it in QEMU; **no image has been built or booted yet**, and none on hardware.
 
 ### Changed
 

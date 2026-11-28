@@ -1,0 +1,18 @@
+[Plymouth Theme]
+Name=HANNAH Robot OS
+Description=HANNAH Robot OS boot screen. Not safety certified.
+ModuleName=two-step
+
+[two-step]
+ImageDir=/usr/share/plymouth/themes/spinner
+Font=DejaVu Sans 12
+TitleFont=DejaVu Sans Bold 18
+Title=HANNAH Robot OS
+SubTitle=Experimental. Not safety certified: use a hardware emergency stop.
+HorizontalAlignment=.5
+VerticalAlignment=.7
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x0d1117
+BackgroundEndColor=0x0d1117
+MessageBelowAnimation=true

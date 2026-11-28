@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for HANNAH Robot OS image updates
+
+[Timer]
+OnBootSec=20min
+OnUnitActiveSec=6h
+RandomizedDelaySec=30min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -6,8 +6,8 @@ Wants=local-fs.target
 
 [Service]
 Type=simple
-User=hannah-ros
-Group=hannah-ros
+User=hannah
+Group=hannah
 WorkingDirectory=/opt/hannah-robot-os
 ExecStart=/usr/bin/python3 -m hannah_robot_os service safety-gateway --config /etc/hannah-robot-os/config.json
 Restart=on-failure

@@ -1,0 +1,22 @@
+# systemd-sysupdate: install the new version's unified kernel image with
+# three boot tries. systemd-boot counts them down and falls back to the
+# previous entry if the new one never reaches boot-complete.target, which
+# needs hannah-boot-ready.service (the READY gate) to succeed.
+[Transfer]
+ProtectVersion=%A
+Verify=yes
+
+[Source]
+Type=url-file
+Path=@UPDATE_URL@
+MatchPattern=hannah-robot-os_@v.efi.xz
+
+[Target]
+Type=regular-file
+Path=/EFI/Linux
+PathRelativeTo=boot
+MatchPattern=hannah-robot-os_@v+@l-@d.efi hannah-robot-os_@v+@l.efi hannah-robot-os_@v.efi
+Mode=0444
+TriesLeft=3
+TriesDone=0
+InstancesMax=2

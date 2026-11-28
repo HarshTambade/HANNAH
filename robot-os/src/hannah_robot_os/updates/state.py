@@ -14,6 +14,7 @@ class UpdateState:
     last_good_slot: str = "a"
     last_good_version: str = "0.1.0"
     status: str = "idle"  # idle, staged, verifying, healthy, rolled_back, failed
+    staged_boot_id: str | None = None  # the boot during which the pending update was staged
 
     @staticmethod
     def load(path: str | Path) -> "UpdateState":
@@ -47,6 +48,7 @@ class UpdateState:
         self.current_version = self.pending_version
         self.pending_slot = None
         self.pending_version = None
+        self.staged_boot_id = None
         self.status = "healthy"
 
     def rollback(self) -> None:
@@ -55,10 +57,12 @@ class UpdateState:
         if self.status in {"staged", "verifying", "failed"} and self.pending_version:
             self.pending_slot = None
             self.pending_version = None
+            self.staged_boot_id = None
             self.status = "rolled_back"
             return
         self.current_slot = self.last_good_slot
         self.current_version = self.last_good_version
         self.pending_slot = None
         self.pending_version = None
+        self.staged_boot_id = None
         self.status = "rolled_back"

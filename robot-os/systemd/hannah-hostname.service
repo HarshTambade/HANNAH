@@ -1,0 +1,14 @@
+[Unit]
+Description=HANNAH Robot OS hostname from /var
+# /etc is read-only, so the hostname chosen at first boot lives on /var and is
+# applied at every boot.
+After=local-fs.target hannah-firstboot.service
+ConditionPathExists=/var/lib/hannah-system/hostname
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'tr -d "\\n" < /var/lib/hannah-system/hostname > /proc/sys/kernel/hostname'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

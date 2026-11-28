@@ -5,8 +5,8 @@ Requires=hannah-hardware-manager.service
 
 [Service]
 Type=simple
-User=hannah-ros
-Group=hannah-ros
+User=hannah
+Group=hannah
 ExecStart=/usr/bin/python3 -m hannah_robot_os service sensor-manager --config /etc/hannah-robot-os/config.json
 Restart=on-failure
 RestartSec=2

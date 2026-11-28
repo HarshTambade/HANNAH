@@ -1,32 +1,191 @@
 name: Robot OS Image CI
 
+# Builds the HANNAH Robot OS disk image with mkosi and boots it headless in
+# QEMU. The x86_64 image is built and boot-checked on every change to the image
+# inputs; arm64 (generic UEFI and Raspberry Pi) and the PREEMPT_RT image are
+# built only on manual dispatch, because arm64 runs under QEMU user emulation
+# on an x86_64 runner and takes much longer.
+
 on:
   push:
     paths:
       - 'robot-os/images/**'
       - 'robot-os/systemd/**'
+      - 'robot-os/image-profiles/**'
+      - 'robot-os/config/**'
+      - 'robot-os/src/**'
+      - 'robot-os/tools/**'
+      - 'robot-os/tests/unit/test_image_*.py'
       - '.github/workflows/robot-os-image-ci.yml'
   pull_request:
     paths:
       - 'robot-os/images/**'
       - 'robot-os/systemd/**'
+      - 'robot-os/image-profiles/**'
+      - 'robot-os/config/**'
+      - 'robot-os/src/**'
+      - 'robot-os/tools/**'
+      - 'robot-os/tests/unit/test_image_*.py'
       - '.github/workflows/robot-os-image-ci.yml'
+  workflow_dispatch:
+    inputs:
+      arm64:
+        description: 'Also build the arm64 images (generic UEFI, Raspberry Pi 4/5) under QEMU user emulation'
+        type: boolean
+        default: false
+      rt:
+        description: 'Also build and boot-check the x86_64 PREEMPT_RT image (industrial profile)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: robot-os-image-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  scripts-and-manifests:
+  config-checks:
+    name: Image config checks
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install pytest
+        run: python -m pip install pytest
       - name: Validate manifests
         run: python robot-os/tools/validate_manifests.py
-      - name: Shell syntax check
-        run: bash -n robot-os/images/scripts/*.sh
-      - name: Build development rootfs (Linux, privileged steps)
+      - name: Image tests (static checks, first boot, updates, build.sh --dry-run per profile)
+        run: python -m pytest -q robot-os/tests/unit/test_image_config.py robot-os/tests/unit/test_image_firstboot.py robot-os/tests/unit/test_image_updates.py
+      - name: shellcheck
+        run: |
+          shellcheck --version
+          shellcheck -S warning \
+            robot-os/images/build.sh \
+            robot-os/images/scripts/*.sh \
+            robot-os/images/mkosi/common/mkosi.postinst.chroot \
+            robot-os/images/mkosi/common/mkosi.finalize \
+            robot-os/images/mkosi/common/mkosi.extra/usr/bin/hannah-robot-os \
+            robot-os/images/mkosi/common/mkosi.extra/usr/sbin/hannah-firstboot \
+            robot-os/images/mkosi/common/mkosi.extra/usr/libexec/hannah/*
+
+  x86_64:
+    name: Build and boot x86_64 (${{ matrix.profile }})
+    needs: config-checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        # The PREEMPT_RT image (industrial profile) only on dispatch with rt ticked.
+        profile: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.rt) && '["robotos-dev-x86_64","robotos-industrial-x86_64"]' || '["robotos-dev-x86_64"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mkosi (pinned in robot-os/images/mkosi/VERSIONS)
+        uses: systemd/mkosi@v25.3
+      - name: Install boot-check tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap qemu-utils
-          sudo env OUT=/tmp/hannah-rootfs.tar.gz bash robot-os/images/scripts/build-dev-rootfs.sh /tmp/hannah-rootfs
-          ls -lh /tmp/hannah-rootfs.tar.gz
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf zstd debian-archive-keyring
+          mkosi --version
+      - name: Allow KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-hannah-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          ls -l /dev/kvm || echo "No KVM: the boot check falls back to software emulation"
+      - name: Build ${{ matrix.profile }}
+        run: sudo env "PATH=$PATH" robot-os/images/build.sh --profile "${{ matrix.profile }}" --out "$RUNNER_TEMP/image"
+      - name: Boot in QEMU and wait for READY
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/image/output"
+          IMAGE="$(find "$RUNNER_TEMP/image/output" -maxdepth 1 -type f -name 'hannah-robot-os_*.raw' | head -n 1)"
+          test -n "$IMAGE"
+          robot-os/images/scripts/qemu-smoke.sh "$IMAGE" --arch x86_64 --log "$RUNNER_TEMP/image/output/serial-console.log" --timeout 1200
+      - name: Check the kernel is PREEMPT_RT
+        if: matrix.profile == 'robotos-industrial-x86_64'
+        run: |
+          grep -E 'HANNAH-BOOT-CHECK: waiting for READY .*PREEMPT_RT' "$RUNNER_TEMP/image/output/serial-console.log"
+      - name: Compress and checksum
+        if: success()
+        run: |
+          cd "$RUNNER_TEMP/image/output"
+          for raw in hannah-robot-os_*.raw; do
+            zstd -T0 -10 -q --rm "$raw" -o "$raw.zst"
+          done
+          sha256sum hannah-robot-os_*.zst > SHA256SUMS.compressed
+          cat SHA256SUMS SHA256SUMS.compressed
+          ls -lh
+      - name: Upload image
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.profile }}-image
+          path: |
+            ${{ runner.temp }}/image/output/hannah-robot-os_*
+            ${{ runner.temp }}/image/output/SHA256SUMS
+            ${{ runner.temp }}/image/output/SHA256SUMS.compressed
+            ${{ runner.temp }}/image/output/serial-console.log
+          compression-level: 0
+          retention-days: 14
+      - name: Upload serial console log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.profile }}-serial-console
+          path: ${{ runner.temp }}/image/output/serial-console.log
+          if-no-files-found: ignore
+
+  arm64:
+    name: Build arm64 (${{ matrix.profile }})
+    needs: config-checks
+    if: github.event_name == 'workflow_dispatch' && inputs.arm64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [robotos-dev-arm64, robotos-rpi5-arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mkosi (pinned in robot-os/images/mkosi/VERSIONS)
+        uses: systemd/mkosi@v25.3
+      - name: Install arm64 emulation and boot-check tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-user-static binfmt-support qemu-system-arm qemu-efi-aarch64 zstd debian-archive-keyring
+          mkosi --version
+          ls /proc/sys/fs/binfmt_misc/ | grep -i aarch64
+      - name: Build ${{ matrix.profile }}
+        run: sudo env "PATH=$PATH" robot-os/images/build.sh --profile "${{ matrix.profile }}" --out "$RUNNER_TEMP/image"
+      - name: Boot in emulated QEMU (informational; slow without KVM)
+        if: matrix.profile == 'robotos-dev-arm64'
+        continue-on-error: true
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/image/output"
+          IMAGE="$(find "$RUNNER_TEMP/image/output" -maxdepth 1 -type f -name 'hannah-robot-os_*.raw' | head -n 1)"
+          robot-os/images/scripts/qemu-smoke.sh "$IMAGE" --arch aarch64 --log "$RUNNER_TEMP/image/output/serial-console.log" --timeout 3600
+      - name: Compress and checksum
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/image/output"
+          cd "$RUNNER_TEMP/image/output"
+          for raw in hannah-robot-os_*.raw; do
+            zstd -T0 -10 -q --rm "$raw" -o "$raw.zst"
+          done
+          sha256sum hannah-robot-os_*.zst > SHA256SUMS.compressed
+          cat SHA256SUMS SHA256SUMS.compressed
+      - name: Upload image
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.profile }}-image
+          path: |
+            ${{ runner.temp }}/image/output/hannah-robot-os_*
+            ${{ runner.temp }}/image/output/SHA256SUMS
+            ${{ runner.temp }}/image/output/SHA256SUMS.compressed
+            ${{ runner.temp }}/image/output/serial-console.log
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: warn

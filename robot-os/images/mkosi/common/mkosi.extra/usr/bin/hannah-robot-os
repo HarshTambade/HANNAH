@@ -1,0 +1,4 @@
+#!/bin/sh
+# HANNAH Robot OS command line (the Python package is in /opt/hannah-robot-os/src,
+# on the path through /usr/lib/python3/dist-packages/hannah_robot_os.pth).
+exec /usr/bin/python3 -m hannah_robot_os "$@"

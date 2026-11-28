@@ -1,0 +1,24 @@
+[Unit]
+Description=HANNAH Robot OS boot READY check
+Documentation=file:/opt/hannah-robot-os/README.md
+After=hannah-robot-os.target hannah-safety-gateway.service hannah-hardware-manager.service hannah-motor-controller.service
+# A boot counts as good (systemd-bless-boot) only when READY passed.
+Before=boot-complete.target
+
+[Service]
+Type=oneshot
+User=hannah
+Group=hannah
+ExecStart=/usr/libexec/hannah/boot-ready
+RemainAfterExit=yes
+StandardOutput=journal+console
+TimeoutStartSec=30min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/hannah-robot-os /run/hannah-robot-os
+
+[Install]
+WantedBy=hannah-robot-os.target
+RequiredBy=boot-complete.target

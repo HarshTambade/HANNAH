@@ -1,0 +1,12 @@
+# HANNAH Robot OS: DHCP on wired Ethernet. The robot then connects out to the
+# HANNAH server; the firewall accepts no new inbound connections.
+[Match]
+Type=ether
+Name=en* eth*
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
+
+[DHCPv4]
+UseDomains=yes

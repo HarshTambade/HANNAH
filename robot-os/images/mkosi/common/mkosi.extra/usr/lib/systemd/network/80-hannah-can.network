@@ -1,0 +1,17 @@
+# HANNAH Robot OS: bring every SocketCAN interface up at one bit rate.
+#
+# 500 kbit/s is the VESC default; ODrive ships at 250 kbit/s and must be set to
+# match the bus (odrivetool: odrv0.can.config.baud_rate). Every node on a bus
+# must use the same rate. The root filesystem is read-only, so a different rate
+# is set at image build time by replacing this file.
+#
+# A raw CAN socket needs no privilege, so the hannah service user can use the
+# bus; bringing the link up (done here by systemd-networkd) needs CAP_NET_ADMIN.
+[Match]
+# Real CAN interfaces only; a virtual vcan bus has no bit rate.
+Name=can*
+Type=can
+
+[CAN]
+BitRate=500000
+RestartSec=100ms
