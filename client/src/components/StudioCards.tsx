@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, BookmarkPlus, CheckCircle2, ChevronDown, Download, ExternalLink, FileSpreadsheet, FileText, FileType2, Loader2, Presentation, Search, ShieldAlert, Trash2, XCircle } from "lucide-react";
-import { FORMAT_LABELS, STUDIO_EVENT, deleteFile, downloadFile, getFile, getResearch, type DocumentFormat, type ResearchResult, type StudioEvent, type StudioFile } from "../services/Studio";
+import { FORMAT_LABELS, STUDIO_EVENT, deleteFile, downloadFile, getFile, getResearch, isMediaFile, type DocumentFormat, type ResearchResult, type StudioEvent, type StudioFile } from "../services/Studio";
 
 const FORMAT_ICON: Record<DocumentFormat, typeof FileText> = { pptx: Presentation, pdf: FileType2, docx: FileText, xlsx: FileSpreadsheet };
 const FORMAT_TONE: Record<DocumentFormat, string> = { pptx: "bg-orange-50 text-orange-700 border-orange-100", pdf: "bg-rose-50 text-rose-700 border-rose-100", docx: "bg-sky-50 text-sky-700 border-sky-100", xlsx: "bg-emerald-50 text-emerald-700 border-emerald-100" };
@@ -168,15 +168,17 @@ export function FileCard({ fileId, onDeleted, compact = false }: { fileId: strin
   }, [fileId]);
   if (file === undefined) return null;
   if (file === null) return <p className={`${compact ? "" : "ml-9"} text-xs text-slate-500`}>This file is no longer on this device.</p>;
-  const Icon = FORMAT_ICON[file.format];
+  if (isMediaFile(file)) return <MediaCard file={file} onDeleted={onDeleted} compact={compact} />;
+  const format = file.format as DocumentFormat;
+  const Icon = FORMAT_ICON[format];
   const passed = file.checks.filter((check) => check.ok).length;
   return (
     <article aria-label={file.name} className={`${compact ? "" : "ml-9 mr-1"} rounded-2xl border border-slate-200 bg-white p-3`}>
       <div className="flex items-center gap-3">
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${FORMAT_TONE[file.format]}`} aria-hidden="true"><Icon size={20} /></span>
+        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${FORMAT_TONE[format]}`} aria-hidden="true"><Icon size={20} /></span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-ink" title={file.name}>{file.name}</p>
-          <p className="text-[11px] text-slate-500">{FORMAT_LABELS[file.format]} · {size(file.bytes)}{facts(file).length ? ` · ${facts(file).join(" · ")}` : ""}{file.version && file.version > 1 ? ` · version ${file.version}` : ""}</p>
+          <p className="text-[11px] text-slate-500">{FORMAT_LABELS[format]} · {size(file.bytes)}{facts(file).length ? ` · ${facts(file).join(" · ")}` : ""}{file.version && file.version > 1 ? ` · version ${file.version}` : ""}</p>
         </div>
         <button type="button" onClick={() => void downloadFile(file.id).then(setStatus).catch((error: Error) => setStatus(error.message))} className="btn-primary inline-flex shrink-0 items-center gap-1.5 !px-3 !py-2 text-xs"><Download size={13} aria-hidden="true" /> Download</button>
         {onDeleted && <button type="button" aria-label={`Delete ${file.name}`} onClick={() => void deleteFile(file.id).then(onDeleted)} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"><Trash2 size={14} /></button>}
@@ -188,5 +190,43 @@ export function FileCard({ fileId, onDeleted, compact = false }: { fileId: strin
       {status && <p role="status" className="mt-1.5 text-[11px] text-emerald-700">{status}</p>}
       {!compact && <p className="mt-1.5 text-[11px] text-slate-400">Kept on this device{file.serverId ? " and in your account for 30 days (Library → Files to keep it longer or delete it)" : ""}.</p>}
     </article>
+  );
+}
+
+/** A picture or clip HANNAH generated, shown inline, with its download. */
+export function MediaCard({ file, onDeleted, compact = false }: { file: StudioFile; onDeleted?: () => void; compact?: boolean }) {
+  const [url, setUrl] = useState("");
+  const [status, setStatus] = useState("");
+  useEffect(() => {
+    let made = "";
+    let active = true;
+    void getFile(file.id).then((found) => {
+      if (!active || !found) return;
+      made = URL.createObjectURL(new Blob([found.data as BlobPart], { type: file.mime }));
+      setUrl(made);
+    });
+    return () => { active = false; if (made) URL.revokeObjectURL(made); };
+  }, [file.id, file.mime]);
+  const summary = file.summary || {};
+  const made = [typeof summary.provider === "string" ? summary.provider : "", typeof summary.model === "string" ? summary.model : ""].filter(Boolean).join(" · ");
+  const prompt = typeof summary.prompt === "string" ? summary.prompt : file.request;
+  return (
+    <figure aria-label={file.name} className={`${compact ? "" : "ml-9 mr-1"} max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white`}>
+      {url
+        ? file.format === "video"
+          ? <video src={url} controls playsInline loop className="block max-h-[420px] w-full bg-black" aria-label={prompt} />
+          : <img src={url} alt={prompt} className="block max-h-[480px] w-full bg-slate-50 object-contain" />
+        : <div className="flex h-40 items-center justify-center bg-slate-50 text-slate-400"><Loader2 size={18} className="animate-spin" aria-hidden="true" /></div>}
+      <figcaption className="flex items-center gap-2 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12px] text-ink" title={prompt}>{prompt}</p>
+          <p className="text-[11px] text-slate-500">{file.format === "video" ? `Video${typeof summary.seconds === "number" ? ` · ${summary.seconds}s` : ""}` : "Image"} · {size(file.bytes)}{made ? ` · ${made}` : ""}</p>
+        </div>
+        <button type="button" onClick={() => void downloadFile(file.id).then(setStatus).catch((error: Error) => setStatus(error.message))} className="btn-primary inline-flex shrink-0 items-center gap-1.5 !px-3 !py-2 text-xs"><Download size={13} aria-hidden="true" /> Download</button>
+        {onDeleted && <button type="button" aria-label={`Delete ${file.name}`} onClick={() => void deleteFile(file.id).then(onDeleted)} className="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"><Trash2 size={14} /></button>}
+      </figcaption>
+      {status && <p role="status" className="px-3 pb-2 text-[11px] text-emerald-700">{status}</p>}
+      {!compact && <p className="px-3 pb-2 text-[11px] text-slate-400">AI-generated. Kept on this device (Library → Files).</p>}
+    </figure>
   );
 }

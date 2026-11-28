@@ -35,6 +35,9 @@ export const RESEARCH_MODES: Array<{ id: ResearchMode; label: string; hint: stri
 ];
 export type DocumentFormat = "pptx" | "pdf" | "docx" | "xlsx";
 export const FORMAT_LABELS: Record<DocumentFormat, string> = { pptx: "PowerPoint", pdf: "PDF", docx: "Word", xlsx: "Excel" };
+/** Pictures and clips HANNAH generated (services/Media.ts), kept with the documents. */
+export type MediaFormat = "image" | "video";
+export const isMediaFile = (file: { format: string }): file is StudioFile & { format: MediaFormat } => file.format === "image" || file.format === "video";
 
 export type ResearchSource = {
   n: number; title: string; url: string; domain: string; author: string; publisher: string; published: string; accessed: string; kind: string;
@@ -75,7 +78,7 @@ export type StudioFile = {
   id: string;
   /** The account's id for it, when signed in. */
   serverId?: string;
-  name: string; format: DocumentFormat; mime: string; bytes: number; createdAt: number;
+  name: string; format: DocumentFormat | MediaFormat; mime: string; bytes: number; createdAt: number;
   summary: Record<string, unknown> | null;
   checks: FileCheck[];
   request: string;
@@ -181,7 +184,7 @@ async function withStore<T>(mode: IDBTransactionMode, work: (store: IDBObjectSto
   });
 }
 
-type Incoming = { id?: string; version?: number; name: string; format: DocumentFormat; mime: string; bytes: number; data: string; summary: Record<string, unknown> | null; checks: FileCheck[] };
+type Incoming = { id?: string; version?: number; name: string; format: DocumentFormat | MediaFormat; mime: string; bytes: number; data: string; summary: Record<string, unknown> | null; checks: FileCheck[] };
 
 /** Keep a file the server just made. Private browsing or a full disk keeps it for this session only. */
 async function keepFile(incoming: Incoming, extra: { request: string; spec?: unknown; notes?: string[] }): Promise<StudioFile> {
@@ -198,6 +201,15 @@ async function keepFile(incoming: Incoming, extra: { request: string; spec?: unk
   for (const old of all.slice(MAX_LOCAL_FILES)) await deleteFile(old.id);
   announce({ kind: "files" });
   return file;
+}
+
+/**
+ * Keep a generated image or video with the other files on this device. It
+ * doesn't become "the last document", so a later "make it shorter" still
+ * means the document.
+ */
+export async function keepMedia(media: { name: string; format: MediaFormat; mime: string; bytes: number; data: string; summary: Record<string, unknown> }, request: string): Promise<StudioFile> {
+  return keepFile({ ...media, checks: [] }, { request });
 }
 
 export async function listFiles(): Promise<StudioFile[]> {
@@ -295,7 +307,7 @@ export async function restoreConversationState({ researchId, fileIds = [] }: { r
   if (researchId && !lastResearch) lastResearch = getResearch(researchId);
   if (fileIds.length && !lastFiles.length) {
     const found = await Promise.all(fileIds.map((id) => getFile(id)));
-    lastFiles = found.filter((item): item is { file: StudioFile; data: Uint8Array } => Boolean(item)).map((item) => item.file);
+    lastFiles = found.filter((item): item is { file: StudioFile; data: Uint8Array } => Boolean(item) && !isMediaFile(item!.file)).map((item) => item.file);
   }
 }
 
@@ -429,7 +441,7 @@ export async function runStudioTurn(text: string, intent: Exclude<StudioIntent, 
   if (intent.kind === "revise") {
     const target = lastFiles[0];
     if (!target?.spec) throw new StudioError("I don't have the last document's contents on this device any more, so I can't revise it. Ask me to make it again with the change.", "no-base");
-    const made = await composeDocument(text, { formats: lastFiles.map((file) => file.format), revise: target, signal, onEvent });
+    const made = await composeDocument(text, { formats: lastFiles.map((file) => file.format).filter((format): format is DocumentFormat => format in FORMAT_LABELS), revise: target, signal, onEvent });
     return { reply: `Done. ${made.changed?.length ? `I ${made.changed.join(", ")}. ` : ""}Everything else is as it was, and the earlier version is still in your files.${made.notes.length ? `\n\n${made.notes.map((note) => `- ${note}`).join("\n")}` : ""}`, fileIds: made.files.map((file) => file.id) };
   }
   if (intent.kind === "research") {
