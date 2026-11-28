@@ -4,7 +4,7 @@ import { useWebLLM } from "../services/WebLLM";
 import {
   ArrowUp, Bookmark, BookmarkCheck, Bot, Cpu, Globe2, HardDrive, KeyRound, Laptop, LockKeyhole, MessageSquarePlus, Mic, MicOff, Phone, PhoneOff,
   RotateCcw, Settings2, ShieldAlert, Smartphone, Speaker, Square, Users, VolumeX, X, ThumbsUp, Check, Pencil, ThumbsDown, Save,
-  EyeOff as TemporaryIcon,
+  EyeOff as TemporaryIcon, FolderOpen, Link2,
 } from "lucide-react";
 import { runTeamTask } from "../services/Orchestrator";
 import { readVoiceSettings, startBargeInMonitor, VoiceIn, VoiceOut } from "../services/VoiceEngines";
@@ -41,6 +41,9 @@ import { screenIncomingPrompt, screenOutgoingText } from "../services/AgentGuard
 import { hasDesktopBridge, runDesktopAgentTurn } from "../services/DesktopAgent";
 import { trackEvent } from "../services/events";
 import FeedbackModal from "./FeedbackModal";
+import ShareDialog from "./ShareDialog";
+import ProjectsPanel from "./ProjectsPanel";
+import { Projects, PROJECTS_EVENT, type ProjectChat } from "../services/Projects";
 import FirstSessionCoach from "./FirstSessionCoach";
 import ActiveAgentBar, { useMarketplace } from "./ActiveAgentBar";
 import { MarketplaceService } from "../services/MarketplaceService";
@@ -293,7 +296,20 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     const durable = messages.filter((message) => message.role !== "system");
     if (durable.length <= 1 && durable[0]?.id === welcomeMessage.id) ChatHistory.clear();
     else ChatHistory.save(durable);
+    // A chat in a project is also kept in that project (services/Projects.ts).
+    Projects.recordCurrentChat(durable.filter((message) => message.id !== welcomeMessage.id));
   }, [messages, temporary]);
+  // The open chat's project, if it's in one: its name shows in the header and its instructions go with each request.
+  const [projectId, setProjectId] = useState<string | null>(() => Projects.current().projectId);
+  const [projectName, setProjectName] = useState(() => Projects.get(Projects.current().projectId)?.name ?? "");
+  useEffect(() => {
+    const update = () => { const current = Projects.current().projectId; setProjectId(current); setProjectName(Projects.get(current)?.name ?? ""); };
+    window.addEventListener(PROJECTS_EVENT, update);
+    window.addEventListener("hannah:settings", update);
+    return () => { window.removeEventListener(PROJECTS_EVENT, update); window.removeEventListener("hannah:settings", update); };
+  }, []);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [nativeStatus, setNativeStatus] = useState<OfflineModelStatus>("checking");
   const [isPreparingNative, setIsPreparingNative] = useState(false);
   const [nativeAgentStatus, setNativeAgentStatus] = useState({ available: false, initialized: false, hasApiKey: false });
@@ -638,6 +654,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
           model: effectiveMode === "ollama" ? ollamaModel || undefined : cloudModel || undefined,
           groqApiKey,
           messages: nextMessages,
+          project: Projects.promptContext(),
           generateLocal: async (prompt, routeMode, cause) => {
             if (routeMode === "webllm") {
               // A cloud hiccup while online must not silently start a ~1 GB
@@ -1027,8 +1044,10 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     if (outcome.ok) notifyMemoryChanged(); else setError(outcome.reason);
   };
 
-  const resetConversation = () => {
+  const resetConversation = (inProject: string | null = Projects.current().projectId) => {
     if (isLoading) return;
+    // A chat in a project is already saved there; one outside any project is cleared, as before.
+    Projects.startNewChat(inProject);
     setMessages([welcomeMessage]);
     setRememberedIds({});
     setInterruptedId(null);
@@ -1040,6 +1059,24 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
     onEmotionChange("neutral");
     void clearMobileAgentConversation().catch(() => undefined);
   };
+
+  /** Open a project's saved chat in place of the open one. */
+  const openProjectChat = (chat: ProjectChat) => {
+    if (isLoading) return;
+    const current = Projects.current();
+    const unsaved = !current.projectId && !temporary && messages.some((message) => message.role === "user");
+    if (unsaved && !window.confirm("The open chat isn't in a project, so opening another chat replaces it. Continue?")) return;
+    const opened = Projects.openChat(chat.id);
+    if (!opened) return;
+    clearConversationState();
+    setMessages(opened.length ? opened : [welcomeMessage]);
+    setRememberedIds({});
+    setInterruptedId(interruptedMessageId(opened));
+    setError("");
+    onEmotionChange("neutral");
+    void clearMobileAgentConversation().catch(() => undefined);
+  };
+  const moveCurrentChat = (target: string | null) => Projects.moveCurrentChat(target, messages.filter((message) => message.role !== "system" && message.id !== welcomeMessage.id));
 
   const nativeStatusLabel = nativeStatus === "available"
     ? "GGUF model ready on this device"
@@ -1129,7 +1166,29 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
           </button>
           <button
             type="button"
-            onClick={resetConversation}
+            onClick={() => setIsProjectsOpen(true)}
+            aria-label={projectName ? `Projects. This chat is in ${projectName}` : "Projects"}
+            title={projectName ? `Project: ${projectName}` : "Projects"}
+            data-testid="chat-projects"
+            className={`flex max-w-[11rem] items-center gap-1.5 rounded-xl border p-2.5 transition ${projectId ? "border-brand-200 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+          >
+            <FolderOpen size={15} className="shrink-0" />
+            {projectName && <span className="hidden truncate text-xs font-medium sm:inline">{projectName}</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsShareOpen(true)}
+            disabled={temporary}
+            aria-label={temporary ? "Temporary chats can't be shared" : "Share this chat as a read-only link"}
+            title={temporary ? "Temporary chats can't be shared" : "Share"}
+            data-testid="chat-share"
+            className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+          >
+            <Link2 size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => resetConversation()}
             disabled={isLoading}
             aria-label="Start a new conversation"
             className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
@@ -1664,6 +1723,15 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       </div>
 
       <FeedbackModal open={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} inferenceMode={effectiveMode} />
+      <ShareDialog open={isShareOpen} onClose={() => setIsShareOpen(false)} messages={messages} skipIds={[welcomeMessage.id!]} />
+      <ProjectsPanel
+        open={isProjectsOpen}
+        onClose={() => setIsProjectsOpen(false)}
+        currentProjectId={projectId}
+        onMoveCurrent={moveCurrentChat}
+        onOpenChat={openProjectChat}
+        onNewChat={(target) => resetConversation(target)}
+      />
     </section>
   );
 }
