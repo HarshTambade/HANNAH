@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { FileUp, FolderOpen, Globe, Loader2, Paperclip, Trash2, X } from "lucide-react";
+import { FileUp, FolderOpen, Globe, ImagePlus, Loader2, Paperclip, Trash2, X } from "lucide-react";
+import type { MediaKind } from "../services/Media";
 import { RESEARCH_MODES, STUDIO_EVENT, deleteResearch, getAttachments, listFiles, readUpload, removeAttachment, researchHistory, type Extraction, type ResearchMode, type ResearchResult, type StudioFile } from "../services/Studio";
 import { FileCard, ResearchCard } from "./StudioCards";
 import MessageContent from "./MessageContent";
@@ -12,10 +13,13 @@ type ComposerProps = {
   onMode: (mode: ResearchMode | null) => void;
   disabled?: boolean;
   onLibrary: () => void;
+  /** The Create switch: the next message is a picture or clip to generate, or null for an ordinary message. */
+  create?: MediaKind | null;
+  onCreate?: (kind: MediaKind | null) => void;
 };
 
 /** The chat's search switch, research mode, and attachments: one row above the message box. */
-export function StudioComposer({ mode, onMode, disabled = false, onLibrary }: ComposerProps) {
+export function StudioComposer({ mode, onMode, disabled = false, onLibrary, create = null, onCreate }: ComposerProps) {
   const [files, setFiles] = useState<Extraction[]>(getAttachments);
   const [reading, setReading] = useState("");
   const [error, setError] = useState("");
@@ -50,6 +54,21 @@ export function StudioComposer({ mode, onMode, disabled = false, onLibrary }: Co
         {mode !== null && (
           <select value={mode} disabled={disabled} onChange={(event) => onMode(event.target.value as ResearchMode)} aria-label="Research mode" title={RESEARCH_MODES.find((item) => item.id === mode)?.hint} className="max-w-40 rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none">
             {RESEARCH_MODES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        )}
+        {onCreate && (
+          <button
+            type="button" disabled={disabled} aria-pressed={create !== null} onClick={() => onCreate(create === null ? "image" : null)}
+            title={create === null ? "Make a picture or a short video from your next message" : "Your next message will be generated as a picture or clip"}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-50 ${create !== null ? "border-violet-200 bg-violet-50 text-violet-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+          >
+            <ImagePlus size={12} aria-hidden="true" /> Create
+          </button>
+        )}
+        {onCreate && create !== null && (
+          <select value={create} disabled={disabled} onChange={(event) => onCreate(event.target.value as MediaKind)} aria-label="What to create" className="rounded-lg border border-violet-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-none">
+            <option value="image">Image</option>
+            <option value="video">Video clip</option>
           </select>
         )}
         <button type="button" disabled={disabled || Boolean(reading)} onClick={() => input.current?.click()} title="Attach a PDF, Word, PowerPoint, Excel, CSV, text or image file" className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50">

@@ -14,6 +14,7 @@ import { getDesktopActionTools } from "./DesktopActions";
 import { getBrowserTools } from "./BrowserTools";
 import { getWebTools } from "./WebTools";
 import { getStudioTools } from "./Studio";
+import { getMediaTools } from "./Media";
 import { Operator, getOperatorTools } from "./Operator";
 import { getRobotTools } from "./Robotics";
 import { getHardwareTools } from "./Devices";
@@ -364,7 +365,7 @@ export function getDeviceTools() {
   // The Action Engine's tools (calendar scheduling, messaging, code) for a signed-in account: one execution path for every agent.
   // Robot tools (services/Robotics.ts) are engine tools too, offered only when the account has a robot.
   // Device tools (services/Devices.ts) likewise, only when a device is switched on.
-  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...getOperatorTools({ calendar: connections.length > 0 }), ...getRobotTools(), ...getHardwareTools(), ...externalTools];
+  return [...deviceTools, ...getWebTools(), ...getStudioTools(), ...getMediaTools(), ...getKnowledgeTools(), ...getBriefingTools(), ...getWorkflowTools(), ...getPhoneTools(), ...desktop, ...connections, ...getOperatorTools({ calendar: connections.length > 0 }), ...getRobotTools(), ...getHardwareTools(), ...externalTools];
 }
 
 /**

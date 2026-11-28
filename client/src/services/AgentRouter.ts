@@ -73,6 +73,8 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /(robot|rover).*(camera|picture|photo|image|\bsees?\b|\blook|colou?r)|(camera|picture|photo|take a (picture|photo)).*(robot|rover)|what can the (robot|rover) see/i, tools: /^robot_(capture_image|camera)$/ },
   { match: /(robots?|rover|fleet).*(statistic|analytic|figures|success rate|utili[sz]ation|how (often|many|long)|performance|latency|report on)|(statistic|analytic|success rate|utili[sz]ation|performance).*(robots?|fleet)/i, tools: /^robot_analytics$/ },
   { match: /\b(robot(ic)? )?arm\b|\bgripper\b|\bgrasp\b|\bpick (it |them |the |up)|pick and place|\bmanipulat/i, tools: /^robot_(stop|cancel|list|state|arm_state|arm_move|grasp|release|wait_for_mission)$/ },
+  // Pictures and clips (services/Media.ts).
+  { match: /\b(draw|sketch|paint|illustrat\w*|animate|images?|pictures?|pics?|photos?|logos?|posters?|wallpapers?|videos?|clips?|animations?)\b/i, tools: /^generate_(image|video)$/ },
   { match: /free (time|slot)|availab|reschedul|\bmove my\b|cancel (my|the) (meeting|event|appointment)|invite|recurring|every (day|week|month|morning|monday|tuesday|wednesday|thursday|friday)|\bbook(ing)?\b|reserv|appointment/i, tools: /^calendar_/ },
 ];
 // web_search is always kept, so "can you check…" never finds HANNAH without a way to look.

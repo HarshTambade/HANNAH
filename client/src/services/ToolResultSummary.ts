@@ -82,6 +82,12 @@ export function summarizeToolResult(name: string, result: unknown): string {
       const made = /^(?:Created and validated|Converted): (.*?)\. The user/.exec(text)?.[1];
       return `${name === "convert_file" ? "Converted" : "Created"}: ${short(made || text.split("\n")[0] || "a file", 160)}`;
     }
+    case "generate_image":
+    case "generate_video": {
+      const text = typeof value.message === "string" ? value.message : "";
+      if (text.startsWith("Not made:")) return short(text.replace(/ Tell the user this plainly\.$/, ""), 160);
+      return name === "generate_image" ? "Made an image" : "Made a video clip";
+    }
     case "read_attached_files": {
       const text = typeof value.message === "string" ? value.message : "";
       const names = [...text.matchAll(/^FILE “([^”]*)”/gm)].map((match) => match[1]);

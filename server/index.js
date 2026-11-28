@@ -31,6 +31,7 @@ const { knownPriceFor, tokenUsageMiddleware, verifiedPriceFor } = require("./cos
 const { createV1Router } = require("./v1");
 const { createOrchestrateHandler } = require("./orchestrate");
 const { createVoiceRouter } = require("./voice");
+const { createMediaRouter } = require("./media");
 const { createVisionRouter } = require("./vision");
 const { createMcpClientRouter } = require("./mcp-client");
 const { createConnectorsRouter } = require("./connectors");
@@ -386,6 +387,8 @@ app.post("/api/robots/:id/enrollment", createRateLimiter(rateLimits.chat));
 app.post("/api/route/preview", createRateLimiter(rateLimits.events));
 app.post("/api/a2a", createRateLimiter(rateLimits.chat));
 app.post("/api/voice/speak", createRateLimiter(rateLimits.chat));
+app.post("/api/media/image", createRateLimiter(rateLimits.agent));
+app.post("/api/media/video", createRateLimiter(rateLimits.agent));
 app.post("/api/voice/transcribe", createRateLimiter(rateLimits.chat));
 app.post("/api/desktop/computer", createRateLimiter(rateLimits.desktop));
 app.post("/api/vision/describe", createRateLimiter(rateLimits.desktop));
@@ -575,6 +578,8 @@ app.use("/api", createWorkforceRouter({ operator: () => operator }));
 app.use("/api", createConnectionsRouter({ allowedOrigins }));
 app.use("/api", createOrchestrateHandler({ getRequestProvider, preferredProviderId, timeoutMs: cloudRequestTimeout }));
 app.use("/api", createVoiceRouter({ getRequestProvider, allowedProviderIds, timeoutMs: cloudRequestTimeout }));
+// Image and video generation in chat, with the caller's own provider key (server/media.js).
+app.use("/api", createMediaRouter({ getRequestProvider, allowedProviderIds, timeoutMs: cloudRequestTimeout }));
 // "What's on my screen?": one screenshot to one vision model (server/vision.js).
 app.use("/api", createVisionRouter({ usableProviders, normalizeRouting: router.normalizeRouting, privacyBlocks: router.privacyBlocks, timeoutMs: cloudRequestTimeout }));
 // Outside MCP servers (operator-configured, operator-only routes).
