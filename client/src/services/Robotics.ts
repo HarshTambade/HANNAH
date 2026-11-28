@@ -179,7 +179,8 @@ export const Robotics = {
   events: async (robotId?: string) => (await accountRequest<{ events: RobotEvent[] }>(`/api/robots/events${robotId ? `?robot=${id(robotId)}` : ""}`)).events,
   /** Ask for a mission. The record says whether it started, waits for approval, or was refused and why. */
   ask: (action: "robots.navigate_to" | "robots.return_to_dock" | "robots.inspect_area" | "robots.set_supported_device_state" | "robots.resume_mission" | "robots.move_robot_arm" | "robots.grasp_object" | "robots.release_object" | "robots.capture_image", params: Record<string, unknown>, request = "Asked on the Robots screen") =>
-    Operator.run(action, params, { request, agent: "You", intent: "robots" }),
+    // "robots": a person pressed this on the Robots screen (the only origin Assisted mode takes a mission from).
+    Operator.run(action, params, { request, agent: "You", intent: "robots", source: "robots" }),
   /** Watch a mission until it ends or the time is up. Returns it as it is then. */
   async waitFor(missionId: string, seconds: number, signal?: AbortSignal) {
     const end = Date.now() + Math.max(1, Math.min(120, seconds)) * 1000;

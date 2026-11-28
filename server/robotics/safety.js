@@ -85,7 +85,12 @@ function normalizeLimits(input) {
  */
 function effectiveLimits(safety) {
   const reported = safety?.reported || {};
-  const owner = safety?.owner || {};
+  // The safety profile (robotics/autonomy.js) tightens the same numbers; it was checked against the robot's own when saved.
+  const profile = safety?.profile || {};
+  const owner = { ...(safety?.owner || {}) };
+  for (const [name, from, pick] of [["maxLinearSpeed", "maxLinearSpeed", Math.min], ["maxAngularSpeed", "maxAngularSpeed", Math.min], ["maxLinearAccel", "maxLinearAccel", Math.min], ["maxJointSpeed", "maxJointSpeed", Math.min], ["minBatteryPercent", "minBatteryPercent", Math.max], ["linkTimeoutS", "commsTimeoutS", Math.min]]) {
+    if (finite(profile[from])) owner[name] = finite(owner[name]) ? pick(owner[name], profile[from]) : profile[from];
+  }
   const stricter = (name, pick) => (finite(reported[name]) && finite(owner[name]) ? pick(reported[name], owner[name]) : finite(reported[name]) ? reported[name] : finite(owner[name]) ? owner[name] : undefined);
   return {
     maxLinearSpeed: stricter("maxLinearSpeed", Math.min),

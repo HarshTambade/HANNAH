@@ -45,6 +45,9 @@ function coerce(schema, value) {
   return value;
 }
 
+/** Who asked, as the command-validation chain needs it: the Action Engine's record when it runs, the request before. */
+const callerOf = (ctx) => ({ source: ctx.record?.source || ctx.caller?.source || "chat", actor: ctx.record?.agent || ctx.caller?.agent || "" });
+
 const kindLabel = (robot) => (robot.simulated ? `SIMULATION (${robot.simulator || "simulator"})` : "PHYSICAL ROBOT");
 const pointText = (point) => (point.place ? `${point.place} (${round(point.x)}, ${round(point.y)})` : `(${round(point.x)}, ${round(point.y)})`);
 
@@ -86,9 +89,8 @@ function robotActions({ robotics, graph = null }) {
       input: { type: "object", properties: { robot: ROBOT, ...definition.input.properties }, required: definition.input.required || [] },
       normalize: (raw) => ({ robot: clip(raw.robot, 80), ...coerce(definition.input, Object.fromEntries(Object.entries(raw || {}).filter(([key]) => key !== "robot" && Object.hasOwn(definition.input.properties, key)))) }),
       async assess(params, ctx) {
-        const verdict = await robotics.assess(ctx.db, ctx.userId, params.robot, capabilityId, inputOf(params));
-        const flags = verdict.ok ? verdict.flags : [`forbidden:${verdict.violations.map((item) => item.message).join(" ")}`];
-        return { resource: { type: "robot", id: verdict.robot.id }, account: verdict.robot.name, flags, verdict };
+        const verdict = await robotics.assess(ctx.db, ctx.userId, params.robot, capabilityId, inputOf(params), { stage: "preflight", identity: callerOf(ctx) });
+        return { resource: { type: "robot", id: verdict.robot.id }, account: verdict.robot.name, flags: verdict.flags, verdict };
       },
       preview(params, _ctx, assessed) {
         const { verdict } = assessed;
@@ -121,9 +123,10 @@ function robotActions({ robotics, graph = null }) {
         };
       },
       async execute(params, ctx) {
-        const verdict = await robotics.assess(ctx.db, ctx.userId, params.robot, capabilityId, inputOf(params));
+        // The chain again, at the moment it is sent, with the approved request behind it.
+        const verdict = await robotics.assess(ctx.db, ctx.userId, params.robot, capabilityId, inputOf(params), { stage: "execute", identity: callerOf(ctx), authorization: { kind: "action-record", recordId: ctx.record?.id } });
         if (!verdict.ok) throw fail(409, `Not sent. ${verdict.violations.map((item) => item.message).join(" ")}`, "safety-refused");
-        const queued = await robotics.dispatch(ctx.db, ctx.userId, { robot: verdict.robot, capabilityId, params: verdict.params, actionId: ctx.record?.id });
+        const queued = await robotics.dispatch(ctx.db, ctx.userId, { robot: verdict.robot, capabilityId, params: verdict.params, actionId: ctx.record?.id, verdict });
         const mission = await robotics.waitFor(ctx.db, ctx.userId, queued.id, (item) => (capabilityId === "capture_image" ? item.final : item.status !== "queued" && item.status !== "sent"));
         if (["rejected", "failed", "timed-out", "expired", "lost", "cancelled"].includes(mission.status)) throw fail(409, missionText(mission, verdict.robot.name), `mission-${mission.status}`);
         if (capabilityId === "capture_image" && mission.result?.imageId) {
@@ -211,12 +214,12 @@ function robotActions({ robotics, graph = null }) {
     return { mission, robot };
   }
   /** A resume moves the robot again, so it gets the same checks as the mission did, against the robot as it is now. */
-  async function resumeCheck(ctx, robot, mission) {
+  async function resumeCheck(ctx, robot, mission, stage = "preflight") {
     if (mission.status !== "paused") return { ok: false, violations: [{ code: "not-paused", message: mission.final ? "That mission is already over." : "That mission isn't paused." }], flags: [], warnings: [] };
     const strip = ({ place: _place, ...point }) => point;
     const params = mission.capability === "inspect_area" ? { waypoints: (mission.params.waypoints || []).map(strip), tolerance: mission.params.tolerance } : mission.capability === "return_to_dock" ? {} : { x: mission.params.x, y: mission.params.y, ...(mission.params.yaw === undefined ? {} : { yaw: mission.params.yaw }), tolerance: mission.params.tolerance };
-    const { safetyCheck } = require("../../robotics/safety");
-    return safetyCheck({ robot, capabilityId: mission.capability, params, now: ctx.now(), active: null });
+    // The whole chain, as for a new mission; the paused mission itself doesn't count as "another mission running".
+    return robotics.assess(ctx.db, ctx.userId, robot, mission.capability, params, { stage, identity: callerOf(ctx), resuming: mission.id, planId: mission.planId, ...(stage === "execute" ? { authorization: { kind: "action-record", recordId: ctx.record?.id } } : {}) });
   }
   /** Cancel or pause: reduces what is happening, so it never needs approval. */
   function control({ id, capabilityId, title, verb, act, settled, good }) {
@@ -282,7 +285,7 @@ function robotActions({ robotics, graph = null }) {
         return { robot: robot.id, title: title || `${steps.length} step${steps.length === 1 ? "" : "s"} on ${robot.name}`, template, steps, priority: Math.max(1, Math.min(5, Math.round(Number(raw?.priority) || 3))), startWithinMinutes: Math.max(1, Math.min(plans.START_WITHIN_MIN.max, Number(raw?.startWithinMinutes) || plans.START_WITHIN_MIN.default)) };
       },
       async assess(params, ctx) {
-        const verdict = await robotics.assessPlan(ctx.db, ctx.userId, params.robot, forward(params));
+        const verdict = await robotics.assessPlan(ctx.db, ctx.userId, params.robot, forward(params), { identity: callerOf(ctx) });
         const flags = verdict.ok ? verdict.flags : [`forbidden:${verdict.violations.map((item) => item.message).join(" ")}`];
         return { resource: { type: "robot", id: verdict.robot.id }, account: verdict.robot.name, flags, verdict };
       },
@@ -304,7 +307,7 @@ function robotActions({ robotics, graph = null }) {
         };
       },
       async execute(params, ctx) {
-        const verdict = await robotics.assessPlan(ctx.db, ctx.userId, params.robot, forward(params));
+        const verdict = await robotics.assessPlan(ctx.db, ctx.userId, params.robot, forward(params), { identity: callerOf(ctx) });
         if (!verdict.ok) throw fail(409, `Not started. ${verdict.violations.map((item) => item.message).join(" ")}`, "safety-refused");
         const created = await robotics.createPlan(ctx.db, ctx.userId, { robot: verdict.robot, title: params.title, template: params.template, steps: forward(params), priority: params.priority, startWithinMin: params.startWithinMinutes, actionId: ctx.record?.id });
         // Wait a moment for the robot to take the first step, so the answer says what happened rather than "queued".
@@ -541,7 +544,7 @@ function robotActions({ robotics, graph = null }) {
       }),
       async execute(params, ctx) {
         const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
-        const queued = await robotics.stop(ctx.db, ctx.userId, robot, { reason: params.reason, actionId: ctx.record?.id });
+        const queued = await robotics.stop(ctx.db, ctx.userId, robot, { reason: params.reason, actionId: ctx.record?.id, identity: callerOf(ctx) });
         const mission = robot.online ? await robotics.waitFor(ctx.db, ctx.userId, queued.id, (item) => item.final) : queued;
         return { missionId: mission.id, robot: { id: robot.id, name: robot.name, online: robot.online, linkTimeoutS: robot.limits.linkTimeoutS ?? null }, status: mission.status, note: missionText(mission, robot.name) };
       },
@@ -550,6 +553,51 @@ function robotActions({ robotics, graph = null }) {
         if (mission.status === "succeeded") return { confirmed: true, evidence: mission.verification?.evidence || "The robot reported it stopped." };
         if (!response.robot.online) return { confirmed: false, evidence: `${response.robot.name} is offline, so the stop couldn't be delivered. A robot that loses its link to HANNAH stops by itself${response.robot.linkTimeoutS ? ` within ${response.robot.linkTimeoutS} seconds` : ""}; HANNAH can't see whether it has.` };
         return { confirmed: false, evidence: missionText(mission, response.robot.name) };
+      },
+    },
+    {
+      // Safety Stop only reduces what happens: allowed at every level and during the emergency stop, never asks.
+      id: "robots.safety_stop", service: "robots", kind: "write", deescalates: true, title: "Put a robot in Safety Stop", description: "Stop the robot through its stop mechanism and hold it in the Safety Stop operating mode: every plan and mission ends, it takes nothing but stops and reads, and only a signed-in person can move it out. A software state, not an emergency stop: the robot's own emergency stop stays the way to stop it in danger.", needs: "A robot enrolled under Robots",
+      input: { type: "object", properties: { robot: ROBOT, reason: { type: "string" } }, required: [] },
+      normalize: (raw) => ({ robot: clip(raw?.robot, 80), reason: clip(raw?.reason, 200) }),
+      async assess(params, ctx) {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        return { resource: { type: "robot", id: robot.id }, account: robot.name, robot };
+      },
+      preview: (_params, _ctx, assessed) => ({ title: `Safety Stop: ${assessed.robot.name}`, lines: [{ label: "Robot", value: `${assessed.robot.name} — ${kindLabel(assessed.robot)}` }, { label: "Approval", value: "Never needed" }, { label: "Leaving it", value: "Only a signed-in person, with the emergency stop released" }], warnings: assessed.robot.simulated ? [] : ["This is software. In danger, use the robot's own emergency stop."] }),
+      async execute(params, ctx) {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        const view = await robotics.manager.setMode(ctx.db, ctx.userId, robot.id, "safety_stop", { actor: ctx.record?.agent || "an agent", reason: params.reason, source: callerOf(ctx).source });
+        return { robot: { id: robot.id, name: robot.name, online: robot.online }, mode: view.mode, confirmed: view.confirmed, note: `${robot.name} is in Safety Stop. ${robot.online ? "The stop was sent." : "It is offline; a robot that loses its link stops by itself."}` };
+      },
+      async verify(response, _params, ctx) {
+        const robot = await robotics.getRobot(ctx.db, ctx.userId, response.robot.id);
+        if (robot.operatingMode !== "safety_stop") return { confirmed: false, evidence: `${robot.name} is in ${robot.operatingMode}.` };
+        return robot.reportedOperatingMode?.mode === "safety_stop" ? { confirmed: true, evidence: `${robot.name} reports it is in Safety Stop.` } : { confirmed: false, evidence: `HANNAH holds ${robot.name} in Safety Stop; the robot hasn't confirmed it yet.` };
+      },
+    },
+    {
+      // Any other mode change is a safety-configuration change: always a person's approval, never a standing permission.
+      id: "robots.set_mode", service: "robots", kind: "write", standing: false, title: "Change a robot's operating mode", description: "Change a robot's operating mode (manual, assisted, supervised, mission, maintenance) by the allowed-transition table. Restoring autonomy is checked first: the robot must be connected, still, released, without faults, inside its operating area and commissioned if physical. Always needs a person's approval.", needs: "A robot enrolled under Robots, connected",
+      input: { type: "object", properties: { robot: ROBOT, mode: { type: "string", enum: ["manual", "assisted", "supervised", "mission", "maintenance"] }, reason: { type: "string" } }, required: ["mode"] },
+      normalize: (raw) => ({ robot: clip(raw?.robot, 80), mode: clip(raw?.mode, 20), reason: clip(raw?.reason, 200) }),
+      async assess(params, ctx) {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        const option = (await robotics.manager.transitionsFor(ctx.db, robot)).find((item) => item.to === params.mode);
+        const reasons = option ? option.reasons : [{ message: `“${params.mode}” isn't an operating mode, or ${robot.name} is already in it.` }];
+        return { resource: { type: "robot", id: robot.id }, account: robot.name, robot, option, flags: reasons.length ? [`forbidden:${reasons.map((item) => item.message).join(" ")}`] : [] };
+      },
+      preview: (params, _ctx, assessed) => ({ title: `Operating mode: ${assessed.robot.name} → ${assessed.option?.label || params.mode}`, lines: [{ label: "Robot", value: `${assessed.robot.name} — ${kindLabel(assessed.robot)}` }, { label: "From", value: assessed.robot.operatingMode }, { label: "Reason", value: params.reason || "none given" }], body: (assessed.option?.reasons || []).map((item) => item.message).join("\n") || "Approve to change it. The robot confirms the change itself." }),
+      async execute(params, ctx) {
+        const robot = await robotics.resolveRobot(ctx.db, ctx.userId, params.robot);
+        const context = await robotics.manager.chainContext(ctx.db, ctx.userId, robot, { stage: "execute", authorization: { kind: "action-record", recordId: ctx.record?.id } });
+        if (!context.authorization?.approved) throw fail(403, "A person has to approve an operating-mode change.", "approval-required");
+        const view = await robotics.manager.setMode(ctx.db, ctx.userId, robot.id, params.mode, { actor: `${ctx.record?.agent || "an agent"}, approved by a person`, person: true, reason: params.reason, source: callerOf(ctx).source });
+        return { robot: { id: robot.id, name: robot.name }, mode: view.mode, note: `${robot.name} is now in ${view.label}; waiting for the robot to confirm.` };
+      },
+      async verify(response, _params, ctx) {
+        const robot = await robotics.getRobot(ctx.db, ctx.userId, response.robot.id);
+        return robot.reportedOperatingMode?.mode === robot.operatingMode && robot.operatingMode === response.mode ? { confirmed: true, evidence: `${robot.name} reports ${robot.operatingMode}.` } : { confirmed: false, evidence: `HANNAH set ${response.mode}; ${robot.name} hasn't confirmed it yet.` };
       },
     },
     assign,
@@ -613,9 +661,9 @@ function robotActions({ robotics, graph = null }) {
       }),
       async execute(params, ctx) {
         const { robot, mission } = await target(ctx, params, (item) => item.status === "paused", "paused");
-        const verdict = await resumeCheck(ctx, robot, mission);
+        const verdict = await resumeCheck(ctx, robot, mission, "execute");
         if (!verdict.ok) throw fail(409, `Not sent. ${verdict.violations.map((item) => item.message).join(" ")}`, "safety-refused");
-        await robotics.resumeMission(ctx.db, ctx.userId, mission.id);
+        await robotics.resumeMission(ctx.db, ctx.userId, mission.id, { verdict });
         const after = await robotics.waitFor(ctx.db, ctx.userId, mission.id, (item) => item.status !== "paused" || !item.resumeRequestedAt);
         if (after.status === "paused" && after.error) throw fail(409, `${robot.name} didn't resume. ${after.error}`, "resume-refused");
         return { missionId: mission.id, robot: { id: robot.id, name: robot.name }, status: after.status, note: missionText(after, robot.name) };

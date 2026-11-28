@@ -23,6 +23,8 @@ import { EdgeResourcesPanel } from "./robotops/EdgeResourcesPanel";
 import MaintenancePanel from "./robotops/MaintenancePanel";
 import InteropPanel from "./robotops/InteropPanel";
 import DeviceSecurityPanel from "./robotops/DeviceSecurityPanel";
+import { SafetyAutonomyPanel } from "./robotops/SafetyAutonomyPanel";
+import { TeleopPanel } from "./robotops/TeleopPanel";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -308,6 +310,8 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
       </section>
 
       {robot.status === "enrolled" && <CommissioningPanel robot={robot} onChanged={() => void refresh()} />}
+      {robot.status === "enrolled" && <SafetyAutonomyPanel robotId={robot.id} canChange={isAccountSession()} />}
+      {robot.status === "enrolled" && !isArm && <TeleopPanel robot={robot} canOperate={isAccountSession()} />}
 
       {isArm && <ArmPanel robot={robot} busy={Boolean(busy)} onAsk={(action, params) => void ask(action, action, params)} />}
       {isArm && active && (

@@ -592,6 +592,19 @@ class KinematicSimAdapter(RobotAdapter):
         self.cancel_navigation()
         self._drive(0.0, 0.0)
 
+    def teleop_velocity(self, linear: float, angular: float) -> tuple[float, float]:
+        """An operator's manual command. The simulated base brakes for an obstacle in front as the navigator does,
+        and its controller stops on its own after COMMAND_TIMEOUT without a new command."""
+        self.cancel_navigation()
+        v, w = float(linear), float(angular)
+        if v > 0.0:
+            accel = self._limit("maxLinearAccel", 0.8)
+            clear = self._clear_ahead() - self.radius
+            if clear < 0.12 + (v * v) / (2 * accel):
+                v = 0.0
+        self._drive(v, w)
+        return v, w
+
     def set_device(self, device: str, on: bool) -> None:
         if device not in self.devices:
             raise ValueError(f"no device called {device}")

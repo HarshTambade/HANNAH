@@ -12,9 +12,13 @@ controller carry out. An adapter exists per way of reaching a robot:
 Adding a robot family means writing an adapter (or, for a ROS 2 robot, only a
 profile file). Nothing above this layer changes.
 
-Deliberately absent: set_velocity, set_pwm, set_torque. The runtime hands a
-goal to the robot's navigation stack and can cancel it or ask for a hold; it
-does not close the control loop itself.
+Deliberately absent: set_pwm, set_torque, and any velocity for autonomy. The
+runtime hands a goal to the robot's navigation stack and can cancel it or ask
+for a hold; it does not close the control loop itself. The one exception is
+teleop_velocity(), for an operator's manual control: a base speed the
+operator holds down, clamped by the runtime, that lapses within the deadman
+time unless a fresh command follows, and that the base controller's own
+command timeout stops as well.
 """
 from __future__ import annotations
 
@@ -75,6 +79,12 @@ class RobotAdapter(ABC):
     @abstractmethod
     def cancel_navigation(self) -> None:
         """Cancel the current goal. Idempotent."""
+
+    def teleop_velocity(self, linear: float, angular: float) -> tuple[float, float]:
+        """Manual control only: drive the base at this speed (m/s, rad/s, already clamped by the runtime)
+        until the next command, a hold, or the controller's own command timeout. Returns what it applied
+        (an adapter may brake for an obstacle ahead). An adapter without manual control raises."""
+        raise NotImplementedError(f"{self.name} has no manual control")
 
     @abstractmethod
     def hold(self) -> None:

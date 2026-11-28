@@ -72,7 +72,7 @@ function interopActions({ interop }) {
         };
       },
       async execute(params, ctx) {
-        const mission = await interop.submit(ctx.db, ctx.userId, params.robot, params.mission, params.params, { actionId: ctx.record?.id });
+        const mission = await interop.submit(ctx.db, ctx.userId, params.robot, params.mission, params.params, { actionId: ctx.record?.id, identity: { source: ctx.record?.source || ctx.caller?.source || "chat", actor: ctx.record?.agent || ctx.caller?.agent || "" } });
         if (["rejected", "failed", "expired", "lost", "cancelled"].includes(mission.status)) throw fail(409, `${mission.title}: ${mission.status}. ${mission.error || mission.evidence || ""}`.trim(), `mission-${mission.status}`);
         return { missionId: mission.id, adapter: mission.adapter, status: mission.status, note: `${mission.title}: ${mission.status}.` };
       },

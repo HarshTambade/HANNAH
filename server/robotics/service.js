@@ -42,12 +42,17 @@ const commissioning = require("./commissioning");
 const plans = require("./plans");
 const fleet = require("./fleet");
 const { createEdgeResourceStore } = require("../edge/resources");
+const autonomy = require("./autonomy");
+const chain = require("./chain");
+const { createSafetyManager } = require("./safety_manager");
+const { createTeleop } = require("./teleop");
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_TTL_MS = 15 * 60_000;
 const SKEW_MS = 60_000;
 const LOST_GRACE_MS = 20_000;
 const SYNC_INTERVAL_MS = 1000;
+const TELEOP_SYNC_INTERVAL_MS = 100;
 // Joint speed (rad/s) an arm may use during its supervised commissioning trial.
 const TRIAL_JOINT_SPEED = 0.3;
 const TELEMETRY_EVERY_MS = 3000;
@@ -115,6 +120,16 @@ function cleanState(input, now) {
   if (!input || typeof input !== "object") return null;
   const state = tidy(input);
   state.mode = MODES.has(state.mode) ? state.mode : "unknown";
+  // Mode and manual-control acknowledgements carry exact sequence numbers; tidy() would round them.
+  const exact = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : null);
+  const reported = input.operatingMode;
+  if (reported && typeof reported === "object" && autonomy.MODES[reported.mode]) {
+    state.operatingMode = { mode: reported.mode, seq: exact(reported.seq), session: typeof reported.session === "string" ? clean(reported.session, 40) : null, refusedSeq: exact(reported.refusedSeq), refusedReason: clean(reported.refusedReason, 200) || null, local: reported.local === true, reason: clean(reported.reason, 200) || null };
+  } else delete state.operatingMode;
+  const teleop = input.teleop;
+  if (teleop && typeof teleop === "object" && typeof teleop.session === "string") {
+    state.teleop = { session: clean(teleop.session, 40), seq: exact(teleop.seq) ?? 0, linear: finite(teleop.linear) ? round(teleop.linear, 3) : 0, angular: finite(teleop.angular) ? round(teleop.angular, 3) : 0, appliedAt: exact(teleop.appliedAt), holding: teleop.holding === true, reason: clean(teleop.reason, 160) || null };
+  } else delete state.teleop;
   state.receivedAt = now;
   for (const drop of [["nav", "path"], ["sensors", "lidar", "ranges"], ["map"], ["nav"], ["sensors"]]) {
     if (JSON.stringify(state).length <= MAX_STATE) break;
@@ -178,6 +193,10 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
   const announce = (userId, event, data) => { if (emit) Promise.resolve().then(() => emit(userId, event, data)).catch(() => {}); };
   const lastSample = new Map();
   let housekeeping = 0;
+  // Operating modes, safety profiles, autonomy policies and manual control use the registry's own functions.
+  const core = { robotRow, view, getRobot, addEvent, nextSeq, stop, listMissions, cancelMission, endPlan, activeMotion };
+  const manager = createSafetyManager({ now, core });
+  const teleop = createTeleop({ now, core, manager });
 
   // ---------- rows and views ----------
   function effectiveMissionStatus(row, at) {
@@ -193,7 +212,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       actionId: row.action_id || null, planId: row.plan_id || null, requestedBy: row.requested_by || "", createdAt: Number(row.created_at), expiresAt: Number(row.expires_at), deadlineAt: Number(row.deadline_at),
       sentAt: row.sent_at ? Number(row.sent_at) : null, acceptedAt: row.accepted_at ? Number(row.accepted_at) : null, finishedAt: row.finished_at ? Number(row.finished_at) : null,
       cancelRequestedAt: row.cancel_requested_at ? Number(row.cancel_requested_at) : null, pauseRequestedAt: row.pause_requested_at ? Number(row.pause_requested_at) : null, resumeRequestedAt: row.resume_requested_at ? Number(row.resume_requested_at) : null, pausedAt: row.paused_at ? Number(row.paused_at) : null,
-      progress: parse(row.progress), result: parse(row.result), verification: parse(row.verification),
+      origin: row.origin || null, progress: parse(row.progress), result: parse(row.result), verification: parse(row.verification),
       error: row.error || (status === "expired" ? "The robot didn't accept the command before it expired. Nothing was run." : status === "lost" ? "The robot accepted the mission and then stopped reporting. Its outcome is unknown; a robot that loses its link to HANNAH stops by itself." : null),
     };
   }
@@ -230,6 +249,9 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       capabilities: parse(row.capabilities, []), disabled: access.disabled || [], alwaysAsk: access.alwaysAsk || [],
       camera: { enabled: access.camera?.enabled === true, retentionHours: Math.max(1, Math.min(IMAGE_RETENTION_H.max, Number(access.camera?.retentionHours) || IMAGE_RETENTION_H.default)), cameras: (profile.sensors || []).filter((sensor) => /camera/.test(sensor.type || "")).map((sensor) => sensor.id) },
       safety: robotSafety, limits: safety.effectiveLimits(robotSafety),
+      // The operating mode HANNAH holds for it, and what the robot last said it is in (it may lag, or have refused).
+      operatingMode: autonomy.MODES[row.operating_mode] ? row.operating_mode : autonomy.defaultMode({ simulated }), modeSeq: Number(row.mode_seq) || 0, modeChangedAt: row.mode_changed_at ? Number(row.mode_changed_at) : null,
+      reportedOperatingMode: online ? state?.operatingMode || null : null, safetyProfile: robotSafety.profile || null,
       state, stateAgeS: state?.receivedAt ? Math.max(0, Math.round((at - state.receivedAt) / 100) / 10) : null,
       owner: "you", createdAt: Number(row.created_at), enrolledAt: row.enrolled_at ? Number(row.enrolled_at) : null, revokedAt: row.revoked_at ? Number(row.revoked_at) : null,
       enrollmentExpiresAt: row.enroll_hash && row.enroll_expires_at ? Number(row.enroll_expires_at) : null,
@@ -348,6 +370,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     await db.query("UPDATE hannah_robots SET status = 'revoked', key_id = NULL, wrapped_key = NULL, ciphertext = NULL, pending_key_id = NULL, pending_wrapped_key = NULL, pending_ciphertext = NULL, enroll_hash = NULL, enroll_expires_at = NULL, revoked_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3", [at, userId, row.id]);
     await db.query("UPDATE hannah_robot_missions SET status = 'cancelled', error = $1, finished_at = $2, updated_at = $2 WHERE user_id = $3 AND robot_id = $4 AND status = 'queued'", ["Cancelled: the robot's credentials were revoked before the command was delivered.", at, userId, row.id]);
     await db.query("UPDATE hannah_robot_missions SET status = 'lost', error = $1, finished_at = $2, updated_at = $2 WHERE user_id = $3 AND robot_id = $4 AND status IN ('sent', 'accepted', 'paused')", ["The robot's credentials were revoked while this was running. It can no longer report; a robot that loses its link to HANNAH stops by itself.", at, userId, row.id]);
+    await db.query("UPDATE hannah_robot_teleop_sessions SET status = 'ended', ended_at = $1, end_reason = $2, cmd = NULL, updated_at = $1 WHERE user_id = $3 AND robot_id = $4 AND status IN ('activating', 'active')", [at, "the robot's credentials were revoked", userId, row.id]);
     await addEvent(db, userId, row.id, { type: "revoked", severity: "warning", message: "Credentials revoked. The robot can no longer connect." });
     return getRobot(db, userId, row.id);
   }
@@ -355,7 +378,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const row = await robotRow(db, userId, id);
     if (!row) return false;
     if (row.status === "enrolled") await revokeRobot(db, userId, row.id);
-    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_plans", "hannah_robot_images", "hannah_robot_destinations", "hannah_robot_maintenance", "hannah_edge_resource_reports"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
+    for (const table of ["hannah_robot_telemetry", "hannah_robot_events", "hannah_robot_missions", "hannah_robot_plans", "hannah_robot_images", "hannah_robot_destinations", "hannah_robot_maintenance", "hannah_edge_resource_reports", "hannah_robot_teleop_sessions"]) await db.query(`DELETE FROM ${table} WHERE user_id = $1 AND robot_id = $2`, [userId, row.id]);
     return (await db.query("DELETE FROM hannah_robots WHERE user_id = $1 AND id = $2", [userId, row.id])).rowCount > 0;
   }
 
@@ -460,7 +483,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
    * timeout was shown but never applied. In the commissioning trial the robot
    * also gets the trial's caps, not just a lower requested speed.
    */
-  function commandFor(row, robotLimits, commissioned = null) {
+  function commandFor(row, robotLimits, commissioned = null, robot = null) {
     const params = parse(row.params, {});
     const limits = {};
     for (const name of ["maxLinearSpeed", "maxAngularSpeed", "maxLinearAccel", "maxJointSpeed", "linkTimeoutS"]) {
@@ -474,6 +497,9 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       v: 1, type: "mission", robotId: row.robot_id, missionId: row.id, seq: Number(row.seq), nonce: row.nonce, capability: row.capability, params,
       issuedAt: Number(row.issued_at), expiresAt: Number(row.expires_at), timeoutS: Math.round((Number(row.deadline_at) - Number(row.expires_at)) / 1000),
       limits,
+      // The robot checks these itself: the mode it must be in, where the command came from, and the profile's areas.
+      ...(robot ? { mode: robot.operatingMode, origin: row.origin || "agent" } : {}),
+      ...(robot?.safetyProfile && (robot.safetyProfile.operatingArea || robot.safetyProfile.geofences?.length) ? { areas: { keepIn: robot.safetyProfile.operatingArea ? [robot.safetyProfile.operatingArea] : [], keepOut: robot.safetyProfile.geofences || [] } } : {}),
     });
   }
 
@@ -635,13 +661,32 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     // Maintenance measurements (motor, battery, controller readings) the robot reported. Recording only; never affects the commands below.
     if (state && onState) await Promise.resolve().then(() => onState(db, row, state, at)).catch(() => {});
 
-    // What the robot should hear: missions not yet accepted and still valid, and cancellations.
+    // The robot's own word on its operating mode, from this exchange. A Safety Stop it entered by itself is adopted.
+    let current = row;
+    robot.reportedOperatingMode = state?.operatingMode || null;
+    if (state) robot.state = state;
+    if (await manager.reconcile(db, row, robot)) {
+      current = (await db.query("SELECT * FROM hannah_robots WHERE id = $1", [row.id])).rows[0] || row;
+      Object.assign(robot, { operatingMode: current.operating_mode, modeSeq: Number(current.mode_seq) || 0 });
+    }
+
+    // What the robot should hear: its mode first, then missions not yet accepted and still valid, and cancellations.
     await advancePlans(db, row.user_id, row.id, at).catch((error) => addEvent(db, row.user_id, row.id, { type: "plan-error", severity: "warning", message: `A plan could not be advanced: ${clean(error?.message, 200)}` }).catch(() => {}));
     await db.query("UPDATE hannah_robot_missions SET status = 'expired', finished_at = $1, updated_at = $1 WHERE robot_id = $2 AND status IN ('queued', 'sent') AND expires_at <= $1", [at, row.id]);
-    const open = (await db.query("SELECT * FROM hannah_robot_missions WHERE robot_id = $1 AND status IN ('queued', 'sent', 'accepted', 'paused') ORDER BY seq", [row.id])).rows;
     const commands = [];
     const signed = (command) => { const payload = JSON.stringify({ v: 1, robotId: row.id, ...command }); commands.push({ payload, sig: signCommand(secret, payload) }); };
+    const manual = await teleop.forSync(db, current, robot, at);
+    const openSession = manual.session ? await manager.openSession(db, row.id) : null;
+    const modeCommand = manager.modeCommand(current, robot, openSession, openSession ? parse(openSession.row.limits, {}) : {});
+    if (modeCommand) signed(modeCommand);
+    const open = (await db.query("SELECT * FROM hannah_robot_missions WHERE robot_id = $1 AND status IN ('queued', 'sent', 'accepted', 'paused') ORDER BY seq", [row.id])).rows;
     for (const mission of open) {
+      // A command the robot's mode no longer allows is not delivered (the robot would refuse it too).
+      const refused = (mission.status === "queued" || mission.status === "sent") && !mission.cancel_requested_at ? autonomy.modeRefusal({ mode: robot.operatingMode, commandClass: autonomy.commandClass(mission.capability), origin: mission.origin || "agent", plan: Boolean(mission.plan_id), robotName: robot.name }) : null;
+      if (refused && mission.status === "queued") {
+        await db.query("UPDATE hannah_robot_missions SET status = 'cancelled', error = $1, finished_at = $2, updated_at = $2 WHERE robot_id = $3 AND id = $4 AND status = 'queued'", [`Not delivered: ${refused.message}`, at, row.id, mission.id]);
+        continue;
+      }
       if (mission.cancel_requested_at && mission.status !== "queued") {
         signed({ type: "cancel", missionId: mission.id, issuedAt: Number(mission.cancel_requested_at) });
         continue;
@@ -659,10 +704,12 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
         const delivered = await db.query("UPDATE hannah_robot_missions SET status = 'sent', sent_at = $1, updated_at = $1 WHERE robot_id = $2 AND id = $3 AND status = 'queued'", [at, row.id, mission.id]);
         if (!delivered.rowCount) continue; // cancelled a moment ago
       }
-      const payload = commandFor(mission, robot.limits, robot.commissioning);
+      const payload = commandFor(mission, robot.limits, robot.commissioning, robot);
       commands.push({ payload, sig: signCommand(secret, payload) });
     }
-    return { serverTime: at, intervalMs: SYNC_INTERVAL_MS, commands };
+    for (const command of manual.commands) signed(command);
+    // While someone drives it by hand the robot exchanges ten times a second, so input reaches it fresh.
+    return { serverTime: at, intervalMs: manual.fast ? TELEOP_SYNC_INTERVAL_MS : SYNC_INTERVAL_MS, commands };
   }
 
   // ---------- missions (the Action Engine calls these) ----------
@@ -690,32 +737,54 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const live = rows.filter((row) => !FINAL.has(effectiveMissionStatus(row, at)) && contract.capability(row.capability)?.motion);
     return live[0] ? publicMission(live[0], at) : null;
   }
-  /** The Safety Gateway's answer for this robot and command, with the robot's current state. */
-  async function assess(db, userId, robotRef, capabilityId, params, { planId = null } = {}) {
+  /**
+   * The Safety Gateway's answer for this robot and command, with the robot's
+   * current state, run through the command-validation chain (chain.js).
+   *   stage          "preflight" when asked for, "execute" at the moment it is sent
+   *   identity       { source, actor }: where the command came from
+   *   authorization  at "execute": { kind: "action-record", recordId } | { kind: "system" }
+   *   planId         the plan this is a step of
+   * The answer keeps the gateway's shape (ok, violations, warnings, flags, params, risk)
+   * and adds `chain`: every step with its result, and the refusal.
+   */
+  async function assess(db, userId, robotRef, capabilityId, params, { planId = null, stage = "preflight", identity = {}, authorization = null, plan = Boolean(planId), resuming = null } = {}) {
     const robot = typeof robotRef === "object" && robotRef ? robotRef : await resolveRobot(db, userId, robotRef);
     const moves = Boolean(contract.capability(capabilityId)?.motion);
-    const active = moves ? await activeMotion(db, userId, robot.id) : null;
-    const verdict = { robot, ...safety.check({ robot, capabilityId, params, now: now(), active }) };
+    const running = moves ? await activeMotion(db, userId, robot.id) : null;
+    // Resuming a paused mission: that mission isn't "another one" in the way.
+    const active = running && running.id === resuming ? null : running;
+    const gateway = safety.check({ robot, capabilityId, params, now: now(), active });
     // A robot working through a plan is busy for anything else that would move it, also between two steps.
     if (moves && !planId && robot?.id) {
-      const running = (await db.query("SELECT id, title FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status = 'running'", [userId, robot.id])).rows[0];
-      if (running && !verdict.violations.some((item) => item.code === "precondition:no-active-motion")) {
-        verdict.violations.push({ code: "busy-plan", message: `${robot.name} is working through the plan “${running.title}”. Cancel the plan or wait for it to finish.` });
-        verdict.ok = false;
+      const busyPlan = (await db.query("SELECT id, title FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status = 'running'", [userId, robot.id])).rows[0];
+      if (busyPlan && !gateway.violations.some((item) => item.code === "precondition:no-active-motion")) {
+        gateway.violations.push({ code: "busy-plan", message: `${robot.name} is working through the plan “${busyPlan.title}”. Cancel the plan or wait for it to finish.` });
+        gateway.ok = false;
       }
     }
-    return verdict;
+    const context = await manager.chainContext(db, userId, robot, { stage, authorization });
+    const verdict = chain.evaluate({ stage, identity: { userId, source: identity.source || "chat", actor: identity.actor }, account: context.account, authorization: context.authorization, robot, capabilityId, params, gateway, plan, policy: context.policy, teleop: context.teleop, activeMotion: active, now: now() });
+    // Any one reason makes the engine ask: the gateway's own are shown, the chain's (mode, policy, profile) when it has none.
+    const flags = verdict.ok && !verdict.suggest ? (gateway.flags.length ? gateway.flags : [...verdict.approvalReasons]) : chain.flagsFor(verdict);
+    return { robot, ...gateway, ok: verdict.ok, violations: verdict.violations, flags, chain: verdict };
   }
-  async function dispatch(db, userId, { robot, capabilityId, params, actionId = null, requestedBy = "", planId = null, id: givenId = null }) {
+  /**
+   * Queue a signed command for the robot. The last step of the chain: it
+   * refuses anything that didn't pass the chain at the execution stage, for
+   * this robot and capability, moments ago. There is no other way to queue one.
+   */
+  async function dispatch(db, userId, { robot, capabilityId, params, actionId = null, requestedBy = "", planId = null, id: givenId = null, verdict = null }) {
     const definition = contract.capability(capabilityId);
     const at = now();
+    if (!chain.isGenuine(verdict?.chain || verdict, { robotId: robot?.id, capabilityId, now: at })) throw fail(409, "Not sent: this command didn't pass HANNAH's command-validation chain at the moment it was sent.", "chain-required");
     const ttl = Math.round((definition.deescalates ? 15 : robot.limits.commandTtlS) * 1000);
     const timeoutS = Math.min(definition.timeoutS.max, definition.timeoutS.default);
     const id = givenId || `ms_${crypto.randomBytes(9).toString("hex")}`;
+    const origin = (verdict?.chain || verdict).origin;
     await db.query(
-      `INSERT INTO hannah_robot_missions (user_id, id, robot_id, capability, params, status, action_id, requested_by, seq, nonce, issued_at, expires_at, deadline_at, created_at, updated_at, plan_id)
-       VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11, $12, $10, $10, $13)`,
-      [userId, id, robot.id, definition.id, JSON.stringify(params), actionId, clean(requestedBy, 80), await nextSeq(db, robot.id), crypto.randomBytes(16).toString("hex"), at, at + ttl, at + ttl + timeoutS * 1000, planId],
+      `INSERT INTO hannah_robot_missions (user_id, id, robot_id, capability, params, status, action_id, requested_by, seq, nonce, issued_at, expires_at, deadline_at, created_at, updated_at, plan_id, origin)
+       VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11, $12, $10, $10, $13, $14)`,
+      [userId, id, robot.id, definition.id, JSON.stringify(params), actionId, clean(requestedBy, 80), await nextSeq(db, robot.id), crypto.randomBytes(16).toString("hex"), at, at + ttl, at + ttl + timeoutS * 1000, planId, origin],
     );
     return getMission(db, userId, id);
   }
@@ -753,9 +822,12 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return getMission(db, userId, mission.id);
   }
   /** Stop a robot: cancel everything it has and send a stop. Never needs approval. */
-  async function stop(db, userId, robotRef, { reason = "", actionId = null, requestedBy = "" } = {}) {
+  async function stop(db, userId, robotRef, { reason = "", actionId = null, requestedBy = "", identity = null, authorization = null } = {}) {
     const robot = typeof robotRef === "object" && robotRef ? robotRef : await resolveRobot(db, userId, robotRef);
     if (robot.status !== "enrolled") throw fail(409, `${robot.name} isn't enrolled, so there is nothing to stop.`, "not-enrolled");
+    // A stop passes the same chain; it can only be refused for a robot that isn't this account's.
+    const verdict = await assess(db, userId, robot, "stop_motion", reason ? { reason: clean(reason, 200) } : {}, { stage: "execute", identity: identity || { source: actionId ? "chat" : "system" }, authorization: authorization || (actionId ? { kind: "action-record", recordId: actionId } : { kind: "system" }) });
+    if (!verdict.ok) throw fail(409, `Not sent. ${verdict.chain.refusal.message}`, verdict.chain.refusal.code);
     // A stop ends the robot's plan and drops every plan waiting behind it, so nothing starts again by itself.
     for (const row of (await db.query(`SELECT * FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status IN ${PLAN_OPEN}`, [userId, robot.id])).rows) {
       await endPlan(db, row, "cancelled", row.status === "running" ? "The robot was stopped." : "The robot was stopped before this plan started.", now());
@@ -763,7 +835,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     for (const mission of await listMissions(db, userId, { robotId: robot.id, active: true, limit: 100 })) {
       if (mission.capability !== "stop_motion") await cancelMission(db, userId, mission.id);
     }
-    const mission = await dispatch(db, userId, { robot, capabilityId: "stop_motion", params: reason ? { reason: clean(reason, 200) } : {}, actionId, requestedBy });
+    const mission = await dispatch(db, userId, { robot, capabilityId: "stop_motion", params: reason ? { reason: clean(reason, 200) } : {}, actionId, requestedBy, verdict });
     await addEvent(db, userId, robot.id, { type: "stop-requested", severity: "warning", message: `Stop requested${reason ? `: ${clean(reason, 160)}` : ""}.` });
     return mission;
   }
@@ -788,10 +860,11 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     await db.query("UPDATE hannah_robot_missions SET pause_requested_at = $1, updated_at = $1 WHERE user_id = $2 AND id = $3 AND status = 'accepted' AND pause_requested_at IS NULL", [now(), userId, mission.id]);
     return getMission(db, userId, mission.id);
   }
-  /** Ask the robot to carry on with a paused mission. This starts motion, so the caller has been through permission and the Safety Gateway. */
-  async function resumeMission(db, userId, id) {
+  /** Ask the robot to carry on with a paused mission. This starts motion, so it needs the chain's answer for that mission, at the moment it is sent. */
+  async function resumeMission(db, userId, id, { verdict = null } = {}) {
     const mission = await getMission(db, userId, id);
     if (mission.status !== "paused") throw fail(409, mission.final ? "That mission is already over." : "That mission isn't paused.", "not-paused");
+    if (!chain.isGenuine(verdict?.chain || verdict, { robotId: mission.robotId, capabilityId: mission.capability, now: now() })) throw fail(409, "Not resumed: the resume didn't pass HANNAH's command-validation chain at the moment it was sent.", "chain-required");
     await db.query("UPDATE hannah_robot_missions SET resume_requested_at = $1, control_nonce = $2, error = NULL, updated_at = $1 WHERE user_id = $3 AND id = $4 AND status = 'paused'", [now(), crypto.randomBytes(16).toString("hex"), userId, mission.id]);
     return getMission(db, userId, mission.id);
   }
@@ -942,7 +1015,8 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
         continue;
       }
       // A step that moves the robot: the Safety Gateway again, against the robot as it is now.
-      const verdict = await assess(db, userId, robot, step.capability, step.params, { planId: row.id });
+      // The chain's execution stage: the plan's own approved request stands behind each step.
+      const verdict = await assess(db, userId, robot, step.capability, step.params, { planId: row.id, stage: "execute", identity: { source: "plan" }, authorization: { kind: "action-record", recordId: row.action_id } });
       if (!verdict.ok) {
         const reason = `Not sent. ${verdict.violations.map((item) => item.message).join(" ")}`;
         Object.assign(step, { status: "failed", error: reason, finishedAt: at });
@@ -953,13 +1027,16 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
       Object.assign(step, { status: "running", missionId, startedAt: at, sent: verdict.params });
       // The plan records the step first; only the exchange that wins this write sends the command.
       if (!(await save()).rowCount) return;
-      await dispatch(db, userId, { robot, capabilityId: step.capability, params: verdict.params, actionId: row.action_id, requestedBy: row.requested_by || "", planId: row.id, id: missionId });
+      await dispatch(db, userId, { robot, capabilityId: step.capability, params: verdict.params, actionId: row.action_id, requestedBy: row.requested_by || "", planId: row.id, id: missionId, verdict });
       return;
     }
   }
   /** Check every step of a plan against the robot as it is now. The first step must be ready; later ones may depend on earlier ones. */
-  async function assessPlan(db, userId, robotRef, steps) {
+  async function assessPlan(db, userId, robotRef, steps, { identity = {} } = {}) {
     const robot = typeof robotRef === "object" && robotRef ? robotRef : await resolveRobot(db, userId, robotRef);
+    const context = await manager.chainContext(db, userId, robot);
+    let suggest = null;
+    const approvalReasons = new Set();
     const violations = [];
     const warnings = new Set();
     const flags = new Set();
@@ -972,10 +1049,15 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     for (const [index, step] of steps.entries()) {
       // A busy robot doesn't refuse a plan: the plan waits its turn. Everything else is checked now.
       const verdict = safety.check({ robot, capabilityId: step.capability, params: step.params, now: now(), active: null });
-      for (const item of verdict.violations) {
+      // Each step through the chain as part of a plan (the mode must allow plans; identity, policy and profile apply to every step).
+      const checkedByChain = chain.evaluate({ stage: "preflight", identity: { userId, source: identity.source || "chat" }, account: context.account, robot, capabilityId: step.capability, params: step.params, gateway: verdict, plan: true, policy: context.policy, teleop: context.teleop, now: now() });
+      for (const item of checkedByChain.violations) {
         if (index > 0 && plans.DEPENDS_ON_EARLIER.has(item.code)) continue;
-        violations.push({ code: item.code, message: `Step ${index + 1} (${plans.stepText(step)}): ${item.message}` });
+        if (violations.some((known) => known.code === item.code && /^(mode-|manual-control|policy-)/.test(item.code))) continue;
+        violations.push({ code: item.code, step: item.step, message: `Step ${index + 1} (${plans.stepText(step)}): ${item.message}` });
       }
+      checkedByChain.approvalReasons.forEach((item) => approvalReasons.add(item));
+      if (checkedByChain.suggest) suggest = checkedByChain.suggest;
       verdict.warnings.forEach((item) => warnings.add(item));
       verdict.flags.forEach((item) => flags.add(item));
       if (order.indexOf(verdict.risk) > order.indexOf(risk)) risk = verdict.risk;
@@ -986,7 +1068,9 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     const waiting = (await db.query("SELECT COUNT(*) AS n FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status = 'queued'", [userId, robot.id])).rows[0];
     if (Number(waiting?.n || 0) >= plans.MAX_QUEUED) violations.push({ code: "queue-full", message: `${robot.name} already has ${plans.MAX_QUEUED} plans waiting. Cancel one or wait.` });
     const busyWith = moving.length ? (await activeMotion(db, userId, robot.id))?.title || (await db.query("SELECT title FROM hannah_robot_plans WHERE user_id = $1 AND robot_id = $2 AND status = 'running'", [userId, robot.id])).rows[0]?.title || null : null;
-    return { robot, ok: violations.length === 0, violations, warnings: [...warnings], flags: [...flags], risk, steps: checked, waitsFor: busyWith };
+    approvalReasons.forEach((item) => flags.add(item));
+    const ok = violations.length === 0;
+    return { robot, ok, violations, warnings: [...warnings], flags: ok && suggest ? [`suggest:${suggest}`] : [...flags], risk, steps: checked, waitsFor: busyWith };
   }
   async function createPlan(db, userId, { robot, title, template = null, steps, priority = 3, startWithinMin = plans.START_WITHIN_MIN.default, actionId = null, requestedBy = "" }) {
     const at = now();
@@ -1160,7 +1244,7 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
     return fleet.analytics({ robots, missions, plans: planRows, events, telemetry: telemetryOf, now: at, windowMs });
   }
 
-  return { credentialExpiry, rotateSecret, edgeResources, nextSeq, activeMotion, addDestination, addEvent, publicMission, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
+  return { manager, teleop, credentialExpiry, rotateSecret, edgeResources, nextSeq, activeMotion, addDestination, addEvent, publicMission, analytics, deleteImage, getImage, listImages, addMaintenance, assess, assessPlan, authenticate, cancelMission, cancelPlan, createPlan, getPlan, listPlans, waitForPlan, commissioningView, confirmCommissioning, createRobot, dispatch, enroll, events, getMission, getRobot, issueCode, listDestinations, listMissions, listRobots, maintenance, pauseMission, removeDestination, removeRobot, resetCommissioning, resolveRobot, revokeRobot, resumeMission, stop, stopAll, sync, telemetry, updateRobot, waitFor };
 }
 
 module.exports = { AUTH_LABEL, COMMAND_LABEL, CODE_TTL_MS, FINAL, SKEW_MS, createRoboticsService, deriveKey, fingerprintOf, normalizeDescriptor, requestMessage, signCommand, signRequest };

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from ..common import AuditLog, SafetyState, now_ms
 from ..config import SafetyLimits
 from ..motors.base import MotorCommand
+from . import modes
 
 
 @dataclass
@@ -27,10 +28,41 @@ class SafetyGateway:
     # Set when an emergency stop has been seen. With limits.estop_latched,
     # releasing the stop does not clear it: an operator must reset it.
     _estop_latch: bool = False
+    # The operating mode (modes.py). Only set_mode() and mirror() change it.
+    operating_mode: str = modes.DEFAULT_MODE
 
     @property
     def state(self) -> SafetyState:
         return self._state
+
+    def set_mode(self, target: str, operator: str = "") -> SafetyDecision:
+        """Change the operating mode by the transition table.
+
+        Safety Stop engages the latched software stop (the same path as an
+        "engage" request). Leaving it needs an operator's name, a released stop
+        input and a successful latch reset; the reset never re-enables motors
+        by itself. Every other change but into Safety Stop needs an operator.
+        """
+        now = now_ms()
+        problem = modes.transition_refusal(self.operating_mode, target)
+        if not problem and target != "safety_stop" and not operator:
+            problem = "operator required"
+        if not problem and self.operating_mode == "safety_stop":
+            if self.estop_active:
+                problem = "stop input still active"
+            else:
+                reset = self.reset_estop(operator)
+                if not reset.allowed:
+                    problem = reset.reason
+        if problem:
+            self.audit.emit("safety-gateway", "mode_refused", severity="warning", current=self.operating_mode, target=target, operator=operator, reason=problem)
+            return SafetyDecision(False, problem, self._state, now)
+        before = self.operating_mode
+        self.operating_mode = target
+        if target == "safety_stop":
+            self.set_estop(True)
+        self.audit.emit("safety-gateway", "mode_changed", severity="warning" if target == "safety_stop" else "info", before=before, after=target, operator=operator)
+        return SafetyDecision(True, "mode changed", self._state, now)
 
     @property
     def estop_latched(self) -> bool:
@@ -69,14 +101,16 @@ class SafetyGateway:
         self.audit.emit("safety-gateway", "estop_reset", operator=operator)
         return SafetyDecision(True, "reset", self._state, now)
 
-    def mirror(self, estop_active: bool, estop_latched: bool, fault: str | None) -> None:
+    def mirror(self, estop_active: bool, estop_latched: bool, fault: str | None, operating_mode: str | None = None) -> None:
         """Take the state the safety-gateway service published (another process's gateway)."""
-        changed = (self.estop_active, self._estop_latch, self.fault) != (estop_active, estop_latched, fault)
-        self.estop_active, self._estop_latch, self.fault = estop_active, estop_latched, fault
+        # A mode this process doesn't know is taken as Safety Stop, never as permission.
+        mode = self.operating_mode if operating_mode is None else (operating_mode if operating_mode in modes.MODES else "safety_stop")
+        changed = (self.estop_active, self._estop_latch, self.fault, self.operating_mode) != (estop_active, estop_latched, fault, mode)
+        self.estop_active, self._estop_latch, self.fault, self.operating_mode = estop_active, estop_latched, fault, mode
         self._recompute_state()
         if changed:
-            self.audit.emit("safety-gateway", "mirrored", severity="warning" if (estop_active or estop_latched or fault) else "info",
-                            estop_active=estop_active, latched=estop_latched, fault=fault)
+            self.audit.emit("safety-gateway", "mirrored", severity="warning" if (estop_active or estop_latched or fault or mode == "safety_stop") else "info",
+                            estop_active=estop_active, latched=estop_latched, fault=fault, operating_mode=mode)
 
     def _recompute_state(self) -> None:
         if self.estop_active or self._estop_latch:
@@ -111,6 +145,9 @@ class SafetyGateway:
             return self._deny("required sensors not healthy", SafetyState.SAFE_STOP, now)
         if cmd.source == "ai_raw":
             return self._deny("raw AI commands are not allowed", SafetyState.SAFE_STOP, now)
+        mode_problem = modes.motion_refusal(self.operating_mode, cmd.source, cmd.linear_x_mps, cmd.angular_z_rps)
+        if mode_problem:
+            return self._deny(mode_problem, SafetyState.SAFE_STOP, now)
         age = now - cmd.issued_at_ms
         if age < 0:
             return self._deny("command issued in future", SafetyState.SAFE_STOP, now)

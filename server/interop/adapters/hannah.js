@@ -90,11 +90,14 @@ function createHannahLinkAdapter({ robotics }) {
     return { ok: verdict.ok, robot: normalized, violations: verdict.violations, warnings: verdict.warnings || [], negotiation, flags: verdict.flags || [], plan: { capability: mapped.capability, params: verdict.params || mapped.params, risk: contract.capability(mapped.capability)?.risk } };
   }
 
-  async function submit(db, userId, robotId, missionType, params = {}, { actionId = null } = {}) {
+  async function submit(db, userId, robotId, missionType, params = {}, { actionId = null, identity = {} } = {}) {
     const verdict = await assess(db, userId, robotId, missionType, params);
     if (!verdict.ok) throw fail(409, `Not sent. ${verdict.violations.map((item) => item.message).join(" ")}`, "refused", { violations: verdict.violations });
     const robot = await robotics.getRobot(db, userId, robotId);
-    const mission = await robotics.dispatch(db, userId, { robot, capabilityId: verdict.plan.capability, params: verdict.plan.params, actionId, requestedBy: "interop" });
+    // The command-validation chain again, at the moment it is sent, with the approved request behind it (robotics/chain.js).
+    const chained = await robotics.assess(db, userId, robot, verdict.plan.capability, verdict.plan.params, { stage: "execute", identity, authorization: { kind: "action-record", recordId: actionId } });
+    if (!chained.ok) throw fail(409, `Not sent. ${chained.violations.map((item) => item.message).join(" ")}`, "safety-refused", { violations: chained.violations });
+    const mission = await robotics.dispatch(db, userId, { robot: chained.robot, capabilityId: verdict.plan.capability, params: chained.params, actionId, requestedBy: "interop", verdict: chained });
     return publicMission(await robotics.waitFor(db, userId, mission.id, (item) => item.status !== "queued" && item.status !== "sent"), missionType);
   }
   function publicMission(mission, missionType = null) {
