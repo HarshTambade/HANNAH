@@ -2,11 +2,14 @@
 Description=HANNAH Robot OS ROS2 Runtime
 After=hannah-safety-gateway.service hannah-hardware-manager.service network-online.target
 Wants=network-online.target
+# Skipped cleanly on an image without ROS 2 (the default disk image ships none).
+ConditionPathExists=/opt/ros/jazzy/setup.bash
+ConditionPathExists=/opt/hannah-robot-os/scripts/start-ros2.sh
 
 [Service]
 Type=simple
-User=hannah-ros
-Group=hannah-ros
+User=hannah
+Group=hannah
 Environment=ROS_DOMAIN_ID=0
 Environment=RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ExecStart=/opt/hannah-robot-os/scripts/start-ros2.sh /etc/hannah-robot-os/config.json

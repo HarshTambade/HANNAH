@@ -1,0 +1,9 @@
+#!/bin/sh
+# First boot of a HANNAH Robot OS image (hannah-firstboot.service).
+# Reads hannah/provision.json from the boot partition when present: hostname,
+# SSH public keys, networks allowed to reach SSH, enrollment server and token.
+# Passwords are refused. See robot-os/README.md, "Disk image".
+set -eu
+/usr/bin/hannah-robot-os firstboot
+# Load the SSH rule first boot may have written.
+/usr/sbin/nft -f /etc/nftables.conf

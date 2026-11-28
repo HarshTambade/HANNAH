@@ -1,0 +1,53 @@
+#!/bin/sh
+# hannah-update.service (run by hannah-update.timer): unattended, signed image updates.
+#
+# 1. Refuse unless the safety gateway reports the software stop engaged: an
+#    update never reboots a robot that may move.
+# 2. systemd-sysupdate checks for a newer version at the update source baked
+#    into the image (/usr/lib/sysupdate.d, written by build.sh --update-url).
+#    Verify=yes: the SHA256SUMS list must carry a valid GPG signature from the
+#    key in /usr/lib/systemd/import-pubring.gpg, and every file must match it.
+# 3. It writes the new root into the empty slot and adds a boot entry with
+#    three tries. `hannah-robot-os update stage` records the pending version.
+# 4. Reboot only when /etc/hannah-robot-os/update.env sets HANNAH_UPDATE_REBOOT=yes
+#    (default: wait for an operator). After the reboot hannah-boot-ready.service
+#    confirms the new version once READY passes; if it never does, the boot
+#    loader falls back and the next confirm records the rollback.
+set -eu
+
+CONFIG=/etc/hannah-robot-os/config.json
+HANNAH_UPDATE_REBOOT=no
+if [ -r /etc/hannah-robot-os/update.env ]; then
+    . /etc/hannah-robot-os/update.env
+fi
+
+SYSUPDATE=/usr/lib/systemd/systemd-sysupdate
+if [ ! -x "$SYSUPDATE" ]; then
+    SYSUPDATE="$(command -v systemd-sysupdate || true)"
+fi
+if [ -z "$SYSUPDATE" ]; then
+    echo "update-hook: systemd-sysupdate is not installed in this image; no update applied" >&2
+    exit 1
+fi
+
+if ! runuser -u hannah -- /usr/bin/hannah-robot-os update gate --config "$CONFIG"; then
+    echo "update-hook: not updating while the robot may move"
+    exit 0
+fi
+
+NEW="$("$SYSUPDATE" check-new 2>/dev/null || true)"
+if [ -z "$NEW" ]; then
+    echo "update-hook: no newer version"
+    exit 0
+fi
+
+echo "update-hook: installing version ${NEW}"
+"$SYSUPDATE" --verify=yes update "$NEW"
+runuser -u hannah -- /usr/bin/hannah-robot-os update stage --version "$NEW"
+
+if [ "$HANNAH_UPDATE_REBOOT" = "yes" ]; then
+    echo "update-hook: rebooting into ${NEW}"
+    systemctl reboot
+else
+    echo "update-hook: ${NEW} is installed and boots next time the robot restarts"
+fi

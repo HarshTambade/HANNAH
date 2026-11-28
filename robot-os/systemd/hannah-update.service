@@ -1,0 +1,13 @@
+[Unit]
+Description=HANNAH Robot OS signed image update
+Documentation=file:/opt/hannah-robot-os/README.md
+After=network-online.target hannah-boot-ready.service
+Wants=network-online.target
+# No update source is baked into the image unless build.sh --update-url was given.
+ConditionDirectoryNotEmpty=/usr/lib/sysupdate.d
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/hannah/update-hook
+NoNewPrivileges=true
+PrivateTmp=true

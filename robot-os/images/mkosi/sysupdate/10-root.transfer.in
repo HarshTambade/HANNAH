@@ -1,0 +1,20 @@
+# systemd-sysupdate: write a new root filesystem into the empty root slot.
+# Installed to /usr/lib/sysupdate.d/ only when build.sh is given --update-url
+# and --update-pubring. The source must publish SHA256SUMS and a detached GPG
+# signature SHA256SUMS.gpg made with the key in the image's pubring.
+[Transfer]
+ProtectVersion=%A
+Verify=yes
+
+[Source]
+Type=url-file
+Path=@UPDATE_URL@
+MatchPattern=hannah-robot-os_@v.root-@ARCH@.raw.xz
+
+[Target]
+Type=partition
+Path=auto
+MatchPattern=hannah-robot-os_@v
+MatchPartitionType=root
+PartitionFlags=0
+ReadOnly=1

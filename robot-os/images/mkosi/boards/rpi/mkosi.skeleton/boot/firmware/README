@@ -1,0 +1,5 @@
+The Raspberry Pi firmware partition. raspi-firmware fills this directory while
+the image is built; it becomes the FAT partition the Pi boots from.
+
+To provision a robot before its first boot, put hannah/provision.json here
+(see robot-os/README.md, "Disk image").

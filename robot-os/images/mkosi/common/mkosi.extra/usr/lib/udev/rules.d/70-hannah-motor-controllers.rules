@@ -1,0 +1,31 @@
+# HANNAH Robot OS: stable names and least-privilege access for USB motor controllers.
+#
+# Each controller gets /dev/hannah/<kind> (the most recently plugged one) and
+# /dev/hannah/<kind>-<USB serial number> (stable across ports and reboots; use
+# this one in hardware profiles when more than one controller of a kind is
+# connected). Devices belong to the dialout group, which the hannah service
+# user is in. Nothing here is world-writable.
+#
+# Matching is by USB vendor:product ID. Two of these IDs are shared with other
+# products, noted below: confirm the device before letting it drive anything.
+# Numbered 70 so the ID_SERIAL_SHORT from 60-serial.rules is already set.
+
+# ODrive (v3.x, Pro, S1 native USB interface): 1209:0d32, a CDC ACM serial port.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0d32", GROUP="dialout", MODE="0660", SYMLINK+="hannah/odrive", TAG+="systemd"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1209", ATTRS{idProduct}=="0d32", ENV{ID_SERIAL_SHORT}=="?*", SYMLINK+="hannah/odrive-$env{ID_SERIAL_SHORT}"
+# The USB device itself, for odrivetool's native protocol over libusb.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1209", ATTR{idProduct}=="0d32", GROUP="dialout", MODE="0660"
+
+# ROBOTIS U2D2 (Dynamixel): FTDI FT232H, 0403:6014. Other FT232H adapters share this ID.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", GROUP="dialout", MODE="0660", SYMLINK+="hannah/dynamixel", TAG+="systemd"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", ENV{ID_SERIAL_SHORT}=="?*", SYMLINK+="hannah/dynamixel-$env{ID_SERIAL_SHORT}"
+# ROBOTIS recommends a 1 ms FTDI latency timer for Dynamixel protocol timing (the default is 16 ms).
+ACTION=="add", SUBSYSTEM=="usb-serial", DRIVER=="ftdi_sio", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", ATTR{latency_timer}="1"
+
+# VESC: STM32 USB virtual COM port, 0483:5740. Many STM32-based devices share this ID.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", GROUP="dialout", MODE="0660", SYMLINK+="hannah/vesc", TAG+="systemd"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", ENV{ID_SERIAL_SHORT}=="?*", SYMLINK+="hannah/vesc-$env{ID_SERIAL_SHORT}"
+
+# USB to CAN adapters running candleLight / gs_usb firmware (CANable, CANtact): 1d50:606f.
+# They need no rule here: the kernel's gs_usb driver makes them SocketCAN interfaces
+# (can0, can1, ...), which 80-hannah-can.network brings up.

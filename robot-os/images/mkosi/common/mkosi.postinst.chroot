@@ -1,0 +1,138 @@
+#!/bin/sh
+# Runs inside the image after packages and extra trees are installed.
+# Turns a Debian package set into HANNAH Robot OS: users, read-only root
+# layout, services, branding, and removal of anything that must be unique
+# per robot (SSH host keys, machine ID).
+set -eu
+
+. /usr/lib/hannah/build-info
+
+echo "hannah postinst: board=${HANNAH_BOARD} arch=${HANNAH_ARCH} kernel=${HANNAH_KERNEL} version=${HANNAH_IMAGE_VERSION}"
+
+# --- Accounts ---------------------------------------------------------------
+# hannah: runs the Robot OS services. No login shell, no home, no sudo.
+# Serial motor controllers belong to the dialout group (see the udev rules).
+if ! getent group hannah >/dev/null; then groupadd --system hannah; fi
+if ! id -u hannah >/dev/null 2>&1; then
+    useradd --system --gid hannah --groups dialout \
+        --home-dir /var/lib/hannah-robot-os --no-create-home \
+        --shell /usr/sbin/nologin --comment "HANNAH Robot OS services" hannah
+fi
+# hannah-admin: the one login account, SSH public keys only. Its password
+# field is "*": no password can ever match, but key login is not "locked".
+if ! getent group hannah-admin >/dev/null; then groupadd hannah-admin; fi
+if ! id -u hannah-admin >/dev/null 2>&1; then
+    useradd --gid hannah-admin --groups sudo,adm,systemd-journal,dialout \
+        --home-dir /var/home/hannah-admin --no-create-home \
+        --shell /bin/bash --comment "HANNAH Robot OS administrator" hannah-admin
+fi
+usermod --password '*' hannah-admin
+passwd --lock root
+chmod 0440 /etc/sudoers.d/50-hannah-admin
+
+# --- Read-only root ---------------------------------------------------------
+# / is mounted read-only. Everything that changes lives on the /var partition.
+rm -rf /home
+ln -s var/home /home
+mkdir -p /efi /var/home /var/lib/hannah-system
+# Each root slot carries its own fstab naming its own partition label, so the
+# slot written by an update names itself.
+ROOT_SPEC="PARTLABEL=hannah-robot-os_${HANNAH_IMAGE_VERSION}"
+FIRMWARE_LINE=""
+if [ "${HANNAH_BOARD}" = "rpi" ]; then
+    FIRMWARE_LINE="PARTLABEL=hannah-firmware /boot/firmware vfat defaults,nofail,noatime,umask=0077 0 2"
+fi
+cat > /etc/fstab <<EOF
+# HANNAH Robot OS ${HANNAH_IMAGE_VERSION}. The root partition is mounted read-only;
+# /var is the one writable partition and survives image updates.
+${ROOT_SPEC} / ext4 ro,noatime 0 0
+PARTLABEL=hannah-var /var ext4 defaults,noatime,nodev,nosuid 0 2
+tmpfs /tmp tmpfs nodev,nosuid,mode=1777,size=256M 0 0
+${FIRMWARE_LINE}
+EOF
+
+# SSH host keys made by the openssh-server package would be shared by every
+# robot flashed from this image. hannah-firstboot makes one per robot in /var.
+rm -f /etc/ssh/ssh_host_*
+
+# --- Python package ---------------------------------------------------------
+# The root is read-only at run time, so compile once here.
+python3 -m compileall -q /opt/hannah-robot-os/src
+
+# --- Services ---------------------------------------------------------------
+systemctl enable \
+    hannah-robot-os.target \
+    hannah-firstboot.service \
+    hannah-hostname.service \
+    hannah-safety-gateway.service \
+    hannah-hardware-manager.service \
+    hannah-motor-controller.service \
+    hannah-sensor-manager.service \
+    hannah-ros2-runtime.service \
+    hannah-telemetry.service \
+    hannah-update-manager.service \
+    hannah-boot-ready.service \
+    hannah-update.timer \
+    systemd-networkd.service \
+    systemd-resolved.service \
+    systemd-timesyncd.service \
+    nftables.service \
+    ssh.service
+systemctl set-default multi-user.target
+# Our first-boot setup replaces systemd's interactive one; apt never runs on an image-based system.
+systemctl mask systemd-firstboot.service apt-daily.timer apt-daily-upgrade.timer
+# Nothing should write to the read-only /etc at boot.
+systemctl mask ldconfig.service systemd-update-done.service
+
+# Report unit problems in the build log. A unit that the offline verifier
+# can't fully resolve here (no running system) is reported, not fatal.
+systemd-analyze verify --man=no /usr/lib/systemd/system/hannah-*.service /usr/lib/systemd/system/hannah-robot-os.target \
+    || echo "hannah postinst: systemd-analyze verify reported the problems above"
+
+# --- Updates ----------------------------------------------------------------
+# systemd-sysupdate writes new versions into the empty root slot. It is a
+# separate package on some Debian releases.
+if [ ! -x /usr/lib/systemd/systemd-sysupdate ] && command -v mkosi-install >/dev/null 2>&1; then
+    mkosi-install systemd-sysupdate || echo "hannah postinst: systemd-sysupdate is not packaged here; the update hook will report it"
+fi
+
+# --- Branding ---------------------------------------------------------------
+cat > /usr/lib/os-release <<EOF
+NAME="HANNAH Robot OS"
+PRETTY_NAME="HANNAH Robot OS ${HANNAH_IMAGE_VERSION} (experimental, not safety certified)"
+ID=hannah-robot-os
+ID_LIKE=debian
+VERSION="${HANNAH_IMAGE_VERSION} (experimental)"
+VERSION_ID="${HANNAH_IMAGE_VERSION}"
+VERSION_CODENAME=trixie
+IMAGE_ID=hannah-robot-os
+IMAGE_VERSION="${HANNAH_IMAGE_VERSION}"
+VARIANT="${HANNAH_BOARD} ${HANNAH_KERNEL} kernel"
+VARIANT_ID=${HANNAH_BOARD}-${HANNAH_KERNEL}
+ANSI_COLOR="1;36"
+HANNAH_SAFETY_NOTICE="Not safety certified. Software stops are not safety-rated; a physical robot needs a hardware emergency stop."
+EOF
+ln -sf ../usr/lib/os-release /etc/os-release
+
+# --- Board specifics ----------------------------------------------------------
+if [ "${HANNAH_BOARD}" = "rpi" ]; then
+    # raspi-firmware writes config.txt, cmdline.txt, the kernel and the initrd to
+    # /boot/firmware, which becomes the firmware partition.
+    cat > /etc/default/raspi-firmware <<EOF
+ROOTPART=${ROOT_SPEC}
+CONSOLES="serial0,115200 tty1"
+EOF
+    echo "ro systemd.firstboot=no" > /etc/default/raspi-extra-cmdline
+    hook=/etc/kernel/postinst.d/z50-raspi-firmware
+    if [ ! -x "$hook" ]; then
+        echo "hannah postinst: $hook is missing; the raspi-firmware package did not install its hook" >&2
+        exit 1
+    fi
+    for kernel in /boot/vmlinuz-*; do
+        [ -e "$kernel" ] || continue
+        version="${kernel#/boot/vmlinuz-}"
+        "$hook" "$version" "$kernel"
+    done
+fi
+
+echo "hannah postinst: done"

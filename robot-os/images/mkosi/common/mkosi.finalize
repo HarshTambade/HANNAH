@@ -1,0 +1,11 @@
+#!/bin/sh
+# Runs on the build host after the image tree is complete, before partitioning.
+# An empty /etc/machine-id on a read-only root makes systemd use a fresh
+# machine ID in memory at every boot without treating each boot as the first.
+# A machine ID baked into the image would be shared by every robot.
+# The robot's lasting identity is /var/lib/hannah-system/robot-id (first boot).
+set -eu
+: > "$BUILDROOT/etc/machine-id"
+rm -f "$BUILDROOT/var/lib/dbus/machine-id"
+mkdir -p "$BUILDROOT/var/lib/dbus"
+ln -s /etc/machine-id "$BUILDROOT/var/lib/dbus/machine-id"

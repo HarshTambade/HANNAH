@@ -1,0 +1,35 @@
+#!/bin/sh
+# hannah-boot-ready.service: wait for the Robot OS READY gate, then say so on
+# the console. boot-complete.target (and so systemd-boot's "this entry is good")
+# waits for this; a boot that never reaches READY is not blessed, and after its
+# tries run out the boot loader falls back to the previous version.
+#
+# The QEMU boot check in CI looks for the "HANNAH-BOOT-CHECK: PASS" line.
+set -u
+
+CONFIG=/etc/hannah-robot-os/config.json
+TRIES="${HANNAH_READY_TRIES:-150}"
+VERSION="$(. /usr/lib/os-release && echo "${IMAGE_VERSION:-unknown}")"
+KERNEL="$(uname -r) $(uname -v)"
+
+echo "HANNAH-BOOT-CHECK: waiting for READY (version ${VERSION}, kernel ${KERNEL})"
+i=0
+while [ "$i" -lt "$TRIES" ]; do
+    if /usr/bin/hannah-robot-os ready --config "$CONFIG" >/run/hannah-robot-os/ready.out 2>&1; then
+        cat /run/hannah-robot-os/ready.out
+        target="$(systemctl is-active hannah-robot-os.target 2>/dev/null || true)"
+        echo "HANNAH-BOOT-CHECK: hannah-robot-os.target ${target}"
+        if [ "$target" = "active" ]; then
+            /usr/bin/hannah-robot-os update confirm --config "$CONFIG" || true
+            echo "HANNAH-BOOT-CHECK: PASS version=${VERSION}"
+            exit 0
+        fi
+    fi
+    i=$((i + 1))
+    sleep 2
+done
+
+echo "HANNAH-BOOT-CHECK: FAIL READY not reached after ${TRIES} tries"
+cat /run/hannah-robot-os/ready.out 2>/dev/null || true
+systemctl --no-pager --failed || true
+exit 1

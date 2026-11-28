@@ -5,8 +5,8 @@ Requires=hannah-safety-gateway.service
 
 [Service]
 Type=simple
-User=hannah-ros
-Group=hannah-ros
+User=hannah
+Group=hannah
 WorkingDirectory=/opt/hannah-robot-os
 ExecStart=/usr/bin/python3 -m hannah_robot_os service motor-controller --config /etc/hannah-robot-os/config.json
 Restart=on-failure
@@ -16,8 +16,11 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/hannah-robot-os /var/log/hannah-robot-os /run/hannah-robot-os
-DeviceAllow=/dev/ttyUSB* rw
-DeviceAllow=/dev/ttyACM* rw
+# Serial motor controllers only (ttyUSB: FTDI such as the U2D2; ttyACM: ODrive, VESC).
+# DeviceAllow takes device paths or "char-<driver>" groups, not globs.
+DeviceAllow=char-ttyUSB rw
+DeviceAllow=char-ttyACM rw
+SupplementaryGroups=dialout
 
 [Install]
 WantedBy=multi-user.target

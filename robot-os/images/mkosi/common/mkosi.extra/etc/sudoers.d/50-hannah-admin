@@ -1,0 +1,3 @@
+# hannah-admin has no password (SSH keys only), so sudo cannot ask for one.
+# Access to this account is access to the robot: guard the keys.
+hannah-admin ALL=(ALL:ALL) NOPASSWD: ALL
