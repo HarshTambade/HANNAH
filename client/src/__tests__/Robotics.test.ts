@@ -274,7 +274,9 @@ describe("robot tools and the Robot Agent", () => {
       ["Inspect the entrance with the robot", ["robot_inspect"]],
       ["Pause the mission", ["robot_pause"]],
       ["Show the robot battery", ["robot_battery"]],
-      ["Explain why the robot stopped, is something wrong with it", ["robot_diagnostics", "robot_state"]],
+      ["Explain why the robot stopped, is something wrong with it", ["robot_diagnostics", "robot_state", "robot_why_stopped"]],
+      ["Why did my robot stop?", ["robot_why_stopped", "robot_timeline"]],
+      ["Show the robot's black box timeline", ["robot_timeline", "robot_why_stopped"]],
       ["Check all connected robots", ["robot_fleet"]],
       ["Give that task to another robot", ["robot_reassign"]],
     ] as Array<[string, string[]]>) {

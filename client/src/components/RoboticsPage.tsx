@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, Loader2, MapPin, OctagonX, Plus, Radio, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
+import BlackBoxPanel from "./robotops/BlackBoxPanel";
 import { AnalyticsPanel, ArmPanel, CameraPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
@@ -449,6 +450,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
       )}
 
       <DiagnosticsPanel robot={robot} />
+      <BlackBoxPanel robot={robot} />
 
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Device</h3>
