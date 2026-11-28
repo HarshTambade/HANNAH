@@ -47,6 +47,7 @@ import { MarketplaceService } from "../services/MarketplaceService";
 import { FORMAT_LABELS, STUDIO_EVENT, clearConversationState, composeDocument, getLastFiles, getResearch, restoreConversationState, resumeResearch, runStudioTurn, setToolConversation, studioIntent, type DocumentFormat, type ResearchMode, type ResearchResult, type StudioEvent } from "../services/Studio";
 import { FileCard, ResearchCard, StudioProgress, citationsOf } from "./StudioCards";
 import { StudioComposer, StudioLibrary } from "./StudioComposer";
+import { mediaIntent, runMediaTurn, type MediaKind } from "../services/Media";
 import TaskPanel from "./TaskPanel";
 import ReportButton from "./ReportButton";
 import MemoryControls from "./MemoryControls";
@@ -152,9 +153,11 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const [searchMode, setSearchModeState] = useState<ResearchMode | null>(() => { try { const stored = window.localStorage.getItem("hannah.chat.searchMode"); return ["quick", "latest", "deep", "academic", "compare"].includes(String(stored)) ? stored as ResearchMode : null; } catch { return null; } });
   const setSearchMode = (next: ResearchMode | null) => { setSearchModeState(next); try { if (next) window.localStorage.setItem("hannah.chat.searchMode", next); else window.localStorage.removeItem("hannah.chat.searchMode"); } catch { /* the switch still works for this session */ } };
   const [studioEvents, setStudioEvents] = useState<StudioEvent[]>([]);
+  /** The composer's Create switch (services/Media.ts): the next message is generated as a picture or clip. */
+  const [createMode, setCreateMode] = useState<MediaKind | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   /** What the tools made during the turn in progress, to attach to its reply. */
-  const turnStudioRef = useRef<{ researchId?: string; fileIds: string[] }>({ fileIds: [] });
+  const turnStudioRef = useRef<{ researchId?: string; fileIds: string[]; mediaIds: string[] }>({ fileIds: [], mediaIds: [] });
   /** A follow-up to a research answer is researched too, in the same mode, whether or not the switch is on. */
   const followUpModeRef = useRef<ResearchMode | null>(null);
   useEffect(() => {
@@ -163,6 +166,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       if (detail?.kind === "progress" && detail.event) setStudioEvents((current) => [...current.slice(-80), detail.event!]);
       else if (detail?.kind === "research-result" && detail.id) turnStudioRef.current.researchId = detail.id;
       else if (detail?.kind === "files-result" && detail.ids) turnStudioRef.current.fileIds.push(...detail.ids);
+      else if (detail?.kind === "media-result" && detail.ids) turnStudioRef.current.mediaIds.push(...detail.ids);
     };
     window.addEventListener(STUDIO_EVENT, onStudio);
     return () => window.removeEventListener(STUDIO_EVENT, onStudio);
@@ -605,7 +609,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
         }
       };
 
-      turnStudioRef.current = { fileIds: [] };
+      turnStudioRef.current = { fileIds: [], mediaIds: [] };
       setStudioEvents([]);
       const plainHistory = nextMessages.filter((message) => message.role !== "system").map(({ role, content: text }) => ({ role, content: text }));
       setToolConversation(plainHistory);
@@ -614,12 +618,23 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
         ? studioIntent(content, { searchMode: followUpModeRef.current ?? searchMode, recentFile: getLastFiles().length > 0 })
         : { kind: "none" as const };
       followUpModeRef.current = null;
-      if (studioWanted.kind !== "none") {
+      // "Draw a red fox in snow", "make a 5-second clip of waves", or anything sent with Create on: generated directly.
+      const mediaWanted = (effectiveMode === "cloud" || effectiveMode === "ollama") && isOnline
+        ? mediaIntent(content, { forced: createMode })
+        : { kind: "none" as const };
+      if (createMode) setCreateMode(null);
+      if (mediaWanted.kind !== "none") {
+        const controller = new AbortController();
+        stopRef.current = controller;
+        setAgentActivity({ phase: "acting", message: mediaWanted.kind === "video" ? "HANNAH is making your video…" : "HANNAH is drawing…" });
+        const turn = await runMediaTurn(mediaWanted, { signal: controller.signal, onProgress: (message) => setAgentActivity({ phase: "acting", message }) });
+        result = { reply: turn.reply, emotion: "neutral" };
+      } else if (studioWanted.kind !== "none") {
         const controller = new AbortController();
         stopRef.current = controller;
         setAgentActivity({ phase: "acting", message: studioWanted.kind === "research" ? "HANNAH is researching…" : "HANNAH is building your file…" });
         const turn = await runStudioTurn(content, studioWanted, { conversation: plainHistory, signal: controller.signal });
-        turnStudioRef.current = { researchId: turn.researchId, fileIds: turn.fileIds ?? [] };
+        turnStudioRef.current = { researchId: turn.researchId, fileIds: turn.fileIds ?? [], mediaIds: [] };
         result = { reply: turn.reply, emotion: "neutral" };
       } else if (effectiveMode === "desktop") {
         const reply = await runDesktopAgentTurn(guardedContent, publishActivity);
@@ -687,7 +702,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       if (userTurns === 3) trackEvent("third_message_sent");
       if (transcript !== undefined) trackEvent("voice_used");
       const made = turnStudioRef.current;
-      const studio = made.researchId || made.fileIds.length ? { ...(made.researchId ? { researchId: made.researchId } : {}), ...(made.fileIds.length ? { fileIds: [...new Set(made.fileIds)] } : {}) } : undefined;
+      const studio = made.researchId || made.fileIds.length || made.mediaIds.length ? { ...(made.researchId ? { researchId: made.researchId } : {}), ...(made.fileIds.length ? { fileIds: [...new Set(made.fileIds)] } : {}), ...(made.mediaIds.length ? { mediaIds: [...new Set(made.mediaIds)] } : {}) } : undefined;
       setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply, ...(studio ? { studio } : {}) }]);
       onEmotionChange(result.emotion);
       if (!speakReply) {
@@ -1347,6 +1362,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                     {isUser ? message.content : <MessageContent text={message.content} citations={message.studio?.researchId ? citationsOf(getResearch(message.studio.researchId)) : undefined} />}
                   </div>
                 </div>
+                {!isUser && message.studio?.mediaIds?.map((fileId) => <FileCard key={fileId} fileId={fileId} />)}
                 {!isUser && message.studio?.fileIds?.map((fileId) => <FileCard key={fileId} fileId={fileId} />)}
                 {!isUser && message.studio?.researchId && (
                   <ResearchCard
@@ -1612,7 +1628,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
             </div>
           </div>
         )}
-        <StudioComposer mode={searchMode} onMode={setSearchMode} disabled={isLoading} onLibrary={() => setLibraryOpen(true)} />
+        <StudioComposer mode={searchMode} onMode={setSearchMode} disabled={isLoading} onLibrary={() => setLibraryOpen(true)} create={createMode} onCreate={setCreateMode} />
         <form onSubmit={(event) => void submitMessage(event)} className="mx-auto flex max-w-[720px] items-end gap-2 rounded-xl border border-slate-200 bg-white p-1.5 transition focus-within:border-brand-400/60 shadow-soft">
           <textarea
             ref={inputRef}
