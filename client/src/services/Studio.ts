@@ -320,6 +320,8 @@ export async function readUpload(file: File): Promise<Extraction> {
 }
 /** The original bytes of attached files, for converting them. Memory only. */
 const uploads = new Map<string, File>();
+/** The original file the person attached under this name (memory only; gone after a reload). */
+export const getUploadedFile = (name: string): File | undefined => uploads.get(name);
 
 export async function convertUpload(name: string, to: DocumentFormat): Promise<StudioFile> {
   const file = uploads.get(name) || [...uploads.values()].find((item) => item.name.toLowerCase() === name.toLowerCase());

@@ -9,6 +9,8 @@ import packageJson from "./package.json";
 import { hannahSeoPlugin } from "./scripts/seoPlugin";
 import { appRoutesPlugin } from "./scripts/appRoutesPlugin";
 import { wakeModelPlugin } from "./scripts/wakeModel";
+import { codeRunnerHeadersPlugin } from "./scripts/codeRunnerHeaders";
+import { PYODIDE_INDEX_URL } from "./src/services/codeSandbox";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
@@ -33,6 +35,7 @@ export default defineConfig(({ mode }) => ({
     hannahSeoPlugin({ mode }),
     appRoutesPlugin(),
     wakeModelPlugin(),
+    codeRunnerHeadersPlugin(),
     VitePWA({
       registerType: "prompt",
       includeAssets: ["icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "favicon.ico"],
@@ -63,6 +66,16 @@ export default defineConfig(({ mode }) => ({
         // /download/android showed the app's "Page not found" screen.
         navigateFallbackDenylist: [/^\/download\//, /^\/api\//, /^\/v1\//, /^\/mcp(?:\/|$)/, /^\/\.well-known\//],
         runtimeCaching: [{
+          // Python for code in chat (services/CodeRunner.ts): the pinned Pyodide release, kept after the first
+          // download so Python also runs offline. Versioned URLs never change.
+          urlPattern: new RegExp(`^${PYODIDE_INDEX_URL.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}`),
+          handler: "CacheFirst",
+          options: {
+            cacheName: "hannah-pyodide",
+            expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 90 },
+            cacheableResponse: { statuses: [200] },
+          },
+        }, {
           urlPattern: /\/models\/.*\.glb$/,
           handler: "CacheFirst",
           options: {
