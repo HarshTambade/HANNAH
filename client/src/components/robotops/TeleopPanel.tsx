@@ -114,7 +114,7 @@ export function TeleopPanel({ robot, canOperate }: { robot: Robot; canOperate: b
   };
 
   if (!view) return <section className={card}>{error ? <Notice tone="rose">{error}</Notice> : <p className="text-sm text-slate-600"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" aria-hidden="true" />Loading manual control…</p>}</section>;
-  const steps = session?.steps || view.session?.steps || view.steps.map((step) => ({ ...step, ok: null as boolean | null, detail: undefined as string | undefined }));
+  const steps = session?.steps || view.session?.steps || (view.steps || []).map((step) => ({ ...step, ok: null as boolean | null, detail: undefined as string | undefined }));
   const link = session?.link;
   const stale = (link?.telemetryAgeS ?? 99) > 2;
 

@@ -363,6 +363,8 @@ test("teleoperation: the handoff in order, exclusive control, newest-only short-
     const active = await until(async () => (await call(users.asha, "GET", `/robots/${id}/teleop`)).body.session, (item) => item.status === "active", "the robot to confirm manual control");
     assert.equal(active.steps.find((step) => step.id === "manual-activation").ok, true);
     assert.equal(live.interval(), 100, "the robot exchanges ten times a second while driven by hand");
+    const shown = (await call(users.asha, "GET", `/robots/${id}/teleop`)).body;
+    assert.equal(shown.steps.length, 8, JSON.stringify(shown).slice(0, 300));
     // Visible on the robot to everyone who can see it.
     assert.equal((await call(users.ashaKey, "GET", `/robots/${id}`)).body.robot.teleop.operator, "asha@autonomy.example");
 
