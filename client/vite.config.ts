@@ -108,6 +108,8 @@ export default defineConfig(({ mode }) => ({
       "/v1": "http://localhost:3001",
       "/mcp": "http://localhost:3001",
       "/.well-known/agent-card.json": "http://localhost:3001",
+      // Shared conversation pages are rendered by the server. A RegExp, so /settings and /skills stay with Vite.
+      "^/s/": "http://localhost:3001",
     },
   },
 }));

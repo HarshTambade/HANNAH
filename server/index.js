@@ -25,6 +25,7 @@ const {
 const { createContentReportHandler } = require("./content-reports");
 const { createSyncHandler, createSyncFetchHandler } = require("./cloud-sync");
 const { accountAuth, accountsUseServerKeys, createAccountRouter, createSpendStore, createSyncBlobStore } = require("./accounts");
+const { createShareRouter, createSharePageRouter } = require("./shares");
 const { createRememberedKeyRouter, rememberedKeyMiddleware } = require("./remembered-key");
 const { databaseConfigured, getDatabase } = require("./db");
 const { knownPriceFor, tokenUsageMiddleware, verifiedPriceFor } = require("./cost-tracking");
@@ -343,6 +344,8 @@ const allowedEmotions = new Set(["happy", "sad", "angry", "neutral", "surprised"
 app.use(cors({ origin: corsOrigin, credentials: true }));
 // Public download links (/download/android and so on): redirect to the newest release that has the package.
 app.use("/download", createDownloadRouter());
+// Shared conversation links (/s/<id>): a read-only page with no scripts, open to anyone with the link (server/shares.js).
+app.use("/s", createSharePageRouter({ limiter: createAddressRateLimiter({ limit: 120, windowMs: 60_000, name: "share-view" }) }));
 // Accounts (when DATABASE_URL is set): recognize a session or developer key first.
 // A Groq key remembered in this browser (HttpOnly cookie) counts as sent with the request.
 app.use("/api", rememberedKeyMiddleware);
@@ -561,6 +564,7 @@ app.use("/api", createAccountRouter({
     return liveModels.length > 0 ? true : null;
   },
 }));
+app.use("/api", createShareRouter());
 app.use("/api", createWebhookRouter());
 // Tasks across devices and approvals from another device (signed-in accounts).
 app.use("/api", createDeviceTaskRouter());

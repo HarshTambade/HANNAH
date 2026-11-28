@@ -8,14 +8,14 @@
  * - Files are served as they are; hashed assets (/assets/…) are cached for a year.
  * - Page routes (/chat, /marketplace …) get their prerendered page
  *   (<route>/index.html) if the build made one, otherwise index.html.
- * - Never shadows the server: /api, /v1, /mcp, /download, /.well-known, /a2a
- *   and /hooks are left to their own routers (and their 404s).
+ * - Never shadows the server: /api, /v1, /mcp, /download, /.well-known, /a2a,
+ *   /hooks and /s (shared conversation pages) are left to their own routers (and their 404s).
  */
 const fs = require("node:fs");
 const path = require("node:path");
 const express = require("express");
 
-const RESERVED = /^\/(?:api|v1|mcp|download|\.well-known|a2a|hooks)(?:\/|$)/;
+const RESERVED = /^\/(?:api|v1|mcp|download|\.well-known|a2a|hooks|s)(?:\/|$)/;
 
 function serveClient(directory) {
   const root = path.resolve(directory);

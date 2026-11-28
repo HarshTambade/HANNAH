@@ -1492,6 +1492,26 @@ const MIGRATIONS = [
       "ALTER TABLE hannah_robots ADD COLUMN mission_seq BIGINT NOT NULL DEFAULT 0",
     ],
   },
+  {
+    version: 32,
+    name: "Shared conversation links",
+    // A read-only copy of chat messages the person chose to publish. Chat
+    // history lives on the device; only this snapshot, taken when the link is
+    // made, is uploaded. Revoking a link deletes its row, so the page stops
+    // working at once; deleting the account removes every link (cascade).
+    // Additive; no existing row is changed.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_shared_conversations (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        snapshot TEXT NOT NULL,
+        message_count INTEGER NOT NULL,
+        created_at BIGINT NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_shared_conversations_owner ON hannah_shared_conversations (user_id, created_at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };
