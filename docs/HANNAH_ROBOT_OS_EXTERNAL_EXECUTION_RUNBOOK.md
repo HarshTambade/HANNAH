@@ -14,7 +14,7 @@ This runbook is for the owner/operator who has the build environment, keys, revi
 
 ## RB2 — Linux build host, image build and boot
 
-**Owner provides:** Ubuntu 24.04 build host or self-hosted CI runner with `docker`, `debootstrap`, `qemu-utils`, `qemu-system-x86_64` (and `qemu-system-aarch64` for ARM profiles), root/sudo, and enough disk space.
+**Owner provides:** a Linux build host or self-hosted CI runner with mkosi (the version in `robot-os/images/mkosi/VERSIONS`), `qemu-system-x86_64` and OVMF (and `qemu-system-aarch64` with AAVMF for ARM profiles), root/sudo, and enough disk space.
 
 ### Steps
 
@@ -22,22 +22,22 @@ This runbook is for the owner/operator who has the build environment, keys, revi
 # On the Linux build host
 cd <repo>
 python3 robot-os/tools/validate_manifests.py
-bash -n robot-os/images/scripts/*.sh
-sudo env OUT=/tmp/hannah-rootfs.tar.gz bash robot-os/images/scripts/build-dev-rootfs.sh /tmp/hannah-rootfs
-ls -lh /tmp/hannah-rootfs.tar.gz
+bash -n robot-os/images/build.sh robot-os/images/scripts/*.sh
+sudo env "PATH=$PATH" robot-os/images/build.sh --profile robotos-dev-x86_64 --out /tmp/hannah-image
+ls -lh /tmp/hannah-image/output/
 ```
 
-For a boot smoke test, supply a kernel/initrd/rootfs image to:
+Boot the image headless; it passes only when the serial console reports READY:
 
 ```bash
-bash robot-os/images/scripts/qemu-smoke.sh <kernel> <initrd> <rootfs.img>
+robot-os/images/scripts/qemu-smoke.sh /tmp/hannah-image/output/hannah-robot-os_*.raw --arch x86_64 --log RB2-serial-console.log
 ```
 
 CI equivalent: `.github/workflows/robot-os-image-ci.yml` on an Ubuntu runner.
 
 ### Evidence required
 
-- `RB2-build.log` with rootfs archive checksum.
+- `RB2-build.log` with the disk image checksum, and `RB2-serial-console.log` from the boot.
 - `RB2-qemu-boot.log` containing `HANNAH Robot OS READY`.
 - Exact profile ID, package versions and git commit SHA.
 - Physical flashing/boot is a **separate** approval and commissioning record.

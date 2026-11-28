@@ -22,20 +22,22 @@ jobs:
         run: |
           for tool in python3 git; do command -v "$tool" || { echo "missing $tool" >&2; exit 1; }; done
           if [ "${{ inputs.target }}" = "image" ]; then
-            for tool in debootstrap qemu-system-x86_64; do command -v "$tool" || { echo "missing $tool" >&2; exit 1; }; done
+            for tool in mkosi qemu-system-x86_64; do command -v "$tool" || { echo "missing $tool (mkosi: see robot-os/images/mkosi/VERSIONS)" >&2; exit 1; }; done
           fi
           if [ "${{ inputs.target }}" = "ros2" ]; then
             command -v colcon || { echo "missing colcon" >&2; exit 1; }
           fi
 
-      - name: RB2 image build
+      - name: RB2 image build and boot
         if: inputs.target == 'image'
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap qemu-utils
+          sudo apt-get install -y --no-install-recommends ovmf zstd debian-archive-keyring
           python3 robot-os/tools/validate_manifests.py
-          sudo env OUT=/tmp/hannah-rootfs.tar.gz bash robot-os/images/scripts/build-dev-rootfs.sh /tmp/hannah-rootfs
-          sha256sum /tmp/hannah-rootfs.tar.gz | tee RB2-build.sha256
+          sudo env "PATH=$PATH" robot-os/images/build.sh --profile robotos-dev-x86_64 --out /tmp/hannah-image | tee RB2-build.log
+          IMAGE=$(ls /tmp/hannah-image/output/hannah-robot-os_*.raw | head -n1)
+          sha256sum "$IMAGE" | tee RB2-build.sha256
+          robot-os/images/scripts/qemu-smoke.sh "$IMAGE" --arch x86_64 --log RB2-serial-console.log --timeout 1200
 
       - name: RB3 ROS2 build
         if: inputs.target == 'ros2'
