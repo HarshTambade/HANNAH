@@ -17,6 +17,7 @@ import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, Circl
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
 import { AnalyticsPanel, ArmPanel, CameraPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
+import SimToRealPanel from "./robotops/SimToRealPanel";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -208,7 +209,7 @@ function Approval({ record, onChanged }: { record: ActionRecord; onChanged: (dec
   );
 }
 
-function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: string; enrollment: Enrollment | null; capabilities: Capability[]; onGone: () => void }) {
+function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }: { robotId: string; enrollment: Enrollment | null; capabilities: Capability[]; onGone: () => void; robots?: Robot[] }) {
   const [data, setData] = useState<{ robot: Robot; missions: Mission[]; events: RobotEvent[] } | null>(null);
   const [samples, setSamples] = useState<TelemetrySample[]>([]);
   const [waiting, setWaiting] = useState<ActionRecord[]>([]);
@@ -450,6 +451,8 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
 
       <DiagnosticsPanel robot={robot} />
 
+      {robot.status === "enrolled" && !robot.simulated && <SimToRealPanel robot={robot} robots={robots} />}
+
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Device</h3>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-0.5 text-sm text-slate-800">
@@ -550,7 +553,7 @@ export default function RoboticsPage() {
               </li>
             ))}
           </ul>
-          {selected && <RobotDetail key={selected} robotId={selected} enrollment={enrollment?.robot.id === selected ? enrollment : null} capabilities={capabilities} onGone={() => { setSelected(null); setEnrollment(null); void refresh(); }} />}
+          {selected && <RobotDetail key={selected} robotId={selected} enrollment={enrollment?.robot.id === selected ? enrollment : null} capabilities={capabilities} robots={robots || []} onGone={() => { setSelected(null); setEnrollment(null); void refresh(); }} />}
         </div>
       )}
       {signedIn && robots && robots.length > 0 && <AnalyticsPanel />}

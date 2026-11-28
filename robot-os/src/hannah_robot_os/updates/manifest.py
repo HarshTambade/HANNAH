@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 from dataclasses import dataclass
@@ -51,11 +53,32 @@ def sha256_file(path: str | Path) -> str:
     return h.hexdigest()
 
 
-def verify_manifest(manifest: UpdateManifest, artifact_path: str | Path, trusted_signers: set[str] | None = None) -> None:
+def signed_bytes(manifest: UpdateManifest) -> bytes:
+    """What the release signature covers: every field but the signature, canonical JSON."""
+    from .package import canonical
+
+    fields = {key: value for key, value in manifest.__dict__.items() if key != "signature" and value is not None}
+    return canonical(fields).encode("utf-8")
+
+
+def sign_manifest(manifest: UpdateManifest, secret: bytes) -> str:
+    from . import ed25519
+
+    return base64.b64encode(ed25519.sign(secret, signed_bytes(manifest))).decode("ascii")
+
+
+def verify_manifest(manifest: UpdateManifest, artifact_path: str | Path, trusted_signers: dict[str, bytes] | None = None) -> None:
+    """Size, SHA-256 and the Ed25519 release signature by a trusted signer.
+
+    `trusted_signers` maps a signer name to its 32-byte Ed25519 public key.
+    Without it nothing can be trusted, so the manifest is refused.
+    """
+    from . import ed25519
+
     p = Path(artifact_path)
     if not p.exists():
         raise FileNotFoundError(f"artifact not found: {p}")
-    if trusted_signers is not None and manifest.signer not in trusted_signers:
+    if not trusted_signers or manifest.signer not in trusted_signers:
         raise ValueError("untrusted signer")
     if len(manifest.sha256) != 64:
         raise ValueError("invalid sha256")
@@ -64,6 +87,11 @@ def verify_manifest(manifest: UpdateManifest, artifact_path: str | Path, trusted
     digest = sha256_file(p)
     if digest != manifest.sha256:
         raise ValueError("artifact hash mismatch")
-    # Signature verification is placeholder until production signing keys/HSM are integrated.
     if not manifest.signature or manifest.signature == "UNSIGNED":
         raise ValueError("manifest signature missing")
+    try:
+        signature = base64.b64decode(manifest.signature, validate=True)
+    except (binascii.Error, ValueError):
+        raise ValueError("manifest signature isn't base64") from None
+    if not ed25519.verify(trusted_signers[manifest.signer], signed_bytes(manifest), signature):
+        raise ValueError("manifest signature doesn't verify")

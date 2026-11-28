@@ -1512,6 +1512,118 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_shared_conversations_owner ON hannah_shared_conversations (user_id, created_at)",
     ],
   },
+  {
+    version: 35,
+    name: "Robot operations: sim-to-real deployments, update packages, staged rollouts and firmware",
+    // Simulator runs and their baselines, sim-to-real deployment records, the
+    // publisher keys an account pins, signed update packages, staged rollouts,
+    // what each robot has installed, firmware operations and their audit trail.
+    // Every row belongs to one account. Additive; no existing row is changed.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_keys (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        key_id TEXT NOT NULL,
+        owner TEXT NOT NULL,
+        public_key TEXT NOT NULL,
+        added_at BIGINT NOT NULL,
+        revoked_at BIGINT,
+        PRIMARY KEY (user_id, key_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_packages (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        package_id TEXT NOT NULL,
+        version TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        manifest TEXT NOT NULL,
+        key_id TEXT NOT NULL,
+        uploaded_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS hannah_robotops_packages_version ON hannah_robotops_packages (user_id, package_id, version)",
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_sim_runs (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        deployment_id TEXT,
+        suite TEXT NOT NULL,
+        profile TEXT NOT NULL,
+        overrides TEXT NOT NULL,
+        status TEXT NOT NULL,
+        summary TEXT,
+        report TEXT,
+        error TEXT,
+        created_at BIGINT NOT NULL,
+        finished_at BIGINT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robotops_sim_runs_suite ON hannah_robotops_sim_runs (user_id, suite, created_at)",
+      "CREATE INDEX IF NOT EXISTS hannah_robotops_sim_runs_deployment ON hannah_robotops_sim_runs (user_id, deployment_id, created_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_baselines (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        suite TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        set_by TEXT NOT NULL,
+        set_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, suite)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_deployments (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        status TEXT NOT NULL,
+        record TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robotops_deployments_robot ON hannah_robotops_deployments (user_id, robot_id, updated_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_rollouts (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        package_row TEXT NOT NULL,
+        status TEXT NOT NULL,
+        record TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robotops_rollouts_recent ON hannah_robotops_rollouts (user_id, updated_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_installed (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        robot_id TEXT NOT NULL,
+        package_id TEXT NOT NULL,
+        version TEXT NOT NULL,
+        previous_version TEXT,
+        rollout_id TEXT,
+        installed_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, robot_id, package_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_firmware (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        record TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_robotops_audit (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        at BIGINT NOT NULL,
+        subject_type TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robotops_audit_subject ON hannah_robotops_audit (user_id, subject_type, subject_id, at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

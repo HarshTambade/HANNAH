@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { apiFetch, apiUrl } from "../services/api";
 import { Operator } from "../services/Operator";
+import UpdatesPanel from "./robotops/UpdatesPanel";
 
 type EnvelopeView = {
   envelopeId: string;
@@ -254,6 +255,8 @@ export default function RobotOSPage() {
         </div>
         {actionMessage ? <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800" role="status">{actionMessage}</p> : null}
       </section>
+
+      <UpdatesPanel />
 
       {confirm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true">

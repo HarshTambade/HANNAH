@@ -44,6 +44,9 @@ const { createRobotOSBridgeRouter } = require("./robotics/robot_os_router");
 const { createAuthenticator: createRobotOSBridgeAuthenticator } = require("./robotics/robot_os_auth");
 const robotOSEnvelopes = require("./robotics/robot_os_envelopes");
 const { createRobotOSCommandService } = require("./robotics/robot_os_commands");
+const { createRobotOps } = require("./robotics/robotops");
+const { createRobotOpsRouter } = require("./robotics/robotops_router");
+const robotSimulator = require("./robotics/simulator");
 const { createDeviceAccountRouter, createHubDeviceRouter } = require("./devices/router");
 const { manualRoutes } = require("./devices/manuals");
 const { createWebRouter } = require("./web");
@@ -455,6 +458,8 @@ try {
   console.error("HANNAH_ROBOT_OS_BRIDGE_OWNERS is not valid JSON; Robot OS owners will come from the robot registry.");
 }
 const robotOSCommands = createRobotOSCommandService({ secrets: robotOSSecrets });
+// Sim-to-real deployments, update rollouts and firmware (created with the operator below).
+let robotOps = null;
 if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
   app.use("/api", createRobotOSBridgeRouter({
     enabled: true,
@@ -473,6 +478,7 @@ if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
           return { stored: false };
         });
         if (!result.stored) return; // duplicate or unstoreable: never double-count
+        if (env.kind === "event" && robotOps) await robotOps.onRobotEvent(db, { userId: result.owner, robotId: env.robot_id, payload: env.payload }).catch((error) => console.error(`Robot OS update report failed: ${error?.message || error}`));
       }
       console.log(JSON.stringify({ robotOSBridge: { robot_id: env.robot_id, envelope_id: env.envelope_id, kind: env.kind, ts_ms: env.ts_ms } }));
     },
@@ -490,6 +496,11 @@ if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
         ok: env.payload?.ok === true,
         reason: env.payload?.reason || "",
       }).catch((error) => console.error(`Robot OS command ack failed: ${error?.message || error}`));
+      const owner = await robotOSEnvelopes.resolveOwner(db, env.robot_id, robotOSOwners).catch(() => null);
+      if (owner && robotOps) {
+        await robotOps.onCommandAck(db, { userId: owner, robotId: env.robot_id, commandId: env.payload?.commandId, ok: env.payload?.ok === true, reason: env.payload?.reason || "", health: env.payload?.health || null })
+          .catch((error) => console.error(`Robot OS rollout update failed: ${error?.message || error}`));
+      }
     },
   }));
 }
@@ -598,6 +609,8 @@ const operator = createOperator({ robotOSCommands });
 // Workflows reach the same engine ("Do an action", "Check a repository").
 workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
+robotOps = createRobotOps({ robotics: operator.robotics, robotOSCommands, simulator: robotSimulator });
+app.use("/api", createRobotOpsRouter({ robotops: robotOps, simulator: robotSimulator }));
 app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands }));
 app.use("/api", createDeviceAccountRouter({ devices: operator.devices, engine: operator.engine, manuals: manualRoutes({ devices: operator.devices }) }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.

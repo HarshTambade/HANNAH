@@ -227,6 +227,29 @@ def cmd_update(args: argparse.Namespace) -> int:
     if args.action == "status":
         print(json.dumps(state.__dict__, indent=2))
         return 0
+    if args.action == "verify-package":
+        from .updates.package import PackageError, load_trusted_keys, verify_package
+
+        try:
+            manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+            facts = json.loads(Path(args.facts).read_text(encoding="utf-8")) if args.facts else {}
+            verified = verify_package(manifest, load_trusted_keys(args.trusted_keys), facts, args.artifact_dir)
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            print(json.dumps({"ok": False, "error": str(error) if isinstance(error, PackageError) else f"{type(error).__name__}: {error}"}, indent=2))
+            return 1
+        print(json.dumps({"ok": True, **verified}, indent=2))
+        return 0
+    if args.action == "report":
+        # The update_status event this robot sends HANNAH after a boot, with its health checks.
+        from .services.status_files import required_services_ready
+
+        status_dir = Path(args.status_dir) if args.status_dir else Path(cfg.data_dir) / "status"
+        ready = required_services_ready(status_dir, cfg.required_services)["robot_ready"]
+        outcome = {"healthy": "healthy", "rolled_back": "rolled-back", "failed": "failed"}.get(state.status, state.status)
+        version = state.current_version if state.status == "healthy" else (state.pending_version or state.current_version)
+        payload = {"type": "update_status", "outcome": outcome, "version": version, "lastGoodVersion": state.last_good_version, "checks": [{"id": "robot-ready", "ok": bool(ready), "detail": "READY gate passed" if ready else "READY gate not passed"}]}
+        print(json.dumps(payload, indent=2))
+        return 0
     if args.action == "gate":
         ok, reason = boot.gate(_safety_dir(args, cfg), stale_after_ms=cfg.safety.watchdog_timeout_ms * 4)
         print(json.dumps({"ok": ok, "reason": reason}, indent=2))
@@ -312,8 +335,12 @@ def build_parser() -> argparse.ArgumentParser:
     fb.add_argument("--no-chown", action="store_true", help="don't change file owners (for testing)")
     fb.set_defaults(func=cmd_firstboot)
 
-    up = sub.add_parser("update", help="A/B image update state: status, gate, stage, confirm")
-    up.add_argument("action", choices=["status", "gate", "stage", "confirm"])
+    up = sub.add_parser("update", help="A/B image update state: status, gate, stage, confirm; verify a signed package; report update status")
+    up.add_argument("action", choices=["status", "gate", "stage", "confirm", "verify-package", "report"])
+    up.add_argument("--manifest", help="verify-package: a signed hannah-update.json")
+    up.add_argument("--trusted-keys", default="/etc/hannah-robot-os/trusted-update-keys.json", help="verify-package: the publisher keys pinned on this robot")
+    up.add_argument("--facts", help="verify-package: JSON with this robot's manufacturer, model, os, rosDistro, runtimeVersion, ...")
+    up.add_argument("--artifact-dir", help="verify-package: folder with the package's files, to check their SHA-256")
     up.add_argument("--state", default="/var/lib/hannah-robot-os/update-state.json")
     up.add_argument("--version", help="stage: the version being installed; confirm: the running version (default: IMAGE_VERSION from os-release)")
     up.add_argument("--os-release", default="/usr/lib/os-release")
