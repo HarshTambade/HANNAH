@@ -8,6 +8,7 @@ Devices (beta): HANNAH can work with lights, plugs, fans, sensors and meters thr
 
 ### Added
 
+- **Projects**: group chats under a name with your own instructions, added to the system prompt for every chat in the project. Kept on the device signed out; synced with an account. **Shared links**: a signed-in person publishes a read-only copy of the messages they tick at `/s/<id>` (no scripts, strict CSP, noindex, never cached), revocable at once, limited to 20 an hour. Migration 32 adds `hannah_shared_conversations`; account export includes links and deletion removes them.
 - **HANNAH Edge**, a hub for a computer on your network (`hannah-os/runtime`, Python 3.9+, standard library only): MQTT 3.1.1, Modbus TCP and HTTP adapters, signed requests and commands, a saved signed configuration, `enroll`, `run`, `doctor` and `simulate` commands.
 - **Device profiles**: a declarative description of a device as named points. Validated, signable, and shown with a compatibility level computed from evidence (plug and play, guided, experimental, simulation, developer required, unsupported). Four simulated devices ship; nothing is plug and play.
 - **A Device Safety Gateway** on the server, repeated on the hub. A change goes only to a point you allowed, inside its range; elevated and high-risk points ask every time; a change is done only when the device reports the new value.

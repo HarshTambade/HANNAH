@@ -59,6 +59,7 @@ Three rules shape the product:
 - [Agent team](#agent-team)
 - [Connectors, web search and chat apps](#connectors-web-search-and-chat-apps)
 - [Accounts and your own database](#accounts-and-your-own-database)
+- [Projects and shared links](#projects-and-shared-links)
 - [Marketplace: agents and skills](#marketplace-agents-and-skills)
 - [Automations](#automations)
 - [AI Workforce](#ai-workforce)
@@ -912,12 +913,20 @@ With a database, users get:
 
 - **Sign-in** with email and password. Passwords are hashed with scrypt, and sessions are random tokens stored only as hashes. On the web the session is an HttpOnly, SameSite cookie.
 - **Provider keys in an encrypted vault.** Each key is encrypted with its own data key, which is wrapped with the master key and bound to the user and provider. A saved key is sent only to that provider's hosted HTTPS API, and it's never shown or exported again.
-- **Sync** of memories, reminders, community skills, chat history, preferences, and automations with their schedules. The merge is three-way, so an edit or deletion made on one device isn't lost to another.
+- **Sync** of memories, reminders, community skills, chat history, preferences, projects and their chats, and automations with their schedules. The merge is three-way, so an edit or deletion made on one device isn't lost to another.
 - **Developer API keys** (`hk_…`) for `/v1`, A2A and the SDK. They're shown once, stored as hashes and revocable.
 - **Webhooks**: HMAC-signed POSTs when a reminder goes off, a team task finishes or the daily budget runs out. Only https URLs on public addresses are accepted.
 - **Budgets that persist** across restarts and serverless instances, a **security activity** log, **export** and **account deletion**.
 
 Signed-in users bring their own provider keys unless the operator sets `HANNAH_ACCOUNTS_USE_SERVER_KEYS=true`. Code: [`server/db`](./server/db), [`server/accounts.js`](./server/accounts.js), [`server/vault.js`](./server/vault.js) and [`server/webhooks.js`](./server/webhooks.js). The account tests run on both SQLite and real Postgres (PGlite).
+
+---
+
+## Projects and shared links
+
+**Projects** group chats under a name with your own instructions (up to 4,000 characters), which go with every request from a chat in that project: the server adds them to the system prompt after HANNAH's rules (they can't add tools, grant permissions or change approvals), and on-device models get them in their prompt. Open **Projects** (the folder button in the chat header) to create one, move the open chat into it, start a new chat in it or reopen one of its chats. Projects and up to 40 of their most recent chats are kept on the device, signed in or not; signed in, they sync like memories (the `projects` and `projectChats` namespaces, each within the 1 MB sync limit). A chat outside any project works as before: New chat clears it. Code: [`client/src/services/Projects.ts`](./client/src/services/Projects.ts), [`server/projects.js`](./server/projects.js).
+
+**Shared links** need an account. Chat history stays on your device, so the **Share** button (the link button in the chat header) uploads a copy of only the messages you tick, when you press Publish, and the server keeps that copy at `/s/<id>`. Messages written later aren't added; share again for a new link. Memories, tool results and file contents are never included; research sources and file names only if you tick them. The server hides keys, tokens and passwords it recognizes, whatever the app sends, but untick anything private. Delete a link in the same dialog and it stops working at once (the page is never cached). The page is rendered by the server with no scripts, under a CSP that allows only its own stylesheet, with `noindex` and `no-referrer`, using the same small Markdown subset as the chat. Making links is limited to 20 an hour and 100 per account. Account export includes every link and its copy; deleting the account deletes them. On Vercel, `vercel.json` sends `/s/` to the server; a self-hosted server serves it itself. Code: [`server/shares.js`](./server/shares.js) (migration 32), [`client/src/components/ShareDialog.tsx`](./client/src/components/ShareDialog.tsx).
 
 ---
 
@@ -1483,7 +1492,9 @@ There are two ways to authenticate:
 | `POST /api/account/register`, `/login`, `/logout`, `/logout-all` | Email and password accounts. |
 | `GET`, `PUT`, `DELETE /api/account/credentials/:provider` | Provider keys in the encrypted vault. |
 | `GET`, `POST`, `DELETE /api/account/api-keys` | Developer API keys (shown once). |
-| `GET`, `PUT /api/account/data/:namespace` | Sync documents with optimistic versions (`memories`, `reminders`, `communitySkills`, `chatHistory`, `settings`). |
+| `GET`, `PUT /api/account/data/:namespace` | Sync documents with optimistic versions (`memories`, `reminders`, `communitySkills`, `chatHistory`, `settings`, `automations`, `automationSchedules`, `projects`, `projectChats`). |
+| `POST`, `GET /api/account/shares`, `DELETE /api/account/shares/:id` | Publish a chosen snapshot as a read-only link, list your links, delete one. Session only. |
+| `GET /s/:id` | The public read-only page for a shared link (no scripts, strict CSP, noindex, `no-store`). |
 | `GET`, `POST`, `DELETE /api/account/webhooks`, `POST …/:id/test`, `POST /api/account/events` | Signed webhooks. |
 | `GET /api/account/audit`, `GET /api/account/export`, `DELETE /api/account` | Security log, export, deletion (needs the password). |
 | `POST /api/db/test` | Operator only: try a database URL without saving it. |
