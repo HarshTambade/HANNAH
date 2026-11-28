@@ -203,6 +203,63 @@ def cmd_service(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_firstboot(args: argparse.Namespace) -> int:
+    """First-boot setup of a disk image: hostname, SSH keys (no passwords), firewall, enrollment."""
+    from .image.firstboot import PROVISION_CANDIDATES, ProvisionError, run_firstboot
+
+    try:
+        report = run_firstboot(
+            root=args.root,
+            provision_paths=tuple(args.provision) if args.provision else PROVISION_CANDIDATES,
+            generate_host_key=not args.no_host_key,
+            chown=not args.no_chown,
+        )
+    except ProvisionError as error:
+        print(json.dumps({"ok": False, "error": str(error)}, indent=2))
+        return 2
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+def cmd_update(args: argparse.Namespace) -> int:
+    """A/B update bookkeeping for the disk image (the image's update hook calls this)."""
+    from .updates import boot
+    from .updates.state import UpdateState
+
+    state_path = Path(args.state)
+    state = UpdateState.load(state_path)
+    cfg = RobotOSConfig.load(args.config) if args.config else RobotOSConfig()
+
+    if args.action == "status":
+        print(json.dumps(state.__dict__, indent=2))
+        return 0
+    if args.action == "gate":
+        ok, reason = boot.gate(_safety_dir(args, cfg), stale_after_ms=cfg.safety.watchdog_timeout_ms * 4)
+        print(json.dumps({"ok": ok, "reason": reason}, indent=2))
+        return 0 if ok else 1
+    if args.action == "stage":
+        try:
+            boot.stage(state, args.version or "", boot.read_boot_id(args.boot_id_file))
+        except ValueError as error:
+            print(json.dumps({"ok": False, "error": str(error)}, indent=2))
+            return 2
+        state.save(state_path)
+        print(json.dumps(state.__dict__, indent=2))
+        return 0
+    if args.action == "confirm":
+        from .services.status_files import required_services_ready
+
+        status_dir = Path(args.status_dir) if args.status_dir else Path(cfg.data_dir) / "status"
+        ready = required_services_ready(status_dir, cfg.required_services)["robot_ready"]
+        running = args.version or boot.read_os_release_version(args.os_release)
+        outcome = boot.confirm(state, running, boot.read_boot_id(args.boot_id_file), ready)
+        if outcome not in {"not-ready", "unknown-version", "pending", "unchanged"}:
+            state.save(state_path)
+        print(json.dumps({"outcome": outcome, "state": state.__dict__}, indent=2))
+        return 1 if outcome in {"not-ready", "unknown-version"} else 0
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="hannah-robot-os")
     sub = p.add_subparsers(dest="command", required=True)
@@ -252,6 +309,24 @@ def build_parser() -> argparse.ArgumentParser:
     rec.add_argument("--reason", default="operator requested recovery")
     rec.add_argument("--last-good-version", default="")
     rec.set_defaults(func=cmd_recovery)
+
+    fb = sub.add_parser("firstboot", help="First-boot setup of a HANNAH Robot OS disk image")
+    fb.add_argument("--root", default="/", help="filesystem root (for testing)")
+    fb.add_argument("--provision", action="append", help="provisioning file to look for (repeatable)")
+    fb.add_argument("--no-host-key", action="store_true", help="don't generate the SSH host key")
+    fb.add_argument("--no-chown", action="store_true", help="don't change file owners (for testing)")
+    fb.set_defaults(func=cmd_firstboot)
+
+    up = sub.add_parser("update", help="A/B image update state: status, gate, stage, confirm")
+    up.add_argument("action", choices=["status", "gate", "stage", "confirm"])
+    up.add_argument("--state", default="/var/lib/hannah-robot-os/update-state.json")
+    up.add_argument("--version", help="stage: the version being installed; confirm: the running version (default: IMAGE_VERSION from os-release)")
+    up.add_argument("--os-release", default="/usr/lib/os-release")
+    up.add_argument("--boot-id-file", default="/proc/sys/kernel/random/boot_id")
+    up.add_argument("--config")
+    up.add_argument("--status-dir")
+    up.add_argument("--safety-dir")
+    up.set_defaults(func=cmd_update)
 
     return p
 
