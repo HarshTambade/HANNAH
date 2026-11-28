@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import ConnectPanel from "./ConnectPanel";
 import {
-  ArrowRight, AudioLines, Bot, Boxes, Brain, Bug, Cable, CalendarDays, Check, ChevronDown, Code2, Cpu, Download, Ear, FileText, HardDrive, History, LifeBuoy, LockKeyhole, Menu,
+  ArrowRight, AudioLines, Bot, Boxes, Brain, Bug, Cable, CalendarDays, Check, ChevronDown, Code2, Cpu, Download, Ear, FileText, FolderKanban, HardDrive, History, ImagePlus, LifeBuoy, LockKeyhole, Menu,
   MonitorSmartphone, PackageOpen, Radar, ShieldCheck, Sparkles, TerminalSquare, Waypoints, Workflow, X,
 } from "lucide-react";
 import AvatarScene from "./AvatarScene";
@@ -35,9 +35,9 @@ const base = import.meta.env?.BASE_URL ?? "/";
 
 /** The website's pages, in the order the navigation shows them. */
 const PAGES: Array<{ tab: LandingTab; label: string; text: string; icon: typeof Cpu }> = [
-  { tab: "features", label: "Features", text: "Models picked for you, workflows that run on their own, connectors and the developer API.", icon: Sparkles },
+  { tab: "features", label: "Features", text: "Models picked for you, pictures and video clips, code that runs in your browser, workflows that run on their own, and the developer API.", icon: Sparkles },
   { tab: "agents", label: "Agents", text: "A team of specialists for hard questions, and AI teammates that work on a cloud computer.", icon: Bot },
-  { tab: "hardware", label: "Robots & devices", text: "Ask a robot or a device in plain words; every request is checked before anything moves.", icon: Cpu },
+  { tab: "hardware", label: "Robots & devices", text: "Ask a robot or a device in plain words; every request is checked before anything moves. Plus HANNAH Robot OS with real motor drivers.", icon: Cpu },
   { tab: "privacy", label: "Privacy", text: "Memory you can see and edit, a Private mode that stays local, and approval for every action.", icon: LockKeyhole },
   { tab: "download", label: "Download", text: "The web app and installers for Windows, macOS, Linux and Android, with how to get started.", icon: Download },
   { tab: "faq", label: "FAQ", text: "Common questions, what's on the roadmap, and where to get help.", icon: LifeBuoy },
@@ -65,7 +65,7 @@ function followInApp(event: MouseEvent<HTMLAnchorElement>, go: () => void) {
   go();
 }
 
-const capabilityIcons: Record<IconName, typeof Cpu> = { Radar, AudioLines, Bot, Brain, Cable, CalendarDays, Cpu, Ear, HardDrive, MonitorSmartphone, PackageOpen, Sparkles, Waypoints, Workflow };
+const capabilityIcons: Record<IconName, typeof Cpu> = { Radar, AudioLines, Bot, Brain, Cable, CalendarDays, Code2, Cpu, Ear, FolderKanban, HardDrive, ImagePlus, MonitorSmartphone, PackageOpen, Sparkles, Waypoints, Workflow };
 
 const STATUS_LABEL: Record<Status, string> = { available: "Available", beta: "Beta", upcoming: "Coming" };
 const STATUS_STYLE: Record<Status, string> = {
@@ -314,9 +314,9 @@ export default function LandingPage({ onStart, onIntegrations, onMarketplace, on
             <div className="landing-hero-grid pointer-events-none absolute inset-0" aria-hidden="true" />
             <section id="home" tabIndex={-1} className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 pb-16 pt-12 outline-none sm:px-8 sm:pt-16 lg:grid-cols-[1.08fr_0.92fr] lg:gap-10 lg:px-12 lg:pb-24 lg:pt-20">
               <div className="min-w-0 max-w-[40rem]">
-                <a {...pageLink("home", "try")} className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs text-slate-200 transition hover:border-sky-300/50 hover:text-white">
+                <a {...pageLink("features", "features")} className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs text-slate-200 transition hover:border-sky-300/50 hover:text-white">
                   <span className="rounded-full bg-sky-400/20 px-1.5 py-px font-semibold text-sky-200">New</span>
-                  <span className="truncate">Agents, skills and connectors you can turn on in one click</span> <ArrowRight size={12} className="shrink-0" />
+                  <span className="truncate">Pictures, video clips and code that runs in your browser</span> <ArrowRight size={12} className="shrink-0" />
                 </a>
                 <h1 className="mt-7 font-display text-[clamp(2.6rem,5.8vw,5.1rem)] font-medium leading-[1.02] tracking-[-0.045em] text-white">
                   Your Personal AI.

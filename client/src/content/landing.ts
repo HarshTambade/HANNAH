@@ -3,10 +3,25 @@
  * The page, the search structured data and /llms.txt all read from here, so
  * they always say the same thing.
  */
-export type IconName = "Radar" | "AudioLines" | "Bot" | "Brain" | "Cable" | "CalendarDays" | "Cpu" | "Ear" | "HardDrive" | "MonitorSmartphone" | "PackageOpen" | "Sparkles" | "Waypoints" | "Workflow";
+export type IconName = "Radar" | "AudioLines" | "Bot" | "Brain" | "Cable" | "CalendarDays" | "Code2" | "Cpu" | "Ear" | "FolderKanban" | "HardDrive" | "ImagePlus" | "MonitorSmartphone" | "PackageOpen" | "Sparkles" | "Waypoints" | "Workflow";
 
 /** Everything here ships in this release. Each line says what it really does. */
 export const CAPABILITIES = [
+  {
+    icon: "ImagePlus",
+    title: "Pictures and video clips",
+    description: "Ask \u201Cdraw a red fox in snow\u201D or \u201Cmake a 5-second clip of waves\u201D and the result appears in the chat, through your own OpenAI, xAI or Together key. Your daily budget applies.",
+  },
+  {
+    icon: "Code2",
+    title: "Runs code for you",
+    description: "Python and JavaScript run in a sandbox in your own browser, with no network access. HANNAH can work out sums and draw charts from your data, and any code block has a Run button.",
+  },
+  {
+    icon: "FolderKanban",
+    title: "Projects and shared links",
+    description: "Group chats into projects with their own instructions. Share a chat as a read-only link that you can delete at any time.",
+  },
   {
     icon: "Cpu",
     title: "Any model, your choice",
@@ -219,9 +234,10 @@ export const ROBOTICS = {
     { id: "release_object", label: "Release it" },
     { id: "stop_motion", label: "Stop" },
   ],
-  also: ["Plans: several steps under one approval that lists every step", "Fleet: HANNAH picks the nearest ready robot and says why", "Commissioning: a physical robot can't move until a person completes eleven checks", "Figures from real records: outcomes, durations, command latency"],
+  also: ["Plans: several steps under one approval that lists every step", "Fleet: HANNAH picks the nearest ready robot and says why", "Commissioning: a physical robot can't move until a person completes eleven checks", "Figures from real records: outcomes, durations, command latency", "HANNAH Robot OS: motor drivers for ODrive, Dynamixel and VESC behind the robot's own speed limits, a latched software stop shared by every service, and a Linux disk image with safe A/B updates"],
   limits: [
     "Tested with HANNAH's built-in simulators: a mobile robot and an arm.",
+    "Motor drivers (ODrive, Dynamixel, VESC) are tested against each protocol's byte format and simulated connections, not on a real motor. The Robot OS disk image is defined but hasn't been built or booted yet.",
     "The ROS 2 and Gazebo files are written and have not been run yet. No physical robot has been connected.",
     "HANNAH is not safety-certified, and Stop is a software request, not an emergency stop.",
   ],
