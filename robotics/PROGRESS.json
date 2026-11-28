@@ -1478,17 +1478,20 @@
    "id": "A.13",
    "stage": "A",
    "feature": "Dashboard and no-code integration of every Part A subsystem",
-   "status": "IN_PROGRESS",
+   "status": "VERIFIED",
    "where": [
     "browser"
    ],
    "tests": [
-    "e2e/robotics.spec.ts"
+    "e2e/robotics.spec.ts",
+    "e2e/robot-teleop.spec.ts",
+    "e2e/robot-os.spec.ts"
    ],
    "files": [
-    "client/src/components/RoboticsPage.tsx"
+    "client/src/components/RoboticsPage.tsx",
+    "client/src/components/robotops/PanelBoundary.tsx"
    ],
-   "note": "Each subsystem has a working panel; the Robots screen redesign around them is next."
+   "note": "Each robot's operations are tabs (Overview, Safety & control, Black box, Health & resources, Deploy); every panel has its own error boundary. Not every panel is driven by a browser test."
   }
  ],
  "blockers": [

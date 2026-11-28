@@ -7,10 +7,10 @@ Updated 2026-11-29. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | Status | Count | Meaning |
 |---|---|---|
 | NOT_STARTED | 4 | Nothing exists |
-| IN_PROGRESS | 1 | Being built; not usable yet |
+| IN_PROGRESS | 0 | Being built; not usable yet |
 | IMPLEMENTED | 6 | Code exists; it has not been run or has no test that proves it |
 | TESTING | 0 | Tests exist and are not all passing |
-| VERIFIED | 72 | Implemented and its tests pass, at the level named |
+| VERIFIED | 73 | Implemented and its tests pass, at the level named |
 | BLOCKED_EXTERNAL_DEPENDENCY | 22 | Can't go further without something only the owner can provide |
 
 ## Milestones
@@ -179,7 +179,7 @@ Updated 2026-11-29. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | A.10 | Device intelligence graph: versioned relationship types, history, team scoping without cross-tenant leaks, live-checked context queries | VERIFIED | unit, server | `edge-graph.test.js`, `edge-graph.pglite.test.js`, `graph.devices.test.js` | Workflow links are added by a person; nothing reads them from workflow drafts. |
 | A.11 | Self-diagnostics: checks across OS, runtime, hardware and AI; 13-step incidents; recovery registry with automatic, approval, admin-only and prohibited policies | VERIFIED | unit, server | `diagnostics.test.js`, `diagnostics.pglite.test.js`, `test_remote_recovery.py` | Robot OS service restarts need a polkit or sudoers rule that the image doesn't ship yet. |
 | A.12 | Hardware marketplace: signed packages of 12 kinds, dependency and permission checks, least-privilege installs, revocation and rollback, factual test status (no badges) | VERIFIED | unit, server | `marketplace.hardware.test.js`, `marketplace.hardware.pglite.test.js`, `test_package_policy.py` | Robot OS package policy is not yet wired into a driver loader. |
-| A.13 | Dashboard and no-code integration of every Part A subsystem | IN_PROGRESS | browser | `robotics.spec.ts` | Each subsystem has a working panel; the Robots screen redesign around them is next. |
+| A.13 | Dashboard and no-code integration of every Part A subsystem | VERIFIED | browser | `robotics.spec.ts`, `robot-teleop.spec.ts`, `robot-os.spec.ts` | Each robot's operations are tabs (Overview, Safety & control, Black box, Health & resources, Deploy); every panel has its own error boundary. Not every panel is driven by a browser test. |
 
 ## External blockers
 
