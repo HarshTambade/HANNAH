@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import CommunitySkillsPanel from "./CommunitySkillsPanel";
 import ConnectorsDirectory from "./ConnectorsDirectory";
+import HardwarePackagesPanel from "./robotops/HardwarePackagesPanel";
 import { MAX_ENABLED_SKILLS, MarketplaceService, type MarketplacePackage, type MarketplacePackageType, type MarketplaceState } from "../services/MarketplaceService";
 
 type MarketplacePageProps = { onBack: () => void; /** Open the chat (after connecting, if the visitor hasn't yet). */ onOpenChat?: () => void };
@@ -16,7 +17,7 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
   // "/marketplace#agents" opens on the agents and skills tab.
-  const [tab, setTab] = useState<"connectors" | "packages">(() => (typeof window !== "undefined" && window.location.hash === "#agents" ? "packages" : "connectors"));
+  const [tab, setTab] = useState<"connectors" | "packages" | "hardware">(() => (typeof window !== "undefined" && window.location.hash === "#agents" ? "packages" : typeof window !== "undefined" && window.location.hash === "#hardware" ? "hardware" : "connectors"));
   const allPackages = MarketplaceService.list();
   const categories = useMemo(() => ["all", ...Array.from(new Set(allPackages.map((item) => item.category))).sort()], [allPackages]);
   const packages = useMemo(() => {
@@ -76,12 +77,12 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
         </section>
 
         <div role="tablist" aria-label="Marketplace sections" className="mt-8 inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-soft">
-          {([["connectors", "Connectors"], ["packages", `Agents and skills (${allPackages.length})`]] as const).map(([id, label]) => (
+          {([["connectors", "Connectors"], ["packages", `Agents and skills (${allPackages.length})`], ["hardware", "Hardware"]] as const).map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={`rounded-lg px-4 py-2 text-xs font-semibold transition ${tab === id ? "bg-ink text-white" : "text-slate-600 hover:text-ink"}`}>{label}</button>
           ))}
         </div>
 
-        {tab === "connectors" ? <ConnectorsDirectory /> : (<>
+        {tab === "connectors" ? <ConnectorsDirectory /> : tab === "hardware" ? <HardwarePackagesPanel /> : (<>
 
         <section className="mt-8 flex flex-col gap-4 rounded-2xl border border-cyan-100 bg-cyan-50 p-4 sm:flex-row sm:items-start sm:p-5">
           <ShieldCheck size={17} className="mt-0.5 shrink-0 text-cyan-700" />

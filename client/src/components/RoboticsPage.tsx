@@ -17,6 +17,8 @@ import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, Circl
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
 import { AnalyticsPanel, ArmPanel, CameraPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
+import InteropPanel from "./robotops/InteropPanel";
+import DeviceSecurityPanel from "./robotops/DeviceSecurityPanel";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -554,6 +556,8 @@ export default function RoboticsPage() {
         </div>
       )}
       {signedIn && robots && robots.length > 0 && <AnalyticsPanel />}
+      {signedIn && <InteropPanel />}
+      {signedIn && <DeviceSecurityPanel />}
     </main>
   );
 }
