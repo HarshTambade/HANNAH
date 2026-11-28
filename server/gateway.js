@@ -250,6 +250,15 @@ function recordSpend(credentialId, model, inputTokens, outputTokens) {
   return usd;
 }
 
+/** Charge a cost already known in dollars (image and video generation report their own). */
+function recordSpendUsd(credentialId, usd) {
+  const amount = Number(usd);
+  if (!credentialId || !Number.isFinite(amount) || amount <= 0) return 0;
+  spend.set(credentialId, { day: dayKey(), usd: spentToday(credentialId) + amount });
+  if (spendStore) Promise.resolve(spendStore.add(credentialId, dayKey(), amount)).catch((error) => console.error(`Spend write failed (${error?.code || error?.name || "error"}).`));
+  return amount;
+}
+
 /** The effective daily cap: the lower of the server's and the caller's. */
 function dailyBudget(requested) {
   const server = Number(process.env.HANNAH_DAILY_BUDGET_USD);
@@ -370,5 +379,6 @@ module.exports = {
   promptToolInstruction,
   providerFallbacks,
   recordSpend,
+  recordSpendUsd,
   toPromptToolMessages,
 };
