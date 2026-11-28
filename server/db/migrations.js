@@ -1512,6 +1512,168 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_shared_conversations_owner ON hannah_shared_conversations (user_id, created_at)",
     ],
   },
+  {
+    version: 36,
+    name: "Robot interoperability, zero-trust device identity, hardware packages",
+    // Interop: robots reached through another adapter than HANNAH's own link
+    // (VDA 5050 over MQTT), and the normalized missions sent to them.
+    // Zero trust: one identity per device with its public key and its current
+    // certificate from the account's CA (the CA key is sealed in the vault),
+    // short-lived credentials stored only as hashes, revoked certificate
+    // serials, a durable nonce store for replay protection that holds across
+    // server instances, the account's device policy, and the security audit.
+    // Packages: verified hardware packages, where each is installed with which
+    // permissions and hardware interfaces, and revocations. hannah_robots
+    // gains when its secret was last replaced. Additive; no row is changed.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_interop_robots (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        adapter TEXT NOT NULL,
+        name TEXT NOT NULL,
+        simulated INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL,
+        config TEXT NOT NULL,
+        factsheet TEXT,
+        state TEXT,
+        connection_state TEXT,
+        last_state_at BIGINT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS hannah_interop_robots_id ON hannah_interop_robots (id)",
+      `CREATE TABLE IF NOT EXISTS hannah_interop_missions (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        adapter TEXT NOT NULL,
+        mission TEXT NOT NULL,
+        params TEXT NOT NULL,
+        status TEXT NOT NULL,
+        vendor_ref TEXT,
+        action_id TEXT,
+        detail TEXT,
+        error TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        finished_at BIGINT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_interop_missions_robot ON hannah_interop_missions (robot_id, status, created_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_device_identities (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        hardware_id TEXT,
+        public_key TEXT,
+        key_fingerprint TEXT,
+        cert_serial TEXT,
+        cert_pem TEXT,
+        cert_not_after BIGINT,
+        challenge_hash TEXT,
+        challenge_expires_at BIGINT,
+        reason TEXT,
+        first_seen_at BIGINT,
+        last_seen_at BIGINT,
+        enrolled_at BIGINT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, device_id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_device_identities_device ON hannah_device_identities (device_id)",
+      `CREATE TABLE IF NOT EXISTS hannah_device_credentials (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        device_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        issued_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        revoked_at BIGINT,
+        replaced_by TEXT
+      )`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS hannah_device_credentials_hash ON hannah_device_credentials (token_hash)",
+      "CREATE INDEX IF NOT EXISTS hannah_device_credentials_device ON hannah_device_credentials (user_id, device_id)",
+      `CREATE TABLE IF NOT EXISTS hannah_account_ca (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        purpose TEXT NOT NULL,
+        cert_pem TEXT NOT NULL,
+        key_id TEXT NOT NULL,
+        wrapped_key TEXT NOT NULL,
+        ciphertext TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, purpose)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_cert_revocations (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        serial TEXT NOT NULL,
+        device_id TEXT,
+        reason TEXT,
+        revoked_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, serial)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_nonces (
+        scope TEXT NOT NULL,
+        nonce TEXT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        PRIMARY KEY (scope, nonce)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_nonces_expiry ON hannah_nonces (expires_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_device_policy (
+        user_id TEXT PRIMARY KEY REFERENCES hannah_users(id) ON DELETE CASCADE,
+        policy TEXT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_security_audit (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES hannah_users(id) ON DELETE CASCADE,
+        at BIGINT NOT NULL,
+        device_id TEXT,
+        kind TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        reason TEXT,
+        detail TEXT
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_security_audit_recent ON hannah_security_audit (user_id, at)",
+      `CREATE TABLE IF NOT EXISTS hannah_hw_packages (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        package_id TEXT NOT NULL,
+        version TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        manifest TEXT NOT NULL,
+        files TEXT NOT NULL,
+        publisher_key_id TEXT NOT NULL,
+        verification TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, package_id, version)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_hw_installs (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        package_id TEXT NOT NULL,
+        target TEXT NOT NULL,
+        version TEXT NOT NULL,
+        previous_version TEXT,
+        permissions TEXT NOT NULL,
+        interfaces TEXT NOT NULL,
+        status TEXT NOT NULL,
+        history TEXT NOT NULL,
+        installed_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, package_id, target)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_hw_revocations (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        package_id TEXT NOT NULL,
+        version TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        revoked_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, package_id, version)
+      )`,
+      "ALTER TABLE hannah_robots ADD COLUMN secret_rotated_at BIGINT",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };
