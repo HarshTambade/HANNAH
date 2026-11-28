@@ -161,6 +161,9 @@ function evaluate({ policy, grants = [], action, call = {}, now = Date.now(), us
   const flags = Array.isArray(call.flags) ? call.flags.filter(Boolean) : [];
   const blocked = flags.find((flag) => flag.startsWith("forbidden:"));
   if (blocked) return { ...base, outcome: "deny", code: "forbidden", reason: blocked.slice("forbidden:".length) };
+  // An action's own rule (a robot autonomy policy of "suggest only") may say it is only prepared.
+  const suggested = flags.find((flag) => flag.startsWith("suggest:"));
+  if (suggested) return { ...base, outcome: "suggest", code: "suggest-only", reason: suggested.slice("suggest:".length) };
   const mustAsk = action.kind === "destroy" || (action.kind === "spend" && action.standing !== true) || action.standing === false;
   if (mustAsk) return { ...base, outcome: "ask", code: "always-asks", reason: `${kind.label}: this always needs your approval.` };
   if (flags.length) return { ...base, outcome: "ask", code: "flagged", reason: `Needs your approval: ${flags.join("; ")}.`, flags };

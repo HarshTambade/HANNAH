@@ -132,7 +132,7 @@ function createActionEngine({ actions = [], now = () => Date.now(), services = {
 
   /** Run it, check it, record it. The row is already "executing". */
   async function perform(db, userId, definition, row, params) {
-    const ctx = context(db, userId, { record: { id: row.id, taskId: row.task_id } });
+    const ctx = context(db, userId, { record: { id: row.id, taskId: row.task_id, source: row.source || "", agent: row.agent || "" } });
     let response;
     try {
       response = await definition.execute(params, ctx);
@@ -178,7 +178,8 @@ function createActionEngine({ actions = [], now = () => Date.now(), services = {
       const { rows } = await db.query("SELECT * FROM hannah_actions WHERE user_id = $1 AND idempotency_key = $2", [userId, idempotencyKey]);
       if (rows[0]) return { ...publicRecord(rows[0], now()), replayed: true };
     }
-    const ctx = context(db, userId);
+    // Who asked travels with the request, so an action's own checks (a robot's operating mode) can see it.
+    const ctx = context(db, userId, { caller: { source: clean(input.source, 40) || "chat", agent: clean(input.agent, 80) } });
     const params = definition.normalize ? await definition.normalize(input.params || {}, ctx) : (input.params || {});
     const paramsText = JSON.stringify(params);
     if (paramsText.length > MAX_PARAMS) throw fail(413, "This action carries too much data.", "too-large");
@@ -209,7 +210,7 @@ function createActionEngine({ actions = [], now = () => Date.now(), services = {
       throw error;
     }
     if (decision.outcome === "allow" && decision.grantId) await permissions.markGrantUsed(db, userId, decision.grantId, at);
-    if (status === "executing") await perform(db, userId, definition, { id, task_id: input.taskId || null }, params);
+    if (status === "executing") await perform(db, userId, definition, { id, task_id: input.taskId || null, source: clean(input.source, 40) || "chat", agent: clean(input.agent, 80) }, params);
     void prune(db, userId).catch(() => {});
     return publicRecord(await fetchRow(db, userId, id), now());
   }

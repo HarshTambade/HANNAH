@@ -1512,6 +1512,74 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_shared_conversations_owner ON hannah_shared_conversations (user_id, created_at)",
     ],
   },
+  {
+    version: 34,
+    name: "Robots: operating modes, autonomy policies, safety audit and teleoperation sessions",
+    // A robot's operating mode (NULL means the default for its kind: Mission
+    // Autonomy for a simulation, Supervised Autonomy for a physical robot) and
+    // a counter so the robot only takes a newer mode. Where each mission came
+    // from, for the mode rules on the robot. Autonomy policies per account and
+    // per team (set by an owner or manager). An append-only audit of mode,
+    // profile, policy and teleoperation changes. Teleoperation sessions: at
+    // most one open per robot (the partial unique index), so two operators can
+    // never hold the same robot. Additive; no existing row is changed.
+    statements: [
+      "ALTER TABLE hannah_robots ADD COLUMN operating_mode TEXT",
+      "ALTER TABLE hannah_robots ADD COLUMN mode_seq BIGINT NOT NULL DEFAULT 0",
+      "ALTER TABLE hannah_robots ADD COLUMN mode_changed_at BIGINT",
+      "ALTER TABLE hannah_robot_missions ADD COLUMN origin TEXT",
+      `CREATE TABLE IF NOT EXISTS hannah_robot_autonomy_policies (
+        scope TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        policy TEXT NOT NULL,
+        missions TEXT NOT NULL,
+        updated_by TEXT,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (scope, scope_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_robot_safety_audit (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT,
+        at BIGINT NOT NULL,
+        kind TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        detail TEXT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_robot_safety_audit_robot ON hannah_robot_safety_audit (user_id, robot_id, at)",
+      `CREATE TABLE IF NOT EXISTS hannah_robot_teleop_sessions (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        robot_id TEXT NOT NULL,
+        operator TEXT NOT NULL,
+        operator_session TEXT,
+        token_hash TEXT NOT NULL,
+        status TEXT NOT NULL,
+        steps TEXT NOT NULL,
+        previous_mode TEXT,
+        limits TEXT NOT NULL,
+        cmd TEXT,
+        cmd_seq BIGINT NOT NULL DEFAULT 0,
+        cmd_received_at BIGINT,
+        cmd_expires_at BIGINT,
+        delivered_seq BIGINT NOT NULL DEFAULT 0,
+        delivered_at BIGINT,
+        acked_seq BIGINT NOT NULL DEFAULT 0,
+        acked_at BIGINT,
+        last_input_at BIGINT,
+        created_at BIGINT NOT NULL,
+        activated_at BIGINT,
+        updated_at BIGINT NOT NULL,
+        ended_at BIGINT,
+        end_reason TEXT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE UNIQUE INDEX IF NOT EXISTS hannah_robot_teleop_one_open ON hannah_robot_teleop_sessions (robot_id) WHERE status IN ('activating', 'active')",
+      "CREATE INDEX IF NOT EXISTS hannah_robot_teleop_robot ON hannah_robot_teleop_sessions (robot_id, status)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

@@ -49,7 +49,7 @@ const fail = (status, message, reason) => Object.assign(new Error(message), { st
 function respond(res, error, fallback) {
   if (res.headersSent) return undefined;
   if (!error.status) console.error(`Robot request failed (${error?.code || error?.name || "error"}).`);
-  return res.status(error.status || 500).json({ error: error.status ? error.message : fallback, ...(error.reason ? { reason: error.reason } : {}), ...(error.candidates ? { candidates: error.candidates } : {}) });
+  return res.status(error.status || 500).json({ error: error.status ? error.message : fallback, ...(error.reason ? { reason: error.reason } : {}), ...(error.candidates ? { candidates: error.candidates } : {}), ...(error.step ? { step: error.step } : {}), ...(error.steps ? { steps: error.steps } : {}), ...(error.chain ? { chain: error.chain } : {}), ...(error.problems ? { problems: error.problems } : {}) });
 }
 
 function createRobotDeviceRouter({ robotics, enrollLimiter = null }) {
@@ -176,10 +176,36 @@ function createRobotAccountRouter({ robotics, engine, robotOSEnvelopes = null, r
     res.json({ commands: (rows.rows || []).map((row) => ({ id: row.id, robotId: row.robot_id, capability: row.capability, status: row.status, ackReason: row.ack_reason || "", issuedAt: Number(row.issued_at), expiresAt: Number(row.expires_at) })) });
   }));
 
+  // ---------- Safety and Autonomy Manager ----------
+  const who = (account) => account.email || account.displayName || `account ${String(account.id).slice(0, 8)}`;
+  const manager = () => robotics.manager;
+  // Autonomy policies: the account's own (a signed-in person), and a team's (its owner or a manager). Every change is audited.
+  router.get("/robots/autonomy-policy", anyAccount(async (_req, res, db, account) => res.json({ policy: await manager().policyFor(db, account.id) })));
+  router.put("/robots/autonomy-policy", json, person(async (req, res, db, account) => res.json({ policy: await manager().setAccountPolicy(db, account.id, req.body || {}, who(account)) })));
+  router.put("/robots/teams/:team/autonomy-policy", json, person(async (req, res, db, account) => res.json({ policy: await manager().setTeamPolicy(db, account.id, req.params.team, req.body || {}, who(account)) })));
+  router.get("/robots/safety-audit", anyAccount(async (req, res, db, account) => res.json({ audit: await manager().auditList(db, account.id, { robotId: req.query.robot, limit: req.query.limit }) })));
+  router.get("/robots/:id/autonomy", anyAccount(async (req, res, db, account) => res.json({ autonomy: await manager().autonomyView(db, account.id, req.params.id) })));
+  // Safety Stop: anyone who may stop the robot. Every other change: a signed-in person, checked against the transition table and the robot's condition.
+  router.post("/robots/:id/mode", json, anyAccount(async (req, res, db, account) => {
+    const mode = String(req.body?.mode || "");
+    if (mode !== "safety_stop" && account.via !== "session") throw fail(403, "Only you, signed in to the app, can change a robot's operating mode, except into Safety Stop.", "session-required");
+    res.json({ autonomy: await manager().setMode(db, account.id, req.params.id, mode, { actor: account.via === "session" ? who(account) : "a developer key", person: account.via === "session", reason: req.body?.reason, source: account.via === "session" ? "robots" : "api-key" }) });
+  }));
+  router.put("/robots/:id/safety-profile", json, person(async (req, res, db, account) => res.json({ autonomy: await manager().setProfile(db, account.id, req.params.id, req.body?.profile ?? req.body ?? {}, who(account)) })));
+  // Teleoperation: the handoff, velocity commands from the operator's own screen, and ending it (anyone may take control away).
+  router.get("/robots/:id/teleop", anyAccount(async (req, res, db, account) => res.json(await robotics.teleop.view(db, account.id, req.params.id))));
+  router.post("/robots/:id/teleop", json, anyAccount(async (req, res, db, account) => {
+    const started = await robotics.teleop.start(db, account.id, req.params.id, { operator: account.via === "session" ? who(account) : "", operatorSession: account.sessionId, person: account.via === "session", confirm: req.body?.confirm || {} });
+    res.status(201).json(started);
+  }));
+  router.post("/robots/:id/teleop/:session/command", json, person(async (req, res, db, account) => res.json(await robotics.teleop.command(db, account.id, req.params.id, req.params.session, req.body || {}))));
+  router.post("/robots/:id/teleop/:session/end", json, anyAccount(async (req, res, db, account) => res.json(await robotics.teleop.end(db, account.id, req.params.id, req.params.session, { actor: account.via === "session" ? who(account) : "a developer key", reason: String(req.body?.reason || "ended by the operator").slice(0, 120) }))));
+
   router.get("/robots/:id", anyAccount(async (req, res, db, account) => {
     const robot = await robotics.getRobot(db, account.id, req.params.id);
-    const [missions, events] = await Promise.all([robotics.listMissions(db, account.id, { robotId: robot.id, limit: 25 }), robotics.events(db, account.id, { robotId: robot.id, limit: 40 })]);
-    res.json({ robot: shown(robot), missions: missions.map((mission) => ({ ...mission, robotName: robot.name, summary: missionText(mission, robot.name) })), events });
+    const [missions, events, session] = await Promise.all([robotics.listMissions(db, account.id, { robotId: robot.id, limit: 25 }), robotics.events(db, account.id, { robotId: robot.id, limit: 40 }), robotics.manager.openSession(db, robot.id)]);
+    // Who holds manual control is on the robot's record for everyone who can see the robot.
+    res.json({ robot: { ...shown(robot), teleop: session ? { id: session.id, operator: session.operator, status: session.status } : null }, missions: missions.map((mission) => ({ ...mission, robotName: robot.name, summary: missionText(mission, robot.name) })), events });
   }));
   router.patch("/robots/:id", json, person(async (req, res, db, account) => res.json({ robot: await robotics.updateRobot(db, account.id, req.params.id, { name: req.body?.name, limits: req.body?.limits, disabled: req.body?.disabled, alwaysAsk: req.body?.alwaysAsk, camera: req.body?.camera }) })));
   router.post("/robots/:id/enrollment", person(async (req, res, db, account) => {
