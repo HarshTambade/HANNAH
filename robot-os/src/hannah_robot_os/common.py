@@ -51,12 +51,19 @@ class AuditEvent:
 
 
 class AuditLog:
-    def __init__(self) -> None:
+    def __init__(self, sinks: list | None = None) -> None:
         self._events: list[AuditEvent] = []
+        # Listeners such as the black box (blackbox/recorder.py). A sink that fails never stops an emit.
+        self.sinks: list = list(sinks or [])
 
     def emit(self, source: str, event: str, severity: str = "info", **data: Any) -> AuditEvent:
         evt = AuditEvent(ts_ms=now_ms(), source=source, event=event, severity=severity, data=data)
         self._events.append(evt)
+        for sink in list(self.sinks):
+            try:
+                sink(evt)
+            except Exception:  # noqa: BLE001 - recording must never break the service that emitted
+                pass
         return evt
 
     def list(self) -> list[AuditEvent]:

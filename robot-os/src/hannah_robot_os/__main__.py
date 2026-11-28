@@ -147,6 +147,14 @@ def cmd_validate_profile(args: argparse.Namespace) -> int:
 def cmd_service(args: argparse.Namespace) -> int:
     cfg = RobotOSConfig.load(args.config) if args.config else RobotOSConfig()
     audit = AuditLog()
+    blackbox = None
+    if getattr(args, "blackbox_dir", None):
+        from .blackbox import OSBlackBox
+
+        # Without a hardware profile the motors are the simulated controller: the recording says so.
+        blackbox = OSBlackBox(str(Path(args.blackbox_dir) / args.name), cfg.robot_id, simulated=not (getattr(args, "profile", None) or cfg.hardware_profile), data_dir=cfg.data_dir)
+        blackbox.sweep()
+        audit.sinks.append(blackbox.sink)
     health = ServiceHealthManager(audit=audit, required_services=cfg.required_services)
     hw = HardwareRegistry(audit=audit)
     safety = SafetyGateway(audit=audit, limits=cfg.safety)
@@ -170,6 +178,8 @@ def cmd_service(args: argparse.Namespace) -> int:
             motor_service.tick(safe, reason=safety.fault or safety.state.value)
         if args.name == "sensor-manager":
             safety.set_required_sensors_ok(sensors.required_sensors_ok())
+        if blackbox is not None and args.name == "telemetry":
+            blackbox.sample_system()
         # other services: heartbeat/status only in this minimal runtime
 
     # The motor drivers come from the hardware profile; with none, the simulated controller.
@@ -193,7 +203,11 @@ def cmd_service(args: argparse.Namespace) -> int:
         tick=tick,
         interval_s=float(args.interval),
     )
-    runtime.run_forever(max_ticks=args.max_ticks)
+    try:
+        runtime.run_forever(max_ticks=args.max_ticks)
+    finally:
+        if blackbox is not None:
+            blackbox.flush()
     return 0
 
 
@@ -278,6 +292,7 @@ def build_parser() -> argparse.ArgumentParser:
     svc.add_argument("--profile", help="hardware profile that picks the motor drivers (default: the config's hardware_profile, else the simulator)")
     svc.add_argument("--interval", type=float, default=0.1)
     svc.add_argument("--max-ticks", type=int)
+    svc.add_argument("--blackbox-dir", help="keep a black box recording of this service's events (and, for telemetry, system readings) here")
     svc.set_defaults(func=cmd_service)
 
     vp = sub.add_parser("validate-profile", help="Validate a hardware profile JSON file")
