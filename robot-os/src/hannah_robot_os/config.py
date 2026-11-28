@@ -31,6 +31,8 @@ class RobotOSConfig:
     enable_ai_runtime: bool = True
     enable_remote_gateway: bool = True
     offline_allowed: bool = True
+    # Hardware profile (JSON) that picks the motor drivers. Empty: simulated controller.
+    hardware_profile: str = ""
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "RobotOSConfig":
@@ -47,6 +49,7 @@ class RobotOSConfig:
             enable_ai_runtime=bool(data.get("enable_ai_runtime", True)),
             enable_remote_gateway=bool(data.get("enable_remote_gateway", True)),
             offline_allowed=bool(data.get("offline_allowed", True)),
+            hardware_profile=str(data.get("hardware_profile") or ""),
         )
 
     @staticmethod
@@ -70,4 +73,5 @@ class RobotOSConfig:
             "enable_ai_runtime": self.enable_ai_runtime,
             "enable_remote_gateway": self.enable_remote_gateway,
             "offline_allowed": self.offline_allowed,
+            "hardware_profile": self.hardware_profile,
         }

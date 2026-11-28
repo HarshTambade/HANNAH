@@ -1,0 +1,22 @@
+{
+  "id": "odrive-usb-diffdrive-example",
+  "name": "Differential drive, one two-axis ODrive over USB ASCII (example, untested on hardware)",
+  "type": "mobile_robot",
+  "status": "experimental",
+  "controllers": [
+    {
+      "controller_id": "drive",
+      "kind": "motor_controller",
+      "driver": "odrive_ascii",
+      "interface": "usb",
+      "model": "ODrive (ASCII protocol)",
+      "capabilities": ["velocity", "encoders"],
+      "transport": {"kind": "serial", "path": "/dev/ttyACM0", "baudrate": 115200, "backend": "posix", "timeout_ms": 100, "retries": 0},
+      "drive": {"wheel_separation_m": 0.4, "wheel_radius_m": 0.08, "gear_ratio": 1.0, "invert_right": true},
+      "options": {"left_axis": 0, "right_axis": 1, "checksum": true, "error_property": "active_errors"}
+    }
+  ],
+  "sensors": [],
+  "limits": {"max_linear_speed_mps": 0.5, "max_angular_speed_rps": 1.5, "max_acceleration_mps2": 0.8},
+  "safety": {"requires_physical_estop": true, "command_ttl_ms": 500, "watchdog_timeout_ms": 500}
+}
