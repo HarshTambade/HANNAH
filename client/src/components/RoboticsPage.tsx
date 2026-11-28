@@ -14,7 +14,7 @@
  */
 import { PanelBoundary } from "./robotops/PanelBoundary";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, Loader2, MapPin, OctagonX, Plus, Radio, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, CircleSlash, Clock, History, Loader2, MapPin, OctagonX, Plus, Radio, Rocket, ShieldCheck, Trash2, WifiOff, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
 import BlackBoxPanel from "./robotops/BlackBoxPanel";
@@ -217,6 +217,16 @@ function Approval({ record, onChanged }: { record: ActionRecord; onChanged: (dec
   );
 }
 
+type RobotTab = "overview" | "safety" | "blackbox" | "health" | "deploy";
+/** The robot's sections. Overview keeps everything a robot always had; the rest are the robot-operations panels. */
+const ROBOT_TABS: Array<{ id: RobotTab; label: string; Icon: typeof MapPin }> = [
+  { id: "overview", label: "Overview", Icon: MapPin },
+  { id: "safety", label: "Safety & control", Icon: ShieldCheck },
+  { id: "blackbox", label: "Black box", Icon: History },
+  { id: "health", label: "Health & resources", Icon: Activity },
+  { id: "deploy", label: "Deploy", Icon: Rocket },
+];
+
 function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }: { robotId: string; enrollment: Enrollment | null; capabilities: Capability[]; onGone: () => void; robots?: Robot[] }) {
   const [data, setData] = useState<{ robot: Robot; missions: Mission[]; events: RobotEvent[] } | null>(null);
   const [samples, setSamples] = useState<TelemetrySample[]>([]);
@@ -228,6 +238,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
   const [place, setPlace] = useState("");
   const [code, setCode] = useState<Enrollment | null>(enrollment);
   const [speed, setSpeed] = useState("");
+  const [tab, setTab] = useState<RobotTab>("overview");
 
   const refresh = useCallback(async () => {
     try {
@@ -310,9 +321,36 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
         {waiting.map((record) => <Approval key={record.id} record={record} onChanged={(decided) => { if (decided) show(decided); void refresh(); }} />)}
       </section>
 
+      <div role="tablist" aria-label={`${robot.name} sections`} className="flex flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white/70 p-1" data-testid="robot-tabs">
+        {ROBOT_TABS.filter((item) => item.id !== "deploy" || (robot.status === "enrolled" && !robot.simulated)).filter((item) => item.id === "overview" || robot.status === "enrolled").map((item) => (
+          <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)} className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium transition ${tab === item.id ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"}`}>
+            <item.Icon className="h-4 w-4" aria-hidden="true" />{item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "safety" && robot.status === "enrolled" && (
+        <div className="space-y-4" role="tabpanel" aria-label="Safety and control">
+          <PanelBoundary name="Safety and autonomy"><SafetyAutonomyPanel robotId={robot.id} canChange={isAccountSession()} /></PanelBoundary>
+          {!isArm ? <PanelBoundary name="Manual control"><TeleopPanel robot={robot} canOperate={isAccountSession()} /></PanelBoundary> : <Notice>Manual control is for mobile robots. An arm is moved by its own planner, one approved goal at a time.</Notice>}
+        </div>
+      )}
+      {tab === "blackbox" && (
+        <div className="space-y-4" role="tabpanel" aria-label="Black box"><PanelBoundary name="Black box"><BlackBoxPanel robot={robot} /></PanelBoundary></div>
+      )}
+      {tab === "health" && robot.status === "enrolled" && (
+        <div className="space-y-4" role="tabpanel" aria-label="Health and resources">
+          <PanelBoundary name="Maintenance"><MaintenancePanel assetId={robot.id} /></PanelBoundary>
+          <PanelBoundary name="Edge resources"><EdgeResourcesPanel robotId={robot.id} /></PanelBoundary>
+        </div>
+      )}
+      {tab === "deploy" && robot.status === "enrolled" && !robot.simulated && (
+        <div className="space-y-4" role="tabpanel" aria-label="Deploy"><PanelBoundary name="Simulation to real"><SimToRealPanel robot={robot} robots={robots} /></PanelBoundary></div>
+      )}
+
+      {tab === "overview" && <div className="space-y-4" role="tabpanel" aria-label="Overview">
+
       {robot.status === "enrolled" && <CommissioningPanel robot={robot} onChanged={() => void refresh()} />}
-      {robot.status === "enrolled" && <PanelBoundary name="Safety and autonomy"><SafetyAutonomyPanel robotId={robot.id} canChange={isAccountSession()} /></PanelBoundary>}
-      {robot.status === "enrolled" && !isArm && <PanelBoundary name="Manual control"><TeleopPanel robot={robot} canOperate={isAccountSession()} /></PanelBoundary>}
 
       {isArm && <ArmPanel robot={robot} busy={Boolean(busy)} onAsk={(action, params) => void ask(action, action, params)} />}
       {isArm && active && (
@@ -384,7 +422,6 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
           </div>
         </section>
       )}
-      {robot.status === "enrolled" && <PanelBoundary name="Edge resources"><EdgeResourcesPanel robotId={robot.id} /></PanelBoundary>}
 
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Missions</h3>
@@ -460,11 +497,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
         </section>
       )}
 
-      <PanelBoundary name="Self-diagnostics"><DiagnosticsPanel robot={robot} /></PanelBoundary>
-      <PanelBoundary name="Black box"><BlackBoxPanel robot={robot} /></PanelBoundary>
-
-      {robot.status === "enrolled" && !robot.simulated && <PanelBoundary name="Simulation to real"><SimToRealPanel robot={robot} robots={robots} /></PanelBoundary>}
-      {robot.status === "enrolled" && <PanelBoundary name="Maintenance"><MaintenancePanel assetId={robot.id} /></PanelBoundary>}
+      <PanelBoundary name="Diagnostics"><DiagnosticsPanel robot={robot} /></PanelBoundary>
 
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Device</h3>
@@ -492,6 +525,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
           <button type="button" className={button} disabled={Boolean(busy)} onClick={() => { if (window.confirm(`Remove ${robot.name} and its mission history?`)) void act("remove", async () => { await Robotics.remove(robot.id); onGone(); }); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Remove</button>
         </div>
       </section>
+      </div>}
     </div>
   );
 }

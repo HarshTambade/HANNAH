@@ -81,8 +81,11 @@ test("manual control: the handoff in order, the deadman, exclusive control, and 
 
   await page.goto("/robotics");
   await expect(page.getByTestId("robot-connection")).toHaveText("Connected", { timeout: 20_000 });
+  // Safety, modes and manual control are on the robot's own tab.
+  await page.getByTestId("robot-tabs").getByRole("tab", { name: "Safety & control" }).click();
   const safety = page.getByTestId("safety-autonomy");
   await expect(safety.getByTestId("operating-mode")).toHaveText("Mission Autonomy");
+  if (process.env.HANNAH_E2E_SHOTS) await page.screenshot({ path: require("node:path").join(process.env.HANNAH_E2E_SHOTS, "robot-safety-tab.png"), fullPage: true });
   await expect(safety).toContainText("not a certified safety function");
 
   // The handoff: confirm the robot, take control, and the robot confirms it.
