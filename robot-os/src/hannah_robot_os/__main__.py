@@ -170,7 +170,34 @@ def cmd_service(args: argparse.Namespace) -> int:
             motor_service.tick(safe, reason=safety.fault or safety.state.value)
         if args.name == "sensor-manager":
             safety.set_required_sensors_ok(sensors.required_sensors_ok())
+        if args.name == "edge-resources" and resources_due():
+            resources.tick()
         # other services: heartbeat/status only in this minimal runtime
+
+    if args.name == "edge-resources":
+        import time as _time
+
+        from .resources import manager_from_config
+        from .services.status_files import required_services_ready
+
+        def service_status() -> list[dict]:
+            names = sorted(set(cfg.required_services) | {"sensor-manager"})
+            return required_services_ready(status_dir, names)["required"]
+
+        try:
+            resources = manager_from_config(cfg, service_status=service_status)
+        except ValueError as error:
+            print(json.dumps({"ok": False, "error": str(error)}, indent=2))
+            return 2
+        every_s = float((cfg.resources or {}).get("interval_s", 5.0))
+        last = {"at": 0.0}
+
+        def resources_due() -> bool:
+            now = _time.monotonic()
+            if last["at"] and now - last["at"] < every_s:
+                return False
+            last["at"] = now
+            return True
 
     # The motor drivers come from the hardware profile; with none, the simulated controller.
     if args.name == "motor-controller":
@@ -254,6 +281,38 @@ def cmd_update(args: argparse.Namespace) -> int:
     return 2
 
 
+def cmd_resources(args: argparse.Namespace) -> int:
+    """Edge Resource Manager: one real sample, the workload units, or a full evaluation."""
+    from .resources import ResourceProbe, manager_from_config
+    from .resources.workloads import apply_overrides, assignments, generate_units
+
+    cfg = RobotOSConfig.load(args.config) if args.config else RobotOSConfig()
+    res = cfg.resources or {}
+    try:
+        if args.action == "units":
+            files = generate_units(apply_overrides(res.get("workload_overrides")), assignments(res.get("assignments")))
+            out = Path(args.out)
+            for name, text in files.items():
+                target = out / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+            print(json.dumps({"ok": True, "written": sorted(files), "into": str(out)}, indent=2))
+            return 0
+        if args.action == "sample":
+            probe = ResourceProbe(root=args.root, storage_paths=res.get("storage_paths") or ["/"])
+            print(json.dumps(probe.sample(), indent=2))
+            return 0
+        cfg.data_dir = args.state_dir or cfg.data_dir
+        manager = manager_from_config(cfg, root=args.root)
+        if args.state_dir is None:
+            manager.state_dir = None  # a one-off evaluation doesn't write the service's history
+        print(json.dumps(manager.tick(), indent=2))
+        return 0
+    except ValueError as error:
+        print(json.dumps({"ok": False, "error": str(error)}, indent=2))
+        return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="hannah-robot-os")
     sub = p.add_subparsers(dest="command", required=True)
@@ -271,7 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.set_defaults(func=cmd_validate_config)
 
     svc = sub.add_parser("service", help="Run a Robot OS service (foreground)")
-    svc.add_argument("name", choices=["safety-gateway", "hardware-manager", "motor-controller", "sensor-manager", "ros2-runtime", "telemetry", "update-manager", "ai-runtime", "remote-gateway"])
+    svc.add_argument("name", choices=["safety-gateway", "hardware-manager", "motor-controller", "sensor-manager", "ros2-runtime", "telemetry", "update-manager", "ai-runtime", "remote-gateway", "edge-resources"])
     svc.add_argument("--config")
     svc.add_argument("--status-dir")
     svc.add_argument("--safety-dir")
@@ -312,7 +371,15 @@ def build_parser() -> argparse.ArgumentParser:
     fb.add_argument("--no-chown", action="store_true", help="don't change file owners (for testing)")
     fb.set_defaults(func=cmd_firstboot)
 
-    up = sub.add_parser("update", help="A/B image update state: status, gate, stage, confirm")
+    rs = sub.add_parser("resources", help="Edge Resource Manager: sample real metrics, write workload slices, or evaluate once")
+    rs.add_argument("action", choices=["sample", "units", "evaluate"])
+    rs.add_argument("--config")
+    rs.add_argument("--root", default="/", help="filesystem root to read /proc and /sys from (for testing)")
+    rs.add_argument("--out", default="/etc/systemd/system", help="units: where to write the slices and drop-ins")
+    rs.add_argument("--state-dir", help="evaluate: keep history here (default: don't write any)")
+    rs.set_defaults(func=cmd_resources)
+
+    up = sub.add_parser("update",help="A/B image update state: status, gate, stage, confirm")
     up.add_argument("action", choices=["status", "gate", "stage", "confirm"])
     up.add_argument("--state", default="/var/lib/hannah-robot-os/update-state.json")
     up.add_argument("--version", help="stage: the version being installed; confirm: the running version (default: IMAGE_VERSION from os-release)")
