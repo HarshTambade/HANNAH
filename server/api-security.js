@@ -63,6 +63,8 @@ function accountMayUse(path) {
     || path.startsWith("/media/")
     // An account's own robots, their missions and telemetry.
     || path === "/robots" || path.startsWith("/robots/")
+    // An account's own sim-to-real deployments, update packages, rollouts and firmware operations.
+    || path.startsWith("/robotops/")
     // An account's own hubs, the devices behind them and their automations.
     || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/") || path === "/inventory"
     // The AI workforce: teammates, computers, tasks, skills, routines, vault and approvals.
