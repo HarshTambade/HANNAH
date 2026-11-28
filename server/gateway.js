@@ -14,7 +14,7 @@
 
 const { randomUUID } = require("node:crypto");
 const profiles = require("../shared/model-profiles.json");
-const { defaultModelFor, listProviders, modelChain, providerKey } = require("./providers/catalog");
+const { defaultModelFor, getProvider, listProviders, modelChain, providerKey } = require("./providers/catalog");
 const { isNetworkFailure, requestWithProviderFallback } = require("./providers/runtime");
 const { knownPriceFor } = require("./cost-tracking");
 const { servedStatus } = require("./providers/served");
@@ -286,16 +286,43 @@ function assertWithinBudget(credentialId, requested) {
 // ---------------------------------------------------------------------------
 // Completion
 
-/** Ordered providers to try when the caller didn't pin one. Never for visitor keys. */
+// A provider an administrator (through diagnostics) asked the gateway to put
+// last, until a time. In memory: a restart, or the time running out, restores
+// the configured order by itself, so the switch is always reversible.
+const avoided = new Map();
+const MAX_AVOID_MS = 6 * 60 * 60_000;
+
+/** Put a provider behind its configured backups (HANNAH_PROVIDER_FALLBACKS) for a while. */
+function avoidProvider(providerId, { forMs = 30 * 60_000, reason = "", by = "" } = {}) {
+  const until = Date.now() + Math.max(60_000, Math.min(MAX_AVOID_MS, Number(forMs) || 0));
+  avoided.set(String(providerId), { until, reason: String(reason).slice(0, 200), by: String(by).slice(0, 80), since: Date.now() });
+  return { providerId: String(providerId), until };
+}
+function restoreProvider(providerId) { return avoided.delete(String(providerId)); }
+function providerAvoidance(now = Date.now()) {
+  for (const [id, entry] of avoided) if (entry.until <= now) avoided.delete(id);
+  return Object.fromEntries([...avoided.entries()].map(([id, entry]) => [id, { ...entry }]));
+}
+const isAvoided = (id) => { const entry = avoided.get(id); if (entry && entry.until <= Date.now()) avoided.delete(id); return Boolean(avoided.get(id)); };
+
+/** Configured backups for a provider, in order (HANNAH_PROVIDER_FALLBACKS, configured and usable). */
+function configuredBackups(primaryId, allowed = null) {
+  // listProviders() leaves out envKey, so the key is looked up on the preset itself.
+  const usable = allowed || new Set(listProviders().filter((provider) => provider.configured && (provider.local || providerKey(getProvider(provider.id)))).map((provider) => provider.id));
+  return [...new Set(String(process.env.HANNAH_PROVIDER_FALLBACKS || "").split(",").map((id) => id.trim()).filter((id) => id && id !== primaryId && usable.has(id)))];
+}
+/** The backup to use instead of `primaryId` while it is avoided, or null. */
+function activeBackup(primaryId, allowed = null) {
+  if (!isAvoided(primaryId)) return null;
+  return configuredBackups(primaryId, allowed).find((id) => !isAvoided(id)) || null;
+}
+
+/** Ordered providers to try when the caller didn't pin one. Never for visitor keys. An avoided provider goes last. */
 function providerFallbacks(primaryId, { byok = false, allowed = null } = {}) {
   if (byok) return [primaryId];
-  if (allowed) {
-    const extra = String(process.env.HANNAH_PROVIDER_FALLBACKS || "").split(",").map((id) => id.trim()).filter((id) => id && id !== primaryId && allowed.has(id));
-    return [primaryId, ...new Set(extra)];
-  }
-  const configured = new Set(listProviders().filter((provider) => provider.configured && (provider.local || providerKey(provider))).map((provider) => provider.id));
-  const extra = String(process.env.HANNAH_PROVIDER_FALLBACKS || "").split(",").map((id) => id.trim()).filter((id) => id && id !== primaryId && configured.has(id));
-  return [primaryId, ...new Set(extra)];
+  const chain = [primaryId, ...configuredBackups(primaryId, allowed)];
+  if (!avoided.size) return chain;
+  return [...chain.filter((id) => !isAvoided(id)), ...chain.filter((id) => isAvoided(id))];
 }
 
 /**
@@ -364,6 +391,11 @@ async function completeWithFallback({ providers, resolve, ...request }) {
 }
 
 module.exports = {
+  activeBackup,
+  avoidProvider,
+  configuredBackups,
+  providerAvoidance,
+  restoreProvider,
   assertWithinBudget,
   budgetStatus,
   hydrateSpend,

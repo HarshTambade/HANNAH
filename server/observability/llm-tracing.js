@@ -16,6 +16,7 @@
  */
 
 const { randomUUID } = require("node:crypto");
+const { recordProviderOutcome } = require("./provider-health");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 
@@ -299,6 +300,12 @@ function exportToLangfuse(trace) {
 }
 
 function finishTrace(trace) {
+  // Provider outcomes for diagnostics are kept in memory whether or not tracing is on (no content, no ids).
+  try {
+    recordProviderOutcome({ providerId: trace.provider?.id, status: trace.status, errorType: trace.error?.type || null, httpStatus: trace.error?.httpStatus ?? null, latencyMs: trace.latency?.totalMs ?? null });
+  } catch {
+    // never let bookkeeping affect a model call
+  }
   if (tracingDisabled()) return;
   try {
     void appendTrace(trace);
