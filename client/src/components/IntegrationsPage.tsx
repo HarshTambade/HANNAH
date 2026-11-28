@@ -217,6 +217,24 @@ const endpointGroups: Array<{ title: string; items: Endpoint[] }> = [
     ],
   },
   {
+    title: "Robot operations (signed in)",
+    items: [
+      { method: "POST", path: "/api/robots/:id/mode", access: "account", description: "Change a robot's operating mode (Manual, Assisted, Supervised Autonomy, Mission Autonomy, Maintenance, Safety Stop). Only moves the transition table allows; GET /api/robots/:id/autonomy shows the mode, profile and policy." },
+      { method: "POST", path: "/api/robots/:id/teleop", access: "account", description: "Take manual control as a signed-in operator (never an API key). /teleop/:session/command sends short-lived velocity commands; /end hands control back." },
+      { method: "GET", path: "/api/robots/:id/blackbox/events", access: "account", description: "The robot's black-box timeline, searchable by time, mission, source, type and severity. /blackbox/incident explains why it stopped, from the records only." },
+      { method: "GET", path: "/api/robots/:id/blackbox/missions/:mission/replay", access: "account", description: "A mission rebuilt from its recordings, always marked as playback." },
+      { method: "POST", path: "/api/robotops/deployments", access: "account", description: "Start a sim-to-real deployment. /simulate runs the built-in simulator, /parity compares it with the real robot, /approve needs a signed-in person." },
+      { method: "POST", path: "/api/robotops/rollouts", access: "account", description: "Roll a signed update package out in waves; each wave needs approval (/waves/:index/approve) and failed robots are rolled back." },
+      { method: "GET", path: "/api/interop", access: "account", description: "Every robot behind every adapter (HANNAH link, VDA 5050) in one normalized shape. /interop/capabilities says which missions each can do." },
+      { method: "GET", path: "/api/trust/devices", access: "account", description: "Device identities, certificates and quarantine. PUT /api/trust/policy sets credential lifetimes, quarantine and mTLS." },
+      { method: "GET", path: "/api/hardware-packages", access: "account", description: "Signed hardware packages and installs. /install, /rollback and /revoke ask a person first." },
+      { method: "GET", path: "/api/robots/:id/resources", access: "account", description: "The robot computer's measured resources, with which local model fits and why." },
+      { method: "POST", path: "/api/graph/ask", access: "account", description: "Ask the device graph about an entity; /graph/nodes/:id/context follows a sensor to its machine, place, robots and workflows, re-checked live." },
+      { method: "GET", path: "/api/maintenance/findings", access: "account", description: "Maintenance findings, each labelled measured anomaly, suspected cause or confirmed fault, with evidence. /feedback marks one real or false." },
+      { method: "GET", path: "/api/diagnostics", access: "account", description: "Self-diagnostic checks and incidents. POST /api/diagnostics/recover runs a recovery by its policy; safety-critical recoveries are refused." },
+    ],
+  },
+  {
     title: "Accounts (when the server has a database)",
     items: [
       { method: "POST", path: "/api/account/register", access: "public", description: "Create an account. /login and /logout work the same way." },
