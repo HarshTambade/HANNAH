@@ -58,6 +58,19 @@ class Bench:
         payload = json.dumps({"v": 1, "type": "resume", "robotId": ROBOT_ID, "missionId": mission, "nonce": nonce or f"resume-{self.seq}", "issuedAt": int(self.now * 1000), "expiresAt": int((self.now + ttl) * 1000)})
         return {"payload": payload, "sig": sign_command(SECRET, payload)}
 
+    def mode(self, mode: str, *, seq: int | None = None, session: str | None = None, deadman_ms: int = 500, max_linear: float | None = None, areas: dict | None = None) -> dict:
+        """A signed operating-mode command, as the server sends it; with a session, manual control is handed over."""
+        self.seq += 1
+        teleop = {"session": session, "deadmanMs": deadman_ms, "maxLinearSpeed": max_linear, "maxAngularSpeed": None, **({"areas": areas} if areas else {})} if session else None
+        payload = json.dumps({"v": 1, "type": "mode", "robotId": ROBOT_ID, "mode": mode, "modeSeq": self.seq if seq is None else seq, "issuedAt": int(self.now * 1000), "teleop": teleop})
+        return {"payload": payload, "sig": sign_command(SECRET, payload)}
+
+    def teleop(self, session: str, seq: int, linear: float, angular: float = 0.0, ttl_ms: int = 400) -> dict:
+        """A signed manual-control command: a speed, a number that only goes up, a short life."""
+        issued = int(self.now * 1000)
+        payload = json.dumps({"v": 1, "type": "teleop", "robotId": ROBOT_ID, "session": session, "seq": seq, "linear": linear, "angular": angular, "issuedAt": issued, "expiresAt": issued + ttl_ms})
+        return {"payload": payload, "sig": sign_command(SECRET, payload)}
+
     def exchange(self, *commands: dict) -> dict:
         """One exchange with the server: take what the robot has to say, hand it commands."""
         body = self.runtime.outbox()

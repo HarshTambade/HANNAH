@@ -83,5 +83,31 @@ class Guard(unittest.TestCase):
             self.assertEqual(CommandGuard(SECRET, ROBOT_ID, path).check(*command(seq=10, mission="ms_ten"), NOW).reason, "replayed")
 
 
+class ModesAndManualControl(unittest.TestCase):
+    def test_modes_only_go_forward_and_manual_commands_expire_on_the_servers_clock(self):
+        guard = CommandGuard(SECRET, ROBOT_ID)
+
+        def signed(body):
+            text = json.dumps(body)
+            return text, sign_command(SECRET, text)
+
+        def mode(seq, name="manual"):
+            return signed({"v": 1, "type": "mode", "robotId": ROBOT_ID, "mode": name, "modeSeq": seq})
+
+        def teleop(seq, expires, session="to_1"):
+            return signed({"v": 1, "type": "teleop", "robotId": ROBOT_ID, "session": session, "seq": seq, "linear": 0.1, "angular": 0, "expiresAt": expires})
+
+        self.assertTrue(guard.check(*mode(10), NOW).ok)
+        guard.remember_mode("manual", 10)
+        self.assertTrue(guard.check(*mode(10), NOW).duplicate)
+        self.assertEqual(guard.check(*mode(9, "mission"), NOW).reason, "replayed")
+        self.assertEqual(guard.check(*signed({"v": 1, "type": "mode", "robotId": ROBOT_ID, "mode": "manual", "modeSeq": "11"}), NOW).reason, "malformed")
+        self.assertTrue(guard.check(*teleop(1, NOW + 400), NOW).ok)
+        self.assertEqual(guard.check(*teleop(1, NOW + 400), NOW).reason, "replayed")
+        self.assertEqual(guard.check(*teleop(2, NOW + 400), NOW, server_now_ms=NOW + 500).reason, "expired", "judged on the server's clock")
+        self.assertTrue(guard.check(*teleop(3, NOW + 400), NOW + 5000, server_now_ms=NOW + 100).ok, "a robot clock ahead of the server's doesn't expire a fresh command")
+        self.assertEqual(guard.check(*signed({"v": 1, "type": "teleop", "robotId": "rb_000000000000000009", "session": "to_1", "seq": 9, "expiresAt": NOW + 400}), NOW).reason, "wrong-robot")
+
+
 if __name__ == "__main__":
     unittest.main()

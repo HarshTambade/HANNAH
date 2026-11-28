@@ -16,6 +16,10 @@ A command that was already accepted is recognised as a repeat delivery, not as
 a new order. A cancellation or a pause only needs a valid signature for a
 mission this robot knows: repeating one can only stop something. A resume
 starts motion again, so it expires in seconds and its nonce works once.
+An operating mode counts only when its number is newer than the last one the
+runtime took (kept on disk). A manual-control command expires on the server's
+clock (estimated from the exchanges) and its number must go up within its
+session; the runtime's deadman then decides how long it may act.
 """
 from __future__ import annotations
 
@@ -79,6 +83,11 @@ class CommandGuard:
         self._last_seq = 0
         self._nonces: list[str] = []
         self._missions: set[str] = set()
+        # The operating mode the robot last took, and its number: kept on disk so a restart keeps it.
+        self._last_mode_seq = 0
+        self.saved_mode: str | None = None
+        # Manual control: per session, the newest command number taken (not kept: a restart ends manual control).
+        self._teleop_seq: dict[str, int] = {}
         if state_path and os.path.exists(state_path):
             try:
                 with open(state_path, "r", encoding="utf-8") as handle:
@@ -86,9 +95,13 @@ class CommandGuard:
                 self._last_seq = int(saved.get("lastSeq", 0))
                 self._nonces = [str(item) for item in saved.get("nonces", [])][-200:]
                 self._missions = set(str(item) for item in saved.get("missions", [])[-200:])
+                self._last_mode_seq = int(saved.get("modeSeq", 0))
+                self.saved_mode = saved.get("mode") if isinstance(saved.get("mode"), str) else None
             except (OSError, ValueError):
                 # An unreadable file must not reopen the replay window: refuse everything older than now.
                 self._last_seq = 2**62
+                self._last_mode_seq = 2**62
+                self.saved_mode = "safety_stop"
 
     @property
     def last_seq(self) -> int:
@@ -100,10 +113,20 @@ class CommandGuard:
         folder = os.path.dirname(self._path) or "."
         handle, temporary = tempfile.mkstemp(dir=folder, prefix=".guard-")
         with os.fdopen(handle, "w", encoding="utf-8") as out:
-            json.dump({"lastSeq": self._last_seq, "nonces": self._nonces[-200:], "missions": sorted(self._missions)[-200:]}, out)
+            json.dump({"lastSeq": self._last_seq, "nonces": self._nonces[-200:], "missions": sorted(self._missions)[-200:], "modeSeq": self._last_mode_seq, "mode": self.saved_mode}, out)
         os.replace(temporary, self._path)
 
-    def check(self, payload: Any, signature: Any, now_ms: int) -> Verdict:
+    @property
+    def mode_seq(self) -> int:
+        return self._last_mode_seq
+
+    def remember_mode(self, mode: str, seq: int) -> None:
+        """The runtime took (or refused) this mode command: never accept it or an older one again."""
+        self._last_mode_seq = max(self._last_mode_seq, int(seq))
+        self.saved_mode = mode
+        self._save()
+
+    def check(self, payload: Any, signature: Any, now_ms: int, server_now_ms: int | None = None) -> Verdict:
         if not isinstance(payload, str) or not isinstance(signature, str):
             return Verdict(False, reason="malformed")
         if not hmac.compare_digest(sign_command(self._secret, payload), signature):
@@ -116,10 +139,29 @@ class CommandGuard:
             return Verdict(False, reason="unsupported-version")
         if command.get("robotId") != self._robot_id:
             return Verdict(False, command, "wrong-robot")
+        kind = command.get("type")
+        if kind == "mode":
+            # A mode only counts when it is newer than the last one taken; the runtime then checks the transition table.
+            seq, mode = command.get("modeSeq"), command.get("mode")
+            if not isinstance(seq, int) or isinstance(seq, bool) or seq <= 0 or not isinstance(mode, str):
+                return Verdict(False, command, "malformed")
+            if seq < self._last_mode_seq:
+                return Verdict(False, command, "replayed")
+            return Verdict(True, command, duplicate=seq == self._last_mode_seq)
+        if kind == "teleop":
+            # Manual control: a short life (judged on the server's clock, as estimated from the exchanges) and a number that only goes up.
+            session, seq, expires = command.get("session"), command.get("seq"), command.get("expiresAt")
+            if not isinstance(session, str) or not session or not isinstance(seq, int) or isinstance(seq, bool) or not isinstance(expires, (int, float)):
+                return Verdict(False, command, "malformed")
+            if expires <= (server_now_ms if server_now_ms is not None else now_ms):
+                return Verdict(False, command, "expired")
+            if seq <= self._teleop_seq.get(session, 0):
+                return Verdict(False, command, "replayed")
+            self._teleop_seq = {session: seq}
+            return Verdict(True, command)
         mission_id = command.get("missionId")
         if not isinstance(mission_id, str) or not mission_id:
             return Verdict(False, command, "malformed")
-        kind = command.get("type")
         if kind in ("cancel", "pause"):
             # Both only reduce what is happening: a valid signature for a mission this robot knows is enough.
             if mission_id not in self._missions:

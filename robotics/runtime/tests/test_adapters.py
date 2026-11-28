@@ -30,9 +30,19 @@ class Contract(unittest.TestCase):
         names = {name for name, _ in inspect.getmembers(RobotAdapter, predicate=inspect.isfunction)}
         self.assertEqual(names, {"describe", "state", "start", "step", "close", "navigate", "navigation_status", "cancel_navigation", "hold", "heartbeat", "set_device", "acknowledge_fault", "move_arm", "arm_status", "grasp", "release", "capture",
                                  # Lowers the controller's limits for a mission (an owner's tighter ones); it can't raise them or move anything.
-                                 "tighten_limits"})
+                                 "tighten_limits",
+                                 # An operator's manual control only: the runtime clamps it, it lapses within the deadman time, and autonomy can't reach it.
+                                 "teleop_velocity"})
         for forbidden in ("velocity", "pwm", "torque", "effort", "wheel", "motor", "joint"):
-            self.assertFalse(any(forbidden in name for name in names), forbidden)
+            self.assertFalse(any(forbidden in name for name in names - {"teleop_velocity"}), forbidden)
+
+    def test_only_manual_control_reaches_the_velocity_interface(self):
+        # The runtime calls teleop_velocity from one place: an operator's command, under manual control.
+        source = inspect.getsource(Runtime)
+        self.assertEqual(source.count(".teleop_velocity("), 1)
+        self.assertIn("def _take_teleop", source)
+        body = inspect.getsource(Runtime._take_teleop)
+        self.assertIn(".teleop_velocity(", body)
 
     def test_both_adapters_implement_it(self):
         from hannah_robot.hal.ros2 import Ros2Adapter
