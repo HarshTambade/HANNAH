@@ -17,6 +17,7 @@ import { AlertTriangle, BatteryCharging, BatteryMedium, Bot, CheckCircle2, Circl
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { OPERATOR_EVENT, Operator, type ActionRecord } from "../services/Operator";
 import { AnalyticsPanel, ArmPanel, CameraPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
+import MaintenancePanel from "./robotops/MaintenancePanel";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -449,6 +450,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone }: { robotId: s
       )}
 
       <DiagnosticsPanel robot={robot} />
+      {robot.status === "enrolled" && <MaintenancePanel assetId={robot.id} />}
 
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Device</h3>

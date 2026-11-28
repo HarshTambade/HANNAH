@@ -371,6 +371,25 @@ const tools: HANNAHTool[] = [
     { type: "object", properties: { repo: repoProp, title: { type: "string" }, body: { type: "string" }, labels: { type: "array", items: { type: "string" } } }, required: ["repo", "title"] }, (args) => ({ repo: str(args.repo), title: str(args.title), body: str(args.body), labels: Array.isArray(args.labels) ? args.labels : undefined }), true),
   engineTool("code_comment", "code.comment", `Comment on an issue or pull request in a connected GitHub repository; review: true posts a comment-only review.${ASKS}`,
     { type: "object", properties: { repo: repoProp, number: { type: "number" }, body: { type: "string" }, review: { type: "boolean" } }, required: ["repo", "number", "body"] }, (args) => ({ repo: str(args.repo), number: args.number, body: str(args.body), review: args.review === true }), true),
+  // Predictive maintenance and self-diagnostics (server/maintenance, server/diagnostics).
+  engineTool("maintenance_report", "maintenance.report", "Answer “is anything wearing out?” from the measurements robots and devices reported (motor temperature and current, battery voltage, controller faults, encoder disagreement, vibration, link losses, mission failures). Each finding is labelled: a measured anomaly (unusual, cause unknown), a suspected cause (two anomalies a fixed rule links; unconfirmed) or a confirmed fault (a controller's fault code or a person's confirmation). Say the label of each, give its evidence and what to inspect, and say when it is from a simulation. Never give a failure date or say a part will fail; there is no validated failure model. If nothing has been measured, say so instead of saying everything is fine.",
+    { type: "object", properties: { asset: { type: "string", description: "Optional: one robot or device, by name or id." } } }, (args) => ({ asset: str(args.asset) })),
+  engineTool("system_diagnostics", "diagnostics.report", "Answer “what's wrong with the system?”: runs HANNAH's self-diagnostics over the server (memory, event loop, disk, database), AI (model providers from real calls, local inference, memory store, queues) and the user's robots, Robot OS services, hubs and devices. Report each problem with what was measured, possible causes as possibilities, and the recovery that fits with its policy. Automatic low-risk recoveries may already have run; report whether they were verified. A check that says unknown was not measured: never call it healthy. Prohibited recoveries (emergency stops, motor faults, power, safety settings) are done by a person at the hardware: say so.",
+    { type: "object", properties: {} }, () => ({})),
+  {
+    name: "diagnostics_recover",
+    description: "Ask for a recovery diagnostics suggested (for example restarting a non-critical Robot OS service or reloading a validated configuration). Approval-required recoveries wait for the user to approve in Actions; administrator-only and prohibited ones are refused and you report the reason. Never ask for emergency stop, motor fault, power or safety-setting changes: they are prohibited.",
+    inputSchema: { type: "object", properties: { incidentId: { type: "string", description: "The incident id from system_diagnostics." }, action: { type: "string", description: "The recovery action id from system_diagnostics." }, robot: { type: "string" }, service: { type: "string" }, device: { type: "string" } }, required: ["action"] }, asksUser: true,
+    execute: async (args) => {
+      try {
+        const { recovery } = await accountRequest<{ recovery: { status: string; approval?: { id: string; status: string }; verification?: { evidence?: string } | null } }>("/api/diagnostics/recover", { method: "POST", body: JSON.stringify({ incidentId: str(args.incidentId) || undefined, action: str(args.action), params: compact({ robot: str(args.robot), service: str(args.service), device: str(args.device) }) }) });
+        if (recovery.status === "waiting-approval") return { status: recovery.status, approvalId: recovery.approval?.id, note: "It has NOT happened. It is waiting for the user's approval in Actions. Tell them that." };
+        return { status: recovery.status, evidence: recovery.verification?.evidence || null, note: recovery.status === "verified" ? "Done and verified." : "Not verified: say exactly this status." };
+      } catch (error) {
+        return { status: "refused", reason: error instanceof Error ? error.message : String(error), note: "It did NOT happen. Tell the user this reason." };
+      }
+    },
+  },
 ];
 
 const CALENDAR = new Set(["calendar_find_free_time", "calendar_schedule", "calendar_update_event", "calendar_delete_event"]);
