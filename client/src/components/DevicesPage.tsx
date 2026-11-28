@@ -14,14 +14,14 @@
  *   - that HANNAH is not a safety system.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, CircleSlash, Clock, HelpCircle, Loader2, PauseCircle, PlayCircle, Plug, Plus, Router, Trash2, XCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, CircleSlash, Clock, Fan, Gauge, HelpCircle, Lightbulb, Loader2, PauseCircle, PlayCircle, Plug, Plus, Power, QrCode, Router, ShieldAlert, Thermometer, Trash2, Workflow, XCircle } from "lucide-react";
 import { ACCOUNT_EVENT, isAccountSession } from "../services/api";
 import { Operator, type ActionRecord } from "../services/Operator";
 import { Devices, type Automation, type AutomationInput, type Check, type Device, type DeviceEvent, type HardwareInventory, type Hub, type HubEnrollment, type Overview, type PointInfo, type Profile, type RulePart, type UpdateRollout } from "../services/Devices";
 import DeviceSetup, { LevelChip } from "./DeviceSetup";
 import { QrScanner } from "./QrScanner";
 
-const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
+const card = "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
 const primary = "inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50";
 const input = "w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900";
@@ -115,6 +115,17 @@ function PointRow({ device, point, ask, busy }: { device: Device; point: PointIn
   );
 }
 
+/** An icon for the kind of device, from its profile's category. */
+function deviceIcon(device: Device) {
+  const kind = `${device.profile.category} ${device.profile.categoryLabel}`.toLowerCase();
+  if (/light|lamp|bulb/.test(kind)) return Lightbulb;
+  if (/fan/.test(kind)) return Fan;
+  if (/sensor|thermo|temperature|climate/.test(kind)) return Thermometer;
+  if (/meter|energy|power-meter/.test(kind)) return Gauge;
+  if (/switch|plug|socket|relay/.test(kind)) return Power;
+  return Plug;
+}
+
 function DeviceCard({ device, onChanged, onRecord }: { device: Device; onChanged: () => void; onRecord: (record: ActionRecord) => void }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -125,12 +136,16 @@ function DeviceCard({ device, onChanged, onRecord }: { device: Device; onChanged
   const ask = (point: string, value: boolean | number) => void act("Asking…", async () => onRecord((await Devices.set(device.id, point, value)).record));
   const state = DEVICE_STATE[device.connection];
   const setup = device.status === "added" || device.status === "verified" || device.status === "failed";
+  const Icon = deviceIcon(device);
   return (
-    <li className={card} data-testid="device-card" data-device={device.name}>
+    <li className={`${card} flex flex-col`} data-testid="device-card" data-device={device.name}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="text-base font-semibold text-slate-900">{device.name}{device.location && <span className="ml-2 text-sm font-normal text-slate-600">{device.location}</span>}</h3>
-          <p className="text-sm text-slate-700">{device.profile.manufacturer} {device.profile.model} · {device.profile.categoryLabel} · {device.profile.protocol.label} · through {device.hub.name}</p>
+        <div className="flex min-w-0 items-start gap-3">
+          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${device.connection === "online" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}><Icon className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-slate-900">{device.name}{device.location && <span className="ml-2 text-sm font-normal text-slate-600">{device.location}</span>}</h3>
+            <p className="text-sm text-slate-600">{device.profile.manufacturer} {device.profile.model} · {device.profile.categoryLabel} · {device.profile.protocol.label} · through {device.hub.name}</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {device.profile.simulated && <span className={`${chip} border-violet-300 bg-violet-100 text-violet-900`}>SIMULATED DEVICE</span>}
@@ -286,11 +301,11 @@ function HubCard({ hub, enrollment, onChanged, onEnrollment }: { hub: Hub; enrol
     <li className="rounded-xl border border-slate-200 p-3" data-testid="hub-card">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-2 font-medium text-slate-900"><Router className="h-4 w-4 text-slate-500" aria-hidden="true" />{hub.name} <span className={`${chip} ${state.tone}`} data-testid="hub-connection">{state.label}</span></p>
-        <div className="flex gap-2">
+        <div className="flex w-full flex-wrap gap-1.5">
           {hub.status !== "enrolled" && <button type="button" className={button} onClick={() => void act(async () => onEnrollment(await Devices.newHubCode(hub.id)))}>New code</button>}
-          <button type="button" className={button} onClick={() => setLookOpen((value) => !value)} data-testid="look-broker">Look at a broker's topics</button>
-          <button type="button" className={button} onClick={() => setMdnsOpen((value) => !value)} data-testid="look-mdns">Look on the network (mDNS)</button>
-          <button type="button" className={button} onClick={() => setUsbOpen((value) => !value)} data-testid="look-usb">List USB devices</button>
+          <button type="button" className={button} onClick={() => setLookOpen((value) => !value)} data-testid="look-broker">Broker topics</button>
+          <button type="button" className={button} onClick={() => setMdnsOpen((value) => !value)} data-testid="look-mdns" title="Look on the network (mDNS)">Network (mDNS)</button>
+          <button type="button" className={button} onClick={() => setUsbOpen((value) => !value)} data-testid="look-usb">USB devices</button>
           <button type="button" className={button} onClick={() => { if (window.confirm(`Remove the hub ${hub.name} and every device behind it?`)) void act(() => Devices.removeHub(hub.id)); }}><Trash2 className="h-4 w-4" aria-hidden="true" />Remove</button>
         </div>
       </div>
@@ -438,14 +453,20 @@ export default function DevicesPage() {
   const rules = overview?.rules || [];
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold text-slate-900"><Plug className="h-6 w-6" aria-hidden="true" />Devices</h1>
-        <p className="mt-1 text-slate-700">Lights, plugs, fans, sensors and meters, reached through a hub on your own network. Add a device, check it, choose what HANNAH may change, then ask in plain words or set up an automation.</p>
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
+          <h1 className="flex items-center gap-2.5 text-2xl font-semibold tracking-tight text-slate-900"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white"><Plug className="h-5 w-5" aria-hidden="true" /></span>Devices</h1>
+          <p className="mt-2 text-[15px] leading-6 text-slate-600">Lights, plugs, fans, sensors and meters, reached through a hub on your own network. Add a device, check it, choose what HANNAH may change, then ask in plain words or set up an automation.</p>
+        </div>
+        {signedIn && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={button} data-testid="scan-qr" onClick={() => setScanOpen(true)}><QrCode className="h-4 w-4" aria-hidden="true" />Scan a QR code</button>
+          </div>
+        )}
       </header>
-      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="note">HANNAH is not a safety system. A lock, a heater or a machine keeps its own protections; an automation here is a convenience, never an interlock. Nothing on this screen is safety-certified.</p>
+      <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-sm text-amber-900" role="note"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />HANNAH is not a safety system. A lock, a heater or a machine keeps its own protections; an automation here is a convenience, never an interlock. Nothing on this screen is safety-certified.</p>
       {!signedIn && <Notice>Sign in to use devices. A hub and its devices belong to an account.</Notice>}
-      {signedIn && <div className="flex justify-end"><button type="button" className={button} data-testid="scan-qr" onClick={() => setScanOpen(true)}>Scan a QR code</button></div>}
       {scanned && <section className={card} aria-label="QR code lookup" data-testid="qr-lookup">
         <p className="text-sm text-slate-700">Code checked against installed HANNAH profiles{scanned.length > 100 ? `: ${scanned.slice(0, 100)}…` : `: ${scanned}`}</p>
         {scanBusy && <p className="mt-2 text-sm text-slate-700">Looking for a matching profile…</p>}
@@ -458,42 +479,33 @@ export default function DevicesPage() {
       {error && <Notice tone="rose">{error}</Notice>}
       {signedIn && overview && (
         <>
-          <section className={card} aria-label="Overview" data-testid="devices-overview">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-800">
-                <div><dt className={heading}>Hubs</dt><dd><span className="text-lg font-semibold text-slate-900">{counts?.hubsOnline ?? 0}</span> of {counts?.hubs ?? 0} connected</dd></div>
-                <div><dt className={heading}>Devices</dt><dd><span className="text-lg font-semibold text-slate-900">{counts?.reporting ?? 0}</span> reporting of {counts?.active ?? 0} switched on</dd></div>
-                <div><dt className={heading}>Automations</dt><dd><span className="text-lg font-semibold text-slate-900">{counts?.rulesOn ?? 0}</span> on{overview.rulesSuspended ? ", all paused" : ""}</dd></div>
-              </dl>
-              {rules.length > 0 && (overview.rulesSuspended
-                ? <button type="button" className={primary} onClick={() => void pause(false)}><PlayCircle className="h-4 w-4" aria-hidden="true" />Resume automations</button>
-                : <button type="button" className={button} onClick={() => void pause(true)}><PauseCircle className="h-4 w-4" aria-hidden="true" />Pause every automation</button>)}
-            </div>
-            {overview.rulesSuspended && <p className="mt-2 text-sm text-amber-900">Every automation is paused. Devices stay as they are until you resume.</p>}
-          </section>
-
-          <section className={card} aria-labelledby="inventory-heading" data-testid="hardware-inventory">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 id="inventory-heading" className="text-lg font-semibold text-slate-900">All connected hardware</h2>
-                <p className="text-sm text-slate-700">Robots, edge hubs and devices in this account. Status reflects the latest report HANNAH received.</p>
+          <section aria-label="Overview" data-testid="devices-overview">
+            <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className={card}><dt className={`${heading} flex items-center gap-1.5`}><Router className="h-3.5 w-3.5" aria-hidden="true" />Hubs</dt><dd className="mt-1 text-sm text-slate-700"><span className="text-2xl font-semibold text-slate-900">{counts?.hubsOnline ?? 0}</span> of {counts?.hubs ?? 0} connected</dd></div>
+              <div className={card}><dt className={`${heading} flex items-center gap-1.5`}><Plug className="h-3.5 w-3.5" aria-hidden="true" />Devices</dt><dd className="mt-1 text-sm text-slate-700"><span className="text-2xl font-semibold text-slate-900">{counts?.reporting ?? 0}</span> reporting of {counts?.active ?? 0} switched on</dd></div>
+              <div className={card}><dt className={`${heading} flex items-center gap-1.5`}><Workflow className="h-3.5 w-3.5" aria-hidden="true" />Automations</dt><dd className="mt-1 text-sm text-slate-700"><span className="text-2xl font-semibold text-slate-900">{counts?.rulesOn ?? 0}</span> on{overview.rulesSuspended ? ", all paused" : ""}</dd></div>
+              <div className={card}><dt className={`${heading} flex items-center gap-1.5`}><Activity className="h-3.5 w-3.5" aria-hidden="true" />All hardware</dt><dd className="mt-1 text-sm text-slate-700"><span className="text-2xl font-semibold text-slate-900">{inventory?.counts.online ?? 0}</span> of {inventory?.counts.total ?? 0} reporting</dd></div>
+            </dl>
+            {rules.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                {overview.rulesSuspended ? <p className="text-sm text-amber-900">Every automation is paused. Devices stay as they are until you resume.</p> : <span />}
+                {overview.rulesSuspended
+                  ? <button type="button" className={primary} onClick={() => void pause(false)}><PlayCircle className="h-4 w-4" aria-hidden="true" />Resume automations</button>
+                  : <button type="button" className={button} onClick={() => void pause(true)}><PauseCircle className="h-4 w-4" aria-hidden="true" />Pause every automation</button>}
               </div>
-              {inventory && <p className="text-sm text-slate-700"><strong className="text-slate-900">{inventory.counts.online}</strong> of {inventory.counts.total} reporting</p>}
-            </div>
-            {!inventory?.items.length ? <p className="mt-3 text-sm text-slate-700">No hardware has been registered yet.</p> : (
-              <ul className="mt-3 divide-y divide-slate-100" data-testid="inventory-items">
-                {inventory.items.map((item) => (
-                  <li key={`${item.kind}:${item.id}`} className="flex flex-wrap items-center justify-between gap-2 py-2" data-testid="inventory-item" data-kind={item.kind}>
-                    <div>
-                      <p className="font-medium text-slate-900">{item.name} <span className="ml-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium capitalize text-slate-700">{item.kind}</span>{item.simulated && <span className="ml-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-900">SIMULATED</span>}</p>
-                      <p className="text-sm text-slate-600">{[item.manufacturer, item.model, item.category].filter(Boolean).join(" · ")}{item.compatibility ? ` · ${item.compatibility.replaceAll("-", " ")}` : ""}</p>
-                    </div>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${item.connection === "online" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>{item.connection.replaceAll("-", " ")}</span>
-                  </li>
-                ))}
-              </ul>
             )}
           </section>
+
+          {hubs.length === 0 && (
+            <section className={`${card} bg-gradient-to-br from-white to-sky-50/60`} aria-label="Getting started">
+              <h2 className="text-lg font-semibold text-slate-900">Three steps to your first device</h2>
+              <ol className="mt-3 grid gap-3 sm:grid-cols-3">
+                {[["Add a hub", "Name it below, then run the command it gives you on a computer on the same network as your devices."], ["Add a device", "Pick it from the list, read its manual, or describe it. The hub checks it can reach it."], ["Ask HANNAH", "\u201CTurn on the fan\u201D, \u201CWhat\u2019s the temperature?\u201D, or set up an automation the hub runs by itself."]].map(([title, text], index) => (
+                  <li key={title} className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-sm font-semibold text-slate-900"><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs text-white">{index + 1}</span>{title}</p><p className="mt-1.5 text-sm text-slate-600">{text}</p></li>
+                ))}
+              </ol>
+            </section>
+          )}
 
           {(waiting.length > 0 || outcome) && (
             <section className="space-y-2" aria-label="Approvals and results">
@@ -502,108 +514,137 @@ export default function DevicesPage() {
             </section>
           )}
 
-          <section className={card} aria-labelledby="hubs-heading">
-            <h2 id="hubs-heading" className="text-lg font-semibold text-slate-900">Hubs</h2>
-            <p className="text-sm text-slate-700">A hub is a computer on the same network as your devices running HANNAH Edge. It speaks to the devices and opens the connection to HANNAH; nothing connects in to it.</p>
-            {!overview.canEnroll && <div className="mt-2"><Notice tone="amber">This server can't enroll hubs yet: it has no key vault to keep a hub's key in.</Notice></div>}
-            <ul className="mt-3 space-y-2">{hubs.map((hub) => <HubCard key={hub.id} hub={hub} enrollment={enrollment?.hub.id === hub.id ? enrollment : null} onChanged={() => void load()} onEnrollment={setEnrollment} />)}</ul>
-            <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void addHub(); }}>
-              <label className="text-sm text-slate-800">Name for a new hub<input className={input} placeholder="Home hub" value={hubName} onChange={(event) => setHubName(event.target.value)} /></label>
-              <button type="submit" className={primary} disabled={!hubName.trim() || !overview.canEnroll}><Plus className="h-4 w-4" aria-hidden="true" />Add a hub</button>
-            </form>
-          </section>
-
-          <section className="space-y-3" aria-labelledby="devices-heading">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 id="devices-heading" className="text-lg font-semibold text-slate-900">Your devices</h2>
-              {!adding && <button type="button" className={primary} disabled={!hubs.some((hub) => hub.status === "enrolled")} onClick={() => setAdding(true)}><Plus className="h-4 w-4" aria-hidden="true" />Add a device</button>}
-            </div>
-            {adding && <div className={card}><DeviceSetup hubs={hubs} initialProfileId={scanProfile?.id} onCancel={() => setAdding(false)} onAdded={() => { setAdding(false); void load(); }} /></div>}
-            {devices.length === 0 && !adding && <p className="text-sm text-slate-700">No devices yet.{hubs.some((hub) => hub.status === "enrolled") ? " Add one: pick it from the list, use its manual, or describe it yourself." : " Add a hub first."}</p>}
-            <ul className="space-y-3">{devices.map((device) => <DeviceCard key={device.id} device={device} onChanged={() => void load()} onRecord={record} />)}</ul>
-          </section>
-
-          <section className={card} aria-labelledby="automations-heading">
-            <h2 id="automations-heading" className="text-lg font-semibold text-slate-900">Automations</h2>
-            <ul className="mt-2 space-y-2">
-              {rules.map((rule) => (
-                <li key={rule.id} className="rounded-xl border border-slate-200 p-3" data-testid="automation-card">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium text-slate-900">{rule.name} <span className={`${chip} ${rule.enabled ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-100 text-slate-700"}`} data-testid="automation-status">{!rule.enabled ? "Off" : rule.status === "suspended" ? "Paused" : rule.status === "active" ? "Acting now" : rule.status === "waiting" ? "Waiting" : rule.status === "not-reported" ? "Being sent to the hub" : "Watching"}</span></p>
-                    <div className="flex gap-2">
-                      <button type="button" className={button} onClick={() => void Devices.setAutomation(rule.id, !rule.enabled).then((answer) => record(answer.record)).catch((reason) => setError(message(reason)))}>{rule.enabled ? <><CircleSlash className="h-4 w-4" aria-hidden="true" />Switch off</> : "Switch on"}</button>
-                      <button type="button" className={button} onClick={() => void Devices.removeAutomation(rule.id).then((answer) => record(answer.record)).catch((reason) => setError(message(reason)))}><Trash2 className="h-4 w-4" aria-hidden="true" />Remove</button>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-800">{automationText(rule)}</p>
-                  <p className="text-sm text-slate-600">{rule.fires ? `Acted ${rule.fires} time${rule.fires === 1 ? "" : "s"}, last at ${clock(rule.lastFiredAt)}.` : "Has not acted yet."} {rule.detail} {rule.lastError && <span className="text-rose-800">{rule.lastError}</span>}</p>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3"><AutomationBuilder devices={devices} onRecord={record} /></div>
-          </section>
-
-          {protocols && (
-            <details className={card}>
-              <summary className="cursor-pointer text-lg font-semibold text-slate-900">What a hub can speak today, and what it can't</summary>
-              <p className="mt-2 text-sm text-slate-800">Available: {protocols.available.map((item) => item.label).join(", ")}. Each was tested against HANNAH's own test servers, not against a physical device.</p>
-              <ul className="mt-2 space-y-1 text-sm text-slate-700" data-testid="not-built">{protocols.notBuilt.map((item) => <li key={item.id}><span className="font-medium text-slate-900">{item.id}:</span> {item.reason}</li>)}</ul>
-            </details>
-          )}
-
-          <details className={card}>
-            <summary className="cursor-pointer text-lg font-semibold text-slate-900">Publisher keys and signed profiles</summary>
-            <div className="mt-3 space-y-3">
-              <p className="text-sm text-slate-700">Trust a publisher's public key to install profiles they signed. A profile can't be installed without a trusted, unrevoked key.</p>
-              {pubError && <Notice tone="rose">{pubError}</Notice>}
-              <ul className="space-y-1 text-sm text-slate-800" data-testid="publisher-list">{publishers.map((key) => <li key={key.keyId} className="flex items-center justify-between gap-2"><span>{key.owner} <span className="font-mono text-xs text-slate-500">{key.keyId}</span>{key.revokedAt ? " (revoked)" : ""}</span>{!key.revokedAt && <button type="button" className={button} onClick={() => void Devices.revokePublisher(key.keyId).then(() => loadPublishers()).catch((reason) => setPubError(message(reason)))}>Revoke</button>}</li>)}</ul>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="block text-sm text-slate-800">Key id<input className={input} value={pubKeyId} onChange={(event) => setPubKeyId(event.target.value)} /></label>
-                <label className="block text-sm text-slate-800">Owner<input className={input} value={pubOwner} onChange={(event) => setPubOwner(event.target.value)} /></label>
-                <label className="block text-sm text-slate-800 sm:col-span-2">Public key (PEM)<textarea className={input} rows={3} value={pubKey} onChange={(event) => setPubKey(event.target.value)} /></label>
-              </div>
-              <button type="button" className={primary} disabled={pubBusy || !pubKeyId.trim() || !pubKey.trim()} onClick={() => void (async () => { setPubBusy(true); setPubError(""); try { await Devices.addPublisher(pubKeyId.trim(), pubOwner.trim() || pubKeyId.trim(), pubKey.trim()); setPubKeyId(""); setPubOwner(""); setPubKey(""); await loadPublishers(); } catch (reason) { setPubError(message(reason)); } finally { setPubBusy(false); } })()}>Trust this key</button>
-              <label className="block text-sm text-slate-800">Install a signed profile (paste its JSON)<textarea className={input} rows={4} value={installJson} onChange={(event) => setInstallJson(event.target.value)} data-testid="install-profile-json" /></label>
-              <button type="button" className={button} disabled={pubBusy || !installJson.trim()} onClick={() => void (async () => { setPubBusy(true); setPubError(""); try { const profile = JSON.parse(installJson); const answer = await Devices.installProfile(profile); setInstallJson(""); await load(); alert(`Installed, signed by ${answer.signedBy}.`); } catch (reason) { setPubError(message(reason)); } finally { setPubBusy(false); } })()}>Install it</button>
-            </div>
-          </details>
-          <details className={card}>
-            <summary className="cursor-pointer text-lg font-semibold text-slate-900" data-testid="hub-updates-toggle">Hub updates</summary>
-            <div className="mt-3 space-y-3">
-              <p className="text-sm text-slate-700">Announce a signed update to a hub. The hub checks its size and SHA-256, unpacks it, runs its health check, and switches over with a way back.</p>
-              {updateError && <Notice tone="rose">{updateError}</Notice>}
-              {updateResult && <Notice tone="emerald">{updateResult}</Notice>}
-              <label className="block text-sm text-slate-800">Hub<select className={input} data-testid="hub-update-hub" value={updateHubId} onChange={(event) => setUpdateHubId(event.target.value)}><option value="">choose</option>{hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name} ({hub.software || "?"})</option>)}</select></label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="block text-sm text-slate-800">Version<input className={input} placeholder="1.9.0" data-testid="hub-update-version" value={updateVersion} onChange={(event) => setUpdateVersion(event.target.value)} /></label>
-                <label className="block text-sm text-slate-800">Size (bytes)<input className={input} inputMode="numeric" data-testid="hub-update-size" value={updateSize} onChange={(event) => setUpdateSize(event.target.value)} /></label>
-                <label className="block text-sm text-slate-800 sm:col-span-2">SHA-256<input className={input} data-testid="hub-update-sha" value={updateSha} onChange={(event) => setUpdateSha(event.target.value)} /></label>
-                <label className="block text-sm text-slate-800 sm:col-span-2">Bundle URL<input className={input} data-testid="hub-update-url" value={updateUrl} onChange={(event) => setUpdateUrl(event.target.value)} /></label>
-              </div>
-              <button type="button" className={primary} data-testid="announce-hub-update" disabled={updateBusy || !updateHubId || !updateVersion.trim() || !updateUrl.trim()} onClick={() => void (async () => { setUpdateBusy(true); setUpdateError(""); setUpdateResult(""); try { await Devices.updateHub(updateHubId, updateVersion.trim(), Number(updateSize) || 0, updateSha.trim(), updateUrl.trim()); setUpdateResult("Update announced. The hub will fetch and switch over."); } catch (reason) { setUpdateError(message(reason)); } finally { setUpdateBusy(false); } })()}>Announce update</button>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <label className="block text-sm text-slate-800">Hubs per cohort<input className={input} type="number" min="1" max="10" inputMode="numeric" data-testid="hub-update-cohort-size" value={rolloutCohortSize} onChange={(event) => setRolloutCohortSize(event.target.value)} /></label>
-                <button type="button" className={primary} data-testid="stage-hub-rollout" disabled={updateBusy || !updateVersion.trim() || !updateUrl.trim()} onClick={() => void (async () => { setUpdateBusy(true); setUpdateError(""); setUpdateResult(""); try { const answer = await Devices.createRollout(updateVersion.trim(), Number(updateSize) || 0, updateSha.trim(), updateUrl.trim(), Number(rolloutCohortSize) || 1); setRollouts((current) => [answer.rollout, ...current.filter((item) => item.id !== answer.rollout.id)]); setUpdateResult(`Staged rollout started with a canary cohort of ${Math.min(answer.rollout.cohortSize, answer.rollout.targets.length)} hub${answer.rollout.targets.length === 1 ? "" : "s"}.${answer.excluded.length ? ` ${answer.excluded.length} incompatible or offline hub${answer.excluded.length === 1 ? " was" : "s were"} left out.` : ""}`); } catch (reason) { setUpdateError(message(reason)); } finally { setUpdateBusy(false); } })()}>Stage rollout</button>
-              </div>
-              {rollouts.length > 0 && <ul className="space-y-2" data-testid="hub-rollouts">{rollouts.map((rollout) => <li key={rollout.id} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800">
-                <div className="flex flex-wrap items-center justify-between gap-2"><strong>{rollout.kind === "rollback" ? `Rollback to ${rollout.rollbackTo}` : `Version ${rollout.version}`}</strong><span className="capitalize">{rollout.status.replaceAll("-", " ")}</span></div>
-                {rollout.detail && <p className="mt-1 text-amber-900">{rollout.detail}</p>}
-                <p className="mt-1 text-slate-600">Canary and cohort size: {rollout.cohortSize}. Updates advance after every hub in a cohort confirms healthy.</p>
-                <ul className="mt-2 space-y-1">{rollout.targets.map((target) => <li key={target.hubId}>{target.hubName}: {target.status.replaceAll("-", " ")}{target.detail ? ` — ${target.detail}` : ""}</li>)}</ul>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {rollout.status === "running" && <button type="button" className={button} onClick={() => void Devices.pauseRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => items.map((item) => item.id === changed.id ? changed : item))).catch((reason) => setUpdateError(message(reason)))}>Pause rollout</button>}
-                  {["paused", "paused-failure"].includes(rollout.status) && <button type="button" className={button} onClick={() => void Devices.resumeRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => items.map((item) => item.id === changed.id ? changed : item))).catch((reason) => setUpdateError(message(reason)))}>Resume rollout</button>}
-                  {rollout.kind === "update" && rollout.status !== "running" && <button type="button" className={button} onClick={() => void Devices.rollbackRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => [changed, ...items])).catch((reason) => setUpdateError(message(reason)))}>Roll back confirmed hubs</button>}
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+            <div className="min-w-0 space-y-5">
+              <section className="space-y-3" aria-labelledby="devices-heading">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 id="devices-heading" className="text-lg font-semibold text-slate-900">Your devices</h2>
+                  {!adding && <button type="button" className={primary} disabled={!hubs.some((hub) => hub.status === "enrolled")} onClick={() => setAdding(true)}><Plus className="h-4 w-4" aria-hidden="true" />Add a device</button>}
                 </div>
-              </li>)}</ul>}
+                {adding && <div className={card}><DeviceSetup hubs={hubs} initialProfileId={scanProfile?.id} onCancel={() => setAdding(false)} onAdded={() => { setAdding(false); void load(); }} /></div>}
+                {devices.length === 0 && !adding && <p className="text-sm text-slate-700">No devices yet.{hubs.some((hub) => hub.status === "enrolled") ? " Add one: pick it from the list, use its manual, or describe it yourself." : " Add a hub first."}</p>}
+                <ul className="grid gap-3 xl:grid-cols-2">{devices.map((device) => <DeviceCard key={device.id} device={device} onChanged={() => void load()} onRecord={record} />)}</ul>
+              </section>
+
+              <section className={card} aria-labelledby="automations-heading">
+                <h2 id="automations-heading" className="text-lg font-semibold text-slate-900">Automations</h2>
+                <ul className="mt-2 space-y-2">
+                  {rules.map((rule) => (
+                    <li key={rule.id} className="rounded-xl border border-slate-200 p-3" data-testid="automation-card">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-medium text-slate-900">{rule.name} <span className={`${chip} ${rule.enabled ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-100 text-slate-700"}`} data-testid="automation-status">{!rule.enabled ? "Off" : rule.status === "suspended" ? "Paused" : rule.status === "active" ? "Acting now" : rule.status === "waiting" ? "Waiting" : rule.status === "not-reported" ? "Being sent to the hub" : "Watching"}</span></p>
+                        <div className="flex gap-2">
+                          <button type="button" className={button} onClick={() => void Devices.setAutomation(rule.id, !rule.enabled).then((answer) => record(answer.record)).catch((reason) => setError(message(reason)))}>{rule.enabled ? <><CircleSlash className="h-4 w-4" aria-hidden="true" />Switch off</> : "Switch on"}</button>
+                          <button type="button" className={button} onClick={() => void Devices.removeAutomation(rule.id).then((answer) => record(answer.record)).catch((reason) => setError(message(reason)))}><Trash2 className="h-4 w-4" aria-hidden="true" />Remove</button>
+                        </div>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-800">{automationText(rule)}</p>
+                      <p className="text-sm text-slate-600">{rule.fires ? `Acted ${rule.fires} time${rule.fires === 1 ? "" : "s"}, last at ${clock(rule.lastFiredAt)}.` : "Has not acted yet."} {rule.detail} {rule.lastError && <span className="text-rose-800">{rule.lastError}</span>}</p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3"><AutomationBuilder devices={devices} onRecord={record} /></div>
+              </section>
+
             </div>
-          </details>
-          {events.length > 0 && (
-            <section className={card} aria-labelledby="activity-heading">
-              <h2 id="activity-heading" className="text-lg font-semibold text-slate-900">Activity</h2>
-              <ul className="mt-2 space-y-0.5 text-sm" data-testid="device-events">{events.slice(0, 14).map((event) => <li key={event.id} className={event.severity === "error" ? "text-rose-800" : event.severity === "warning" ? "text-amber-900" : "text-slate-700"}><span className="text-slate-500">{clock(event.at)}</span> {event.message}</li>)}</ul>
-            </section>
-          )}
+            <aside className="min-w-0 space-y-4" aria-label="Hubs and activity">
+              <section className={card} aria-labelledby="hubs-heading">
+                <h2 id="hubs-heading" className="text-lg font-semibold text-slate-900">Hubs</h2>
+                <p className="text-sm text-slate-700">A hub is a computer on the same network as your devices running HANNAH Edge. It speaks to the devices and opens the connection to HANNAH; nothing connects in to it.</p>
+                {!overview.canEnroll && <div className="mt-2"><Notice tone="amber">This server can't enroll hubs yet: it has no key vault to keep a hub's key in.</Notice></div>}
+                <ul className="mt-3 space-y-2">{hubs.map((hub) => <HubCard key={hub.id} hub={hub} enrollment={enrollment?.hub.id === hub.id ? enrollment : null} onChanged={() => void load()} onEnrollment={setEnrollment} />)}</ul>
+                <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); void addHub(); }}>
+                  <label className="text-sm text-slate-800">Name for a new hub<input className={input} placeholder="Home hub" value={hubName} onChange={(event) => setHubName(event.target.value)} /></label>
+                  <button type="submit" className={primary} disabled={!hubName.trim() || !overview.canEnroll}><Plus className="h-4 w-4" aria-hidden="true" />Add a hub</button>
+                </form>
+              </section>
+
+              {protocols && (
+                <details className={card}>
+                  <summary className="cursor-pointer text-base font-semibold text-slate-900">What a hub can speak today, and what it can't</summary>
+                  <p className="mt-2 text-sm text-slate-800">Available: {protocols.available.map((item) => item.label).join(", ")}. Each was tested against HANNAH's own test servers, not against a physical device.</p>
+                  <ul className="mt-2 space-y-1 text-sm text-slate-700" data-testid="not-built">{protocols.notBuilt.map((item) => <li key={item.id}><span className="font-medium text-slate-900">{item.id}:</span> {item.reason}</li>)}</ul>
+                </details>
+              )}
+
+              <details className={card}>
+                <summary className="cursor-pointer text-base font-semibold text-slate-900">Publisher keys and signed profiles</summary>
+                <div className="mt-3 space-y-3">
+                  <p className="text-sm text-slate-700">Trust a publisher's public key to install profiles they signed. A profile can't be installed without a trusted, unrevoked key.</p>
+                  {pubError && <Notice tone="rose">{pubError}</Notice>}
+                  <ul className="space-y-1 text-sm text-slate-800" data-testid="publisher-list">{publishers.map((key) => <li key={key.keyId} className="flex items-center justify-between gap-2"><span>{key.owner} <span className="font-mono text-xs text-slate-500">{key.keyId}</span>{key.revokedAt ? " (revoked)" : ""}</span>{!key.revokedAt && <button type="button" className={button} onClick={() => void Devices.revokePublisher(key.keyId).then(() => loadPublishers()).catch((reason) => setPubError(message(reason)))}>Revoke</button>}</li>)}</ul>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="block text-sm text-slate-800">Key id<input className={input} value={pubKeyId} onChange={(event) => setPubKeyId(event.target.value)} /></label>
+                    <label className="block text-sm text-slate-800">Owner<input className={input} value={pubOwner} onChange={(event) => setPubOwner(event.target.value)} /></label>
+                    <label className="block text-sm text-slate-800 sm:col-span-2">Public key (PEM)<textarea className={input} rows={3} value={pubKey} onChange={(event) => setPubKey(event.target.value)} /></label>
+                  </div>
+                  <button type="button" className={primary} disabled={pubBusy || !pubKeyId.trim() || !pubKey.trim()} onClick={() => void (async () => { setPubBusy(true); setPubError(""); try { await Devices.addPublisher(pubKeyId.trim(), pubOwner.trim() || pubKeyId.trim(), pubKey.trim()); setPubKeyId(""); setPubOwner(""); setPubKey(""); await loadPublishers(); } catch (reason) { setPubError(message(reason)); } finally { setPubBusy(false); } })()}>Trust this key</button>
+                  <label className="block text-sm text-slate-800">Install a signed profile (paste its JSON)<textarea className={input} rows={4} value={installJson} onChange={(event) => setInstallJson(event.target.value)} data-testid="install-profile-json" /></label>
+                  <button type="button" className={button} disabled={pubBusy || !installJson.trim()} onClick={() => void (async () => { setPubBusy(true); setPubError(""); try { const profile = JSON.parse(installJson); const answer = await Devices.installProfile(profile); setInstallJson(""); await load(); alert(`Installed, signed by ${answer.signedBy}.`); } catch (reason) { setPubError(message(reason)); } finally { setPubBusy(false); } })()}>Install it</button>
+                </div>
+              </details>
+              <details className={card}>
+                <summary className="cursor-pointer text-base font-semibold text-slate-900" data-testid="hub-updates-toggle">Hub updates</summary>
+                <div className="mt-3 space-y-3">
+                  <p className="text-sm text-slate-700">Announce a signed update to a hub. The hub checks its size and SHA-256, unpacks it, runs its health check, and switches over with a way back.</p>
+                  {updateError && <Notice tone="rose">{updateError}</Notice>}
+                  {updateResult && <Notice tone="emerald">{updateResult}</Notice>}
+                  <label className="block text-sm text-slate-800">Hub<select className={input} data-testid="hub-update-hub" value={updateHubId} onChange={(event) => setUpdateHubId(event.target.value)}><option value="">choose</option>{hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name} ({hub.software || "?"})</option>)}</select></label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="block text-sm text-slate-800">Version<input className={input} placeholder="1.9.0" data-testid="hub-update-version" value={updateVersion} onChange={(event) => setUpdateVersion(event.target.value)} /></label>
+                    <label className="block text-sm text-slate-800">Size (bytes)<input className={input} inputMode="numeric" data-testid="hub-update-size" value={updateSize} onChange={(event) => setUpdateSize(event.target.value)} /></label>
+                    <label className="block text-sm text-slate-800 sm:col-span-2">SHA-256<input className={input} data-testid="hub-update-sha" value={updateSha} onChange={(event) => setUpdateSha(event.target.value)} /></label>
+                    <label className="block text-sm text-slate-800 sm:col-span-2">Bundle URL<input className={input} data-testid="hub-update-url" value={updateUrl} onChange={(event) => setUpdateUrl(event.target.value)} /></label>
+                  </div>
+                  <button type="button" className={primary} data-testid="announce-hub-update" disabled={updateBusy || !updateHubId || !updateVersion.trim() || !updateUrl.trim()} onClick={() => void (async () => { setUpdateBusy(true); setUpdateError(""); setUpdateResult(""); try { await Devices.updateHub(updateHubId, updateVersion.trim(), Number(updateSize) || 0, updateSha.trim(), updateUrl.trim()); setUpdateResult("Update announced. The hub will fetch and switch over."); } catch (reason) { setUpdateError(message(reason)); } finally { setUpdateBusy(false); } })()}>Announce update</button>
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                    <label className="block text-sm text-slate-800">Hubs per cohort<input className={input} type="number" min="1" max="10" inputMode="numeric" data-testid="hub-update-cohort-size" value={rolloutCohortSize} onChange={(event) => setRolloutCohortSize(event.target.value)} /></label>
+                    <button type="button" className={primary} data-testid="stage-hub-rollout" disabled={updateBusy || !updateVersion.trim() || !updateUrl.trim()} onClick={() => void (async () => { setUpdateBusy(true); setUpdateError(""); setUpdateResult(""); try { const answer = await Devices.createRollout(updateVersion.trim(), Number(updateSize) || 0, updateSha.trim(), updateUrl.trim(), Number(rolloutCohortSize) || 1); setRollouts((current) => [answer.rollout, ...current.filter((item) => item.id !== answer.rollout.id)]); setUpdateResult(`Staged rollout started with a canary cohort of ${Math.min(answer.rollout.cohortSize, answer.rollout.targets.length)} hub${answer.rollout.targets.length === 1 ? "" : "s"}.${answer.excluded.length ? ` ${answer.excluded.length} incompatible or offline hub${answer.excluded.length === 1 ? " was" : "s were"} left out.` : ""}`); } catch (reason) { setUpdateError(message(reason)); } finally { setUpdateBusy(false); } })()}>Stage rollout</button>
+                  </div>
+                  {rollouts.length > 0 && <ul className="space-y-2" data-testid="hub-rollouts">{rollouts.map((rollout) => <li key={rollout.id} className="rounded-lg border border-slate-200 p-3 text-sm text-slate-800">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><strong>{rollout.kind === "rollback" ? `Rollback to ${rollout.rollbackTo}` : `Version ${rollout.version}`}</strong><span className="capitalize">{rollout.status.replaceAll("-", " ")}</span></div>
+                    {rollout.detail && <p className="mt-1 text-amber-900">{rollout.detail}</p>}
+                    <p className="mt-1 text-slate-600">Canary and cohort size: {rollout.cohortSize}. Updates advance after every hub in a cohort confirms healthy.</p>
+                    <ul className="mt-2 space-y-1">{rollout.targets.map((target) => <li key={target.hubId}>{target.hubName}: {target.status.replaceAll("-", " ")}{target.detail ? ` — ${target.detail}` : ""}</li>)}</ul>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {rollout.status === "running" && <button type="button" className={button} onClick={() => void Devices.pauseRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => items.map((item) => item.id === changed.id ? changed : item))).catch((reason) => setUpdateError(message(reason)))}>Pause rollout</button>}
+                      {["paused", "paused-failure"].includes(rollout.status) && <button type="button" className={button} onClick={() => void Devices.resumeRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => items.map((item) => item.id === changed.id ? changed : item))).catch((reason) => setUpdateError(message(reason)))}>Resume rollout</button>}
+                      {rollout.kind === "update" && rollout.status !== "running" && <button type="button" className={button} onClick={() => void Devices.rollbackRollout(rollout.id).then(({ rollout: changed }) => setRollouts((items) => [changed, ...items])).catch((reason) => setUpdateError(message(reason)))}>Roll back confirmed hubs</button>}
+                    </div>
+                  </li>)}</ul>}
+                </div>
+              </details>
+              {events.length > 0 && (
+                <section className={card} aria-labelledby="activity-heading">
+                  <h2 id="activity-heading" className="text-lg font-semibold text-slate-900">Activity</h2>
+                  <ul className="mt-2 space-y-0.5 text-sm" data-testid="device-events">{events.slice(0, 14).map((event) => <li key={event.id} className={event.severity === "error" ? "text-rose-800" : event.severity === "warning" ? "text-amber-900" : "text-slate-700"}><span className="text-slate-500">{clock(event.at)}</span> {event.message}</li>)}</ul>
+                </section>
+              )}
+              <section className={card} aria-labelledby="inventory-heading" data-testid="hardware-inventory">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 id="inventory-heading" className="text-lg font-semibold text-slate-900">All connected hardware</h2>
+                    <p className="text-sm text-slate-700">Robots, edge hubs and devices in this account. Status reflects the latest report HANNAH received.</p>
+                  </div>
+                  {inventory && <p className="text-sm text-slate-700"><strong className="text-slate-900">{inventory.counts.online}</strong> of {inventory.counts.total} reporting</p>}
+                </div>
+                {!inventory?.items.length ? <p className="mt-3 text-sm text-slate-700">No hardware has been registered yet.</p> : (
+                  <ul className="mt-3 divide-y divide-slate-100" data-testid="inventory-items">
+                    {inventory.items.map((item) => (
+                      <li key={`${item.kind}:${item.id}`} className="flex flex-wrap items-center justify-between gap-2 py-2" data-testid="inventory-item" data-kind={item.kind}>
+                        <div>
+                          <p className="font-medium text-slate-900">{item.name} <span className="ml-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium capitalize text-slate-700">{item.kind}</span>{item.simulated && <span className="ml-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-900">SIMULATED</span>}</p>
+                          <p className="text-sm text-slate-600">{[item.manufacturer, item.model, item.category].filter(Boolean).join(" · ")}{item.compatibility ? ` · ${item.compatibility.replaceAll("-", " ")}` : ""}</p>
+                        </div>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${item.connection === "online" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>{item.connection.replaceAll("-", " ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+            </aside>
+          </div>
         </>
       )}
       {scanOpen && <QrScanner onResult={(text) => { void identifyQr(text); }} onClose={() => setScanOpen(false)} />}

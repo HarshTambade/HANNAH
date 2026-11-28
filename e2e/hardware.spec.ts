@@ -370,6 +370,7 @@ test("an automation is built without code, approved once, and then the hub runs 
   await expect(fan.getByTestId("value-power")).toHaveText("On");
   await page.getByRole("button", { name: "Resume automations" }).click();
   await expect(fan.getByTestId("value-power")).toHaveText("Off", { timeout: 40_000 });
+  if (process.env.HANNAH_E2E_SHOTS) { await page.setViewportSize({ width: 1440, height: 1000 }); await page.screenshot({ path: join(process.env.HANNAH_E2E_SHOTS, "devices-desktop.png"), fullPage: true }); }
 });
 
 test("a manual is read into values with their page and line, and its proposal is only experimental until the hub connects", async ({ page }) => {

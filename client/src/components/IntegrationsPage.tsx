@@ -186,6 +186,37 @@ const endpointGroups: Array<{ title: string; items: Endpoint[] }> = [
     ],
   },
   {
+    title: "Images and video",
+    items: [
+      { method: "GET", path: "/api/media/providers", access: "account", description: "Which image and video engines this account can use: OpenAI, xAI or Together for images, xAI for video." },
+      { method: "POST", path: "/api/media/image", access: "account", description: "Make an image from { prompt, size?, provider? } with the account's or the server's key. Returns the image as base64. The daily budget applies, and prompts about minors or real private people are refused." },
+      { method: "POST", path: "/api/media/video", access: "account", description: "Start a short video clip (xAI). Returns a job id to poll." },
+      { method: "GET", path: "/api/media/video/:provider/:id", access: "account", description: "Poll a video job; when it's done, the clip comes back as base64 MP4." },
+    ],
+  },
+  {
+    title: "Shared links and projects",
+    items: [
+      { method: "POST", path: "/api/account/shares", access: "account", description: "Publish a read-only copy of chosen messages. Returns a link to /s/:id. At most 20 an hour." },
+      { method: "GET", path: "/api/account/shares", access: "account", description: "Your shared links." },
+      { method: "DELETE", path: "/api/account/shares/:id", access: "account", description: "Delete a link; it stops working at once." },
+      { method: "GET", path: "/s/:id", access: "public", description: "The shared page itself: server-rendered HTML with no scripts, not indexed and not cached." },
+      { method: "POST", path: "/api/agent", access: "byok", description: "Send project: { name, instructions } with an agent step to apply a project's instructions (up to 4,000 characters) to that request." },
+    ],
+  },
+  {
+    title: "AI Workforce (signed in)",
+    items: [
+      { method: "GET", path: "/api/workforce/bots", access: "account", description: "Your AI teammates. POST creates one from a template or from scratch." },
+      { method: "POST", path: "/api/workforce/bots/:id/messages", access: "account", description: "Talk to a teammate. Asking for work returns a proposed task you accept separately." },
+      { method: "POST", path: "/api/workforce/tasks", access: "account", description: "Queue a task for a teammate. It runs on the server; /tasks/:id/delegate and /handoff pass it on." },
+      { method: "GET", path: "/api/workforce/approvals", access: "account", description: "Approvals waiting for you. High-risk steps always ask; critical ones (payments, robot motion) are refused." },
+      { method: "POST", path: "/api/workforce/routines", access: "account", description: "Run a teammate or skill on a schedule, on an event or from a webhook. /routines/:id/run starts one now." },
+      { method: "POST", path: "/api/hooks/routine/:id", access: "public", description: "A routine's webhook. Verified the provider's way: GitHub, Linear, Sentry, PagerDuty, or X-HANNAH-Signature for any service." },
+      { method: "GET", path: "/api/workforce/sessions/:id/stream", access: "account", description: "Live view of a cloud computer's browser as server-sent events. /handoff takes control; /input sends your clicks and keys." },
+    ],
+  },
+  {
     title: "Accounts (when the server has a database)",
     items: [
       { method: "POST", path: "/api/account/register", access: "public", description: "Create an account. /login and /logout work the same way." },
@@ -253,6 +284,13 @@ const webhookEvents = [
   { name: "team.completed", detail: "An agent team finished its task." },
   { name: "budget.exceeded", detail: "Today's estimated spend passed your daily budget." },
   { name: "approval.requested", detail: "One of your devices is waiting for your approval. Forward it to a phone service (ntfy, Pushover, Slack) to hear about it when HANNAH isn't open." },
+  { name: "workflow.completed", detail: "A server workflow run finished. workflow.failed when it didn't; workflow.notification from a workflow's Notify step." },
+  { name: "robot.mission.finished", detail: "A robot mission ended, with its verified outcome. robot.plan.finished for a multi-step plan." },
+  { name: "robot.alert", detail: "A robot reported something that needs attention, such as low battery or a fault." },
+  { name: "device.alert", detail: "A device behind a hub reported an alert. device.rule.fired when a hub automation acted." },
+  { name: "workforce.approval.requested", detail: "An AI teammate is waiting for your approval." },
+  { name: "workforce.task.completed", detail: "An AI teammate finished a task." },
+  { name: "workforce.task.failed", detail: "An AI teammate's task failed or was blocked, with the reason." },
   { name: "webhook.test", detail: "Sent when you press Test in Settings." },
 ];
 
