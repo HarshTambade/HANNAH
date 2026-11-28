@@ -17,6 +17,7 @@ Devices (beta): HANNAH can work with lights, plugs, fans, sensors and meters thr
 - A self-update module for the hub with a health check and rollback (tested by itself; not wired to the server).
 - Descriptions of five HANNAH OS images that share one core, a service unit, a first-boot configuration and a snap description (written; never built or booted).
 - Migration 22: seven tables for hubs, devices, commands, automations, events, readings and profiles.
+- **A HANNAH Robot OS disk image definition** (`robot-os/images`, mkosi on Debian 13) for x86_64 UEFI, arm64 UEFI and Raspberry Pi 4/5: read-only root with A/B slots and a separate `/var`, optional PREEMPT_RT kernel, SSH keys only with no password anywhere, outbound-only firewall, stable device names for ODrive, Dynamixel U2D2 and VESC, SocketCAN, watchdog, signed update hook and a not-safety-certified notice. CI builds the x86_64 image and boots it in QEMU; **no image has been built or booted yet**, and none on hardware.
 
 ### Changed
 
