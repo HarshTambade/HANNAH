@@ -20,6 +20,7 @@ import { Operator, type ActionRecord } from "../services/Operator";
 import { Devices, type Automation, type AutomationInput, type Check, type Device, type DeviceEvent, type HardwareInventory, type Hub, type HubEnrollment, type Overview, type PointInfo, type Profile, type RulePart, type UpdateRollout } from "../services/Devices";
 import DeviceSetup, { LevelChip } from "./DeviceSetup";
 import { QrScanner } from "./QrScanner";
+import { DeviceGraphPanel } from "./robotops/DeviceGraphPanel";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -598,6 +599,7 @@ export default function DevicesPage() {
               </li>)}</ul>}
             </div>
           </details>
+          <DeviceGraphPanel />
           {events.length > 0 && (
             <section className={card} aria-labelledby="activity-heading">
               <h2 id="activity-heading" className="text-lg font-semibold text-slate-900">Activity</h2>
