@@ -66,7 +66,9 @@ function accountMayUse(path) {
     // An account's own hubs, the devices behind them and their automations.
     || path === "/hubs" || path.startsWith("/hubs/") || path === "/devices" || path.startsWith("/devices/") || path === "/inventory"
     // The AI workforce: teammates, computers, tasks, skills, routines, vault and approvals.
-    || path === "/workforce" || path.startsWith("/workforce/");
+    || path === "/workforce" || path.startsWith("/workforce/")
+    // Predictive maintenance and self-diagnostics for the account (server-wide recoveries check for an administrator themselves).
+    || path === "/maintenance" || path.startsWith("/maintenance/") || path === "/diagnostics" || path.startsWith("/diagnostics/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 

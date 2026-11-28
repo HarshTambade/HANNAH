@@ -46,6 +46,7 @@ const SERVICES = {
   device: { label: "This device", description: "Run commands, open apps, control the desktop, change settings." },
   robots: { label: "Robots", description: "Read a robot's state and sensors, start and cancel missions on robots you enrolled. Stopping a robot is always allowed." },
   hardware: { label: "Devices and smart hardware", description: "Read sensors, switch and set devices you connected through a hub, and create automations the hub runs by itself." },
+  maintenance: { label: "Maintenance and diagnostics", description: "Read wear findings and system diagnostics. Recoveries beyond the low-risk automatic ones (restarting a non-critical Robot OS service, reloading a validated configuration, restoring a validated version) always ask first. Safety settings, emergency stops, motor faults and power are never touched." },
 };
 
 const LEVELS = [
