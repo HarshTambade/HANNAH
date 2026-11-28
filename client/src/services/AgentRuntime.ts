@@ -1,3 +1,4 @@
+import { projectGuidance } from "./Projects";
 import type { ChatMessage, Emotion, InferenceMode } from "../types";
 import { executeHANNAHTool, getDeviceTools, type HANNAHTool } from "./DeviceTools";
 import { LLMRouter, shouldUseLocalFallback, type AgentMessage, type AgentStepMeta, type AgentToolCall } from "./LLMRouter";
@@ -140,12 +141,12 @@ function parseLocalStep(text: string): { reply?: AgentReply; toolCalls: AgentToo
   return { reply: parseReply(text), toolCalls: [] };
 }
 
-function createLocalPrompt(messages: AgentMessage[], tools: HANNAHTool[], marketplaceInstructions = "", personalizationBlock = "") {
+function createLocalPrompt(messages: AgentMessage[], tools: HANNAHTool[], marketplaceInstructions = "", personalizationBlock = "", project?: { name: string; instructions: string }) {
   const definitions = tools.map(({ name, description, inputSchema }) => ({ name, description, parameters: inputSchema }));
   const context = messages.slice(-8).map((message) => `${message.role}: ${message.content.slice(0, 1200)}`).join("\n");
   const packageGuidance = marketplaceInstructions ? `\nThe user turned on these marketplace packages. Work the way the active agent describes and apply each enabled skill where relevant; safety and approvals remain unchanged:\n${marketplaceInstructions}\n` : "";
   // The rules and tools stay whole; when it's too long, the oldest conversation goes first.
-  const head = `${agentRules}${packageGuidance}${personalizationBlock}\nAvailable tools (JSON schema): ${JSON.stringify(definitions)}\n\nConversation and tool results:\n`;
+  const head = `${agentRules}${packageGuidance}${projectGuidance(project)}${personalizationBlock}\nAvailable tools (JSON schema): ${JSON.stringify(definitions)}\n\nConversation and tool results:\n`;
   const room = Math.max(2_000, 11_000 - head.length);
   return `${head}${context.length > room ? `…${context.slice(-room)}` : context}`;
 }
@@ -211,6 +212,8 @@ type AgentTurnOptions = {
   toolsOverride?: HANNAHTool[];
   /** Specialist agents: tier to ask Auto routing for. */
   routeHint?: "simple" | "standard" | "complex";
+  /** The chat's project (Projects.ts): its instructions join the system prompt. */
+  project?: { name: string; instructions: string };
   /** Shown in the run log, for example "Research agent". */
   agentLabel?: string;
 };
@@ -328,7 +331,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
       trimConversation(conversation);
       compactToolResults(conversation);
       try {
-        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memoriesFor(mode), { routeHint: options.routeHint, signal: options.signal, knowledge: documentPassages, onWait: (ms) => options.onActivity?.({ phase: "thinking", message: `The AI provider is busy right now · trying again in ${Math.max(1, Math.round(ms / 1000))} s…` }) });
+        const step = await LLMRouter.requestStep(mode, conversation, activeTools, options.model, options.groqApiKey, options.providerId, marketplaceItemIds, personalization, memoriesFor(mode), { routeHint: options.routeHint, signal: options.signal, knowledge: documentPassages, project: options.project, onWait: (ms) => options.onActivity?.({ phase: "thinking", message: `The AI provider is busy right now · trying again in ${Math.max(1, Math.round(ms / 1000))} s…` }) });
         // Stop pressed while the model worked: don't show or speak what it said.
         if (options.signal?.aborted) return stopped();
         content = step.content;
@@ -345,7 +348,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
         mode = await LLMRouter.resolveMode("cloud", false);
         preferredMode = mode;
         options.onActivity?.({ phase: "thinking", message: "Cloud AI is unavailable · switching to on-device AI…" });
-        const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions, personalizationBlock), mode, error);
+        const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions, personalizationBlock, options.project), mode, error);
         if (options.signal?.aborted) return stopped();
         const step = parseLocalStep(localText);
         if (step.reply) return completeTurn(step.reply);
@@ -353,7 +356,7 @@ async function runAgentLoop(options: AgentTurnOptions, runId: string): Promise<A
         toolCalls = step.toolCalls;
       }
     } else {
-      const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions, personalizationBlock), mode);
+      const localText = await options.generateLocal(createLocalPrompt(conversation, activeTools, marketplaceInstructions, personalizationBlock, options.project), mode);
       if (options.signal?.aborted) return stopped();
       const step = parseLocalStep(localText);
       if (step.reply) return completeTurn(step.reply);

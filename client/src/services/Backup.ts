@@ -27,7 +27,7 @@ export type Section = { id: SectionId; label: string; what: string; keys: string
 
 /** What a backup carries, by section. Everything else on the device is left out. */
 export const SECTIONS: Section[] = [
-  { id: "conversation", label: "Conversation", what: "your chat history", keys: ["hannah.chat.history.v1"], event: ["hannah:chat-history"] },
+  { id: "conversation", label: "Conversation", what: "your chat history, projects and their chats", keys: ["hannah.chat.history.v1", "hannah.projects.v1", "hannah.projectChats.v1", "hannah.chat.current.v1"], event: ["hannah:chat-history", "hannah:projects"] },
   { id: "memories", label: "Memories", what: "what HANNAH remembers and your memory settings", keys: ["hannah.memory.v1", "hannah.memory.settings.v1", "hannah.memoryConsent.v1"], event: ["hannah:memory", "hannah:memory-settings"] },
   { id: "knowledge", label: "Knowledge", what: "documents you added for HANNAH to search", keys: ["hannah.knowledge.v1"], event: ["hannah:knowledge"] },
   { id: "reminders", label: "Reminders", what: "upcoming and past reminders", keys: ["hannah.reminders.v1"], event: ["hannah:reminders"] },

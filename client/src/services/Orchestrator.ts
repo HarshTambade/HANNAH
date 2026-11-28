@@ -283,6 +283,8 @@ type TeamOptions = {
   signal?: AbortSignal;
   onActivity?: (activity: AgentActivity) => void;
   generateLocal: (prompt: string, mode: InferenceMode, cause?: unknown) => Promise<string>;
+  /** The chat's project (Projects.ts): each specialist follows its instructions too. */
+  project?: { name: string; instructions: string };
 };
 
 function budget() {
@@ -350,6 +352,7 @@ async function executeSteps(run: TeamRun, options: TeamOptions) {
         maxIterations: agent.maxIterations,
         signal: options.signal,
         generateLocal: options.generateLocal,
+        project: options.project,
         messages: [{ role: "user", content: stepPrompt(run, step, agent.instructions) }],
         // Shows on this run, and on your other devices, while a step waits for your yes or no.
         onActivity: (activity) => {

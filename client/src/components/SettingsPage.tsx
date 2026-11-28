@@ -16,6 +16,7 @@ import SetupCheckPanel from "./SetupCheckPanel";
 import { desktopFilesAvailable } from "../services/DesktopFiles";
 import { DAILY_BUDGET_KEY } from "../services/LLMRouter";
 import { ChatHistory } from "../services/ChatHistory";
+import { Projects } from "../services/Projects";
 import { UsageStats } from "../services/UsageStats";
 import { MemoryService } from "../services/MemoryService";
 import { clearAllMemories } from "../services/MemoryStore";
@@ -208,8 +209,9 @@ export default function SettingsPage({ onDisconnect, onGroqKeyChange }: Settings
   const diagnosticCounts = Diagnostics.counts();
 
   const clearAll = () => {
-    if (!window.confirm("Delete your conversation, memories, style feedback and usage stats from this browser? This can’t be undone.")) return;
+    if (!window.confirm("Delete your conversation, projects, memories, style feedback and usage stats from this browser? This can’t be undone.")) return;
     ChatHistory.clear();
+    Projects.clear();
     clearAllMemories();
     PersonalizationEngine.clear();
     UsageStats.clear();
