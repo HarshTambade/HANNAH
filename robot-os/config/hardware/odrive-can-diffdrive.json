@@ -1,0 +1,22 @@
+{
+  "id": "odrive-can-diffdrive-example",
+  "name": "Differential drive, two ODrive axes on CAN (example, untested on hardware)",
+  "type": "mobile_robot",
+  "status": "experimental",
+  "controllers": [
+    {
+      "controller_id": "drive",
+      "kind": "motor_controller",
+      "driver": "odrive_can",
+      "interface": "can",
+      "model": "ODrive (CAN Simple, firmware 0.6)",
+      "capabilities": ["velocity", "encoders", "estop", "watchdog"],
+      "transport": {"kind": "can", "interface": "can0", "backend": "socketcan", "timeout_ms": 500, "retries": 0},
+      "drive": {"wheel_separation_m": 0.4, "wheel_radius_m": 0.08, "gear_ratio": 1.0, "invert_right": true},
+      "options": {"left_node_id": 0, "right_node_id": 1, "current_limit_a": 10.0, "heartbeat_timeout_ms": 500}
+    }
+  ],
+  "sensors": [],
+  "limits": {"max_linear_speed_mps": 0.5, "max_angular_speed_rps": 1.5, "max_acceleration_mps2": 0.8},
+  "safety": {"requires_physical_estop": true, "command_ttl_ms": 500, "watchdog_timeout_ms": 500}
+}

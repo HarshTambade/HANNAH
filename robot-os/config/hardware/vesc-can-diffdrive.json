@@ -1,0 +1,22 @@
+{
+  "id": "vesc-can-diffdrive-example",
+  "name": "Differential drive, two VESCs on CAN (example, untested on hardware)",
+  "type": "mobile_robot",
+  "status": "experimental",
+  "controllers": [
+    {
+      "controller_id": "drive",
+      "kind": "motor_controller",
+      "driver": "vesc_can",
+      "interface": "can",
+      "model": "VESC (CAN, status messages enabled)",
+      "capabilities": ["velocity"],
+      "transport": {"kind": "can", "interface": "can0", "backend": "socketcan", "timeout_ms": 500, "retries": 0},
+      "drive": {"wheel_separation_m": 0.5, "wheel_radius_m": 0.1, "gear_ratio": 1.0, "invert_right": true},
+      "options": {"left_can_id": 0, "right_can_id": 1, "pole_pairs": 7, "status_timeout_ms": 500}
+    }
+  ],
+  "sensors": [],
+  "limits": {"max_linear_speed_mps": 0.5, "max_angular_speed_rps": 1.5, "max_acceleration_mps2": 0.8},
+  "safety": {"requires_physical_estop": true, "command_ttl_ms": 500, "watchdog_timeout_ms": 500}
+}

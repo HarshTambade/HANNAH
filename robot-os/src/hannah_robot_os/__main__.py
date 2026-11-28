@@ -150,13 +150,11 @@ def cmd_service(args: argparse.Namespace) -> int:
     health = ServiceHealthManager(audit=audit, required_services=cfg.required_services)
     hw = HardwareRegistry(audit=audit)
     safety = SafetyGateway(audit=audit, limits=cfg.safety)
-    motors = MotorControllerManager(audit=audit, limits=cfg.safety)
     sensors = SensorManager(audit=audit, registry=hw, required_sensor_ids=cfg.required_sensors)
     status_dir = Path(args.status_dir) if args.status_dir else Path(cfg.data_dir) / "status"
     status_path = status_dir / f"{args.name}.json"
     safety_dir = _safety_dir(args, cfg)
     from .safety import shared
-    was_safe = {"value": True}
 
     def tick() -> None:
         safety.heartbeat()
@@ -169,25 +167,21 @@ def cmd_service(args: argparse.Namespace) -> int:
             # Stop on the change to unsafe, then again only if something still turns,
             # so a long stop doesn't write an audit entry every tick.
             safe = shared.mirror(safety, safety_dir, stale_after_ms=cfg.safety.watchdog_timeout_ms * 4)
-            if not safe:
-                for c in list(getattr(motors, "_controllers", {}).keys()):
-                    st = motors.status(c)
-                    if was_safe["value"] or (st.velocity_left_mps or 0) or (st.velocity_right_mps or 0):
-                        motors.stop(c, reason=f"safety: {safety.fault or safety.state.value}")
-            was_safe["value"] = safe
-            for c in list(getattr(motors, "_controllers", {}).keys()):
-                motors.watchdog_check(c)
+            motor_service.tick(safe, reason=safety.fault or safety.state.value)
         if args.name == "sensor-manager":
             safety.set_required_sensors_ok(sensors.required_sensors_ok())
         # other services: heartbeat/status only in this minimal runtime
 
-    # minimal simulated controller wiring for motor-controller service
+    # The motor drivers come from the hardware profile; with none, the simulated controller.
     if args.name == "motor-controller":
-        ctrl = SimMotorController(controller_id="sim-motor-1")
-        motors.register_controller(ctrl)
-        motors.connect(ctrl.controller_id)
-        motors.enable(ctrl.controller_id, True)
-        hw.register(HardwareDevice(device_id=ctrl.controller_id, kind="motor_controller", manufacturer="HANNAH", model="SIM-MC", interface="sim"))
+        from .services.motor_service import MotorService, ProfileError
+
+        motor_service = MotorService(audit=audit, cfg=cfg, hw=hw, profile_path=getattr(args, "profile", None) or cfg.hardware_profile)
+        try:
+            motor_service.setup()
+        except (ProfileError, OSError, ValueError) as error:
+            print(json.dumps({"ok": False, "error": str(error), "errors": getattr(error, "errors", [])}, indent=2))
+            return 2
 
     from .services.runtime import ServiceRuntime
 
@@ -224,6 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
     svc.add_argument("--config")
     svc.add_argument("--status-dir")
     svc.add_argument("--safety-dir")
+    svc.add_argument("--profile", help="hardware profile that picks the motor drivers (default: the config's hardware_profile, else the simulator)")
     svc.add_argument("--interval", type=float, default=0.1)
     svc.add_argument("--max-ticks", type=int)
     svc.set_defaults(func=cmd_service)

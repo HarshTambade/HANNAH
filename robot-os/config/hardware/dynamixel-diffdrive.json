@@ -1,0 +1,22 @@
+{
+  "id": "dynamixel-diffdrive-example",
+  "name": "Differential drive, two Dynamixel X-series servos in velocity mode (example, untested on hardware)",
+  "type": "mobile_robot",
+  "status": "experimental",
+  "controllers": [
+    {
+      "controller_id": "drive",
+      "kind": "motor_controller",
+      "driver": "dynamixel_p2",
+      "interface": "serial",
+      "model": "Dynamixel XM430-W350 (Protocol 2.0)",
+      "capabilities": ["velocity", "encoders", "watchdog"],
+      "transport": {"kind": "serial", "path": "/dev/ttyUSB0", "baudrate": 57600, "backend": "posix", "timeout_ms": 50, "retries": 0},
+      "drive": {"wheel_separation_m": 0.16, "wheel_radius_m": 0.033, "gear_ratio": 1.0, "invert_right": true, "max_wheel_speed_mps": 0.2},
+      "options": {"left_id": 1, "right_id": 2, "bus_watchdog_ms": 100, "pulses_per_turn": 4096, "model_velocity_limit_raw": 1023}
+    }
+  ],
+  "sensors": [],
+  "limits": {"max_linear_speed_mps": 0.2, "max_angular_speed_rps": 1.5, "max_acceleration_mps2": 0.5},
+  "safety": {"requires_physical_estop": true, "command_ttl_ms": 500, "watchdog_timeout_ms": 500}
+}

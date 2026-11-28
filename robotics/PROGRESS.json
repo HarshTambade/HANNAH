@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-21",
+ "updated": "2026-11-28",
  "stages": {
   "1": "Stage 1 — Foundation",
   "2": "Stage 2 — ROS 2, Gazebo and navigation",
@@ -562,9 +562,20 @@
    "stage": "4",
    "feature": "Physical adapters: USB, UART, SPI, I2C, CAN, micro-ROS",
    "status": "BLOCKED_EXTERNAL_DEPENDENCY",
-   "note": "Nothing written. An adapter for hardware nobody has would be untestable.",
+   "note": "Motor controller drivers exist in HANNAH Robot OS (robot-os): ODrive over CAN and USB ASCII, Dynamixel Protocol 2.0, VESC over UART and CAN, and HANNAH's own framed serial protocol to a microcontroller. A hardware profile picks one. They are tested against byte vectors from the public protocol documents and against fake buses and serial lines only; none has been run on a real motor controller. SPI, I2C and micro-ROS: nothing written. Still blocked: there is no hardware to test on.",
    "blockedBy": [
     "B2"
+   ],
+   "tests": [
+    "robot-os/tests/unit/test_motor_protocol_vectors.py",
+    "robot-os/tests/unit/test_motor_drivers.py",
+    "robot-os/tests/unit/test_motor_factory.py"
+   ],
+   "files": [
+    "robot-os/src/hannah_robot_os/motors/drivers/odrive.py",
+    "robot-os/src/hannah_robot_os/motors/drivers/dynamixel.py",
+    "robot-os/src/hannah_robot_os/motors/drivers/vesc.py",
+    "robot-os/src/hannah_robot_os/motors/factory.py"
    ]
   },
   {

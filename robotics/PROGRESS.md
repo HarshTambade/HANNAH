@@ -2,7 +2,7 @@
 
 Generated from `PROGRESS.json` by `robotics/tools/progress.py`. Edit the JSON, not this page.
 
-Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physical robot.** "sim" means HANNAH's own built-in simulators. HANNAH is not safety-certified.
+Updated 2026-11-28. **Nothing here has run in Gazebo, with ROS 2, or on a physical robot.** "sim" means HANNAH's own built-in simulators. HANNAH is not safety-certified.
 
 | Status | Count | Meaning |
 |---|---|---|
@@ -81,7 +81,7 @@ Updated 2026-11-21. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 |---|---|---|---|---|---|
 | 4.2 | Hardware audit and a bill of materials for a first reference robot | IMPLEMENTED | — | — | A document: what a first robot must provide, by function. No hardware exists here, so there is nothing to audit and no parts are named. |
 | 4.3 | Edge computer and embedded controller integration | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Blocked by B2. |
-| 4.4 | Physical adapters: USB, UART, SPI, I2C, CAN, micro-ROS | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Nothing written. An adapter for hardware nobody has would be untestable. Blocked by B2. |
+| 4.4 | Physical adapters: USB, UART, SPI, I2C, CAN, micro-ROS | BLOCKED_EXTERNAL_DEPENDENCY | — | `test_motor_protocol_vectors.py`, `test_motor_drivers.py`, `test_motor_factory.py` | Motor controller drivers exist in HANNAH Robot OS (robot-os): ODrive over CAN and USB ASCII, Dynamixel Protocol 2.0, VESC over UART and CAN, and HANNAH's own framed serial protocol to a microcontroller. A hardware profile picks one. They are tested against byte vectors from the public protocol documents and against fake buses and serial lines only; none has been run on a real motor controller. SPI, I2C and micro-ROS: nothing written. Still blocked: there is no hardware to test on. Blocked by B2. |
 | 4.5 | Motors, encoders, odometry on hardware | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Blocked by B2. |
 | 4.6 | Physical sensors | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Blocked by B2. |
 | 4.7 | Commissioning: a physical robot can't move until a person completes the checks | VERIFIED | server | `robotics.stage2.test.js`, `robotics.stage2.pglite.test.js` | Eleven steps covering the directive's seventeen checks; where the server can't observe something it records a named person's statement. Tested with a stand-in robot. No robot has been commissioned. |
