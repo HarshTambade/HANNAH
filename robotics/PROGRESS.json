@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-28",
+ "updated": "2026-11-29",
  "stages": {
   "1": "Stage 1 — Foundation",
   "2": "Stage 2 — ROS 2, Gazebo and navigation",
@@ -10,7 +10,8 @@
   "7": "Stage 7 — Fleet",
   "D": "Part D — Product integration",
   "E": "Part E — Security and safety",
-  "F": "Part F — Validation and production"
+  "F": "Part F — Validation and production",
+  "A": "Part A — Advanced ecosystem (owner's spec of 2026-11-29: black box, safety and autonomy, sim-to-real, interoperability, edge resources, zero trust, teleoperation, maintenance, updates, device graph, self-diagnostics, hardware marketplace)"
  },
  "items": [
   {
@@ -1159,6 +1160,335 @@
    "blockedBy": [
     "B1"
    ]
+  },
+  {
+   "id": "A.1",
+   "stage": "A",
+   "feature": "Robot black box: on-robot recording, timeline with clock uncertainty, why-did-it-stop reports, playback, retention",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server",
+    "sim"
+   ],
+   "tests": [
+    "server/robotics.blackbox.test.js",
+    "server/robotics.blackbox.pglite.test.js",
+    "robotics/runtime/tests/test_blackbox.py",
+    "robot-os/tests/unit/test_blackbox.py"
+   ],
+   "files": [
+    "server/robotics/blackbox.js",
+    "robotics/runtime/hannah_robot/blackbox"
+   ],
+   "note": "Recorded and investigated end to end with the built-in simulator. The panel was not opened in a browser."
+  },
+  {
+   "id": "A.1r",
+   "stage": "A",
+   "feature": "Black box: rosbag2 export, import and live topic recording",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "robotics/runtime/tests/test_blackbox.py"
+   ],
+   "files": [
+    "robotics/runtime/hannah_robot/blackbox/rosbag2.py"
+   ],
+   "note": "Tested with fake ROS modules only.",
+   "blockedBy": [
+    "B1"
+   ]
+  },
+  {
+   "id": "A.2",
+   "stage": "A",
+   "feature": "Safety and autonomy manager: six modes with one transition table (server, runtime, Robot OS), safety profiles that only tighten, autonomy policies, one command-validation chain for every entry point",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server",
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "server/robotics.autonomy.test.js",
+    "server/robotics.autonomy.http.test.js",
+    "server/robotics.autonomy.pglite.test.js",
+    "robotics/runtime/tests/test_modes_teleop.py",
+    "robot-os/tests/unit/test_operating_modes.py"
+   ],
+   "files": [
+    "server/robotics/chain.js",
+    "server/robotics/autonomy.js",
+    "server/robotics/safety_manager.js"
+   ],
+   "note": "Software checks, not a certified safety function. Interop missions on a HANNAH-link robot run the chain at execution (merge fix)."
+  },
+  {
+   "id": "A.3",
+   "stage": "A",
+   "feature": "Simulation-to-real deployments: simulator regression with baselines, parity report, approval-gated physical stages, staged expansion and rollback",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server",
+    "sim"
+   ],
+   "tests": [
+    "server/robotops.test.js",
+    "server/robotops.unit.test.js",
+    "server/robotops.pglite.test.js"
+   ],
+   "files": [
+    "server/robotics/simtoreal.js",
+    "robotics/runtime/hannah_robot/scenarios.py"
+   ],
+   "note": "Differential-drive robots only; no physical stage has been run."
+  },
+  {
+   "id": "A.4",
+   "stage": "A",
+   "feature": "Universal robot interoperability: normalized interface, HANNAH link and VDA 5050 2.0 adapters in one fleet, mission negotiation, normalized errors",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server",
+    "sim"
+   ],
+   "tests": [
+    "server/interop.test.js",
+    "server/interop.pglite.test.js"
+   ],
+   "files": [
+    "server/interop/registry.js",
+    "server/interop/vda5050/adapter.js"
+   ],
+   "note": "VDA 5050 tested against HANNAH's simulated vehicle on an in-process broker."
+  },
+  {
+   "id": "A.4v",
+   "stage": "A",
+   "feature": "VDA 5050 against a vendor vehicle or fleet manager",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "files": [
+    "server/interop/vda5050/adapter.js"
+   ],
+   "note": "Not tried with a real vehicle.",
+   "blockedBy": [
+    "B7"
+   ]
+  },
+  {
+   "id": "A.5",
+   "stage": "A",
+   "feature": "Edge resource manager: real metrics or 'not measurable', protected workload slices, predefined recovery policies, model advice from measured hardware",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server"
+   ],
+   "tests": [
+    "robot-os/tests/unit/test_edge_resources.py",
+    "robotics/runtime/tests/test_resources.py",
+    "server/edge-graph.test.js"
+   ],
+   "files": [
+    "robot-os/src/hannah_robot_os/resources/manager.py",
+    "server/edge/model-fit.js"
+   ],
+   "note": "Metrics tested with fixture /proc and /sys trees; slices never applied to systemd."
+  },
+  {
+   "id": "A.6",
+   "stage": "A",
+   "feature": "Zero-trust device identity: account CA, X.509 certificates, short-lived credentials, rotation, revocation, quarantine, mTLS option, replay and robot-binding fixes",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server"
+   ],
+   "tests": [
+    "server/trust.test.js",
+    "server/trust.pglite.test.js",
+    "server/robotics.trust.test.js",
+    "server/robotics.trust.pglite.test.js"
+   ],
+   "files": [
+    "server/trust/service.js"
+   ],
+   "note": "mTLS tested in-process; not on Vercel."
+  },
+  {
+   "id": "A.6s",
+   "stage": "A",
+   "feature": "SROS 2 keystores and DDS security on a running ROS 2 graph",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "where": [
+    "unit"
+   ],
+   "tests": [
+    "server/trust.sros2.test.js"
+   ],
+   "files": [
+    "server/trust/sros2.js"
+   ],
+   "note": "Generated files pass the DDS Security schemas and OpenSSL; no DDS graph was run.",
+   "blockedBy": [
+    "B7"
+   ]
+  },
+  {
+   "id": "A.7",
+   "stage": "A",
+   "feature": "Teleoperation and rescue mode: step-by-step handoff, exclusive control, short-lived numbered commands, deadman and link watchdogs on the robot",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server",
+    "sim",
+    "browser"
+   ],
+   "tests": [
+    "server/robotics.autonomy.http.test.js",
+    "robotics/runtime/tests/test_modes_teleop.py",
+    "e2e/robot-teleop.spec.ts"
+   ],
+   "files": [
+    "server/robotics/teleop.js"
+   ],
+   "note": "No camera stream; telemetry only. Not run on a physical base."
+  },
+  {
+   "id": "A.8",
+   "stage": "A",
+   "feature": "Predictive maintenance: series and baselines, detectors with measured precision and recall, labelled findings, verdicts, tasks and service history",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server"
+   ],
+   "tests": [
+    "server/maintenance.detectors.test.js",
+    "server/maintenance.test.js",
+    "server/maintenance.pglite.test.js",
+    "robotics/runtime/tests/test_battery_report.py"
+   ],
+   "files": [
+    "server/maintenance/service.js"
+   ],
+   "note": "Detectors measured on synthetic series with injected anomalies."
+  },
+  {
+   "id": "A.9",
+   "stage": "A",
+   "feature": "Signed update packages, staged rollout waves, health checks, automatic rollback, gated firmware",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server"
+   ],
+   "tests": [
+    "server/robotops.test.js",
+    "robot-os/tests/unit/test_update_package.py",
+    "robot-os/tests/unit/test_image_updates.py"
+   ],
+   "files": [
+    "server/robotics/rollout.js",
+    "robot-os/src/hannah_robot_os/updates/package.py"
+   ],
+   "note": "Robot side run as the real dispatcher per command, not on a booted image."
+  },
+  {
+   "id": "A.9b",
+   "stage": "A",
+   "feature": "A/B update and firmware flashing on real hardware",
+   "status": "BLOCKED_EXTERNAL_DEPENDENCY",
+   "files": [
+    "robot-os/images/build.sh"
+   ],
+   "note": "No image built or booted; there is deliberately no physical flasher.",
+   "blockedBy": [
+    "B8",
+    "B2"
+   ]
+  },
+  {
+   "id": "A.10",
+   "stage": "A",
+   "feature": "Device intelligence graph: versioned relationship types, history, team scoping without cross-tenant leaks, live-checked context queries",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server"
+   ],
+   "tests": [
+    "server/edge-graph.test.js",
+    "server/edge-graph.pglite.test.js",
+    "server/graph.devices.test.js"
+   ],
+   "files": [
+    "server/graph"
+   ],
+   "note": "Workflow links are added by a person; nothing reads them from workflow drafts."
+  },
+  {
+   "id": "A.11",
+   "stage": "A",
+   "feature": "Self-diagnostics: checks across OS, runtime, hardware and AI; 13-step incidents; recovery registry with automatic, approval, admin-only and prohibited policies",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server"
+   ],
+   "tests": [
+    "server/diagnostics.test.js",
+    "server/diagnostics.pglite.test.js",
+    "robot-os/tests/unit/test_remote_recovery.py"
+   ],
+   "files": [
+    "server/diagnostics/engine.js",
+    "server/diagnostics/recovery.js"
+   ],
+   "note": "Robot OS service restarts need a polkit or sudoers rule that the image doesn't ship yet."
+  },
+  {
+   "id": "A.12",
+   "stage": "A",
+   "feature": "Hardware marketplace: signed packages of 12 kinds, dependency and permission checks, least-privilege installs, revocation and rollback, factual test status (no badges)",
+   "status": "VERIFIED",
+   "where": [
+    "unit",
+    "server"
+   ],
+   "tests": [
+    "server/marketplace.hardware.test.js",
+    "server/marketplace.hardware.pglite.test.js",
+    "robot-os/tests/unit/test_package_policy.py"
+   ],
+   "files": [
+    "server/marketplace/hardware-packages.js",
+    "robot-os/src/hannah_robot_os/safety/package_policy.py"
+   ],
+   "note": "Robot OS package policy is not yet wired into a driver loader."
+  },
+  {
+   "id": "A.13",
+   "stage": "A",
+   "feature": "Dashboard and no-code integration of every Part A subsystem",
+   "status": "IN_PROGRESS",
+   "where": [
+    "browser"
+   ],
+   "tests": [
+    "e2e/robotics.spec.ts"
+   ],
+   "files": [
+    "client/src/components/RoboticsPage.tsx"
+   ],
+   "note": "Each subsystem has a working panel; the Robots screen redesign around them is next."
   }
  ],
  "blockers": [
@@ -1197,6 +1527,18 @@
    "what": "No live model run",
    "needs": "A session allowed to use a model provider key",
    "unblocks": "Proof that a real model drives the robot agents correctly"
+  },
+  {
+   "id": "B7",
+   "what": "No DDS / SROS 2 runtime, no vendor VDA 5050 vehicle, no MQTT broker over TLS",
+   "needs": "A Linux host with ROS 2 and a DDS security plugin; a VDA 5050 vehicle or fleet manager; a TLS-enabled broker",
+   "unblocks": "A.6 secured DDS graph, A.4 vendor interoperability"
+  },
+  {
+   "id": "B8",
+   "what": "No built Robot OS image and no target board",
+   "needs": "A run of robot-os-image-ci.yml on Linux, then a PC, Raspberry Pi or Jetson to boot it",
+   "unblocks": "A.9 A/B update on a booted image, A.5 systemd slices on a real robot"
   }
  ],
  "next": [

@@ -8,6 +8,16 @@ Devices (beta): HANNAH can work with lights, plugs, fans, sensors and meters thr
 
 ### Added
 
+- **Robot operations (beta; software and simulator only, see [Robot operations](../README.md#robot-operations)):**
+  - Safety and autonomy manager: operating modes with one transition table on the server and the robot, safety profiles that only tighten, autonomy policies, one command-validation chain for every way of moving a robot, safety audit (migration 34).
+  - Teleoperation with step-by-step handoff, exclusive control, 400 ms commands, deadman and on-robot link watchdogs.
+  - Robot black box: on-robot recording with per-topic rules, a timeline with clock uncertainty, "why did my robot stop?" reports that separate confirmed records from suspected causes, playback and regression scenarios, retention, export and deletion (migration 33; rosbag2 not yet run on real ROS 2).
+  - Sim-to-real deployments with baselines and parity reports, signed update packages with staged waves, health checks and automatic rollback through Robot OS, and a gated firmware flow with no physical flasher (migration 35).
+  - Interoperability over HANNAH's robot link and VDA 5050 2.0; zero-trust device identity (account CA, X.509 certificates, short-lived credentials, quarantine, mTLS option, SROS 2 keystores, DDS network policy); signed hardware marketplace packages with least-privilege installs (migration 36).
+  - Edge resource manager with real metrics and protected workload slices, and the device intelligence graph (migration 37).
+  - Predictive maintenance with measured detector precision, and self-diagnostics with a recovery registry where safety-critical recoveries are prohibited (migration 38).
+- **Website:** one page per navigation tab; new feature cards for pictures and video, code in chat, and projects with shared links.
+- **Devices screen** redesigned as a dashboard; the **Integrations** page lists the new APIs and webhook events.
 - **Images and video clips in chat.** Ask "draw a red fox in snow" or "make a 5-second clip of waves", or use the composer's **Create** switch. The result appears inline with a download button. Images work with an OpenAI, xAI or Together key, and video with an xAI key. Prompts with sexual content involving minors, or of real private people, are refused before any provider is called. The daily budget applies. Tested only with stand-ins for the provider APIs, not with a real key.
 - **Projects**: group chats under a name with your own instructions, added to the system prompt for every chat in the project. Kept on the device signed out; synced with an account. **Shared links**: a signed-in person publishes a read-only copy of the messages they tick at `/s/<id>` (no scripts, strict CSP, noindex, never cached), revocable at once, limited to 20 an hour. Migration 32 adds `hannah_shared_conversations`; account export includes links and deletion removes them.
 - **HANNAH Edge**, a hub for a computer on your network (`hannah-os/runtime`, Python 3.9+, standard library only): MQTT 3.1.1, Modbus TCP and HTTP adapters, signed requests and commands, a saved signed configuration, `enroll`, `run`, `doctor` and `simulate` commands.

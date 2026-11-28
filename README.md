@@ -64,6 +64,7 @@ Three rules shape the product:
 - [Automations](#automations)
 - [AI Workforce](#ai-workforce)
 - [Robots](#robots)
+- [Robot operations](#robot-operations)
 - [HANNAH Robot OS](#hannah-robot-os)
 - [Devices](#devices)
 - [MCP integration](#mcp-integration)
@@ -727,6 +728,9 @@ Never put a secret in a `VITE_*` variable: Vite embeds those values in the publi
 | `WORKFORCE_ALLOW_PRIVATE_NETWORK` | `false` | `true` lets workforce browsers reach private addresses (self-hosting only). A computer's allowlist and "none" settings still apply. |
 | `HANNAH_WORKFORCE_EXTENDED_COMMANDS` | — | `1` allows more terminal programs (node, git, npm and similar) on workforce computers. Use it only with a working sandbox or inside a container. |
 | `HANNAH_WORKFORCE_SANDBOX` | `auto` | The workforce terminal's sandbox: `auto`, `off`, `sandbox-exec` or `bwrap`. Naming a driver makes it required, so commands are refused if it's missing or fails its check. |
+| `HANNAH_ADMIN_EMAILS` | — | Comma-separated emails of signed-in accounts allowed to run admin-only recoveries (for example switching to a backup model provider). The operator token always can. |
+| `HANNAH_BLACKBOX_DIR` | `~/.hannah/blackbox` | Where uploaded robot black-box recordings are stored as files. On a serverless host without it, recording uploads are refused rather than lost. |
+| `HANNAH_DEVICE_MTLS_PORT`, `HANNAH_DEVICE_MTLS_KEY`, `HANNAH_DEVICE_MTLS_CERT` | — | An optional listener where robots and devices connect with their account-issued client certificates. Not available on Vercel, where TLS ends before the app. |
 | `WORKFORCE_WORKER`, `WORKFORCE_WORKER_INTERVAL_MS`, `WORKFORCE_TICK_TASKS` | on, `60000`, `2` | The built-in worker that runs routines and queued tasks (`off` turns it off), how often it runs, and tasks per tick. |
 | `HANNAH_ACCOUNTS_USE_SERVER_KEYS` | `false` | `true` lets signed-in users use the server's provider keys, which you pay for. By default each user brings their own keys. |
 | `OPENAI_TTS_MODEL`, `GROQ_STT_MODEL` | `gpt-4o-mini-tts`, `whisper-large-v3-turbo` | Models for the hosted voice engines. |
@@ -1165,6 +1169,29 @@ Limits you tighten on a robot's page (speed, turning speed, acceleration, joint 
 **What is not done:** the ROS 2 adapter, the Gazebo robot and the container are written and have never been run (no ROS 2 or Docker on the development machine); no physical robot, no MoveIt 2, no physical camera, no learned vision model, no industrial or IoT connectors. Every requirement with its real state and the tests behind it: [`robotics/PROGRESS.md`](./robotics/PROGRESS.md).
 
 More: [architecture](./docs/robotics/ROBOTICS_ARCHITECTURE.md), [safety gateway](./docs/robotics/SAFETY_GATEWAY.md), [security](./docs/robotics/SECURITY_ARCHITECTURE.md), [developer guide and JavaScript client](./docs/robotics/DEVELOPER_SDK.md), [deploying the runtime](./docs/robotics/DEPLOYMENT.md), [tests](./docs/robotics/TESTS.md), [`robotics/README.md`](./robotics/README.md).
+
+---
+
+## Robot operations
+
+**Beta. Built and tested in software and with HANNAH's built-in simulators. Nothing here has run on a physical robot, a booted Robot OS image or a real ROS 2 graph yet**, and none of it is a certified safety function: a robot's physical emergency stop stays independent. Every item's real state and the tests behind it are in [`robotics/PROGRESS.md`](./robotics/PROGRESS.md) (Part A). Each part has its own panel on the **Robots**, **Robot OS** or **Devices** screen and, where it helps, a chat tool.
+
+| Part | What it does |
+| --- | --- |
+| **Safety and autonomy** | Each robot has an operating mode (Manual, Assisted, Supervised Autonomy, Mission Autonomy, Maintenance, Safety Stop), changed only through one transition table that the server and the robot both enforce. A safety profile can only tighten the robot's own limits (speed, operating area, geofences, destinations, time windows, battery, comms timeout, approvals). Every command, from chat, agents, workflows, the fleet, plans or manual control, passes one chain in this order: identity, authorization, robot, capability, state, mode, safety policy, approval, and only then the robot. Account and team autonomy policies range from read-only to approved missions; nothing switches the checks off, and every change is audited. |
+| **Manual control** | Control is handed to one signed-in operator step by step. The robot moves only on fresh commands that live 400 ms, while the deadman is held, and holds by itself when input stops or the link drops. Autonomous and manual commands are never accepted at the same time. There's no camera stream yet; it works from telemetry. |
+| **Black box** | A robot running the runtime with `--record` keeps events (stops, faults, lost links, sensors going quiet, navigation failures, missions) and selected telemetry on its own disk, with per-topic rules for rate, retention and sensitivity. Cameras and microphones are never recorded blindly. The timeline merges these with HANNAH's records of missions, requests and approvals, and shows how sure each timestamp is. **"Why did my robot stop?"** gives what the records confirm, each line citing record ids, apart from what is only suspected. Missions can be replayed (always marked as playback) and an incident turned into a simulator scenario. |
+| **Simulation to real** | A change to a robot runs first in the built-in simulator, compared with a baseline (missions completed, navigation reliability, motion, faults, resources). A parity report lists every difference between the simulated and the real robot and every untested assumption. Nothing physical happens until the robot is commissioned and you approve a supervised test. |
+| **Updates and firmware** | Updates are Ed25519-signed packages accepted only from publisher keys you pinned. They reach robots in waves, one robot first, each wave with your approval; the robot verifies the signature itself, backs up its configuration, and is rolled back automatically unless every health check passes. Firmware is a separate gated operation, and HANNAH has no driver that flashes physical hardware. |
+| **Interoperability** | One normalized robot interface over adapters: HANNAH's own robot link and VDA 5050 2.0 over MQTT, checked against the published schemas. Missions (navigate, inspect, deliver, dock, report status, request assistance) are negotiated against what each robot offers and refused with a reason when it can't. VDA 5050 has been tested with HANNAH's simulated vehicle only. |
+| **Device security** | Every device has its own key and a short-lived X.509 certificate from your account's own certificate authority, with rotation, revocation and quarantine of unknown devices, and an mTLS option. HANNAH generates SROS 2 keystores from a robot's profile (validated files; not yet run on a DDS graph) and keeps DDS off the internet. |
+| **Edge resources** | Robot OS measures the robot's computer from `/proc`, `/sys`, `statvfs` and, when installed, nvidia-smi or tegrastats; anything a device can't provide says "not measurable", never an estimate. Safety and navigation workloads can never be throttled. HANNAH recommends a local model that fits the robot's free memory, with the reason. |
+| **Device graph** | Robots, sensors, machines, places and workflows linked with versioned relationships and their full history, kept per account and team. "What does this sensor affect?" re-checks each robot, device and workflow live before calling it current. |
+| **Maintenance** | HANNAH learns each component's usual range from what robots, Robot OS and hubs report, and flags drift, spikes and trends. A finding is labelled a measured anomaly, a suspected cause or a confirmed fault (only from a controller's fault code or your confirmation), with its evidence and what to inspect, never a failure date. Mark findings real or false and each detector's precision is shown. |
+| **Self-diagnostics** | Checks across the server, AI providers, robots, Robot OS services and devices, with each incident's 13 steps recorded. Low-risk recoveries run automatically and are verified; others need your approval or a server administrator. Emergency stops, motor faults, power and safety settings are never touched. |
+| **Hardware packages** | The Marketplace's **Hardware** tab installs signed adapters, drivers, sensor integrations, diagnostics, maintenance rules, mission skills, scenarios and profiles with only the permissions and hardware interfaces they declare, with revocation and rollback. It says who tested what, on what and where, and shows no certification badges. |
+
+**Not done or not verified yet:** anything on a physical robot or a booted Robot OS image; ROS 2 bag recording and SROS 2 on a real ROS 2 graph; a vendor VDA 5050 vehicle; MQTT over TLS to a real broker; real firmware flashing (deliberately absent); a live camera stream for manual control.
 
 ---
 

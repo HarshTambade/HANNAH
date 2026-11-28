@@ -2,16 +2,16 @@
 
 Generated from `PROGRESS.json` by `robotics/tools/progress.py`. Edit the JSON, not this page.
 
-Updated 2026-11-28. **Nothing here has run in Gazebo, with ROS 2, or on a physical robot.** "sim" means HANNAH's own built-in simulators. HANNAH is not safety-certified.
+Updated 2026-11-29. **Nothing here has run in Gazebo, with ROS 2, or on a physical robot.** "sim" means HANNAH's own built-in simulators. HANNAH is not safety-certified.
 
 | Status | Count | Meaning |
 |---|---|---|
 | NOT_STARTED | 4 | Nothing exists |
-| IN_PROGRESS | 0 | Being built; not usable yet |
+| IN_PROGRESS | 1 | Being built; not usable yet |
 | IMPLEMENTED | 6 | Code exists; it has not been run or has no test that proves it |
 | TESTING | 0 | Tests exist and are not all passing |
-| VERIFIED | 60 | Implemented and its tests pass, at the level named |
-| BLOCKED_EXTERNAL_DEPENDENCY | 18 | Can't go further without something only the owner can provide |
+| VERIFIED | 72 | Implemented and its tests pass, at the level named |
+| BLOCKED_EXTERNAL_DEPENDENCY | 22 | Can't go further without something only the owner can provide |
 
 ## Milestones
 
@@ -159,6 +159,28 @@ Updated 2026-11-28. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | F3a | Onboard health check, logs and a deployment guide | VERIFIED | unit, sim | `test_doctor.py`, `robotics.sim.test.js` | `hannah_robot doctor` checks the computer, moves nothing and makes no signed request. |
 | F3b | Running the runtime as a service; installer; updates | BLOCKED_EXTERNAL_DEPENDENCY | — | — | A systemd unit is written and has never been started. No installer and no automatic updates. Blocked by B1. |
 
+## Part A — Advanced ecosystem (owner's spec of 2026-11-29: black box, safety and autonomy, sim-to-real, interoperability, edge resources, zero trust, teleoperation, maintenance, updates, device graph, self-diagnostics, hardware marketplace)
+
+| # | Requirement | Status | Verified at | Tests | Note |
+|---|---|---|---|---|---|
+| A.1 | Robot black box: on-robot recording, timeline with clock uncertainty, why-did-it-stop reports, playback, retention | VERIFIED | unit, server, sim | `robotics.blackbox.test.js`, `robotics.blackbox.pglite.test.js`, `test_blackbox.py`, `test_blackbox.py` | Recorded and investigated end to end with the built-in simulator. The panel was not opened in a browser. |
+| A.1r | Black box: rosbag2 export, import and live topic recording | BLOCKED_EXTERNAL_DEPENDENCY | unit | `test_blackbox.py` | Tested with fake ROS modules only. Blocked by B1. |
+| A.2 | Safety and autonomy manager: six modes with one transition table (server, runtime, Robot OS), safety profiles that only tighten, autonomy policies, one command-validation chain for every entry point | VERIFIED | unit, server, sim, browser | `robotics.autonomy.test.js`, `robotics.autonomy.http.test.js`, `robotics.autonomy.pglite.test.js`, `test_modes_teleop.py`, `test_operating_modes.py` | Software checks, not a certified safety function. Interop missions on a HANNAH-link robot run the chain at execution (merge fix). |
+| A.3 | Simulation-to-real deployments: simulator regression with baselines, parity report, approval-gated physical stages, staged expansion and rollback | VERIFIED | unit, server, sim | `robotops.test.js`, `robotops.unit.test.js`, `robotops.pglite.test.js` | Differential-drive robots only; no physical stage has been run. |
+| A.4 | Universal robot interoperability: normalized interface, HANNAH link and VDA 5050 2.0 adapters in one fleet, mission negotiation, normalized errors | VERIFIED | unit, server, sim | `interop.test.js`, `interop.pglite.test.js` | VDA 5050 tested against HANNAH's simulated vehicle on an in-process broker. |
+| A.4v | VDA 5050 against a vendor vehicle or fleet manager | BLOCKED_EXTERNAL_DEPENDENCY | — | — | Not tried with a real vehicle. Blocked by B7. |
+| A.5 | Edge resource manager: real metrics or 'not measurable', protected workload slices, predefined recovery policies, model advice from measured hardware | VERIFIED | unit, server | `test_edge_resources.py`, `test_resources.py`, `edge-graph.test.js` | Metrics tested with fixture /proc and /sys trees; slices never applied to systemd. |
+| A.6 | Zero-trust device identity: account CA, X.509 certificates, short-lived credentials, rotation, revocation, quarantine, mTLS option, replay and robot-binding fixes | VERIFIED | unit, server | `trust.test.js`, `trust.pglite.test.js`, `robotics.trust.test.js`, `robotics.trust.pglite.test.js` | mTLS tested in-process; not on Vercel. |
+| A.6s | SROS 2 keystores and DDS security on a running ROS 2 graph | BLOCKED_EXTERNAL_DEPENDENCY | unit | `trust.sros2.test.js` | Generated files pass the DDS Security schemas and OpenSSL; no DDS graph was run. Blocked by B7. |
+| A.7 | Teleoperation and rescue mode: step-by-step handoff, exclusive control, short-lived numbered commands, deadman and link watchdogs on the robot | VERIFIED | unit, server, sim, browser | `robotics.autonomy.http.test.js`, `test_modes_teleop.py`, `robot-teleop.spec.ts` | No camera stream; telemetry only. Not run on a physical base. |
+| A.8 | Predictive maintenance: series and baselines, detectors with measured precision and recall, labelled findings, verdicts, tasks and service history | VERIFIED | unit, server | `maintenance.detectors.test.js`, `maintenance.test.js`, `maintenance.pglite.test.js`, `test_battery_report.py` | Detectors measured on synthetic series with injected anomalies. |
+| A.9 | Signed update packages, staged rollout waves, health checks, automatic rollback, gated firmware | VERIFIED | unit, server | `robotops.test.js`, `test_update_package.py`, `test_image_updates.py` | Robot side run as the real dispatcher per command, not on a booted image. |
+| A.9b | A/B update and firmware flashing on real hardware | BLOCKED_EXTERNAL_DEPENDENCY | — | — | No image built or booted; there is deliberately no physical flasher. Blocked by B8, B2. |
+| A.10 | Device intelligence graph: versioned relationship types, history, team scoping without cross-tenant leaks, live-checked context queries | VERIFIED | unit, server | `edge-graph.test.js`, `edge-graph.pglite.test.js`, `graph.devices.test.js` | Workflow links are added by a person; nothing reads them from workflow drafts. |
+| A.11 | Self-diagnostics: checks across OS, runtime, hardware and AI; 13-step incidents; recovery registry with automatic, approval, admin-only and prohibited policies | VERIFIED | unit, server | `diagnostics.test.js`, `diagnostics.pglite.test.js`, `test_remote_recovery.py` | Robot OS service restarts need a polkit or sudoers rule that the image doesn't ship yet. |
+| A.12 | Hardware marketplace: signed packages of 12 kinds, dependency and permission checks, least-privilege installs, revocation and rollback, factual test status (no badges) | VERIFIED | unit, server | `marketplace.hardware.test.js`, `marketplace.hardware.pglite.test.js`, `test_package_policy.py` | Robot OS package policy is not yet wired into a driver loader. |
+| A.13 | Dashboard and no-code integration of every Part A subsystem | IN_PROGRESS | browser | `robotics.spec.ts` | Each subsystem has a working panel; the Robots screen redesign around them is next. |
+
 ## External blockers
 
 | Id | What is missing | What it needs | What it holds up |
@@ -169,6 +191,8 @@ Updated 2026-11-28. **Nothing here has run in Gazebo, with ROS 2, or on a physic
 | B4 | Unknown which industrial or IoT systems exist | The owner naming the systems, with test access | Any connector in part D4 |
 | B5 | No independent reviewer | A security review by someone who didn't write the protocol; a safety engineer for any real robot | Any claim beyond "tested by its author" |
 | B6 | No live model run | A session allowed to use a model provider key | Proof that a real model drives the robot agents correctly |
+| B7 | No DDS / SROS 2 runtime, no vendor VDA 5050 vehicle, no MQTT broker over TLS | A Linux host with ROS 2 and a DDS security plugin; a VDA 5050 vehicle or fleet manager; a TLS-enabled broker | A.6 secured DDS graph, A.4 vendor interoperability |
+| B8 | No built Robot OS image and no target board | A run of robot-os-image-ci.yml on Linux, then a PC, Raspberry Pi or Jetson to boot it | A.9 A/B update on a booted image, A.5 systemd slices on a real robot |
 
 ## Known limitations
 
