@@ -63,12 +63,22 @@ const { vaultConfigured } = require("../vault");
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 
 /** One engine, one coding service and one robot registry for the whole server: routes, workflows and MCP all use these. */
-function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs, robotOSCommands = null } = {}) {
+function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs, robotOSCommands = null, trust = null } = {}) {
   const coding = createCodingService({ fetchImpl, now, ...(request ? { request } : {}), ...(roots ? { roots } : {}) });
-  const robotics = createRoboticsService({ now, emit: emitUserEvent, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
+  // The account's device policy (secret age, mTLS) for the robot link, read at most every 30 s per account.
+  const policies = new Map();
+  const credentialPolicy = trust ? async (db, userId) => {
+    const cached = policies.get(userId);
+    if (cached && now() - cached.at < 30_000) return cached.policy;
+    const policy = await trust.getPolicy(db, userId).catch(() => null);
+    if (policies.size > 5000) policies.clear();
+    policies.set(userId, { at: now(), policy });
+    return policy;
+  } : null;
+  const robotics = createRoboticsService({ now, emit: emitUserEvent, credentialPolicy, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
   const devices = createDeviceService({ now, emit: emitUserEvent });
   const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands })] });
-  return { coding, devices, engine, robotics, robotOSCommands };
+  return { coding, devices, engine, robotics, robotOSCommands, trust };
 }
 
 /** Every connection an account has, in one shape. */

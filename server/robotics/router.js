@@ -7,7 +7,8 @@
  * parser because the signature covers the exact body):
  *
  *   POST /api/robots/enroll          { code, descriptor } → { robotId, secret, … }   once per code
- *   POST /api/robots/device/sync     signed; { state, reports, events } → { commands }
+ *   POST /api/robots/device/sync     signed; { state, reports, events } → { commands, credentialExpiresAt? }
+ *   POST /api/robots/device/rotate   signed; → { secret } that replaces the current one once the robot signs with it
  *
  * Neither uses an account session. Enrollment is proven by the one-time code
  * (and limited per network address); every later request by the robot's
@@ -84,18 +85,34 @@ function createRobotDeviceRouter({ robotics, enrollLimiter = null }) {
     if (recent.size > 5000) for (const [key, value] of recent) { if (at - value.from > 5000) recent.delete(key); }
     return entry.count > floodLimit;
   };
+  // What the robot signed. Behind the mTLS listener res.locals.device names the certificate's device.
+  const signed = (req, res) => ({
+    robotId: req.get("x-hannah-robot"), time: req.get("x-hannah-time"), counter: req.get("x-hannah-counter"), signature: req.get("x-hannah-signature"),
+    method: req.method, path: req.baseUrl + req.path, body: req.rawBody || "", clientDevice: res.locals.device?.deviceId || null,
+  });
   router.post("/robots/device/sync", json, async (req, res) => {
     if (flooding(String(req.get("x-hannah-robot") || "").slice(0, 40))) return res.status(429).json({ error: "Too many requests from this robot.", reason: "rate-limited" });
     const db = await database(res);
     if (!db) return undefined;
     try {
-      const robot = await service().authenticate(db, {
-        robotId: req.get("x-hannah-robot"), time: req.get("x-hannah-time"), counter: req.get("x-hannah-counter"), signature: req.get("x-hannah-signature"),
-        method: req.method, path: req.baseUrl + req.path, body: req.rawBody || "",
-      });
-      return res.json(await service().sync(db, robot, req.body || {}));
+      const robot = await service().authenticate(db, signed(req, res));
+      const answer = await service().sync(db, robot, req.body || {});
+      const credentialExpiresAt = service().credentialExpiry ? await service().credentialExpiry(db, robot.row) : null;
+      return res.json(credentialExpiresAt ? { ...answer, credentialExpiresAt } : answer);
     } catch (error) {
       return respond(res, error, "The sync didn't work on the server.");
+    }
+  });
+  // A new secret for the robot, asked for with a request signed by the current one.
+  router.post("/robots/device/rotate", json, async (req, res) => {
+    if (flooding(String(req.get("x-hannah-robot") || "").slice(0, 40))) return res.status(429).json({ error: "Too many requests from this robot.", reason: "rate-limited" });
+    const db = await database(res);
+    if (!db) return undefined;
+    try {
+      const robot = await service().authenticate(db, signed(req, res));
+      return res.json(await service().rotateSecret(db, robot));
+    } catch (error) {
+      return respond(res, error, "The rotation didn't work on the server.");
     }
   });
   return router;

@@ -45,6 +45,9 @@ const { createAuthenticator: createRobotOSBridgeAuthenticator } = require("./rob
 const robotOSEnvelopes = require("./robotics/robot_os_envelopes");
 const { createRobotOSCommandService } = require("./robotics/robot_os_commands");
 const { createDeviceAccountRouter, createHubDeviceRouter } = require("./devices/router");
+const { createTrustService } = require("./trust/service");
+const { createTrustRouter } = require("./trust/router");
+const { createMtlsServer, requireClientCertificate } = require("./trust/mtls");
 const { manualRoutes } = require("./devices/manuals");
 const { createWebRouter } = require("./web");
 const { createHostingSetupRouter } = require("./hosting-setup");
@@ -455,6 +458,8 @@ try {
   console.error("HANNAH_ROBOT_OS_BRIDGE_OWNERS is not valid JSON; Robot OS owners will come from the robot registry.");
 }
 const robotOSCommands = createRobotOSCommandService({ secrets: robotOSSecrets });
+// Zero-trust device identity (server/trust): one service for every device link.
+const deviceTrust = createTrustService();
 if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
   app.use("/api", createRobotOSBridgeRouter({
     enabled: true,
@@ -463,6 +468,17 @@ if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
       resolveSecret: async (robotId) => {
         const db = await getDatabase().catch(() => null);
         return db ? robotOSCommands.secretFor(db, robotId).catch(() => null) : robotOSSecrets[robotId] || null;
+      },
+      // Replays are refused across every server instance and restart, not only in this process.
+      claim: async (scope, id, expiresAt) => {
+        const db = await getDatabase().catch(() => null);
+        return db ? deviceTrust.claimNonce(db, scope, id, expiresAt) : false;
+      },
+      onRefused: async ({ robotId, envelopeId, reason }) => {
+        const db = await getDatabase().catch(() => null);
+        if (!db) return;
+        const owner = await robotOSEnvelopes.resolveOwner(db, robotId, robotOSOwners).catch(() => null);
+        await deviceTrust.audit(db, { userId: owner, deviceId: robotId, kind: "robotos-envelope", decision: "refused", reason, detail: { envelopeId } });
       },
     }),
     onEnvelope: async (env) => {
@@ -594,10 +610,12 @@ app.use("/api", createConnectorsRouter({ publicBaseUrl, allowedOrigins, timeoutM
 // Research (search, read, cite) and Document Studio (PowerPoint, PDF, Word, Excel): server/studio.js.
 app.use("/api", createStudioRouter({ getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
 // The Action Engine (permission, approval, execution, verification, audit), the integrations hub and the coding service: server/actions, server/coding.
-const operator = createOperator({ robotOSCommands });
+const operator = createOperator({ robotOSCommands, trust: deviceTrust });
 // Workflows reach the same engine ("Do an action", "Check a repository").
 workflowRuntime.operatorRef.current = operator;
 app.use("/api", createOperatorRouter({ operator, getRequestProvider, preferredProviderId, timeoutMs: Math.max(cloudRequestTimeout, 90_000) }));
+// Device identities, certificates, credentials, quarantine, SROS 2 keystores (server/trust).
+app.use("/api", createTrustRouter({ trust: deviceTrust, robotics: operator.robotics, deviceLimiter: createAddressRateLimiter({ ...rateLimitSettings().robotEnrollPerAddress, name: "trust-device" }) }));
 app.use("/api", createRobotAccountRouter({ robotics: operator.robotics, engine: operator.engine, robotOSEnvelopes, robotOSCommands }));
 app.use("/api", createDeviceAccountRouter({ devices: operator.devices, engine: operator.engine, manuals: manualRoutes({ devices: operator.devices }) }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
@@ -1288,6 +1306,16 @@ async function startServer() {
   server.on("close", () => {
     void closeFeedbackStores();
   });
+  // Optional mutual-TLS listener for robots (server/trust/mtls.js): only where this process terminates TLS itself.
+  const mtlsPort = Number(process.env.HANNAH_DEVICE_MTLS_PORT) || 0;
+  if (mtlsPort && process.env.HANNAH_DEVICE_MTLS_KEY && process.env.HANNAH_DEVICE_MTLS_CERT) {
+    const mtlsApp = express();
+    mtlsApp.use("/api", requireClientCertificate({ trust: deviceTrust, database: getDatabase, matchHeader: "x-hannah-robot" }));
+    mtlsApp.use("/api", createRobotDeviceRouter({ robotics: () => operator.robotics }));
+    createMtlsServer(mtlsApp, { key: process.env.HANNAH_DEVICE_MTLS_KEY.replace(/\\n/g, "\n"), cert: process.env.HANNAH_DEVICE_MTLS_CERT.replace(/\\n/g, "\n") })
+      .listen(mtlsPort, host, () => console.log(`HANNAH robot mTLS link listening on https://${host}:${mtlsPort}`))
+      .on("error", (error) => console.error(`The robot mTLS listener could not start (${error.code || error.name}).`));
+  }
 }
 
 // Export the Express app for serverless adapters while preserving direct startup

@@ -1672,6 +1672,10 @@ const MIGRATIONS = [
         PRIMARY KEY (user_id, package_id, version)
       )`,
       "ALTER TABLE hannah_robots ADD COLUMN secret_rotated_at BIGINT",
+      // A rotated secret waits here, sealed, until the robot's first request signed with it.
+      "ALTER TABLE hannah_robots ADD COLUMN pending_key_id TEXT",
+      "ALTER TABLE hannah_robots ADD COLUMN pending_wrapped_key TEXT",
+      "ALTER TABLE hannah_robots ADD COLUMN pending_ciphertext TEXT",
     ],
   },
 ];
