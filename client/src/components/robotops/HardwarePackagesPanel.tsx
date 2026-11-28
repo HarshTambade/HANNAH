@@ -7,6 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { RobotTrust, packageStatusText, type HardwarePackage, type PackageInstall } from "../../services/RobotTrust";
+import { ACCOUNT_EVENT, isAccountSession } from "../../services/api";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
 const button = "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -20,16 +21,24 @@ export default function HardwarePackagesPanel() {
   const [outcome, setOutcome] = useState<string | null>(null);
   const [upload, setUpload] = useState("");
   const [target, setTarget] = useState("");
+  const [signedIn, setSignedIn] = useState(isAccountSession());
+  useEffect(() => {
+    const changed = () => setSignedIn(isAccountSession());
+    window.addEventListener(ACCOUNT_EVENT, changed);
+    return () => window.removeEventListener(ACCOUNT_EVENT, changed);
+  }, []);
   const refresh = useCallback(async () => {
+    if (!isAccountSession()) return;
     try { const listed = await RobotTrust.packages(); setPackages(listed.packages); setInstalls(listed.installs); } catch (error) { setProblem(message(error)); }
   }, []);
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh, signedIn]);
   const run = async (task: () => Promise<string | null>) => { setProblem(null); setOutcome(null); try { setOutcome(await task()); await refresh(); } catch (error) { setProblem(message(error)); } };
 
   return (
     <section className={`${card} mt-8`} aria-labelledby="hardware-packages-heading" data-testid="hardware-packages">
       <h2 id="hardware-packages-heading" className="text-sm font-semibold text-ink">Hardware packages</h2>
       <p className="mt-1 text-xs leading-5 text-slate-600">Robot adapters, drivers, sensor integrations, diagnostics, maintenance rules, mission skills, simulation scenarios, teleoperation interfaces, hardware profiles and workflow templates. Each is checked before it is kept: the publisher's signature, every file, its dependencies, its permissions and the hardware it says it opens. Installed, it gets only what it declares. Installing on a robot always asks you first.</p>
+      {!signedIn && <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">Sign in to see and install hardware packages. They belong to an account, with the publisher keys you trust.</p>}
       {problem && <p role="alert" className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">{problem}</p>}
       {outcome && <p role="status" className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">{outcome}</p>}
       {packages && packages.length === 0 && <p className="mt-3 text-xs text-slate-500">No hardware packages yet. Add a publisher's key under Devices, then add a signed package here.</p>}

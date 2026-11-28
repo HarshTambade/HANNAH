@@ -116,7 +116,7 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[11px] text-slate-500 shadow-soft">
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl border border-violet-100 bg-gradient-to-r from-violet-50/80 via-white to-cyan-50/60 px-4 py-3 text-[12px] text-slate-600">
           <span className="inline-flex items-center gap-1.5"><Bot size={12} className="text-violet-600" /> Active agent: <strong className="font-semibold text-ink">{state.activeAgentId ? MarketplaceService.getPackage(state.activeAgentId)?.name : "HANNAH (no agent)"}</strong></span>
           <span className="inline-flex items-center gap-1.5"><Check size={12} className="text-cyan-600" /> Skills on: <strong className="font-semibold text-ink">{state.enabledSkillIds.length} of {MAX_ENABLED_SKILLS}</strong></span>
           <button type="button" onClick={() => openChat()} className="ml-auto inline-flex items-center gap-1 font-semibold text-violet-700 hover:underline"><MessageSquare size={12} /> Open chat</button>
@@ -146,31 +146,31 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
               const enabled = item.type === "skill" && state.enabledSkillIds.includes(item.id);
               const on = active || enabled;
               return (
-                <article key={item.id} className="deck-frame flex flex-col transition hover:-translate-y-0.5"><div className={`deck-card flex flex-1 flex-col ${item.type === "agent" ? "tone-lavender" : "tone-mint"}`}>
+                <article key={item.id} className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-24px_rgba(15,23,42,0.35)] ${on ? (item.type === "agent" ? "border-violet-300 ring-1 ring-violet-200" : "border-cyan-300 ring-1 ring-cyan-200") : "border-slate-200/80"}`}><span aria-hidden="true" className={`absolute inset-x-0 top-0 h-1 ${item.type === "agent" ? "bg-gradient-to-r from-violet-400 to-fuchsia-300" : "bg-gradient-to-r from-cyan-400 to-emerald-300"}`} /><div className="flex flex-1 flex-col p-5">
                   <div className="flex items-start justify-between gap-3">
                     <span className={`flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm ${item.type === "agent" ? "border-violet-100 bg-gradient-to-br from-violet-50 to-white text-violet-700" : "border-cyan-100 bg-gradient-to-br from-cyan-50 to-white text-cyan-700"}`}>
                       {item.type === "agent" ? <Bot size={20} /> : <Sparkles size={19} />}
                     </span>
                     <div className="flex flex-col items-end gap-1">
-                      <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-500">{item.type} · {item.category}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${item.type === "agent" ? "bg-violet-50 text-violet-700" : "bg-cyan-50 text-cyan-800"}`}>{item.type} · {item.category}</span>
                       {item.tools?.length ? <span className="text-[10px] text-slate-500">{item.tools.length} tool{item.tools.length === 1 ? "" : "s"}</span> : null}
                     </div>
                   </div>
                   <div className="mt-4 flex items-center gap-2">
-                    <h2 className="font-['Manrope'] text-sm font-semibold text-ink">{item.name}</h2>
+                    <h2 className="font-['Manrope'] text-[15px] font-semibold text-ink">{item.name}</h2>
                     {on && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.type === "agent" ? "bg-violet-100 text-violet-700" : "bg-cyan-100 text-cyan-700"}`}>On</span>}
                   </div>
-                  <p className="mt-2 line-clamp-3 text-xs leading-5 text-slate-500">{item.description}</p>
+                  <p className="mt-1.5 line-clamp-3 text-[13px] leading-5 text-slate-600">{item.description}</p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {item.tags.map((tag) => <span key={tag} className="rounded-md bg-white/80 px-2 py-1 text-[10px] text-slate-600 ring-1 ring-slate-100">{tag}</span>)}
+                    {item.tags.map((tag) => <span key={tag} className="rounded-md bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200/70">{tag}</span>)}
                   </div>
                   {item.starters.length > 0 && (
                     <div className="mt-3">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Try it with</p>
                       <ul className="mt-1.5 space-y-1">
-                        {item.starters.slice(0, 3).map((starter) => (
+                        {item.starters.slice(0, 2).map((starter) => (
                           <li key={starter}>
-                            <button type="button" onClick={() => tryIt(item, starter)} aria-label={`Try ${item.name}: ${starter.trim()}`} className="w-full rounded-lg border border-white/80 bg-white/70 px-2.5 py-1.5 text-left text-[11px] leading-4 text-slate-700 transition hover:border-violet-200 hover:bg-white">
+                            <button type="button" onClick={() => tryIt(item, starter)} aria-label={`Try ${item.name}: ${starter.trim()}`} className="w-full rounded-lg border border-slate-200/80 bg-slate-50/70 px-2.5 py-1.5 text-left text-[12px] leading-4 text-slate-700 transition hover:border-violet-200 hover:bg-white">
                               “{starter.trim().replace(/[:\s]+$/, "…")}”
                             </button>
                           </li>
@@ -180,10 +180,10 @@ export default function MarketplacePage({ onBack, onOpenChat }: MarketplacePageP
                   )}
                   <details className="mt-3 text-[11px] text-slate-500">
                     <summary className="cursor-pointer">What it tells HANNAH{item.tools?.length ? ` · keeps ${item.tools.length} tool${item.tools.length === 1 ? "" : "s"} to hand` : ""}</summary>
-                    <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-white/70 p-2 leading-4 text-slate-600">{item.instructions}</p>
+                    <p className="mt-1.5 whitespace-pre-wrap rounded-lg bg-slate-50 p-2 leading-4 text-slate-600">{item.instructions}</p>
                     {item.tools?.length ? <p className="mt-1.5 break-words font-mono text-[10px]">{item.tools.join(", ")}</p> : null}
                   </details>
-                  <div className="mt-auto flex items-center justify-between gap-3 pt-5">
+                  <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
                     <span className="text-[10px] text-slate-500">{item.publisher} · v{item.version}</span>
                     <div className="flex items-center gap-2">
                       {item.type === "agent" ? (
