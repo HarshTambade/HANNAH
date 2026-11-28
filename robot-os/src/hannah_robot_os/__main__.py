@@ -127,7 +127,7 @@ def cmd_safety(args: argparse.Namespace) -> int:
         print(json.dumps(data or {"error": "the safety gateway hasn't published its state"}, indent=2))
         return 0 if data else 1
     try:
-        path = shared.submit(safety_dir, args.action, args.operator or "")
+        path = shared.submit(safety_dir, args.action, args.operator or "", mode=getattr(args, "mode", "") or "")
     except ValueError as error:
         print(str(error))
         return 2
@@ -155,6 +155,10 @@ def cmd_service(args: argparse.Namespace) -> int:
     status_path = status_dir / f"{args.name}.json"
     safety_dir = _safety_dir(args, cfg)
     from .safety import shared
+
+    if args.name == "safety-gateway":
+        # The operating mode it had before a restart, so a Safety Stop isn't lost by restarting the service.
+        shared.restore(safety, safety_dir)
 
     def tick() -> None:
         safety.heartbeat()
@@ -290,7 +294,8 @@ def build_parser() -> argparse.ArgumentParser:
     rd.set_defaults(func=cmd_ready)
 
     sf = sub.add_parser("safety", help="Engage, release or reset the software stop through the safety gateway, or show its state")
-    sf.add_argument("action", choices=["engage", "release", "reset", "status"])
+    sf.add_argument("action", choices=["engage", "release", "reset", "mode", "status"])
+    sf.add_argument("--mode", help="for mode: manual, assisted, supervised, mission, maintenance or safety_stop (all but safety_stop need --operator)")
     sf.add_argument("--operator", help="who is resetting (required for reset)")
     sf.add_argument("--config")
     sf.add_argument("--safety-dir")
