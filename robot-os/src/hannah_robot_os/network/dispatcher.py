@@ -15,8 +15,9 @@ from ..updates.state import UpdateState
 from ..updates.recovery import RecoveryManager
 from .bridge import BridgeEnvelope
 from .command_guard import CommandGuard
+from ..services.service_manager import ConfigReloader, ServiceManager, check_restart
 
-ALLOWED_CAPABILITIES = {"update.stage", "update.activate", "update.rollback", "diagnostics.run"}
+ALLOWED_CAPABILITIES = {"update.stage", "update.activate", "update.rollback", "diagnostics.run", "service.restart", "config.reload"}
 
 
 @dataclass
@@ -27,6 +28,9 @@ class RobotOSCommandDispatcher:
     update_state: UpdateState
     audit: AuditLog
     recovery: RecoveryManager | None = None
+    # Remote recovery (diagnostics). Without them, service.restart and config.reload are refused.
+    services: ServiceManager | None = None
+    config_reloader: ConfigReloader | None = None
     now: Any = now_ms
     health_snapshot: Any = field(default_factory=lambda: lambda: {"robot_ready": False})
     # With a path, results survive a restart: the server re-delivers a command
@@ -181,6 +185,23 @@ class RobotOSCommandDispatcher:
                 except backups.BackupError as error:
                     self.audit.emit("command-dispatcher", "restore_refused", severity="warning", command_id=command_id, reason=str(error))
                     return self._settle(command, command_id, False, f"slot rolled back; configuration not restored: {error}", extra)
+        elif capability == "service.restart":
+            name = str(params.get("service", "")).strip()
+            allowed, why = check_restart(name)
+            if not allowed:
+                return self._settle(command, command_id, False, why)
+            if self.services is None:
+                return self._settle(command, command_id, False, "no service manager on this robot")
+            ok, why = self.services.restart(name)
+            self.audit.emit("command-dispatcher", "service_restart", service=name, ok=ok, detail=why)
+            if not ok:
+                return self._settle(command, command_id, False, why)
+        elif capability == "config.reload":
+            if self.config_reloader is None:
+                return self._settle(command, command_id, False, "no configuration reloader on this robot")
+            ok, why = self.config_reloader.reload()
+            if not ok:
+                return self._settle(command, command_id, False, why)
         # diagnostics.run is a read/report capability; the report is the ack itself.
 
         self._applied.append(command_id)

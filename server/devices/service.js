@@ -687,6 +687,30 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
     if (command.final && !command.result?.probe) await recordVerification(db, userId, command);
     return { device: await getDevice(db, userId, row.id), pending: !command.final, commandId };
   }
+  /**
+   * Ask a running device's hub to reconnect it: its entry in the hub's signed
+   * configuration changes, so the hub stops and restarts that device's
+   * adapter. Nothing is written to the device. Returns the configuration
+   * version the hub has to report back for the reconnect to have reached it.
+   */
+  async function requestReconnect(db, userId, id, { requestedBy = "" } = {}) {
+    const row = await deviceRow(db, userId, id);
+    if (!row) throw fail(404, "That device isn't in your account.", "not-found");
+    if (row.status !== "active") throw fail(409, "Only a running device can be reconnected. Check a stopped one instead.", "not-active");
+    const hub = hubView(await hubRow(db, userId, row.hub_id));
+    if (!hub?.online) throw fail(409, `The hub “${hub?.name || ""}” isn't connected, so it can't reconnect the device.`, "hub-offline");
+    await db.query("UPDATE hannah_devices SET reconnect_seq = reconnect_seq + 1, updated_at = $1 WHERE user_id = $2 AND id = $3", [now(), userId, row.id]);
+    await bump(db, row.hub_id);
+    const version = Number((await db.query("SELECT config_version FROM hannah_hubs WHERE id = $1", [row.hub_id])).rows[0]?.config_version) || 0;
+    await addEvent(db, userId, { hubId: row.hub_id, deviceId: row.id, type: "device-reconnect-requested", message: `Reconnect of “${row.name}” requested${requestedBy ? ` by ${String(requestedBy).slice(0, 80)}` : ""}. Its hub restarts the device's connection when it takes configuration ${version}.` });
+    return { deviceId: row.id, hubId: row.hub_id, configVersion: version };
+  }
+  /** Whether the hub has taken a configuration version, and the device's connection now. */
+  async function reconnectStatus(db, userId, id, configVersion) {
+    const device = await getDevice(db, userId, id);
+    const hub = (await db.query("SELECT reported_config FROM hannah_hubs WHERE user_id = $1 AND id = $2", [userId, device.hub.id])).rows[0];
+    return { applied: Number(hub?.reported_config || 0) >= Number(configVersion), connection: device.connection };
+  }
   async function activateDevice(db, userId, id, { writable = [], acceptPartial = false } = {}) {
     const row = await deviceRow(db, userId, id);
     if (!row) throw fail(404, "That device isn't in your account.", "not-found");
@@ -813,7 +837,7 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
       .filter((rule) => [...(rule.when.all || [rule.when]), ...rule.then, ...(rule.otherwise || [])].every((item) => active.has(item.device)));
     const payload = JSON.stringify({
       v: 1, hubId: row.id, version: Number(row.config_version), rulesSuspended: Boolean(Number(row.rules_suspended)),
-      devices: devices.map((device) => ({ id: device.id, name: device.name, profile: profiles.hubProfile(parse(device.profile, {})), settings: { ...parse(device.settings, {}), ...unseal(device) }, writable: parse(device.writable, []) })),
+      devices: devices.map((device) => ({ id: device.id, name: device.name, profile: profiles.hubProfile(parse(device.profile, {})), settings: { ...parse(device.settings, {}), ...unseal(device) }, writable: parse(device.writable, []), ...(Number(device.reconnect_seq) > 0 ? { reconnect: Number(device.reconnect_seq) } : {}) })),
       rules,
     });
     return { payload, signature: signConfig(secret, payload) };
@@ -916,7 +940,7 @@ function createDeviceService({ now = () => Date.now(), ackWaitMs = Number(proces
 
   return {
     activateDevice, addDevice, assessRule, assessWrite, authenticate, commands, createHub, createRule, deleteProfile, deleteRule, discover, enrollHub, events, getCommand, getDevice, getHub, history,
-    createRollout, issueHubCode, issueUpdate, listDevices, listHubs, listProfiles, listRollouts, listRules, overview, protocols, removeDevice, removeHub, resolveDevice, resolveHub, resolveRule, revokeHub, rollbackRollout, saveProfile, setRolloutPaused, setRule, suspendRules, sync, testDevice,
+    createRollout, issueHubCode, issueUpdate, listDevices, listHubs, listProfiles, listRollouts, listRules, overview, protocols, removeDevice, removeHub, reconnectStatus, requestReconnect, resolveDevice, resolveHub, resolveRule, revokeHub, rollbackRollout, saveProfile, setRolloutPaused, setRule, suspendRules, sync, testDevice,
     updateDevice, waitForCommand, write,
     listPublisherKeys, addPublisherKey, revokePublisherKey, installSignedProfile,
   };

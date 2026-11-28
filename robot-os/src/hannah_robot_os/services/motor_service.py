@@ -33,6 +33,7 @@ from ..motors.factory import MANUFACTURER, build_from_profile, effective_limits
 from ..motors.manager import MotorControllerManager
 from ..motors.sim import SimMotorController
 from ..profiles.schema import validate_hardware_profile
+from .maintenance_features import MaintenanceFeatureWindow
 
 
 class ProfileError(ValueError):
@@ -65,6 +66,9 @@ class MotorService:
     _was_safe: bool = True
     _last_attempt: dict[str, int] = field(default_factory=dict)
     _reported: dict[str, str] = field(default_factory=dict)
+    # Maintenance features from the controllers' own feedback (read only; never affects control).
+    features: MaintenanceFeatureWindow = field(default_factory=MaintenanceFeatureWindow)
+    last_maintenance: dict | None = None
 
     def setup(self) -> MotorControllerManager:
         profile = load_profile(self.profile_path) if self.profile_path else None
@@ -115,7 +119,14 @@ class MotorService:
                     set_estop(False)
                 self._recover(cid)
             self.motors.watchdog_check(cid)
+            self.features.add(self.motors.status(cid), self.clock())
         self._was_safe = safe
+        if self.features.due(self.clock()):
+            self.last_maintenance = self.features.close(self.clock())
+
+    def maintenance(self) -> dict | None:
+        """The last closed maintenance window, for the status file and the parent HANNAH."""
+        return self.last_maintenance
 
     def _recover(self, cid: str) -> None:
         assert self.motors is not None

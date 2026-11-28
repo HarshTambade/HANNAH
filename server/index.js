@@ -65,7 +65,7 @@ const { createRuntime } = require("./workflows/runtime");
 const { createHookRouter, createWorkflowRouter } = require("./workflows/router");
 const { createWorkforceRouter, startWorker: startWorkforceWorker } = require("./workforce");
 const serverVersion = require("./package.json").version;
-const { assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
+const { activeBackup, assertWithinBudget, budgetStatus, classifyRequest, complete, hydrateSpend, normalizeProviderError, pickAutoModel, recordSpend, setSpendStore } = require("./gateway");
 const router = require("./router");
 const {
   defaultModelFor,
@@ -203,8 +203,9 @@ function allowedProviderIds(req, res) {
 /** The default provider for this caller: the server default when allowed, else their first usable one. */
 function preferredProviderId(req, res) {
   const allowed = allowedProviderIds(req, res);
-  if (!allowed || allowed.has(defaultProviderId())) return defaultProviderId();
-  return [...allowed][0] || defaultProviderId();
+  const primary = !allowed || allowed.has(defaultProviderId()) ? defaultProviderId() : [...allowed][0] || defaultProviderId();
+  // Diagnostics may have switched to a configured backup while the primary fails (gateway.avoidProvider). Never for visitor keys.
+  return res.locals.hannahByok ? primary : activeBackup(primary, allowed) || primary;
 }
 
 /** Every provider this caller can actually reach, each with the key to use. Never includes credentials in output. */
@@ -492,6 +493,11 @@ if (process.env.HANNAH_ROBOT_OS_BRIDGE === "1") {
         }
         // An event envelope from Robot OS's black box also goes on the robot's timeline.
         if (env.kind === "event" && result.owner) await operator.blackbox.ingestEnvelope(db, result.owner, env).catch((error) => console.error(`Robot OS black box event not stored: ${error?.message || error}`));
+        // A Robot OS maintenance window (motor temperatures, currents, voltages, fault codes) feeds predictive maintenance.
+        if (result.owner && env.kind === "telemetry" && env.payload?.maintenance) {
+          const robot = (await db.query("SELECT simulated FROM hannah_robots WHERE id = $1", [String(env.robot_id)]).catch(() => ({ rows: [] }))).rows[0];
+          await operator.maintenance.recordRobotOSFeatures(db, result.owner, String(env.robot_id), env.payload.maintenance, { simulated: Boolean(Number(robot?.simulated)) }).catch((error) => console.error(`Robot OS maintenance features not recorded: ${error?.message || error}`));
+        }
       }
       console.log(JSON.stringify({ robotOSBridge: { robot_id: env.robot_id, envelope_id: env.envelope_id, kind: env.kind, ts_ms: env.ts_ms } }));
     },
@@ -630,6 +636,9 @@ app.use("/api", createBlackBoxAccountRouter({ blackbox: operator.blackbox, creat
 app.use("/api", createDeviceAccountRouter({ devices: operator.devices, engine: operator.engine, manuals: manualRoutes({ devices: operator.devices }) }));
 // The Device Intelligence Graph: entities, versioned relationships, history and live-checked context (server/graph).
 app.use("/api", createGraphRouter({ graph: operator.graph }));
+// Predictive maintenance and self-diagnostics (server/maintenance, server/diagnostics).
+app.use("/api", require("./maintenance/router").createMaintenanceRouter({ maintenance: operator.maintenance }));
+app.use("/api", require("./diagnostics/router").createDiagnosticsRouter({ diagnostics: operator.diagnostics }));
 // Web search (Groq browser search with the request's key) and page reading, on every platform.
 app.use("/api", createWebRouter({ getRequestProvider }));
 // "Set up HANNAH": connect this deployment to Vercel and Supabase with the person's own tokens.
@@ -734,6 +743,7 @@ app.get("/api/providers", (req, res) => {
 // Which catalog models each provider really serves right now, by provider and
 // key (hashed), for 10 minutes: the curated list outlives models a provider retires.
 const liveModelCache = new Map();
+require("./diagnostics/caches").registerSafeCache("live-model-catalog", { description: "Which models each provider served when last asked (refetched on the next catalog request)", clear: () => liveModelCache.clear(), size: () => liveModelCache.size });
 async function liveModelsFor(req, provider) {
   let apiKey;
   try {

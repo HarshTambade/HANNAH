@@ -19,6 +19,8 @@ class ServiceRuntime:
     status_path: Path
     tick: Callable[[], None]
     interval_s: float = 1.0
+    # Extra sections for the status file (for example the motor controller's maintenance window).
+    extra: Callable[[], dict] | None = None
 
     def run_forever(self, max_ticks: int | None = None) -> None:
         running = True
@@ -57,4 +59,9 @@ class ServiceRuntime:
             "health": self.health.snapshot(),
             "audit_tail": [e.to_dict() for e in self.audit.list()[-20:]],
         }
+        if self.extra is not None:
+            try:
+                payload.update({key: value for key, value in (self.extra() or {}).items() if key not in payload})
+            except Exception as error:  # noqa: BLE001 - a report section must never stop the service
+                payload["extra_error"] = type(error).__name__
         self.status_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

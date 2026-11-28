@@ -37,6 +37,21 @@ STALE_SCAN_S = 3.0
 BEAMS = 72
 
 
+def battery_report(message) -> dict | None:
+    """A sensor_msgs/BatteryState as HANNAH's battery report. Voltage, current and
+    temperature are included only when the message carries them: BatteryState
+    uses NaN for "not measured", and a NaN is left out, never sent as a number.
+    These feed predictive maintenance on the server."""
+    if message is None:
+        return None
+    out = {"percent": round(message.percentage * 100.0, 1), "charging": message.power_supply_status == 1}
+    for field, key in (("voltage", "voltageV"), ("current", "currentA"), ("temperature", "temperatureC")):
+        value = getattr(message, field, None)
+        if isinstance(value, (int, float)) and math.isfinite(value):
+            out[key] = round(float(value), 3)
+    return out
+
+
 def _yaw(q) -> float:
     return math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
@@ -231,7 +246,7 @@ class Ros2Adapter(RobotAdapter):
         navigator_ready = bool(self._node is not None and self._navigator.server_is_ready())
         return {
             "pose": pose, "velocity": velocity,
-            "battery": None if battery is None else {"percent": round(battery.percentage * 100.0, 1), "charging": battery.power_supply_status == 1},
+            "battery": battery_report(battery),
             "estop": {"engaged": bool(estop), "source": "hardware topic" if self.topics.get("estop") else "not monitored"},
             "motorsEnabled": not bool(estop),
             "localized": localized,

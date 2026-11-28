@@ -145,4 +145,4 @@ async function checkAgentHealth() {
   };
 }
 
-module.exports = { checkAgentHealth };
+module.exports = { checkAgentHealth, checkOllama, checkPythonFallback };

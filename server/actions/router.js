@@ -51,6 +51,11 @@ const { hardwareActions } = require("./catalog/hardware");
 const { robotOSActions } = require("./catalog/robot_os");
 const { blackboxActions } = require("./catalog/blackbox");
 const { createBlackBoxService } = require("../robotics/blackbox");
+const { opsActions } = require("./catalog/ops");
+const { createMaintenanceService } = require("../maintenance/service");
+const { createRecoveryRegistry } = require("../diagnostics/recovery");
+const { createDiagnosticsEngine } = require("../diagnostics/engine");
+const robotOSEnvelopes = require("../robotics/robot_os_envelopes");
 const { createDeviceService } = require("../devices/service");
 const { createRoboticsService } = require("../robotics/service");
 const { createGraphService } = require("../graph/service");
@@ -66,14 +71,19 @@ const { vaultConfigured } = require("../vault");
 const fail = (status, message, reason) => Object.assign(new Error(message), { status, reason });
 
 /** One engine, one coding service and one robot registry for the whole server: routes, workflows and MCP all use these. */
-function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs, robotOSCommands = null } = {}) {
+function createOperator({ fetchImpl = (...args) => fetch(...args), request, now = () => Date.now(), roots, robotAckWaitMs, robotOSCommands = null, diagnosticProbes = null } = {}) {
   const coding = createCodingService({ fetchImpl, now, ...(request ? { request } : {}), ...(roots ? { roots } : {}) });
-  const robotics = createRoboticsService({ now, emit: emitUserEvent, ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
+  // Maintenance records what robots report on each sync; it never changes what the robot is sent.
+  const maintenance = createMaintenanceService({ now, emit: emitUserEvent });
+  const robotics = createRoboticsService({ now, emit: emitUserEvent, onState: (db, row, state, at) => maintenance.recordRobotState(db, row, state, at), ...(robotAckWaitMs ? { ackWaitMs: robotAckWaitMs } : {}) });
   const devices = createDeviceService({ now, emit: emitUserEvent });
   const graph = createGraphService({ now, robotics, devices });
   const blackbox = createBlackBoxService({ robotics, now });
-  const engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics, graph }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands }), ...blackboxActions({ robotics, blackbox })] });
-  return { blackbox, coding, devices, engine, graph, robotics, robotOSCommands };
+  let engine = null;
+  const recovery = createRecoveryRegistry({ robotOSCommands, robotOSEnvelopes, devices, robotics, now });
+  const diagnostics = createDiagnosticsEngine({ now, robotics, devices, robotOSEnvelopes, registry: recovery, actionEngine: () => engine, ...(diagnosticProbes ? { probes: diagnosticProbes } : {}) });
+  engine = createActionEngine({ now, actions: [...calendarActions({ fetchImpl }), ...communicationActions({ fetchImpl }), ...codeActions({ coding }), ...deviceActions(), ...robotActions({ robotics, graph }), ...hardwareActions({ devices }), ...robotOSActions({ robotics, robotOSCommands }), ...blackboxActions({ robotics, blackbox }), ...opsActions({ maintenance, diagnostics })] });
+  return { blackbox, coding, devices, diagnostics, engine, graph, maintenance, recovery, robotics, robotOSCommands };
 }
 
 /** Every connection an account has, in one shape. */

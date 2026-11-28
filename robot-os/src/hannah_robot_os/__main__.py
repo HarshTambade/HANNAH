@@ -229,6 +229,7 @@ def cmd_service(args: argparse.Namespace) -> int:
         status_path=status_path,
         tick=tick,
         interval_s=float(args.interval),
+        extra=(lambda: {"maintenance": motor_service.maintenance()}) if args.name == "motor-controller" else None,
     )
     try:
         runtime.run_forever(max_ticks=args.max_ticks)

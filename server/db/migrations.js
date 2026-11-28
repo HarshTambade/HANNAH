@@ -1766,6 +1766,155 @@ const MIGRATIONS = [
       "CREATE INDEX IF NOT EXISTS hannah_edge_resource_reports_robot ON hannah_edge_resource_reports (user_id, robot_id, at)",
     ],
   },
+  {
+    version: 38,
+    name: "Predictive maintenance and self-diagnostics",
+    // Maintenance: measurements robots and hubs reported, aggregated into
+    // five-minute buckets (count, sum, sum of squares, min, max, last), the
+    // baseline computed per component and metric, the findings detectors
+    // raised (each labelled measured anomaly, suspected cause or confirmed
+    // fault, with the person's verdict for false-positive tracking), and
+    // maintenance tasks. Service history stays in hannah_robot_maintenance,
+    // which gains the component and the task it closed.
+    // Diagnostics: incidents with their lifecycle, recovery attempts with the
+    // policy that applied, and an audit trail of every incident and change.
+    // Server-wide incidents have no user_id. Additive; no existing row changes.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS hannah_maint_series (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        asset_id TEXT NOT NULL,
+        component TEXT NOT NULL,
+        metric TEXT NOT NULL,
+        bucket_at BIGINT NOT NULL,
+        asset_kind TEXT NOT NULL,
+        unit TEXT,
+        source TEXT NOT NULL,
+        n INTEGER NOT NULL,
+        sum_v DOUBLE PRECISION NOT NULL,
+        sumsq_v DOUBLE PRECISION NOT NULL,
+        min_v DOUBLE PRECISION NOT NULL,
+        max_v DOUBLE PRECISION NOT NULL,
+        last_v DOUBLE PRECISION NOT NULL,
+        last_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, asset_id, component, metric, bucket_at)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_maint_series_recent ON hannah_maint_series (user_id, asset_id, bucket_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_maint_baselines (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        asset_id TEXT NOT NULL,
+        component TEXT NOT NULL,
+        metric TEXT NOT NULL,
+        computed_at BIGINT NOT NULL,
+        from_at BIGINT NOT NULL,
+        to_at BIGINT NOT NULL,
+        stats TEXT NOT NULL,
+        PRIMARY KEY (user_id, asset_id, component, metric)
+      )`,
+      `CREATE TABLE IF NOT EXISTS hannah_maint_findings (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        asset_id TEXT NOT NULL,
+        asset_kind TEXT NOT NULL,
+        component TEXT NOT NULL,
+        metric TEXT,
+        label TEXT NOT NULL,
+        detector TEXT NOT NULL,
+        status TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        confidence DOUBLE PRECISION NOT NULL,
+        simulated INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        first_seen_at BIGINT NOT NULL,
+        last_seen_at BIGINT NOT NULL,
+        occurrences INTEGER NOT NULL,
+        feedback TEXT,
+        feedback_note TEXT,
+        feedback_at BIGINT,
+        confirmation TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_maint_findings_asset ON hannah_maint_findings (user_id, asset_id, status)",
+      "CREATE INDEX IF NOT EXISTS hannah_maint_findings_print ON hannah_maint_findings (user_id, fingerprint, status)",
+      `CREATE TABLE IF NOT EXISTS hannah_maint_tasks (
+        user_id TEXT NOT NULL REFERENCES hannah_users(id) ON DELETE CASCADE,
+        id TEXT NOT NULL,
+        asset_id TEXT NOT NULL,
+        component TEXT,
+        finding_id TEXT,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        note TEXT,
+        status TEXT NOT NULL,
+        due_at BIGINT,
+        reminder_id TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        done_at BIGINT,
+        done_note TEXT,
+        PRIMARY KEY (user_id, id)
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_maint_tasks_asset ON hannah_maint_tasks (user_id, asset_id, status)",
+      "ALTER TABLE hannah_robot_maintenance ADD COLUMN component TEXT",
+      "ALTER TABLE hannah_robot_maintenance ADD COLUMN task_id TEXT",
+      // Diagnostics' "reconnect device": a change to this number changes the
+      // device's entry in its hub's signed configuration, so the hub stops and
+      // restarts that device's adapter. 0 leaves the entry exactly as before.
+      "ALTER TABLE hannah_devices ADD COLUMN reconnect_seq INTEGER NOT NULL DEFAULT 0",
+      `CREATE TABLE IF NOT EXISTS hannah_diag_incidents (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES hannah_users(id) ON DELETE CASCADE,
+        scope TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        subsystem TEXT NOT NULL,
+        component TEXT NOT NULL,
+        problem TEXT NOT NULL,
+        fingerprint TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        status TEXT NOT NULL,
+        title TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        occurrences INTEGER NOT NULL,
+        opened_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        resolved_at BIGINT
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_diag_incidents_owner ON hannah_diag_incidents (user_id, status, updated_at)",
+      "CREATE INDEX IF NOT EXISTS hannah_diag_incidents_print ON hannah_diag_incidents (fingerprint, status)",
+      `CREATE TABLE IF NOT EXISTS hannah_diag_recoveries (
+        id TEXT PRIMARY KEY,
+        incident_id TEXT,
+        user_id TEXT REFERENCES hannah_users(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        policy TEXT NOT NULL,
+        status TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        requested_by TEXT NOT NULL,
+        action_record_id TEXT,
+        params TEXT NOT NULL,
+        result TEXT,
+        verification TEXT,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_diag_recoveries_incident ON hannah_diag_recoveries (incident_id, created_at)",
+      `CREATE TABLE IF NOT EXISTS hannah_ops_audit (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES hannah_users(id) ON DELETE CASCADE,
+        at BIGINT NOT NULL,
+        area TEXT NOT NULL,
+        subject_id TEXT,
+        actor TEXT NOT NULL,
+        event TEXT NOT NULL,
+        detail TEXT
+      )`,
+      "CREATE INDEX IF NOT EXISTS hannah_ops_audit_owner ON hannah_ops_audit (user_id, at)",
+      "CREATE INDEX IF NOT EXISTS hannah_ops_audit_subject ON hannah_ops_audit (subject_id, at)",
+    ],
+  },
 ];
 
 module.exports = { MIGRATIONS };

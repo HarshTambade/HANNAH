@@ -10,6 +10,7 @@ import { RefreshCw } from "lucide-react";
 import { apiFetch, apiUrl } from "../services/api";
 import { Operator } from "../services/Operator";
 import UpdatesPanel from "./robotops/UpdatesPanel";
+import DiagnosticsPanel from "./robotops/DiagnosticsPanel";
 
 type EnvelopeView = {
   envelopeId: string;
@@ -147,6 +148,8 @@ export default function RobotOSPage() {
       </header>
 
       {error ? <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900" role="alert">{error}</p> : null}
+
+      <DiagnosticsPanel />
 
       <section className="mb-4 grid gap-3 sm:grid-cols-4">
         <div className={card}><p className={heading}>Envelopes</p><p className="mt-1 text-2xl font-semibold text-slate-900">{summary.total}</p></div>

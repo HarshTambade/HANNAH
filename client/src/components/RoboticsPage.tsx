@@ -20,6 +20,7 @@ import BlackBoxPanel from "./robotops/BlackBoxPanel";
 import { AnalyticsPanel, ArmPanel, CameraPanel, CommissioningPanel, DestinationsPanel, DiagnosticsPanel, FleetPanel, PlansPanel, SurroundingsPanel } from "./RobotPanels";
 import SimToRealPanel from "./robotops/SimToRealPanel";
 import { EdgeResourcesPanel } from "./robotops/EdgeResourcesPanel";
+import MaintenancePanel from "./robotops/MaintenancePanel";
 import { Robotics, type Capability, type Enrollment, type Mission, type Robot, type RobotEvent, type TelemetrySample } from "../services/Robotics";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -456,6 +457,7 @@ function RobotDetail({ robotId, enrollment, capabilities, onGone, robots = [] }:
       <BlackBoxPanel robot={robot} />
 
       {robot.status === "enrolled" && !robot.simulated && <SimToRealPanel robot={robot} robots={robots} />}
+      {robot.status === "enrolled" && <MaintenancePanel assetId={robot.id} />}
 
       <section className={`${card} space-y-2`}>
         <h3 className="font-semibold text-slate-900">Device</h3>

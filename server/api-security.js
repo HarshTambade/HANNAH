@@ -70,7 +70,9 @@ function accountMayUse(path) {
     // The account's Device Intelligence Graph (server/graph): scoped to the account and its teams.
     || path === "/graph" || path.startsWith("/graph/")
     // The AI workforce: teammates, computers, tasks, skills, routines, vault and approvals.
-    || path === "/workforce" || path.startsWith("/workforce/");
+    || path === "/workforce" || path.startsWith("/workforce/")
+    // Predictive maintenance and self-diagnostics for the account (server-wide recoveries check for an administrator themselves).
+    || path === "/maintenance" || path.startsWith("/maintenance/") || path === "/diagnostics" || path.startsWith("/diagnostics/");
 }
 const GROQ_KEY_PATTERN = /^gsk_[A-Za-z0-9]{20,200}$/;
 
