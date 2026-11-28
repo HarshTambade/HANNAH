@@ -1,10 +1,12 @@
 import { Fragment, type ReactNode } from "react";
+import CodeBlock from "./CodeBlock";
+import { normalizeLanguage } from "../services/codeSandbox";
 
 /**
  * Minimal, safe Markdown for chat replies. It builds React elements directly
  * (never innerHTML), so model output cannot inject markup or scripts.
  * Supports paragraphs, line breaks, headings, bullet/numbered lists, fenced
- * code, inline code, bold, italics, and https links. With `citations` (a
+ * code (Python and JavaScript blocks get a Run button, components/CodeBlock.tsx), inline code, bold, italics, and https links. With `citations` (a
  * research answer's sources by number), each [n] becomes a link to that
  * source; a number with no source stays plain text.
  */
@@ -54,7 +56,7 @@ function renderLines(lines: string[], keyPrefix: string, citations?: Citations) 
 }
 
 type Block =
-  | { kind: "code"; text: string }
+  | { kind: "code"; text: string; tag: string }
   | { kind: "heading"; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
   | { kind: "paragraph"; lines: string[] };
@@ -65,12 +67,13 @@ function parseBlocks(source: string): Block[] {
   let index = 0;
   while (index < lines.length) {
     const line = lines[index];
-    if (/^\s*```/.test(line)) {
+    const fence = /^\s*```\s*([\w#+.-]*)/.exec(line);
+    if (fence) {
       const body: string[] = [];
       index += 1;
       while (index < lines.length && !/^\s*```/.test(lines[index])) body.push(lines[index++]);
       index += 1;
-      blocks.push({ kind: "code", text: body.join("\n") });
+      blocks.push({ kind: "code", text: body.join("\n"), tag: fence[1] ?? "" });
       continue;
     }
     if (!line.trim()) { index += 1; continue; }
@@ -104,7 +107,7 @@ export default function MessageContent({ text, citations }: { text: string; cita
       {blocks.map((block, index) => {
         const key = `block-${index}`;
         if (block.kind === "code") {
-          return <pre key={key} className="overflow-x-auto rounded-xl bg-slate-900 px-3 py-2.5 font-mono text-[12px] leading-relaxed text-slate-100"><code>{block.text}</code></pre>;
+          return <CodeBlock key={key} code={block.text} language={normalizeLanguage(block.tag)} tag={block.tag || undefined} />;
         }
         if (block.kind === "heading") return <p key={key} className="font-semibold text-ink">{renderInline(block.text, key, citations)}</p>;
         if (block.kind === "list") {

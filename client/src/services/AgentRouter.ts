@@ -48,6 +48,9 @@ const TOOL_FAMILIES: Array<{ match: RegExp; tools: RegExp }> = [
   { match: /remember|memory|memories|forget|my (favou?rite|preference)/i, tools: /^(search_memories|save_memory)$/ },
   { match: /knowledge|document|uploaded|my notes/i, tools: /^knowledge_/ },
   { match: /attach|upload|this (file|pdf|document|sheet|spreadsheet|deck|csv|image|picture)|the (file|pdf|csv|spreadsheet)|\bconvert\b|\.(pdf|docx|pptx|xlsx|csv)\b/i, tools: /^(read_attached_files|convert_file)$/ },
+  // Code execution in chat (services/CodeRunner.ts): sums, statistics, data and charts.
+  { match: /\b(python|javascript|run (this|the|that|it|my) code|code interpreter|calculat|compute\b|plot|chart|graph|histogram|statistic|regression|correlat|simulat|average|median|percentile|std ?dev|variance|compound interest|factorial|prime|fibonacci|matplotlib|pandas|numpy|dataframe)/i, tools: /^run_code$/ },
+  { match: /attach|upload|this (file|csv|sheet|spreadsheet)|the (file|csv|spreadsheet)|\.(csv|tsv|xlsx|json)\b/i, tools: /^run_code$/ },
   { match: /briefing|weather|agenda|my day/i, tools: /^daily_briefing$/ },
   { match: /workflow|automat/i, tools: /^(create_workflow_draft|list_workflows)$/ },
   { match: /battery|device|setting|wi-?fi|bluetooth|volume|brightness/i, tools: /^(get_device_status|get_battery_status|toggle_setting)$/ },

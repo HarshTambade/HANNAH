@@ -21,6 +21,8 @@ import { AgentApiError } from "../services/LLMRouter";
 import { ApprovalCenter, type ApprovalRequest } from "../services/ApprovalCenter";
 import { WAKE_EVENT, WakeWord } from "../services/WakeWord";
 import MessageContent from "./MessageContent";
+import CodeBlock from "./CodeBlock";
+import { CODE_RUN_EVENT, type RecordedRun } from "../services/CodeRunner";
 import type { ChatMessage, Emotion, InferenceMode, SpeechLanguage } from "../types";
 import { useConnectivity } from "../services/connectivity";
 import {
@@ -155,6 +157,13 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
   const [libraryOpen, setLibraryOpen] = useState(false);
   /** What the tools made during the turn in progress, to attach to its reply. */
   const turnStudioRef = useRef<{ researchId?: string; fileIds: string[] }>({ fileIds: [] });
+  /** Code the agent ran during the turn in progress (run_code), to show under its reply. */
+  const turnCodeRunsRef = useRef<RecordedRun[]>([]);
+  useEffect(() => {
+    const onRun = (event: Event) => { const run = (event as CustomEvent<RecordedRun>).detail; if (run?.id) turnCodeRunsRef.current = [...turnCodeRunsRef.current, run].slice(-6); };
+    window.addEventListener(CODE_RUN_EVENT, onRun);
+    return () => window.removeEventListener(CODE_RUN_EVENT, onRun);
+  }, []);
   /** A follow-up to a research answer is researched too, in the same mode, whether or not the switch is on. */
   const followUpModeRef = useRef<ResearchMode | null>(null);
   useEffect(() => {
@@ -606,6 +615,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       };
 
       turnStudioRef.current = { fileIds: [] };
+      turnCodeRunsRef.current = [];
       setStudioEvents([]);
       const plainHistory = nextMessages.filter((message) => message.role !== "system").map(({ role, content: text }) => ({ role, content: text }));
       setToolConversation(plainHistory);
@@ -688,7 +698,9 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
       if (transcript !== undefined) trackEvent("voice_used");
       const made = turnStudioRef.current;
       const studio = made.researchId || made.fileIds.length ? { ...(made.researchId ? { researchId: made.researchId } : {}), ...(made.fileIds.length ? { fileIds: [...new Set(made.fileIds)] } : {}) } : undefined;
-      setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply, ...(studio ? { studio } : {}) }]);
+      const codeRuns = turnCodeRunsRef.current.map(({ id, language, code }) => ({ id, language, code }));
+      turnCodeRunsRef.current = [];
+      setMessages((current) => [...current, { id: createMessageId(), role: "assistant", content: result.reply, ...(studio ? { studio } : {}), ...(codeRuns.length ? { codeRuns } : {}) }]);
       onEmotionChange(result.emotion);
       if (!speakReply) {
         if (presentTimerRef.current !== null) window.clearTimeout(presentTimerRef.current);
@@ -1347,6 +1359,7 @@ export default function ChatUI({ onEmotionChange, onActivityChange, panel = fals
                     {isUser ? message.content : <MessageContent text={message.content} citations={message.studio?.researchId ? citationsOf(getResearch(message.studio.researchId)) : undefined} />}
                   </div>
                 </div>
+                {!isUser && message.codeRuns?.map((run) => <div key={run.id} className="ml-9 max-w-[85%]"><CodeBlock code={run.code} language={run.language} runId={run.id} caption="Code HANNAH ran" /></div>)}
                 {!isUser && message.studio?.fileIds?.map((fileId) => <FileCard key={fileId} fileId={fileId} />)}
                 {!isUser && message.studio?.researchId && (
                   <ResearchCard
