@@ -101,7 +101,7 @@ function createRobotDeviceRouter({ robotics, enrollLimiter = null }) {
   return router;
 }
 
-function createRobotAccountRouter({ robotics, engine, robotOSEnvelopes = null, robotOSCommands = null }) {
+function createRobotAccountRouter({ robotics, engine, robotOSEnvelopes = null, robotOSCommands = null, blackbox = null }) {
   const router = express.Router();
   const json = express.json({ limit: "200kb" });
   const guard = ({ session = false } = {}) => (handler) => async (req, res) => {
@@ -189,6 +189,8 @@ function createRobotAccountRouter({ robotics, engine, robotOSEnvelopes = null, r
   router.post("/robots/:id/revoke", person(async (req, res, db, account) => res.json({ robot: await robotics.revokeRobot(db, account.id, req.params.id) })));
   router.delete("/robots/:id", person(async (req, res, db, account) => {
     if (!(await robotics.removeRobot(db, account.id, req.params.id))) throw fail(404, "That robot isn't enrolled in your account.", "not-found");
+    // Its black box (events, recordings and their files) goes with it.
+    if (blackbox) await blackbox.removeRobotData(db, account.id, req.params.id);
     res.json({ removed: true });
   }));
   router.post("/robots/:id/stop", json, anyAccount(async (req, res, db, account) => {
