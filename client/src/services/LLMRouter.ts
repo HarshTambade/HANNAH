@@ -235,7 +235,7 @@ export class LLMRouter {
     return resolveInferenceMode(preferred, browserConnected && network.connected);
   }
 
-  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = [], extra: { routeHint?: "simple" | "standard" | "complex"; signal?: AbortSignal; knowledge?: Array<{ citation: string; text: string }>; onWait?: (ms: number) => void } = {}): Promise<AgentStep> {
+  static async requestStep(mode: Extract<InferenceMode, "cloud" | "ollama">, messages: AgentMessage[], tools: HANNAHTool[], model?: string, groqApiKey?: string, providerId = "groq", marketplaceItemIds: string[] = [], personalization?: PersonalizationContext, memories: string[] = [], extra: { routeHint?: "simple" | "standard" | "complex"; signal?: AbortSignal; knowledge?: Array<{ citation: string; text: string }>; project?: { name: string; instructions: string }; onWait?: (ms: number) => void } = {}): Promise<AgentStep> {
     if (mode === "cloud" && ChaosEngine.consume("network-drop")) {
       ChaosEngine.setDegraded("Offline: cloud request dropped; switching to local AI.");
       throw new Error("Chaos injection: simulated cloud network drop.");
@@ -254,6 +254,8 @@ export class LLMRouter {
       ...(memories.length ? { memories } : {}),
       // Passages from the user's own documents that match what they asked (server/index.js labels them as untrusted).
       ...(extra.knowledge?.length ? { knowledge: extra.knowledge } : {}),
+      // The chat's project instructions (server/projects.js adds them to the system prompt).
+      ...(extra.project?.instructions.trim() ? { project: extra.project } : {}),
       ...(dailyBudgetUsd() ? { budget: { dailyUsd: dailyBudgetUsd() } } : {}),
       ...(CommunitySkills.runtimeSkills().length ? { communitySkills: CommunitySkills.runtimeSkills() } : {}),
       messages,

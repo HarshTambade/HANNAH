@@ -114,6 +114,21 @@ export const LANDING_TAB_TITLES: Record<LandingTab, string> = {
   faq: "FAQ and support · HANNAH",
 };
 
+/**
+ * Paths the HANNAH server answers itself, never the web app. On Vercel they're
+ * rewritten to the server (vercel.json), the self-hosted server keeps them
+ * from the app (server/static-client.js), and Vite proxies them in
+ * development. /s/<id> is a shared conversation's public read-only page,
+ * rendered by the server with no scripts (server/shares.js), so the build
+ * emits no page for it and no app route may start with one of these.
+ */
+export const SERVER_PATH_PREFIXES = ["/api/", "/v1/", "/mcp", "/download/", "/.well-known/", "/a2a", "/hooks/", "/s/"] as const;
+
+/** Whether a path belongs to the server (see SERVER_PATH_PREFIXES). */
+export function isServerPath(path: string) {
+  return SERVER_PATH_PREFIXES.some((prefix) => (prefix.endsWith("/") ? path === prefix.slice(0, -1) || path.startsWith(prefix) : path === prefix || path.startsWith(`${prefix}/`)));
+}
+
 /** App paths other than "/", for the build to emit an index.html each. */
 export const APP_ROUTE_PATHS = Object.values(ROUTE_PATHS).filter((path) => path !== "/");
 

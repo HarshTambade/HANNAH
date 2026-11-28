@@ -61,6 +61,13 @@ describe("AgentRuntime tool loop", () => {
     expect(result).toEqual({ reply: "Pune is sunny at 22°C.", emotion: "happy" });
   });
 
+  it("sends the chat's project instructions with every model step", async () => {
+    const project = { name: "Trip", instructions: "Answer in Celsius." };
+    await runAgentTurn({ mode: "cloud", project, messages: [{ role: "user", content: "Weather in Pune?" }], generateLocal: async () => "" });
+    expect(requestStep).toHaveBeenCalledTimes(2);
+    for (const call of requestStep.mock.calls) expect((call[9] as { project?: unknown }).project).toEqual(project);
+  });
+
   it("reports when a tool is waiting for the user's approval, and when it stops waiting", async () => {
     toolFlags.requiresApproval = true;
     const phases: string[] = [];

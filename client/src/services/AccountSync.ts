@@ -14,7 +14,7 @@ import { Diagnostics } from "./Diagnostics";
 
 type Item = Record<string, unknown>;
 type Namespace = {
-  name: "memories" | "reminders" | "communitySkills" | "chatHistory" | "settings" | "automations" | "automationSchedules";
+  name: "memories" | "reminders" | "communitySkills" | "chatHistory" | "settings" | "automations" | "automationSchedules" | "projects" | "projectChats";
   label: string;
   storageKey?: string;
   /** Sync only these items of the list; the rest stay on this device. */
@@ -37,7 +37,10 @@ export const SYNC_NAMESPACES: Namespace[] = [
   // Saved automations and their schedules, so a routine runs on whichever device is open. Plain tasks in the same list stay local.
   { name: "automations", label: "Automations", storageKey: "hannah.tasks.v1", filter: (item) => item.kind === "workflow", idOf: (item) => item.id as string, stampOf: (item) => stamp(item.updatedAt, item.createdAt), event: "hannah:automations", limit: 100 },
   { name: "automationSchedules", label: "Automation schedules", storageKey: "hannah.automations.v1", idOf: (item) => item.workflowId as string, stampOf: (item) => stamp(item.updatedAt, item.lastRunAt), event: "hannah:automations" },
-  { name: "settings", label: "Preferences", keys: ["hannah.budget.dailyUsd", "hannah.guardian.strictness.v1", "hannah.cloudProvider", "hannah.voiceEnabled", "hannah.voice.settings.v1", "hannah.speechLanguage", "hannah.specialists.v1", "hannah.chat.team", "hannah.routing.v1"], event: "hannah:settings" },
+  { name: "settings", label: "Preferences", keys: ["hannah.budget.dailyUsd", "hannah.guardian.strictness.v1", "hannah.cloudProvider", "hannah.voiceEnabled", "hannah.voice.settings.v1", "hannah.speechLanguage", "hannah.specialists.v1", "hannah.chat.team", "hannah.routing.v1", "hannah.chat.current.v1"], event: "hannah:settings" },
+  // Projects and their saved chats (Projects.ts). Last, so project chats over the 1 MB limit can't stop the rest syncing.
+  { name: "projects", label: "Projects", storageKey: "hannah.projects.v1", idOf: (item) => item.id as string, stampOf: (item) => stamp(item.updatedAt, item.createdAt), event: "hannah:projects", limit: 50 },
+  { name: "projectChats", label: "Project chats", storageKey: "hannah.projectChats.v1", idOf: (item) => item.id as string, stampOf: (item) => stamp(item.updatedAt, item.createdAt), event: "hannah:projects", limit: 40 },
 ];
 
 const BASE_PREFIX = "hannah.sync.base.";

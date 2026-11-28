@@ -61,7 +61,8 @@ export default defineConfig(({ mode }) => ({
         // These paths belong to the HANNAH server, not the app: let navigations
         // to them reach the network instead of the cached app page. Without this,
         // /download/android showed the app's "Page not found" screen.
-        navigateFallbackDenylist: [/^\/download\//, /^\/api\//, /^\/v1\//, /^\/mcp(?:\/|$)/, /^\/\.well-known\//],
+        // Server pages: /s/<id> is a shared conversation the server renders, so the app must never answer it offline.
+        navigateFallbackDenylist: [/^\/download\//, /^\/api\//, /^\/v1\//, /^\/mcp(?:\/|$)/, /^\/\.well-known\//, /^\/s\//],
         runtimeCaching: [{
           urlPattern: /\/models\/.*\.glb$/,
           handler: "CacheFirst",
@@ -108,6 +109,8 @@ export default defineConfig(({ mode }) => ({
       "/v1": "http://localhost:3001",
       "/mcp": "http://localhost:3001",
       "/.well-known/agent-card.json": "http://localhost:3001",
+      // Shared conversation pages are rendered by the server. A RegExp, so /settings and /skills stay with Vite.
+      "^/s/": "http://localhost:3001",
     },
   },
 }));

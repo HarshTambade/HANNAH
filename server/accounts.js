@@ -24,7 +24,7 @@ const scryptAsync = promisify(scrypt);
 const SESSION_COOKIE = "hannah_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SCRYPT = { N: 1 << 15, r: 8, p: 1, keylen: 64 };
-const SYNC_NAMESPACES = new Set(["memories", "reminders", "communitySkills", "chatHistory", "settings", "automations", "automationSchedules"]);
+const SYNC_NAMESPACES = new Set(["memories", "reminders", "communitySkills", "chatHistory", "settings", "automations", "automationSchedules", "projects", "projectChats"]);
 const MAX_SYNC_BYTES = 1024 * 1024;
 const EMAIL_PATTERN = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,63}$/;
 
@@ -479,7 +479,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
   }));
 
   router.get("/account/export", requireSession(async (_req, res, db, account) => {
-    const [user, data, credentials, keys, events, tasks, connections, runs] = await Promise.all([
+    const [user, data, credentials, keys, events, tasks, connections, runs, shares] = await Promise.all([
       db.query("SELECT id, email, display_name, created_at FROM hannah_users WHERE id = $1", [account.id]),
       db.query("SELECT namespace, value, version, updated_at FROM hannah_user_data WHERE user_id = $1", [account.id]),
       db.query("SELECT provider_id, hint, updated_at FROM hannah_credentials WHERE user_id = $1", [account.id]),
@@ -488,6 +488,7 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
       db.query("SELECT id, kind, title, detail, status, device_name, created_at, updated_at, decided_by FROM hannah_device_tasks WHERE user_id = $1 ORDER BY created_at", [account.id]),
       db.query("SELECT provider, account_email, scopes, created_at FROM hannah_connections WHERE user_id = $1", [account.id]),
       db.query("SELECT id, kind, title, status, record, last_device_name, created_at, updated_at, finished_at FROM hannah_task_runs WHERE user_id = $1 ORDER BY created_at", [account.id]),
+      require("./shares").exportShares(db, account.id),
     ]);
     await audit(db, account.id, "account.exported");
     res.setHeader("Content-Disposition", "attachment; filename=\"hannah-account-export.json\"");
@@ -500,6 +501,8 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
       audit: events.rows.map((row) => ({ event: row.event, detail: row.detail ? JSON.parse(row.detail) : null, at: Number(row.created_at) })),
       deviceTasks: tasks.rows.map((row) => ({ id: row.id, kind: row.kind, title: row.title, detail: row.detail || "", status: row.status, device: row.device_name, createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), decidedBy: row.decided_by || null })),
       connections: connections.rows.map((row) => ({ provider: row.provider, email: row.account_email, scopes: row.scopes, connectedAt: Number(row.created_at), note: "Sign-in tokens are never exported." })),
+      // Shared conversation links and the snapshot each one publishes.
+      sharedConversations: shares,
       taskRuns: runs.rows.map((row) => ({ id: row.id, kind: row.kind, title: row.title, status: row.status, record: JSON.parse(row.record), lastDevice: row.last_device_name, createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), finishedAt: row.finished_at === null ? null : Number(row.finished_at) })),
     });
   }));
@@ -508,7 +511,9 @@ function createAccountRouter({ isOperator, verifyProviderKey }) {
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     const { rows } = await db.query("SELECT password_hash FROM hannah_users WHERE id = $1", [account.id]);
     if (!rows[0] || !(await verifyPassword(password, rows[0].password_hash))) return res.status(401).json({ error: "Enter your password to delete your account." });
-    // Child rows go with ON DELETE CASCADE; spend rows are keyed by credential, not user.
+    // Shared links first, so a public page can't outlive the account; the rest
+    // go with ON DELETE CASCADE; spend rows are keyed by credential, not user.
+    await db.query("DELETE FROM hannah_shared_conversations WHERE user_id = $1", [account.id]);
     await db.query("DELETE FROM hannah_users WHERE id = $1", [account.id]);
     await db.query("DELETE FROM hannah_spend WHERE credential_id = $1", [`user:${account.id}`]);
     res.setHeader("Set-Cookie", sessionCookie(req, "", 0));

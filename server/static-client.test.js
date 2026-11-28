@@ -58,7 +58,7 @@ test("never answers server routes with the web app, and never leaves the folder"
   const health = await get("/api/health");
   assert.equal(health.status, 200);
   assert.match(health.type, /json/);
-  for (const url of ["/api/does-not-exist", "/v1/nope", "/mcp", "/download/nothing", "/.well-known/nothing", "/hooks/x"]) {
+  for (const url of ["/api/does-not-exist", "/v1/nope", "/mcp", "/download/nothing", "/.well-known/nothing", "/hooks/x", "/s/x"]) {
     const response = await get(url);
     assert.doesNotMatch(response.body, /HANNAH app/, `${url} isn't the web app`);
   }

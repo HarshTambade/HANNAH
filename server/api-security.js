@@ -31,6 +31,9 @@ const BYOK_PATHS = new Set(["/feedback", "/report-content", "/events", "/agent",
 // so these routes can't be used as a relay to arbitrary servers, and guests
 // have their own, lower, per-address limit there.
 const GUEST_PATHS = new Set(["/connectors/discover", "/connectors/register", "/connectors/token", "/connectors/rpc"]);
+// Shared conversation pages (/s/<id>, server/shares.js) are open to anyone with
+// the link, but they're mounted outside /api, so they need no entry here; the
+// routes that create, list and revoke links are /account/shares (signed in).
 // Open to everyone: sign-in itself and the database status the app needs before sign-in.
 // The calendar/email sign-in callbacks are opened by Google or Microsoft; the single-use state identifies the user.
 const PUBLIC_PATHS = new Set(["/health", "/presence", "/account/status", "/account/register", "/account/login", "/account/logout", "/db/status", "/a2a/agent-card", "/account/connections/google/callback", "/account/connections/microsoft/callback", "/account/connections/google/confirm", "/account/connections/microsoft/confirm", "/workflows/catalog", "/workflows/tick", "/workforce/tick", "/session/key", "/connectors/catalog"]);
