@@ -167,7 +167,7 @@ function normalizeDescriptor(input) {
 
 const ALERTS = new Set(["estop-engaged", "fault", "link-lost", "commissioning-reset", "revoked"]);
 
-function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(process.env.HANNAH_ROBOT_ACK_WAIT_MS) || 6000, pollMs = 150, emit = null } = {}) {
+function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(process.env.HANNAH_ROBOT_ACK_WAIT_MS) || 6000, pollMs = 150, emit = null, onState = null } = {}) {
   /**
    * Tell the account's webhooks and workflows that something happened. Never
    * waited for: a robot's exchange must not depend on someone else's server
@@ -580,6 +580,9 @@ function createRoboticsService({ now = () => Date.now(), ackWaitMs = Number(proc
         await db.query("DELETE FROM hannah_robot_missions WHERE robot_id = $1 AND created_at < $2", [row.id, at - MISSIONS_KEEP_MS]).catch(() => {});
       }
     }
+
+    // Maintenance measurements (motor, battery, controller readings) the robot reported. Recording only; never affects the commands below.
+    if (state && onState) await Promise.resolve().then(() => onState(db, row, state, at)).catch(() => {});
 
     // What the robot should hear: missions not yet accepted and still valid, and cancellations.
     await advancePlans(db, row.user_id, row.id, at).catch((error) => addEvent(db, row.user_id, row.id, { type: "plan-error", severity: "warning", message: `A plan could not be advanced: ${clean(error?.message, 200)}` }).catch(() => {}));
